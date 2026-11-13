@@ -1,5 +1,5 @@
-import { sql } from 'kysely';
-import type { CentreDb, CentreTx } from '../client';
+import { sql, type InsertObject, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { CourseRow } from './courses';
 
 /**
@@ -176,62 +176,62 @@ const CLASS_COURSE_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
 // ---------------------------------------------------------------------------
 
-function classInsertValues(v: NewClass) {
+function classInsertValues(values: NewClass): InsertObject<CentreDB, 'classes'> {
   return {
-    tenant_id: v.tenantId,
-    name: v.name,
-    ...(v.code !== undefined ? { code: v.code } : {}),
-    ...(v.schoolYear !== undefined ? { school_year: v.schoolYear } : {}),
-    owner_id: v.ownerId,
-    cohort_id: v.cohortId,
-    ...(v.allowSelfReport !== undefined ? { allow_self_report: v.allowSelfReport } : {}),
-    ...(v.joinCode !== undefined ? { join_code: v.joinCode } : {}),
-    ...(v.onLeave !== undefined ? { on_leave: v.onLeave } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
+    tenant_id: values.tenantId,
+    name: values.name,
+    ...(values.code !== undefined ? { code: values.code } : {}),
+    ...(values.schoolYear !== undefined ? { school_year: values.schoolYear } : {}),
+    owner_id: values.ownerId,
+    cohort_id: values.cohortId,
+    ...(values.allowSelfReport !== undefined ? { allow_self_report: values.allowSelfReport } : {}),
+    ...(values.joinCode !== undefined ? { join_code: values.joinCode } : {}),
+    ...(values.onLeave !== undefined ? { on_leave: values.onLeave } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
   };
 }
 
-function classUpdateValues(v: Partial<ClassRow>) {
+function classUpdateSet(patch: Partial<ClassRow>): UpdateObject<CentreDB, 'classes'> {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.code !== undefined ? { code: v.code } : {}),
-    ...(v.schoolYear !== undefined ? { school_year: v.schoolYear } : {}),
-    ...(v.ownerId !== undefined ? { owner_id: v.ownerId } : {}),
-    ...(v.cohortId !== undefined ? { cohort_id: v.cohortId } : {}),
-    ...(v.allowSelfReport !== undefined ? { allow_self_report: v.allowSelfReport } : {}),
-    ...(v.joinCode !== undefined ? { join_code: v.joinCode } : {}),
-    ...(v.joinAutoApprove !== undefined ? { join_auto_approve: v.joinAutoApprove } : {}),
-    ...(v.onLeave !== undefined ? { on_leave: v.onLeave } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.feeCost !== undefined ? { fee_cost: v.feeCost } : {}),
-    ...(v.feeCurrency !== undefined ? { fee_currency: v.feeCurrency } : {}),
-    ...(v.feePaymentAccountId !== undefined ? { fee_payment_account_id: v.feePaymentAccountId } : {}),
+    ...(patch.tenantId !== undefined ? { tenant_id: patch.tenantId } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.code !== undefined ? { code: patch.code } : {}),
+    ...(patch.schoolYear !== undefined ? { school_year: patch.schoolYear } : {}),
+    ...(patch.ownerId !== undefined ? { owner_id: patch.ownerId } : {}),
+    ...(patch.cohortId !== undefined ? { cohort_id: patch.cohortId } : {}),
+    ...(patch.allowSelfReport !== undefined ? { allow_self_report: patch.allowSelfReport } : {}),
+    ...(patch.joinCode !== undefined ? { join_code: patch.joinCode } : {}),
+    ...(patch.joinAutoApprove !== undefined ? { join_auto_approve: patch.joinAutoApprove } : {}),
+    ...(patch.onLeave !== undefined ? { on_leave: patch.onLeave } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.feeCost !== undefined ? { fee_cost: patch.feeCost } : {}),
+    ...(patch.feeCurrency !== undefined ? { fee_currency: patch.feeCurrency } : {}),
+    ...(patch.feePaymentAccountId !== undefined ? { fee_payment_account_id: patch.feePaymentAccountId } : {}),
   };
 }
 
-function joinRequestInsertValues(v: NewClassJoinRequest) {
+function joinRequestInsertValues(values: NewClassJoinRequest): InsertObject<CentreDB, 'class_join_requests'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    tenant_id: v.tenantId,
-    class_id: v.classId,
-    user_id: v.userId,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.decidedBy !== undefined ? { decided_by: v.decidedBy } : {}),
-    ...(v.decidedAt !== undefined ? { decided_at: v.decidedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    tenant_id: values.tenantId,
+    class_id: values.classId,
+    user_id: values.userId,
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.decidedBy !== undefined ? { decided_by: values.decidedBy } : {}),
+    ...(values.decidedAt !== undefined ? { decided_at: values.decidedAt } : {}),
   };
 }
 
-function joinRequestUpdateValues(v: Partial<ClassJoinRequestRow>) {
+function joinRequestUpdateSet(patch: Partial<ClassJoinRequestRow>): UpdateObject<CentreDB, 'class_join_requests'> {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.classId !== undefined ? { class_id: v.classId } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.decidedBy !== undefined ? { decided_by: v.decidedBy } : {}),
-    ...(v.decidedAt !== undefined ? { decided_at: v.decidedAt } : {}),
+    ...(patch.tenantId !== undefined ? { tenant_id: patch.tenantId } : {}),
+    ...(patch.classId !== undefined ? { class_id: patch.classId } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.decidedBy !== undefined ? { decided_by: patch.decidedBy } : {}),
+    ...(patch.decidedAt !== undefined ? { decided_at: patch.decidedAt } : {}),
   };
 }
 
@@ -241,81 +241,84 @@ function joinRequestUpdateValues(v: Partial<ClassJoinRequestRow>) {
 export class ClassesRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  private db(): ClassesDb {
+    return this.handle;
+  }
+
   /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: ClassesTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
   /** Lấy lớp theo id. */
-  async getClass(id: string): Promise<ClassRow | undefined> {
-    return this.handle
+  async getClass(id: string, db: ClassesDb = this.db()): Promise<ClassRow | undefined> {
+    return db
       .selectFrom('classes')
       .select(CLASS_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<ClassRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Lấy lớp theo mã lớp trong một tenant. */
-  async getClassByCode(tenantId: string, code: string): Promise<ClassRow | undefined> {
-    return this.handle
+  async getClassByCode(tenantId: string, code: string, db: ClassesDb = this.db()): Promise<ClassRow | undefined> {
+    return db
       .selectFrom('classes')
       .select(CLASS_COLUMNS)
       .where('tenant_id', '=', tenantId)
       .where('code', '=', code)
-      .executeTakeFirst() as Promise<ClassRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Lấy lớp theo backing cohort. */
-  async getClassByCohortId(cohortId: string): Promise<ClassRow | undefined> {
-    return this.handle
+  async getClassByCohortId(cohortId: string, db: ClassesDb = this.db()): Promise<ClassRow | undefined> {
+    return db
       .selectFrom('classes')
       .select(CLASS_COLUMNS)
       .where('cohort_id', '=', cohortId)
-      .executeTakeFirst() as Promise<ClassRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Mọi lớp của một tenant, theo thời điểm tạo. */
-  async listClassesByTenant(tenantId: string): Promise<ClassRow[]> {
-    return this.handle
+  async listClassesByTenant(tenantId: string, db: ClassesDb = this.db()): Promise<ClassRow[]> {
+    return db
       .selectFrom('classes')
       .select(CLASS_COLUMNS)
       .where('tenant_id', '=', tenantId)
       .orderBy('created_at', 'asc')
-      .execute() as Promise<ClassRow[]>;
+      .execute();
   }
 
   /** Chèn lớp mới; nhận handle giao dịch khi gọi trong transaction tạo lớp. */
-  async insertClass(v: NewClass, tx?: ClassesDb): Promise<ClassRow> {
-    const db = tx ?? this.handle;
+  async insertClass(v: NewClass, db: ClassesDb = this.db()): Promise<ClassRow> {
     return db
       .insertInto('classes')
       .values(classInsertValues(v))
       .returning(CLASS_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<ClassRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Cập nhật lớp. */
-  async updateClass(id: string, patch: Partial<ClassRow>): Promise<void> {
-    await this.handle
+  async updateClass(id: string, patch: Partial<ClassRow>, db: ClassesDb = this.db()): Promise<void> {
+    await db
       .updateTable('classes')
-      .set({ ...classUpdateValues(patch), updated_at: new Date() })
+      .set({ ...classUpdateSet(patch), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá lớp. */
-  async deleteClass(id: string): Promise<void> {
-    await this.handle.deleteFrom('classes').where('id', '=', id).execute();
+  async deleteClass(id: string, db: ClassesDb = this.db()): Promise<void> {
+    await db.deleteFrom('classes').where('id', '=', id).execute();
   }
 
   /** Xoá backing cohort của lớp (bảng `cohort` do module groups sở hữu — xoá qua đây như repository cũ). */
-  async deleteCohort(cohortId: string): Promise<void> {
-    await this.handle.deleteFrom('cohort').where('id', '=', cohortId).execute();
+  async deleteCohort(cohortId: string, db: ClassesDb = this.db()): Promise<void> {
+    await db.deleteFrom('cohort').where('id', '=', cohortId).execute();
   }
 
   /** Số khoá đang thuộc lớp — chốt chặn xoá lớp (FK RESTRICT ở DB là lưới cuối). */
-  async countCoursesInClass(classId: string): Promise<number> {
-    const row = await this.handle
+  async countCoursesInClass(classId: string, db: ClassesDb = this.db()): Promise<number> {
+    const row = await db
       .selectFrom('course')
       .select(sql<number>`count(*)::int`.as('value'))
       .where('class_id', '=', classId)
@@ -324,8 +327,8 @@ export class ClassesRepository {
   }
 
   /** Mọi khoá thuộc lớp (gồm cả khoá ẩn — bề mặt lớp là bề mặt quản trị của staff lớp). */
-  async listCoursesInClass(classId: string): Promise<CourseRow[]> {
-    return this.handle
+  async listCoursesInClass(classId: string, db: ClassesDb = this.db()): Promise<CourseRow[]> {
+    return db
       .selectFrom('course')
       .select(CLASS_COURSE_COLUMNS)
       .where('class_id', '=', classId)
@@ -336,8 +339,8 @@ export class ClassesRepository {
   /**
    * Các khoá của lớp mà một học sinh đang ghi danh ACTIVE (status = 0 — `ENROL_ACTIVE` của module enrol; xét mọi instance của khoá, đường chính là instance cohort của lớp). Đình chỉ ở một khoá đặt dòng ghi danh thành SUSPENDED (status = 1) nên khoá đó rơi khỏi tập này — dashboard phía học sinh (CLASS-2) chỉ hiện các khoá trong tập này.
    */
-  async listActiveEnrolledCourseIds(classId: string, userId: string): Promise<string[]> {
-    const rows = await this.handle
+  async listActiveEnrolledCourseIds(classId: string, userId: string, db: ClassesDb = this.db()): Promise<string[]> {
+    const rows = await db
       .selectFrom('user_enrolments')
       .innerJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
       .innerJoin('course', 'course.id', 'enrol.course_id')
@@ -353,8 +356,8 @@ export class ClassesRepository {
   /**
    * Đẩy chế độ rời lớp mới xuống `custom_text1` của mọi instance cohort của lớp (các khoá đã tạo trước khi lớp đổi `on_leave` phải theo chế độ hiện hành của lớp, không giữ ảnh chụp lúc tạo khoá).
    */
-  async syncOnLeaveToInstances(cohortId: string, onLeave: string): Promise<void> {
-    await this.handle
+  async syncOnLeaveToInstances(cohortId: string, onLeave: string, db: ClassesDb = this.db()): Promise<void> {
+    await db
       .updateTable('enrol')
       .set({ custom_text1: onLeave, updated_at: new Date() })
       .where('enrol', '=', 'cohort')
@@ -365,59 +368,59 @@ export class ClassesRepository {
   // --- tự báo danh (CLASS-1) ---------------------------------------------------
 
   /** Lớp theo mã tham gia: `join_code` là unique toàn hệ khi có đặt, nên tra cứu không cần tenant. */
-  async getClassByJoinCode(joinCode: string): Promise<ClassRow | undefined> {
-    return this.handle
+  async getClassByJoinCode(joinCode: string, db: ClassesDb = this.db()): Promise<ClassRow | undefined> {
+    return db
       .selectFrom('classes')
       .select(CLASS_COLUMNS)
       .where('join_code', '=', joinCode)
-      .executeTakeFirst() as Promise<ClassRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Chèn một yêu cầu tham gia lớp. */
-  async insertJoinRequest(v: NewClassJoinRequest): Promise<ClassJoinRequestRow> {
-    return this.handle
+  async insertJoinRequest(v: NewClassJoinRequest, db: ClassesDb = this.db()): Promise<ClassJoinRequestRow> {
+    return db
       .insertInto('class_join_requests')
       .values(joinRequestInsertValues(v))
       .returning(JOIN_REQUEST_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<ClassJoinRequestRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy yêu cầu tham gia theo id. */
-  async getJoinRequest(id: string): Promise<ClassJoinRequestRow | undefined> {
-    return this.handle
+  async getJoinRequest(id: string, db: ClassesDb = this.db()): Promise<ClassJoinRequestRow | undefined> {
+    return db
       .selectFrom('class_join_requests')
       .select(JOIN_REQUEST_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<ClassJoinRequestRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Yêu cầu đang chờ của một học sinh cho một lớp (unique từng phần ở DB là lưới cuối). */
-  async findPendingJoinRequest(classId: string, userId: string): Promise<ClassJoinRequestRow | undefined> {
-    return this.handle
+  async findPendingJoinRequest(classId: string, userId: string, db: ClassesDb = this.db()): Promise<ClassJoinRequestRow | undefined> {
+    return db
       .selectFrom('class_join_requests')
       .select(JOIN_REQUEST_COLUMNS)
       .where('class_id', '=', classId)
       .where('user_id', '=', userId)
       .where('status', '=', 'pending')
-      .executeTakeFirst() as Promise<ClassJoinRequestRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Các yêu cầu tham gia của một lớp theo trạng thái, theo thời điểm tạo. */
-  async listJoinRequests(classId: string, status: string): Promise<ClassJoinRequestRow[]> {
-    return this.handle
+  async listJoinRequests(classId: string, status: string, db: ClassesDb = this.db()): Promise<ClassJoinRequestRow[]> {
+    return db
       .selectFrom('class_join_requests')
       .select(JOIN_REQUEST_COLUMNS)
       .where('class_id', '=', classId)
       .where('status', '=', status)
       .orderBy('created_at', 'asc')
-      .execute() as Promise<ClassJoinRequestRow[]>;
+      .execute();
   }
 
   /** Cập nhật yêu cầu tham gia. */
-  async updateJoinRequest(id: string, patch: Partial<ClassJoinRequestRow>): Promise<void> {
-    await this.handle
+  async updateJoinRequest(id: string, patch: Partial<ClassJoinRequestRow>, db: ClassesDb = this.db()): Promise<void> {
+    await db
       .updateTable('class_join_requests')
-      .set({ ...joinRequestUpdateValues(patch), updated_at: new Date() })
+      .set({ ...joinRequestUpdateSet(patch), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
@@ -426,8 +429,8 @@ export class ClassesRepository {
    * Học sinh đã đình chỉ khỏi lớp: còn dòng ghi danh SUSPENDED (status = 1) trên instance cohort của lớp nhưng KHÔNG còn trong backing cohort — suy ra từ chính vật chất hoá ghi danh, không bảng phụ
    * (roster chỉ có hai trạng thái thuộc/không thuộc, xem hồ sơ mục 4.3).
    */
-  async listSuspendedMemberIds(cohortId: string): Promise<string[]> {
-    const rows = await this.handle
+  async listSuspendedMemberIds(cohortId: string, db: ClassesDb = this.db()): Promise<string[]> {
+    const rows = await db
       .selectFrom('user_enrolments')
       .innerJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
       .select('user_enrolments.user_id as userId')

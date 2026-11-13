@@ -5,13 +5,14 @@ import type {
   AssignmentForUserView, AssignmentView, TeacherCommentBankEntryView,
 } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
+import { roundToOneDecimal } from '../../common/round';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';
 import { FilesService } from '../files/files.service';
-import { GradesService } from '../grades/grades.service';
+import { GradesService, GRADE_SOURCE_ASSIGN } from '../grades/grades.service';
 import { UsersService } from '../users/users.service';
 import {
   AssignmentsRepository, type AssignAnnotationRow, type AssignGradeRow, type AssignSubmissionRow, type AssignmentRow,
@@ -36,7 +37,7 @@ export const ASSIGN_FILE_AREA = 'submission_files';
  * (sau hạn vẫn nhận, đánh dấu trễ).
  *
  * Chấm theo vòng đời TRẢ BÀI (Google Return / Canvas posting policy):
- * giáo viên chấm trên bề mặt bài nộp — dấu vector trên ảnh (đúng/sai/vẽ tay/ghi chú), điểm hoặc mức Đạt/Chưa đạt theo chế độ kết quả của bài, lời phê cấu trúc 3 ô TT 22 (tiến bộ / ưu điểm / hạn chế), kết quả rubric neo YCCĐ — tất cả ở trạng thái NHÁP, học sinh chưa thấy và sổ điểm chưa nhận. Bấm TRẢ BÀI (từng em hoặc theo đợt) mới công bố nguyên tử: gói chấm hiện với học sinh, điểm ghi vào sổ điểm qua grade item của course module (GradesService.recordActivityGrade, source 'mod/assign') tại đúng thời điểm trả nên chảy vào gradebook + completion (theo điểm như mod_quiz), kèm sự kiện thông báo. Sửa gói chấm sau khi đã trả ghi vết kiểm toán (assign_grade_revisions).
+ * giáo viên chấm trên bề mặt bài nộp — dấu vector trên ảnh (đúng/sai/vẽ tay/ghi chú), điểm hoặc mức Đạt/Chưa đạt theo chế độ kết quả của bài, lời phê cấu trúc 3 ô TT 22 (tiến bộ / ưu điểm / hạn chế), kết quả rubric neo YCCĐ — tất cả ở trạng thái NHÁP, học sinh chưa thấy và sổ điểm chưa nhận. Bấm TRẢ BÀI (từng em hoặc theo đợt) mới công bố nguyên tử: gói chấm hiện với học sinh, điểm ghi vào sổ điểm qua grade item của course module (GradesService.recordActivityGrade, source 'mod/assign') tại đúng thời điểm trả nên chảy vào gradebook + completion (theo điểm như mod/quiz), kèm sự kiện thông báo. Sửa gói chấm sau khi đã trả ghi vết kiểm toán (assign_grade_revisions).
  *
  * Máy trạng thái bài nộp: (chưa có) → draft → submitted → graded (khi gói chấm khớp attempt_number hiện hành VÀ đã trả bài). Gói chấm còn nháp thì học sinh mở lại được về draft để sửa (nộp lại tăng attempt_number); đã trả bài thì khoá hẳn.
  */
@@ -150,7 +151,7 @@ export class AssignmentsService {
     const value = this.gradebookValue(assignment, g);
     if (value == null) return;
     const item = await this.grades.getItemForCm(assignment.course, assignment.cmId);
-    if (item) await this.grades.recordActivityGrade(item.id, userId, value, 'mod/assign');
+    if (item) await this.grades.recordActivityGrade(item.id, userId, value, GRADE_SOURCE_ASSIGN);
   }
   /** Gói chấm phải đầy đủ theo chế độ kết quả của bài mới trả bài được. */
   private assertGradeComplete(assignment: AssignmentRow, g: AssignGradeRow): void {
@@ -236,8 +237,10 @@ export class AssignmentsService {
         ...(resultMode === 'level' ? { gradeMax: 1, gradePass: 1 } : { gradeMax: assignment.grade }),
       });
     } catch (err) {
-      // Dọn dẹp best-effort để không để lại bài tập mồ côi không có cm.
-      await this.repo.deleteAssignment(assignment.id).catch(() => undefined);
+      // Dọn dẹp best-effort để không để lại bài tập mồ côi không có cm — dọn lỗi thì phải thấy trong log (lỗi gốc vẫn được ném lại).
+      await this.repo.deleteAssignment(assignment.id).catch((cleanupErr) => {
+        this.logger.warn(`createAssignment cleanup failed for assignment ${assignment.id}: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+      });
       throw err;
     }
     await this.outbox.enqueueStandalone({ aggregate: 'assignment', type: 'assignment_created', payload: { assignmentId: assignment.id, courseId, actorId } });
@@ -300,11 +303,20 @@ export class AssignmentsService {
     const submissions = await this.repo.listSubmissions(assignment.id);
     for (const s of submissions) {
       const links = await this.repo.listSubmissionFiles(s.id);
-      for (const link of links) await this.files.deleteFile(link.fileId).catch(() => undefined);
+      for (const link of links) await this.files.deleteFile(link.fileId).catch((err) => {
+        // Xoá tệp đính kèm lỗi thì bài tập vẫn xoá tiếp — nhưng tệp mồ côi phải thấy trong log để dọn sau.
+        this.logger.warn(`deleteAssignment: failed to delete file ${link.fileId} of assignment ${assignment.id}: ${err instanceof Error ? err.message : String(err)}`);
+      });
     }
     if (assignment.cmId) {
-      const item = await this.grades.getItemForCm(assignment.course, assignment.cmId).catch(() => undefined);
-      if (item) await this.grades.deleteItem(actorId, item.id).catch(() => undefined);
+      const item = await this.grades.getItemForCm(assignment.course, assignment.cmId).catch((err) => {
+        // Tra grade item lỗi thì không xoá được grade item — mồ côi phải thấy trong log thay vì im lặng bỏ qua.
+        this.logger.warn(`deleteAssignment: failed to look up grade item for assignment ${assignment.id}: ${err instanceof Error ? err.message : String(err)}`);
+        return undefined;
+      });
+      if (item) await this.grades.deleteItem(actorId, item.id).catch((err) => {
+        this.logger.warn(`deleteAssignment: failed to delete grade item ${item.id} of assignment ${assignment.id}: ${err instanceof Error ? err.message : String(err)}`);
+      });
     }
     await this.repo.deleteAssignment(assignment.id);
     if (assignment.cmId) await this.courses.deleteCm(actorId, assignment.cmId);
@@ -557,7 +569,7 @@ export class AssignmentsService {
     const distribution = Array.from({ length: 10 }, (_, i) => ({ fromPct: i * 10, toPct: (i + 1) * 10, count: 0 }));
     for (const g of gradedValues) {
       const pct = gradeMax > 0 ? (g / gradeMax) * 100 : 0;
-      distribution[Math.min(9, Math.max(0, Math.floor(pct / 10)))]!.count += 1;
+      distribution[Math.min(9, Math.max(0, Math.floor(pct / 10)))]!.count += 1; // Bất biến: chỉ số đã kẹp trong 0..9, distribution có đúng 10 ô.
     }
     return {
       assignment: this.assignmentView(assignment),
@@ -657,11 +669,11 @@ export class AssignmentsService {
       else raw += ev.score ?? 0;
     }
     if (!any || max <= 0) return null;
-    return Math.round((raw / max) * assignment.grade * 10) / 10;
+    return roundToOneDecimal((raw / max) * assignment.grade);
   }
 
   /**
-   * LƯU gói chấm (assign:grade) — bản NHÁP theo vòng đời trả bài: điểm/ mức + lời phê cấu trúc + kết quả rubric được lưu vào assign_grades nhưng CHƯA công bố (học sinh không thấy, sổ điểm chưa nhận). Chỉ chấm được bài đã chốt nộp. Nếu gói chấm của lần nộp hiện hành ĐÃ TRẢ thì lần lưu này là SỬA SAU TRẢ: ghi vết kiểm toán (giá trị trước → sau), ghi lại sổ điểm ngay và phát sự kiện điểm thay đổi.
+   * LƯU gói chấm (assign:grade) — bản NHÁP theo vòng đời trả bài: điểm/ mức + lời phê cấu trúc + kết quả rubric được lưu vào assign_grades nhưng CHƯA công bố (học sinh không thấy, sổ điểm chưa nhận). Chỉ chấm được bài đã chốt nộp. Nếu gói chấm của lần nộp hiện hành ĐÃ TRẢ thì lần lưu này là SỬA SAU TRẢ: ghi vết kiểm toán (giá trị trước → sau), ghi lại sổ điểm ngay và phát sự kiện điểm thay đổi. Ghi gói chấm là nguyên tử: vết kiểm toán, điểm, kết quả rubric và sự kiện outbox cùng commit hoặc cùng lùi; ghi sổ điểm chạy sau khi commit (transaction riêng của GradesService).
    */
   async gradeSubmission(actorId: string, assignmentId: string, userId: string, input: {
     grade?: number; level?: string | null; feedback?: string;
@@ -693,41 +705,53 @@ export class AssignmentsService {
       feedbackStrengths: input.feedbackStrengths !== undefined ? input.feedbackStrengths : (existingCurrent?.feedbackStrengths ?? null),
       feedbackWeaknesses: input.feedbackWeaknesses !== undefined ? input.feedbackWeaknesses : (existingCurrent?.feedbackWeaknesses ?? null),
     };
-    if (isPostReleaseEdit && existingCurrent) {
-      await this.repo.insertRevision({
-        gradeId: existingCurrent.id, actorId,
-        previousGrade: existingCurrent.grade, newGrade: next.grade,
-        previousLevel: existingCurrent.level, newLevel: next.level,
-        previousFeedback: existingCurrent.feedback, newFeedback: next.feedback,
-      });
-    }
-    const saved = await this.repo.upsertGrade({
-      assignmentId: assignment.id, userId, graderId: actorId,
-      attemptNumber: submission.attemptNumber, ...next,
-      status: existingCurrent?.status ?? 'draft',
-      releasedAt: existingCurrent?.releasedAt ?? null,
-      releasedBy: existingCurrent?.releasedBy ?? null,
-    });
-    if (input.evaluations) {
-      await this.repo.deleteEvaluations(saved.id);
-      for (const ev of input.evaluations) {
-        await this.repo.upsertEvaluation({
-          gradeId: saved.id, criterionId: ev.criterionId,
-          levelId: ev.levelId ?? null, score: ev.score ?? null, note: ev.note ?? null,
+    // Ghi gói chấm nguyên tử: vết kiểm toán + điểm + kết quả rubric + sự
+    // kiện outbox chạy trong MỘT transaction duy nhất — một bước giữa
+    // chừng lỗi thì toàn bộ gói chấm lùi về trạng thái cũ, không để lại
+    // điểm đã lưu mà rubric thì dở dang. Ghi sổ điểm
+    // (GradesService.recordActivityGrade) có transaction riêng của nó nên
+    // chạy SAU khi transaction này commit, như mẫu GradesService.setGrade
+    // (ghi xong mới làm mới completion).
+    let saved!: AssignGradeRow;
+    await this.repo.transaction(async (tx) => {
+      if (isPostReleaseEdit && existingCurrent) {
+        await this.repo.insertRevision({
+          gradeId: existingCurrent.id, actorId,
+          previousGrade: existingCurrent.grade, newGrade: next.grade,
+          previousLevel: existingCurrent.level, newLevel: next.level,
+          previousFeedback: existingCurrent.feedback, newFeedback: next.feedback,
+        }, tx);
+      }
+      saved = await this.repo.upsertGrade({
+        assignmentId: assignment.id, userId, graderId: actorId,
+        attemptNumber: submission.attemptNumber, ...next,
+        status: existingCurrent?.status ?? 'draft',
+        releasedAt: existingCurrent?.releasedAt ?? null,
+        releasedBy: existingCurrent?.releasedBy ?? null,
+      }, tx);
+      if (input.evaluations) {
+        await this.repo.deleteEvaluations(saved.id, tx);
+        for (const ev of input.evaluations) {
+          await this.repo.upsertEvaluation({
+            gradeId: saved.id, criterionId: ev.criterionId,
+            levelId: ev.levelId ?? null, score: ev.score ?? null, note: ev.note ?? null,
+          }, tx);
+        }
+      }
+      if (isPostReleaseEdit) {
+        await this.outbox.enqueueKysely(tx, {
+          aggregate: 'assignment', type: 'assignment_grade_changed',
+          payload: { assignmentId: assignment.id, courseId: assignment.course, userId, graderId: actorId, grade: saved.grade, level: saved.level, attemptNumber: saved.attemptNumber },
+        });
+      } else {
+        await this.outbox.enqueueKysely(tx, {
+          aggregate: 'assignment', type: 'assignment_grading_saved',
+          payload: { assignmentId: assignment.id, courseId: assignment.course, userId, graderId: actorId, draft: true, attemptNumber: submission.attemptNumber },
         });
       }
-    }
+    });
     if (isPostReleaseEdit) {
       await this.writeGradebook(assignment, userId, saved);
-      await this.outbox.enqueueStandalone({
-        aggregate: 'assignment', type: 'assignment_grade_changed',
-        payload: { assignmentId: assignment.id, courseId: assignment.course, userId, graderId: actorId, grade: saved.grade, level: saved.level, attemptNumber: saved.attemptNumber },
-      });
-    } else {
-      await this.outbox.enqueueStandalone({
-        aggregate: 'assignment', type: 'assignment_grading_saved',
-        payload: { assignmentId: assignment.id, courseId: assignment.course, userId, graderId: actorId, draft: true, attemptNumber: submission.attemptNumber },
-      });
     }
     return this.getSubmissionForTeacher(actorId, assignmentId, userId);
   }
@@ -785,14 +809,20 @@ export class AssignmentsService {
       return false;
     }
     // Ghi sổ điểm trước khi công bố: sổ từ chối thì bài chưa coi là đã trả.
+    // Ghi sổ điểm có transaction riêng (GradesService) nên chạy trước,
+    // ngoài transaction công bố dưới đây.
     await this.writeGradebook(assignment, userId, current);
-    await this.repo.updateGrade(current.id, { status: 'released', releasedAt: new Date(), releasedBy: actorId });
     const payload = {
       assignmentId: assignment.id, courseId: assignment.course, userId, graderId: actorId,
       grade: current.grade, level: current.level, attemptNumber: current.attemptNumber,
     };
-    await this.outbox.enqueueStandalone({ aggregate: 'assignment', type: 'assignment_returned', payload });
-    await this.outbox.enqueueStandalone({ aggregate: 'assignment', type: 'assignment_graded', payload: { ...payload, released: true } });
+    // Đổi trạng thái + hai sự kiện outbox trong MỘT transaction: một bước
+    // lỗi thì bài vẫn ở trạng thái nháp và không sự kiện nào được phát.
+    await this.repo.transaction(async (tx) => {
+      await this.repo.updateGrade(current.id, { status: 'released', releasedAt: new Date(), releasedBy: actorId }, tx);
+      await this.outbox.enqueueKysely(tx, { aggregate: 'assignment', type: 'assignment_returned', payload });
+      await this.outbox.enqueueKysely(tx, { aggregate: 'assignment', type: 'assignment_graded', payload: { ...payload, released: true } });
+    });
     return true;
   }
 

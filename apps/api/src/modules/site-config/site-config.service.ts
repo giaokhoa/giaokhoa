@@ -22,6 +22,9 @@ import {
  * đọc giá trị hiệu lực qua {@link SiteConfigService.getValue} thay vì tự
  * chạm vào bảng config.
  */
+
+/** Trần số dòng vết audit trả về trong một lần liệt kê. */
+const AUDIT_LIST_LIMIT = 100;
 @Injectable()
 export class SiteConfigService {
   constructor(private readonly repo: SiteConfigRepository) {}
@@ -69,9 +72,8 @@ export class SiteConfigService {
    * Liệt kê mọi setting đã đăng ký kèm giá trị hiệu lực.
    */
   async listSettings(): Promise<SiteSetting[]> {
-    const views: SiteSetting[] = [];
-    for (const def of SITE_SETTINGS) views.push(await this.toView(def));
-    return views;
+    // Mỗi setting đọc ghi đè của riêng mình nên nạp song song; Promise.all giữ đúng thứ tự đăng ký.
+    return Promise.all(SITE_SETTINGS.map((def) => this.toView(def)));
   }
 
   /**
@@ -164,7 +166,7 @@ export class SiteConfigService {
    */
   async listAudit(settingKey?: string): Promise<SiteSettingAuditEntry[]> {
     const rows = await this.repo.listAudit(settingKey);
-    return rows.slice(0, 100).map((row) => ({
+    return rows.slice(0, AUDIT_LIST_LIMIT).map((row) => ({
       id: row.id,
       settingKey: row.settingKey,
       oldValue: row.oldValue,

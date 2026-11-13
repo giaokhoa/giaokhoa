@@ -14,6 +14,7 @@ import {
   updateConversationStateSchema, conversationMemberStateSchema, listConversationsQuerySchema,
   personProfileSchema,
   createExamMatrixCellSchema, createExamMatrixSchema, examMatrixCellViewSchema,
+  createExamSchema, updateExamSchema,
   createExamContributionSchema, withdrawExamSchema, withdrawExamMatrixSchema,
   examMatrixViewSchema, examMatrixContributionViewSchema,
   mcpSubmitContributionInputSchema, mcpSubmitContributionOutputSchema,
@@ -377,6 +378,17 @@ describe('Hợp đồng đánh giá', () => {
       curriculumId: '01900000-0000-7000-8000-000000000034', scopeOutcomeIds: [nodeId],
     })).toThrow();
   });
+
+  it('từ chối tfScale ngoài 0–100 ở đề thi tạo/sửa (ràng buộc 0–100 của quiz tfScale cũng áp cho đề)', () => {
+    // tfScale là thang tỉ trọng đúng/sai chùm: mỗi nấc là phần trăm nên phải nằm trong 0–100.
+    const vuotTran = [0, 25, 50, 75, 101];
+    const duoiTran = [-1, 25, 50, 75, 100];
+    expect(() => createExamSchema.parse({ name: 'Đề', tfScale: vuotTran })).toThrow();
+    expect(() => createExamSchema.parse({ name: 'Đề', tfScale: duoiTran })).toThrow();
+    expect(() => updateExamSchema.parse({ tfScale: vuotTran })).toThrow();
+    expect(() => updateExamSchema.parse({ tfScale: duoiTran })).toThrow();
+    expect(createExamSchema.parse({ name: 'Đề', tfScale: [0, 25, 50, 75, 100] }).tfScale).toEqual([0, 25, 50, 75, 100]);
+  });
 });
 
 describe('Hợp đồng định danh', () => {
@@ -693,7 +705,7 @@ describe('Hợp đồng rich text', () => {
   });
 });
 
-describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tên, không tỉ trọng + stimulus)', () => {
+describe('Hợp đồng payload câu hỏi (port giaokhoa: cờ đúng/sai, không tên, không tỉ trọng + stimulus)', () => {
   const categoryId = '01900000-0000-7000-8000-000000000001';
   const stimulusId = '01900000-0000-7000-8000-000000000099';
   const mcAnswers = [
@@ -723,7 +735,7 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
     expect(withDocText.solution).toEqual({ answer: 'Lời giải mẫu...' });
   });
 
-  it('locks the multichoice answer shape: 4 choices with exactly one correct (D-3 + bỏ tỉ trọng)', () => {
+  it('khoá hình dạng đáp án multichoice: đúng 4 lựa chọn, đúng một đáp án đúng (D-3 + bỏ tỉ trọng)', () => {
     // Hai đáp án đúng -> từ chối (mô hình cũ cho tổng fraction, mô hình mới đúng MỘT đáp án đúng).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?',
@@ -954,19 +966,19 @@ describe('Hợp đồng tổng quan lớp (CLASS-2, #184)', () => {
     }],
   };
 
-  it('parses a member overview (dashboard theo vai của học sinh)', () => {
+  it('phân tích tổng quan thành viên (dashboard theo vai của học sinh)', () => {
     const parsed = classOverviewSchema.parse(overview);
     expect(parsed.viewerRole).toBe('member');
     expect(parsed.courses[0]?.fullName).toBe('Toán 10');
     expect(parsed.rosterCount).toBe(32);
   });
 
-  it('rejects a viewerRole outside the closed owner/staff/member set (vai lạ không được lọt vào dashboard)', () => {
+  it('từ chối viewerRole ngoài tập đóng owner/staff/member (vai lạ không được lọt vào dashboard)', () => {
     expect(() => classOverviewSchema.parse({ ...overview, viewerRole: 'teacher' })).toThrow();
     expect(() => classOverviewSchema.parse({ ...overview, viewerRole: 'admin' })).toThrow();
   });
 
-  it('rejects a negative rosterCount (số học sinh của lớp không thể âm)', () => {
+  it('từ chối rosterCount âm (số học sinh của lớp không thể âm)', () => {
     expect(() => classOverviewSchema.parse({ ...overview, rosterCount: -1 })).toThrow();
   });
 });
@@ -981,19 +993,19 @@ describe('Hợp đồng học phí lớp (CLASS-3, #184)', () => {
     createdAt: '2026-10-26T00:00:00.000Z', updatedAt: '2026-10-26T00:00:00.000Z',
   };
 
-  it('parses a class view carrying the fee package (học phí là số nguyên đơn vị nhỏ nhất)', () => {
+  it('phân tích view lớp mang gói học phí (học phí là số nguyên đơn vị nhỏ nhất)', () => {
     const parsed = classSchema.parse(classView);
     expect(parsed.feeCost).toBe(1500000);
     expect(parsed.feeCurrency).toBe('VND');
     expect(parsed.feePaymentAccountId).toBeNull();
   });
 
-  it('rejects a fractional feeCost (tiền không có phần lẻ ở đơn vị nhỏ nhất — cùng bất biến payments)', () => {
+  it('từ chối feeCost lẻ (tiền không có phần lẻ ở đơn vị nhỏ nhất — cùng bất biến payments)', () => {
     expect(() => classSchema.parse({ ...classView, feeCost: 1500000.5 })).toThrow();
     expect(updateClassSchema.safeParse({ feeCost: 100.5 }).success).toBe(false);
   });
 
-  it('rejects a negative fee in the update contract (đặt học phí âm là lỗi nhập liệu, tắt thu phí là null/0)', () => {
+  it('từ chối học phí âm trong hợp đồng cập nhật (đặt học phí âm là lỗi nhập liệu, tắt thu phí là null/0)', () => {
     expect(updateClassSchema.safeParse({ feeCost: -1 }).success).toBe(false);
     expect(updateClassSchema.safeParse({ feeCost: 0 }).success).toBe(true);
     expect(updateClassSchema.safeParse({ feeCost: null }).success).toBe(true);
@@ -1001,7 +1013,7 @@ describe('Hợp đồng học phí lớp (CLASS-3, #184)', () => {
     expect(updateClassSchema.safeParse({ feeCurrency: 'VN' }).success).toBe(false);
   });
 
-  it('parses the public package view and rejects unknown class status (gói công khai không mang trạng thái lạ)', () => {
+  it('phân tích view gói công khai và từ chối trạng thái lớp lạ (gói công khai không mang trạng thái lạ)', () => {
     const pub = {
       classId: classView.id, name: classView.name, code: '10A1', schoolYear: '2026-2027',
       description: '', ownerName: 'Nguyễn Văn A', status: 'active',
@@ -1014,7 +1026,7 @@ describe('Hợp đồng học phí lớp (CLASS-3, #184)', () => {
   });
 });
 
-describe('class list item contracts (danh sách lớp kèm cờ quyền theo người gọi)', () => {
+describe('Hợp đồng mục danh sách lớp (danh sách lớp kèm cờ quyền theo người gọi)', () => {
   const classView = {
     id: '01900000-0000-7000-8000-0000000000c1', tenantId: '01900000-0000-7000-8000-0000000000a1',
     name: 'Lớp 10A1', code: '10A1', schoolYear: '2026-2027',
@@ -1024,7 +1036,7 @@ describe('class list item contracts (danh sách lớp kèm cờ quyền theo ng�
     createdAt: '2026-10-26T00:00:00.000Z', updatedAt: '2026-10-26T00:00:00.000Z',
   };
 
-  it('parses a list item carrying the four caller capability flags (cờ hiển thị do server suy)', () => {
+  it('phân tích mục danh sách mang bốn cờ năng lực của người gọi (cờ hiển thị do server suy)', () => {
     const parsed = classListItemSchema.parse({ ...classView, canCreate: true, canUpdate: true, canDelete: false, canManageRoster: true });
     expect(parsed.canCreate).toBe(true);
     expect(parsed.canUpdate).toBe(true);
@@ -1035,19 +1047,19 @@ describe('class list item contracts (danh sách lớp kèm cờ quyền theo ng�
     expect(parsed.joinCode).toBeNull();
   });
 
-  it('rejects a list item missing a flag (dòng danh sách thiếu cờ thì web không có căn cứ vẽ theo vai)', () => {
+  it('từ chối mục danh sách thiếu cờ (dòng danh sách thiếu cờ thì web không có căn cứ vẽ theo vai)', () => {
     expect(() => classListItemSchema.parse({ ...classView, canCreate: true, canUpdate: true, canDelete: true })).toThrow();
     expect(() => classListItemSchema.parse({ ...classView, canCreate: 'yes', canUpdate: true, canDelete: true, canManageRoster: true })).toThrow();
   });
 
-  it('keeps plain ClassView free of the flags (chi tiết/tạo/sửa lớp không mang cờ danh sách)', () => {
+  it('giữ ClassView thuần không mang cờ (chi tiết/tạo/sửa lớp không mang cờ danh sách)', () => {
     const parsed = classSchema.parse(classView);
     expect('canCreate' in parsed).toBe(false);
     expect('canManageRoster' in parsed).toBe(false);
   });
 });
 
-describe('mcp question contracts (biên AI: không fraction, không tên)', () => {
+describe('Hợp đồng câu hỏi MCP (biên AI: không fraction, không tên)', () => {
   const bankId = '01900000-0000-7000-8000-000000000050';
   const categoryId = '01900000-0000-7000-8000-000000000001';
 
@@ -1082,7 +1094,7 @@ describe('mcp question contracts (biên AI: không fraction, không tên)', () =
   });
 });
 
-describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy vết rút + MCP đối xứng)', () => {
+describe('Hợp đồng đồng bộ bank (issue #228: đóng góp đề khuôn QB-4 + truy vết rút + MCP đối xứng)', () => {
   const bankId = '01900000-0000-7000-8000-000000000050';
   const examId = '01900000-0000-7000-8000-000000000060';
   const matrixId = '01900000-0000-7000-8000-000000000070';
@@ -1166,7 +1178,7 @@ describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy 
   });
 });
 
-describe('coupon + purchase plan contracts (phần còn lại của lát 2, #189)', () => {
+describe('Hợp đồng coupon + gói mua (phần còn lại của lát 2, #189)', () => {
   it('coupon phần trăm chỉ hợp lệ trong khoảng 1–99; cố định là số nguyên dương', () => {
     // Ràng buộc nghiệp vụ của hình dạng theo đặc tả coupon: phần trăm
     // giảm luôn nhỏ hơn giá gói nên số tiền phải trả không bao giờ về

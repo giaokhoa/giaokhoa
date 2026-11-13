@@ -66,14 +66,23 @@ function createForeignKeySql(table: string, constraint: string, definition: stri
   ) THEN ALTER TABLE "${table}" ADD CONSTRAINT "${constraint}" ${definition}; END IF; END $$;`;
 }
 
+/**
+ * Kiểm tra một đối tượng `pg_class` đã tồn tại trong schema `public` hay chưa — `relkind` phân biệt loại đối tượng
+ * (`r` = bảng, `i` = index). Hai hàm `tableExistsSql`/`indexExistsSql` dưới đây chỉ là tên gọi rõ nghĩa cho hai
+ * trường hợp dùng trong file này.
+ */
+function classExistsSql(name: string, relkind: 'r' | 'i'): string {
+  return `SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = '${name}' AND c.relkind = '${relkind}'`;
+}
+
 /** Kiểm tra một bảng đã tồn tại trong schema `public` hay chưa. */
 function tableExistsSql(table: string): string {
-  return `SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = '${table}' AND c.relkind = 'r'`;
+  return classExistsSql(table, 'r');
 }
 
 /** Kiểm tra một index đã tồn tại trong schema `public` hay chưa. */
 function indexExistsSql(index: string): string {
-  return `SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = '${index}' AND c.relkind = 'i'`;
+  return classExistsSql(index, 'i');
 }
 
 /** Kiểm tra một policy RLS đã tồn tại trên một bảng hay chưa. */
@@ -171,6 +180,26 @@ const CONTROL_PLANE_DELTA_OBJECT: DeltaObject = {
 };
 
 /**
+ * Chạy một khối công việc trong một transaction duy nhất trên kết nối đang mở: lỗi ở bất kỳ câu nào cũng rollback
+ * toàn bộ rồi ném ra nguyên trạng — chạy lại sau đó sẽ làm nốt phần thiếu. Dùng chung cho khối ensure đối tượng
+ * (`ensureObjects`) và khối bật RLS trong `ensureCentreSchemaDelta` (hai khối cùng khuôn `BEGIN`/`try`/`COMMIT`/
+ * `ROLLBACK`, chỉ khác thân công việc).
+ */
+async function runInTransaction(
+  client: Client,
+  fn: () => Promise<void>,
+): Promise<void> {
+  await client.query('BEGIN');
+  try {
+    await fn();
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
  * Áp một danh sách đối tượng delta lên một kết nối đang mở, trong
  * một transaction duy nhất: kiểm tra từng đối tượng rồi chỉ tạo
  * đối tượng còn thiếu. Lỗi ở bất kỳ câu nào cũng rollback toàn bộ
@@ -187,8 +216,7 @@ async function ensureObjects(
   log: (message: string) => void,
 ): Promise<CentreDeltaStoreReport> {
   const report: CentreDeltaStoreReport = { created: [], alreadyPresent: [] };
-  await client.query('BEGIN');
-  try {
+  await runInTransaction(client, async () => {
     for (const object of objects) {
       const exists = await client.query(object.existsSql);
       if ((exists.rowCount ?? 0) > 0) {
@@ -199,11 +227,7 @@ async function ensureObjects(
         log(`[centre-delta] created ${object.name}`);
       }
     }
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
-  }
+  });
   return report;
 }
 
@@ -242,8 +266,7 @@ export async function ensureCentreSchemaDelta(options: {
     // đã có thì bỏ qua toàn bộ (bảng đã ở đúng trạng thái RLS của
     // baseline — bước này chỉ lấp đối tượng thiếu, không sửa đối
     // tượng đã bị sửa tay).
-    await business.query('BEGIN');
-    try {
+    await runInTransaction(business, async () => {
       for (const table of BUSINESS_RLS_TABLES) {
         const policy = await business.query(policyExistsSql(table));
         if ((policy.rowCount ?? 0) > 0) {
@@ -256,11 +279,7 @@ export async function ensureCentreSchemaDelta(options: {
           log(`[centre-delta] created tenant_isolation on ${table}`);
         }
       }
-      await business.query('COMMIT');
-    } catch (error) {
-      await business.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    }
+    });
     let controlPlane: CentreDeltaStoreReport | null = null;
     if (options.controlPlaneDatabaseUrl) {
       const cp = new Client({ connectionString: options.controlPlaneDatabaseUrl });

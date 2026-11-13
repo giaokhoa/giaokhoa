@@ -27,7 +27,7 @@ export function parseSheetQr(text: string | null): { batchId: string; variantCod
   if (!text) return null;
   const parts = text.split('|');
   if (parts.length !== 4 || parts[0] !== SHEET_QR_PREFIX || !parts[1] || !parts[2]) return null;
-  return { batchId: parts[1]!, variantCode: parts[2]!, userId: parts[3] ? parts[3]! : null };
+  return { batchId: parts[1]!, variantCode: parts[2]!, userId: parts[3] ? parts[3]! : null }; // Bất biến: đã kiểm tra parts.length === 4 và parts[1], parts[2] khác rỗng ở trên.
 }
 
 const PAGE_W_PT = TEMPLATE_WIDTH / PX_PER_PT;
@@ -181,7 +181,7 @@ export async function generateSheetsPdf(input: SheetsPdfInput): Promise<Buffer> 
     // Lưới đáp án.
     text(page, ctx, 'ĐÁP ÁN', 64, ANSWER_TOP - 44, 10, { bold: true });
     for (const row of geometry.rows) {
-      const layout = input.layout[row.slot - 1]!;
+      const layout = input.layout[row.slot - 1]!; // Bất biến: layout có đúng một mục cho mỗi hàng hình học, slot chạy 1..rows.length.
       text(page, ctx, `${row.slot}.`, row.labelX, row.labelY - 12, 11, { bold: true });
       row.centers.forEach((center, k) => {
         // Câu đúng/sai chùm TF-A: 4 cặp ô Đ/S nối tiếp nhau trên một

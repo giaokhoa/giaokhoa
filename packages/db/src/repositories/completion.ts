@@ -19,7 +19,7 @@
  * WHERE đều là tham số bắt buộc, không bao giờ `undefined`.
  * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
-import type { Insertable, Updateable } from 'kysely';
+import type {InsertObject, UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
@@ -180,8 +180,8 @@ const COURSE_COMPLETION_COLUMNS = [
 /**
  * Ánh xạ dữ kiện ghi trạng thái hoàn thành cm (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4 trong sổ tay của package).
  */
-function cmCompletionInsertValues(values: NewCmCompletion): Insertable<CentreDB['course_modules_completion']> {
-  const row: Insertable<CentreDB['course_modules_completion']> = {
+function cmCompletionInsertValues(values: NewCmCompletion): InsertObject<CentreDB, 'course_modules_completion'> {
+  const row: InsertObject<CentreDB, 'course_modules_completion'> = {
     course_module_id: values.courseModuleId,
     user_id: values.userId,
   };
@@ -197,8 +197,8 @@ function cmCompletionInsertValues(values: NewCmCompletion): Insertable<CentreDB[
  * Ánh xạ dữ kiện ghi tiêu chí (camelCase) sang values insert
  * (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4).
  */
-function criteriaInsertValues(values: NewCriteria): Insertable<CentreDB['course_completion_criteria']> {
-  const row: Insertable<CentreDB['course_completion_criteria']> = {
+function criteriaInsertValues(values: NewCriteria): InsertObject<CentreDB, 'course_completion_criteria'> {
+  const row: InsertObject<CentreDB, 'course_completion_criteria'> = {
     course: values.course,
     criteria_type: values.criteriaType,
   };
@@ -216,8 +216,8 @@ function criteriaInsertValues(values: NewCriteria): Insertable<CentreDB['course_
 /**
  * Ánh xạ dữ kiện ghi dấu hoàn thành thủ công (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4).
  */
-function critComplInsertValues(values: NewCritCompl): Insertable<CentreDB['course_completion_crit_compl']> {
-  const row: Insertable<CentreDB['course_completion_crit_compl']> = {
+function critComplInsertValues(values: NewCritCompl): InsertObject<CentreDB, 'course_completion_crit_compl'> {
+  const row: InsertObject<CentreDB, 'course_completion_crit_compl'> = {
     criteria_id: values.criteriaId,
     user_id: values.userId,
   };
@@ -230,8 +230,8 @@ function critComplInsertValues(values: NewCritCompl): Insertable<CentreDB['cours
 /**
  * Ánh xạ dữ kiện ghi bản ghi hoàn thành khoá học (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4).
  */
-function courseCompletionInsertValues(values: NewCourseCompletion): Insertable<CentreDB['course_completions']> {
-  const row: Insertable<CentreDB['course_completions']> = {
+function courseCompletionInsertValues(values: NewCourseCompletion): InsertObject<CentreDB, 'course_completions'> {
+  const row: InsertObject<CentreDB, 'course_completions'> = {
     user_id: values.userId,
     course: values.course,
   };
@@ -277,17 +277,17 @@ export class CompletionRepository {
    * Ghi/cập nhật trạng thái hoàn thành cm. Khi dòng đã có (trùng khoá duy nhất cặp cm + user), chỉ các cột trạng thái đổi: trạng thái, cờ đã xem và người ghi đè (trường nào vắng mặt trong dữ kiện ghi thì giữ nguyên giá trị đã có), kèm mốc cập nhật hiện tại — đúng tập cột của nhánh cập nhật ở đường cũ trước đây.
    */
   async upsertCmCompletion(v: NewCmCompletion, db: CompletionDb = this.db()): Promise<CmCompletionRow> {
-    const set: Updateable<CentreDB['course_modules_completion']> = { updated_at: new Date() };
+    const set: UpdateObject<CentreDB, 'course_modules_completion'> = { updated_at: new Date() };
     if (v.completionState !== undefined) set.completion_state = v.completionState;
     if (v.viewed !== undefined) set.viewed = v.viewed;
     if (v.overrideBy !== undefined) set.override_by = v.overrideBy;
-    const rows = await db
+    const row = await db
       .insertInto('course_modules_completion')
       .values(cmCompletionInsertValues(v))
       .onConflict((oc) => oc.columns(['course_module_id', 'user_id']).doUpdateSet(set))
       .returning(CM_COMPLETION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Mọi trạng thái hoàn thành cm của user trong khoá học. */
@@ -332,12 +332,12 @@ export class CompletionRepository {
 
   /** Thêm một tiêu chí hoàn thành khoá học. */
   async insertCriteria(v: NewCriteria, db: CompletionDb = this.db()): Promise<CriteriaRow> {
-    const rows = await db
+    const row = await db
       .insertInto('course_completion_criteria')
       .values(criteriaInsertValues(v))
       .returning(CRITERIA_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Tiêu chí của khoá học, theo thứ tự đã khai (sortOrder rồi id). */
@@ -409,15 +409,15 @@ export class CompletionRepository {
    * Ghi dấu hoàn thành thủ công cho một tiêu chí (ghi lại thì cập nhật người đánh dấu và thời điểm).
    */
   async upsertCritCompl(v: NewCritCompl, db: CompletionDb = this.db()): Promise<CritComplRow> {
-    const set: Updateable<CentreDB['course_completion_crit_compl']> = { time_completed: new Date() };
+    const set: UpdateObject<CentreDB, 'course_completion_crit_compl'> = { time_completed: new Date() };
     if (v.markedBy !== undefined) set.marked_by = v.markedBy;
-    const rows = await db
+    const row = await db
       .insertInto('course_completion_crit_compl')
       .values(critComplInsertValues(v))
       .onConflict((oc) => oc.columns(['criteria_id', 'user_id']).doUpdateSet(set))
       .returning(CRIT_COMPL_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Xoá dấu hoàn thành thủ công (bỏ đánh dấu). */
@@ -470,17 +470,17 @@ export class CompletionRepository {
    * Ghi/cập nhật bản ghi hoàn thành khoá học. Khi dòng đã có (trùng khoá duy nhất cặp user + khoá), chỉ trạng thái và các mốc bắt đầu/hoàn thành đổi theo dữ kiện ghi (trường vắng mặt thì giữ nguyên), mốc gắn cờ tổng hợp lại luôn lấy thời điểm ghi — cột `time_enrolled` không nằm trong nhánh cập nhật nên giữ nguyên như đường cũ trước đây.
    */
   async upsertCourseCompletion(v: NewCourseCompletion, db: CompletionDb = this.db()): Promise<CourseCompletionRow> {
-    const set: Updateable<CentreDB['course_completions']> = { re_aggregate: new Date() };
+    const set: UpdateObject<CentreDB, 'course_completions'> = { re_aggregate: new Date() };
     if (v.status !== undefined) set.status = v.status;
     if (v.timeStarted !== undefined) set.time_started = v.timeStarted;
     if (v.timeCompleted !== undefined) set.time_completed = v.timeCompleted;
-    const rows = await db
+    const row = await db
       .insertInto('course_completions')
       .values(courseCompletionInsertValues(v))
       .returning(COURSE_COMPLETION_COLUMNS)
       .onConflict((oc) => oc.columns(['user_id', 'course']).doUpdateSet(set))
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Mọi bản ghi hoàn thành của khoá học. */

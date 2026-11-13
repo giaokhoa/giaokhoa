@@ -8,14 +8,14 @@
  * và là NGUỒN ĐỊNH NGHĨA DUY NHẤT của hệ — package này cấm giữ bản sao của registry (hai nguồn định nghĩa là lỗi thiết kế). Vì vậy file này chỉ khai HÌNH DẠNG của registry: danh sách khoá
  * (`CONTEXT_LEVEL_KEYS`) và kiểu ánh xạ khoá → số mức
  * (`ContextLevels`). Giá trị số thật của từng mức do phía ứng dụng
- * cấp qua tham số constructor (điểm tiêm là DI token trong module dashboard phía `apps/api`, implementation trỏ thẳng tới registry hiện hành). Tại thời điểm chuyển đổi, repository chỉ tiêu thụ đúng một khoá qua cổng: `COURSE` (lọc gán vai tại context khoá).
+ * cấp qua tham số constructor (điểm tiêm là DI token trong module dashboard phía `apps/api`, implementation trỏ thẳng tới registry hiện hành). Tại thời điểm chuyển đổi, repository chỉ tiêu thụ đúng một khoá qua cổng: `COURSE` (lọc gán vai tại context khoá). Ngoại lệ duy nhất: ba hằng số mức ở cuối file (`CONTEXT_LEVEL_TENANT`, `CONTEXT_LEVEL_CLASS`, `CONTEXT_LEVEL_COURSE`) phục vụ ba repository chưa tiêm được registry (exams, files, messaging — việc tiêm đòi đổi factory module phía `apps/api`, ngoài phạm vi PR dọn code style issue #50); các hằng này phải gương đúng giá trị registry và repository mới cấm dùng chúng, phải tiêm qua constructor như repository này.
  *
  * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài giữ nguyên hợp đồng dòng camelCase của repository cũ trước chuyển đổi qua danh sách cột tường minh có bí danh; các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Module này không tham gia transaction nào (kiểm kê tại file cũ: 0 điểm mở transaction, phía service gọi từng method độc lập) nên repository không nhận handle giao dịch — cấm giao dịch lai vì vậy không có bề mặt để vi phạm.
  *
  * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
-import { sql } from 'kysely';
-import type { CentreDb } from '../client';
+import { sql, type InsertObject } from 'kysely';
+import type { CentreDb, CentreDB } from '../client';
 
 /**
  * Danh sách khoá của registry mức ngữ cảnh — HÌNH DẠNG của registry, không phải giá trị của nó: hằng này chỉ nêu các khoá tồn tại trong registry phía ứng dụng, tuyệt đối không mang số mức của bất kỳ khoá nào. Đổi hình dạng registry (thêm/bớt khoá) thì sửa hằng này cùng interface `ContextLevels` ở lượt chạm tương ứng; đổi GIÁ TRỊ số mức chỉ sửa ở registry phía ứng dụng, package không phải chạm.
@@ -57,6 +57,18 @@ export interface ContextLevels {
   /** Mức ngữ cảnh khối trong module. */
   readonly BLOCK: number;
 }
+
+/**
+ * Số mức ngữ cảnh cho ba khoá mà các repository chưa tiêm registry dùng — NGOẠI LỆ có chủ đích (S1, issue #50), không phải nguồn định nghĩa thứ hai.
+ *
+ * Ba repository exams, files và messaging lọc theo mức ngữ cảnh nhưng được dựng chỉ bằng handle (factory module phía `apps/api` không truyền registry), nên chưa tiêm được qua constructor như `DashboardRepository`. Cho tới khi factory phía ứng dụng được đổi để tiêm registry, ba hằng này là cầu nối duy nhất để code trong package không còn số magic 20/45/50 rải rác. `CONTEXT_LEVEL_SYSTEM` chỉ phục vụ dữ liệu gieo trong spec (context gốc của cây).
+ *
+ * GIÁ TRỊ PHẢI GƯƠNG ĐÚNG registry phía ứng dụng (`CONTEXT_LEVELS` trong `apps/api/src/modules/access/domain/capabilities.ts`): đổi giá trị một mức ở registry thì sửa hằng tương ứng trong cùng PR, không để lệch. Repository mới cấm dùng các hằng này — phải nhận `ContextLevels` qua constructor.
+ */
+export const CONTEXT_LEVEL_SYSTEM = 10;
+export const CONTEXT_LEVEL_TENANT = 20;
+export const CONTEXT_LEVEL_CLASS = 45;
+export const CONTEXT_LEVEL_COURSE = 50;
 
 /** Handle truy vấn kho trung tâm mà repository giữ: facade định tuyến theo không gian do phía ứng dụng cấp. */
 export type DashboardDb = CentreDb;
@@ -205,14 +217,14 @@ const GRADE_COLUMNS = [
 /**
  * Ánh xạ ghi cho `user_dashboard_state` (khuôn T-4): từng trường camelCase → snake_case tường minh. Cả hai trường đều bắt buộc ở điểm gọi nên không có `undefined` nào cần loại; hàm này là điểm duy nhất dựng values của bảng để hình dạng ghi không rải rác.
  */
-function stateInsertValues(userId: string, at: Date) {
+function stateInsertValues(userId: string, at: Date): InsertObject<CentreDB, 'user_dashboard_state'> {
   return { user_id: userId, last_seen_at: at };
 }
 
 /**
  * Ánh xạ ghi cho `user_course_card_prefs` (khuôn T-4): `color` và `nickname` mang kiểu `string | null` tường minh ở chữ ký — null là giá trị nghiệp vụ (xoá màu/biệt danh) nên được ghi thẳng thành NULL, không bao giờ là `undefined`.
  */
-function prefInsertValues(userId: string, courseId: string, color: string | null, nickname: string | null) {
+function prefInsertValues(userId: string, courseId: string, color: string | null, nickname: string | null): InsertObject<CentreDB, 'user_course_card_prefs'> {
   return { user_id: userId, course_id: courseId, color, nickname };
 }
 
@@ -237,8 +249,8 @@ export class DashboardRepository {
   }
 
   /** Khoá user đang ghi danh hiệu lực (user_enrolments active, chưa hết hạn). */
-  async enrolledCourseIds(userId: string, now: Date): Promise<string[]> {
-    const rows = await this.db()
+  async enrolledCourseIds(userId: string, now: Date, db: DashboardDb = this.db()): Promise<string[]> {
+    const rows = await db
       .selectFrom('user_enrolments')
       .innerJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
       .select('enrol.course_id as courseId')
@@ -256,8 +268,8 @@ export class DashboardRepository {
   }
 
   /** Khoá user có gán vai trực tiếp tại context khoá (ứng viên đội giảng dạy). */
-  async roleAssignedCourseIds(userId: string): Promise<string[]> {
-    const rows = await this.db()
+  async roleAssignedCourseIds(userId: string, db: DashboardDb = this.db()): Promise<string[]> {
+    const rows = await db
       .selectFrom('role_assignments')
       .innerJoin('context', 'context.id', 'role_assignments.context_id')
       .select('context.instance_id as courseId')
@@ -270,9 +282,9 @@ export class DashboardRepository {
   }
 
   /** Tên hiển thị của một tập khoá: courseId → fullName. */
-  async courseNames(courseIds: string[]): Promise<Map<string, string>> {
+  async courseNames(courseIds: string[], db: DashboardDb = this.db()): Promise<Map<string, string>> {
     if (!courseIds.length) return new Map();
-    const rows = await this.db()
+    const rows = await db
       .selectFrom('course')
       .select(['id', 'full_name as fullName'])
       .where('id', 'in', courseIds)
@@ -281,9 +293,9 @@ export class DashboardRepository {
   }
 
   /** Quiz có hạn nộp trong tập khoá kèm các attempt của chính user. */
-  async quizDueRows(courseIds: string[], userId: string, until: Date): Promise<DashboardQuizDueRow[]> {
+  async quizDueRows(courseIds: string[], userId: string, until: Date, db: DashboardDb = this.db()): Promise<DashboardQuizDueRow[]> {
     if (!courseIds.length) return [];
-    return this.db()
+    return db
       .selectFrom('course_modules')
       .innerJoin('exam_pins', 'exam_pins.id', 'course_modules.instance_id')
       .innerJoin('exam_versions', 'exam_versions.id', 'exam_pins.exam_version_id')
@@ -312,9 +324,9 @@ export class DashboardRepository {
   }
 
   /** Bài tập C2 có hạn nộp trong tập khoá kèm bài nộp hiện hành của chính user. */
-  async assignmentDueRows(courseIds: string[], userId: string, until: Date): Promise<DashboardAssignmentDueRow[]> {
+  async assignmentDueRows(courseIds: string[], userId: string, until: Date, db: DashboardDb = this.db()): Promise<DashboardAssignmentDueRow[]> {
     if (!courseIds.length) return [];
-    return this.db()
+    return db
       .selectFrom('course_modules')
       .innerJoin('assignments', 'assignments.id', 'course_modules.instance_id')
       .leftJoin('assign_submissions', (join) =>
@@ -344,7 +356,7 @@ export class DashboardRepository {
    * Phép nối điểm ↔ item dùng chung cho hai method đọc điểm: điểm của chính user, item thuộc khoá, và chỉ dòng CÓ nội dung hiển thị (điểm đã nhập hoặc phản hồi khác rỗng) — điều kiện boolean ghép bằng expression builder, cùng cây điều kiện với mảnh SQL của đường cũ.
    */
   private gradeRowsQuery() {
-    return this.db()
+    return db
       .selectFrom('grade_grades')
       .innerJoin('grade_items', 'grade_items.id', 'grade_grades.item_id')
       .select(GRADE_COLUMNS)
@@ -360,7 +372,7 @@ export class DashboardRepository {
   }
 
   /** Điểm của chính user thay đổi sau mốc (chưa lọc công bố — service lọc bằng GradesService). */
-  async gradeRowsSince(courseIds: string[], userId: string, since: Date): Promise<DashboardGradeRow[]> {
+  async gradeRowsSince(courseIds: string[], userId: string, since: Date, db: DashboardDb = this.db()): Promise<DashboardGradeRow[]> {
     if (!courseIds.length) return [];
     return this.gradeRowsQuery()
       .where('grade_grades.user_id', '=', userId)
@@ -373,9 +385,9 @@ export class DashboardRepository {
   /**
    * Mọi vết công bố scope item trong tập khoá — service suy ra: (a) hiệu lực công bố hiện tại theo vết mới nhất, (b) ứng viên "mới": điểm chấm TRƯỚC mốc nhưng chỉ được CÔNG BỐ sau mốc thì thời điểm trở nên hiển thị là thời điểm công bố, không phải thời điểm chấm.
    */
-  async itemPublications(courseIds: string[]): Promise<DashboardGradePublicationRow[]> {
+  async itemPublications(courseIds: string[], db: DashboardDb = this.db()): Promise<DashboardGradePublicationRow[]> {
     if (!courseIds.length) return [];
-    return this.db()
+    return db
       .selectFrom('grade_publications')
       .select(PUBLICATION_COLUMNS)
       .where('grade_publications.course_id', 'in', courseIds)
@@ -385,7 +397,7 @@ export class DashboardRepository {
   }
 
   /** Điểm của chính user trên một tập item cụ thể (ứng viên từ vết công bố sau mốc). */
-  async gradeRowsForItems(itemIds: string[], userId: string): Promise<DashboardGradeRow[]> {
+  async gradeRowsForItems(itemIds: string[], userId: string, db: DashboardDb = this.db()): Promise<DashboardGradeRow[]> {
     if (!itemIds.length) return [];
     return this.gradeRowsQuery()
       .where('grade_grades.user_id', '=', userId)
@@ -394,9 +406,9 @@ export class DashboardRepository {
   }
 
   /** Bài nộp C2 đang chờ chấm trong tập khoá kèm trạng thái gói chấm của đúng attempt hiện tại. */
-  async assignmentPendingRows(courseIds: string[]): Promise<DashboardAssignmentPendingRow[]> {
+  async assignmentPendingRows(courseIds: string[], db: DashboardDb = this.db()): Promise<DashboardAssignmentPendingRow[]> {
     if (!courseIds.length) return [];
-    return this.db()
+    return db
       .selectFrom('assign_submissions')
       .innerJoin('assignments', 'assignments.id', 'assign_submissions.assignment_id')
       .leftJoin('assign_grades', (join) =>
@@ -416,9 +428,9 @@ export class DashboardRepository {
   }
 
   /** Lượt quiz đã nộp còn câu chờ chấm tay trong tập khoá. */
-  async quizPendingRows(courseIds: string[]): Promise<DashboardQuizPendingRow[]> {
+  async quizPendingRows(courseIds: string[], db: DashboardDb = this.db()): Promise<DashboardQuizPendingRow[]> {
     if (!courseIds.length) return [];
-    return this.db()
+    return db
       .selectFrom('exam_attempts')
       .innerJoin('exam_pins', 'exam_pins.id', 'exam_attempts.pin_id')
       .select([
@@ -435,9 +447,9 @@ export class DashboardRepository {
   /**
    * Phiếu giấy CAM-0 đang chờ xử lý trong tập khoá (chỉ hai trạng thái chờ giáo viên: needs_identity + needs_review; ready/recorded KHÔNG tính — ready là đã đủ điều kiện ghi, recorded là đã xong). Trả từng phiếu để service gom số đếm + mốc chờ lâu nhất + quiz đích deep-link.
    */
-  async paperPendingRows(courseIds: string[]): Promise<DashboardPaperPendingRow[]> {
+  async paperPendingRows(courseIds: string[], db: DashboardDb = this.db()): Promise<DashboardPaperPendingRow[]> {
     if (!courseIds.length) return [];
-    return this.db()
+    return db
       .selectFrom('exam_scans')
       .innerJoin('exam_pins', 'exam_pins.id', 'exam_scans.exam_pin_id')
       .select([
@@ -451,8 +463,8 @@ export class DashboardRepository {
   }
 
   /** Mốc xem trước hiện tại của user; undefined nếu chưa từng xem. */
-  async getState(userId: string): Promise<DashboardStateRow | undefined> {
-    return this.db()
+  async getState(userId: string, db: DashboardDb = this.db()): Promise<DashboardStateRow | undefined> {
+    return db
       .selectFrom('user_dashboard_state')
       .select(STATE_COLUMNS)
       .where('user_id', '=', userId)
@@ -460,8 +472,8 @@ export class DashboardRepository {
   }
 
   /** Cập nhật (hoặc tạo) mốc xem trước = thời điểm vừa xem xong. */
-  async touchState(userId: string, at: Date): Promise<void> {
-    await this.db()
+  async touchState(userId: string, at: Date, db: DashboardDb = this.db()): Promise<void> {
+    await db
       .insertInto('user_dashboard_state')
       .values(stateInsertValues(userId, at))
       .onConflict((oc) =>
@@ -471,8 +483,8 @@ export class DashboardRepository {
   }
 
   /** Mọi pref thẻ khoá của chính user. */
-  async listPrefs(userId: string): Promise<CardPrefRow[]> {
-    return this.db()
+  async listPrefs(userId: string, db: DashboardDb = this.db()): Promise<CardPrefRow[]> {
+    return db
       .selectFrom('user_course_card_prefs')
       .select(PREF_COLUMNS)
       .where('user_id', '=', userId)
@@ -486,8 +498,9 @@ export class DashboardRepository {
     courseId: string,
     color: string | null,
     nickname: string | null,
+    db: DashboardDb = this.db(),
   ): Promise<CardPrefRow> {
-    const rows = await this.db()
+    return db
       .insertInto('user_course_card_prefs')
       .values(prefInsertValues(userId, courseId, color, nickname))
       .onConflict((oc) =>
@@ -498,13 +511,12 @@ export class DashboardRepository {
         }),
       )
       .returning(PREF_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Xoá pref thẻ khoá (khi cả màu lẫn biệt danh đều trống). */
-  async deletePref(userId: string, courseId: string): Promise<void> {
-    await this.db()
+  async deletePref(userId: string, courseId: string, db: DashboardDb = this.db()): Promise<void> {
+    await db
       .deleteFrom('user_course_card_prefs')
       .where('user_id', '=', userId)
       .where('course_id', '=', courseId)

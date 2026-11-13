@@ -1,4 +1,5 @@
-import type { CentreDb, CentreTx } from '../client';
+import { type InsertObject, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreDB, CentreTx } from '../client';
 
 /**
  * Kho dữ liệu điểm theo bài trên Kysely: quản lý mục điểm, điểm của người học, lịch sử chấm và trạng thái công bố cấp bài.
@@ -218,32 +219,32 @@ const PUBLICATION_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
 // ---------------------------------------------------------------------------
 
-function itemInsertValues(v: NewGradeItem) {
+function itemInsertValues(values: NewGradeItem): InsertObject<CentreDB, 'grade_items'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course_id: v.courseId,
-    ...(v.itemType !== undefined ? { item_type: v.itemType } : {}),
-    ...(v.itemModule !== undefined ? { item_module: v.itemModule } : {}),
-    ...(v.itemInstance !== undefined ? { item_instance: v.itemInstance } : {}),
-    ...(v.itemName !== undefined ? { item_name: v.itemName } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.gradeType !== undefined ? { grade_type: v.gradeType } : {}),
-    ...(v.gradeMin !== undefined ? { grade_min: v.gradeMin } : {}),
-    ...(v.gradeMax !== undefined ? { grade_max: v.gradeMax } : {}),
-    ...(v.gradePass !== undefined ? { grade_pass: v.gradePass } : {}),
-    ...(v.hidden !== undefined ? { hidden: v.hidden } : {}),
-    ...(v.locked !== undefined ? { locked: v.locked } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.multiplicator !== undefined ? { multiplicator: v.multiplicator } : {}),
-    ...(v.plusFactor !== undefined ? { plus_factor: v.plusFactor } : {}),
-    ...(v.postingPolicy !== undefined ? { posting_policy: v.postingPolicy } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course_id: values.courseId,
+    ...(values.itemType !== undefined ? { item_type: values.itemType } : {}),
+    ...(values.itemModule !== undefined ? { item_module: values.itemModule } : {}),
+    ...(values.itemInstance !== undefined ? { item_instance: values.itemInstance } : {}),
+    ...(values.itemName !== undefined ? { item_name: values.itemName } : {}),
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.gradeType !== undefined ? { grade_type: values.gradeType } : {}),
+    ...(values.gradeMin !== undefined ? { grade_min: values.gradeMin } : {}),
+    ...(values.gradeMax !== undefined ? { grade_max: values.gradeMax } : {}),
+    ...(values.gradePass !== undefined ? { grade_pass: values.gradePass } : {}),
+    ...(values.hidden !== undefined ? { hidden: values.hidden } : {}),
+    ...(values.locked !== undefined ? { locked: values.locked } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.multiplicator !== undefined ? { multiplicator: values.multiplicator } : {}),
+    ...(values.plusFactor !== undefined ? { plus_factor: values.plusFactor } : {}),
+    ...(values.postingPolicy !== undefined ? { posting_policy: values.postingPolicy } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
 /** Ánh xạ patch của `grade_items`: trải patch như bản cũ, `updated_at` luôn làm mới ở cuối. */
-function itemUpdateSet(patch: Partial<ItemRow>) {
+function itemUpdateSet(patch: Partial<ItemRow>): UpdateObject<CentreDB, 'grade_items'> {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
     ...(patch.courseId !== undefined ? { course_id: patch.courseId } : {}),
@@ -267,27 +268,27 @@ function itemUpdateSet(patch: Partial<ItemRow>) {
   };
 }
 
-function gradeInsertValues(v: NewGrade) {
+function gradeInsertValues(values: NewGrade): InsertObject<CentreDB, 'grade_grades'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    item_id: v.itemId,
-    user_id: v.userId,
-    ...(v.rawGrade !== undefined ? { raw_grade: v.rawGrade } : {}),
-    ...(v.finalGrade !== undefined ? { final_grade: v.finalGrade } : {}),
-    ...(v.rawGradeMax !== undefined ? { raw_grade_max: v.rawGradeMax } : {}),
-    ...(v.rawGradeMin !== undefined ? { raw_grade_min: v.rawGradeMin } : {}),
-    ...(v.hidden !== undefined ? { hidden: v.hidden } : {}),
-    ...(v.locked !== undefined ? { locked: v.locked } : {}),
-    ...(v.overridden !== undefined ? { overridden: v.overridden } : {}),
-    ...(v.excluded !== undefined ? { excluded: v.excluded } : {}),
-    ...(v.feedback !== undefined ? { feedback: v.feedback } : {}),
-    ...(v.frozen !== undefined ? { frozen: v.frozen } : {}),
-    ...(v.aggregationStatus !== undefined ? { aggregation_status: v.aggregationStatus } : {}),
-    ...(v.aggregationWeight !== undefined ? { aggregation_weight: v.aggregationWeight } : {}),
-    ...(v.lockTime !== undefined ? { lock_time: v.lockTime } : {}),
-    ...(v.information !== undefined ? { information: v.information } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    item_id: values.itemId,
+    user_id: values.userId,
+    ...(values.rawGrade !== undefined ? { raw_grade: values.rawGrade } : {}),
+    ...(values.finalGrade !== undefined ? { final_grade: values.finalGrade } : {}),
+    ...(values.rawGradeMax !== undefined ? { raw_grade_max: values.rawGradeMax } : {}),
+    ...(values.rawGradeMin !== undefined ? { raw_grade_min: values.rawGradeMin } : {}),
+    ...(values.hidden !== undefined ? { hidden: values.hidden } : {}),
+    ...(values.locked !== undefined ? { locked: values.locked } : {}),
+    ...(values.overridden !== undefined ? { overridden: values.overridden } : {}),
+    ...(values.excluded !== undefined ? { excluded: values.excluded } : {}),
+    ...(values.feedback !== undefined ? { feedback: values.feedback } : {}),
+    ...(values.frozen !== undefined ? { frozen: values.frozen } : {}),
+    ...(values.aggregationStatus !== undefined ? { aggregation_status: values.aggregationStatus } : {}),
+    ...(values.aggregationWeight !== undefined ? { aggregation_weight: values.aggregationWeight } : {}),
+    ...(values.lockTime !== undefined ? { lock_time: values.lockTime } : {}),
+    ...(values.information !== undefined ? { information: values.information } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
@@ -312,7 +313,7 @@ function gradeConflictSet(v: NewGrade) {
 }
 
 /** Ánh xạ patch của `grade_grades`: trải patch như bản cũ, `updated_at` luôn làm mới ở cuối. */
-function gradeUpdateSet(patch: Partial<GradeRow>) {
+function gradeUpdateSet(patch: Partial<GradeRow>): UpdateObject<CentreDB, 'grade_grades'> {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
     ...(patch.itemId !== undefined ? { item_id: patch.itemId } : {}),
@@ -336,34 +337,34 @@ function gradeUpdateSet(patch: Partial<GradeRow>) {
   };
 }
 
-function historyInsertValues(v: NewGradeHistory) {
+function historyInsertValues(values: NewGradeHistory): InsertObject<CentreDB, 'grade_grades_history'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    item_id: v.itemId,
-    user_id: v.userId,
-    ...(v.oldId !== undefined ? { old_id: v.oldId } : {}),
-    ...(v.action !== undefined ? { action: v.action } : {}),
-    ...(v.rawGrade !== undefined ? { raw_grade: v.rawGrade } : {}),
-    ...(v.finalGrade !== undefined ? { final_grade: v.finalGrade } : {}),
-    ...(v.excluded !== undefined ? { excluded: v.excluded } : {}),
-    ...(v.frozen !== undefined ? { frozen: v.frozen } : {}),
-    ...(v.overridden !== undefined ? { overridden: v.overridden } : {}),
-    ...(v.source !== undefined ? { source: v.source } : {}),
-    ...(v.loggedUser !== undefined ? { logged_user: v.loggedUser } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    item_id: values.itemId,
+    user_id: values.userId,
+    ...(values.oldId !== undefined ? { old_id: values.oldId } : {}),
+    ...(values.action !== undefined ? { action: values.action } : {}),
+    ...(values.rawGrade !== undefined ? { raw_grade: values.rawGrade } : {}),
+    ...(values.finalGrade !== undefined ? { final_grade: values.finalGrade } : {}),
+    ...(values.excluded !== undefined ? { excluded: values.excluded } : {}),
+    ...(values.frozen !== undefined ? { frozen: values.frozen } : {}),
+    ...(values.overridden !== undefined ? { overridden: values.overridden } : {}),
+    ...(values.source !== undefined ? { source: values.source } : {}),
+    ...(values.loggedUser !== undefined ? { logged_user: values.loggedUser } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function publicationInsertValues(v: NewGradePublication) {
+function publicationInsertValues(values: NewGradePublication): InsertObject<CentreDB, 'grade_publications'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course_id: v.courseId,
-    ...(v.itemId !== undefined ? { item_id: v.itemId } : {}),
-    action: v.action,
-    scope: v.scope,
-    actor_id: v.actorId,
-    ...(v.note !== undefined ? { note: v.note } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course_id: values.courseId,
+    ...(values.itemId !== undefined ? { item_id: values.itemId } : {}),
+    action: values.action,
+    scope: values.scope,
+    actor_id: values.actorId,
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
 }
 
@@ -373,8 +374,8 @@ function publicationInsertValues(v: NewGradePublication) {
 export class GradesRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Handle gốc của repository (điểm mở giao dịch + truy vấn ngoài giao dịch). */
-  db(): CentreDb {
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): CentreDb {
     return this.handle;
   }
 
@@ -383,10 +384,9 @@ export class GradesRepository {
     return this.handle.transaction().execute(fn);
   }
 
-  // items
+  // mục điểm
   /** Chèn grade item. */
-  async insertItem(v: NewGradeItem, tx?: GradesDb): Promise<ItemRow> {
-    const db = tx ?? this.handle;
+  async insertItem(v: NewGradeItem, db: GradesDb = this.db()): Promise<ItemRow> {
     return db
       .insertInto('grade_items')
       .values(itemInsertValues(v))
@@ -395,8 +395,7 @@ export class GradesRepository {
   }
 
   /** Lấy item theo id. */
-  async getItem(id: string, tx?: GradesDb): Promise<ItemRow | undefined> {
-    const db = tx ?? this.handle;
+  async getItem(id: string, db: GradesDb = this.db()): Promise<ItemRow | undefined> {
     return db
       .selectFrom('grade_items')
       .select(ITEM_COLUMNS)
@@ -405,8 +404,7 @@ export class GradesRepository {
   }
 
   /** Item của khoá học. */
-  async listItems(courseId: string, tx?: GradesDb): Promise<ItemRow[]> {
-    const db = tx ?? this.handle;
+  async listItems(courseId: string, db: GradesDb = this.db()): Promise<ItemRow[]> {
     return db
       .selectFrom('grade_items')
       .select(ITEM_COLUMNS)
@@ -417,8 +415,7 @@ export class GradesRepository {
   }
 
   /** Tìm item theo (itemType, itemInstance) — khoá liên kết với hoạt động nguồn. */
-  async findItemByTypeInstance(courseId: string, itemType: string, itemInstance: string, tx?: GradesDb): Promise<ItemRow | undefined> {
-    const db = tx ?? this.handle;
+  async findItemByTypeInstance(courseId: string, itemType: string, itemInstance: string, db: GradesDb = this.db()): Promise<ItemRow | undefined> {
     return db
       .selectFrom('grade_items')
       .select(ITEM_COLUMNS)
@@ -429,8 +426,7 @@ export class GradesRepository {
   }
 
   /** Tìm item gắn với một course module. */
-  async findItemForCm(courseId: string, cmId: string, tx?: GradesDb): Promise<ItemRow | undefined> {
-    const db = tx ?? this.handle;
+  async findItemForCm(courseId: string, cmId: string, db: GradesDb = this.db()): Promise<ItemRow | undefined> {
     return db
       .selectFrom('grade_items')
       .select(ITEM_COLUMNS)
@@ -443,8 +439,7 @@ export class GradesRepository {
   /**
    * Tìm grade item theo idNumber trong một khoá học (idNumber là định danh duy nhất của item trong khoá khi không null).
    */
-  async findItemByIdnumber(courseId: string, idNumber: string, tx?: GradesDb): Promise<ItemRow | undefined> {
-    const db = tx ?? this.handle;
+  async findItemByIdnumber(courseId: string, idNumber: string, db: GradesDb = this.db()): Promise<ItemRow | undefined> {
     return db
       .selectFrom('grade_items')
       .select(ITEM_COLUMNS)
@@ -454,8 +449,7 @@ export class GradesRepository {
   }
 
   /** Cập nhật item. */
-  async updateItem(id: string, patch: Partial<ItemRow>, tx?: GradesDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateItem(id: string, patch: Partial<ItemRow>, db: GradesDb = this.db()): Promise<void> {
     await db
       .updateTable('grade_items')
       .set(itemUpdateSet(patch))
@@ -464,18 +458,16 @@ export class GradesRepository {
   }
 
   /** Xoá item. */
-  async deleteItem(id: string, tx?: GradesDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async deleteItem(id: string, db: GradesDb = this.db()): Promise<void> {
     await db
       .deleteFrom('grade_items')
       .where('id', '=', id)
       .execute();
   }
 
-  // grades
+  // điểm
   /** Điểm của user tại một item. */
-  async getGrade(itemId: string, userId: string, tx?: GradesDb): Promise<GradeRow | undefined> {
-    const db = tx ?? this.handle;
+  async getGrade(itemId: string, userId: string, db: GradesDb = this.db()): Promise<GradeRow | undefined> {
     return db
       .selectFrom('grade_grades')
       .select(GRADE_COLUMNS)
@@ -485,9 +477,8 @@ export class GradesRepository {
   }
 
   /** Mọi điểm của khoá học. */
-  async listGradesForCourse(courseId: string, userId?: string, tx?: GradesDb): Promise<GradeRow[]> {
-    const db = tx ?? this.handle;
-    const items = await this.listItems(courseId, tx);
+  async listGradesForCourse(courseId: string, userId?: string, db: GradesDb = this.db()): Promise<GradeRow[]> {
+    const items = await this.listItems(courseId, db);
     if (!items.length) return [];
     let query = db
       .selectFrom('grade_grades')
@@ -498,8 +489,7 @@ export class GradesRepository {
   }
 
   /** Lấy một bản ghi điểm theo id. */
-  async getGradeById(id: string, tx?: GradesDb): Promise<GradeRow | undefined> {
-    const db = tx ?? this.handle;
+  async getGradeById(id: string, db: GradesDb = this.db()): Promise<GradeRow | undefined> {
     return db
       .selectFrom('grade_grades')
       .select(GRADE_COLUMNS)
@@ -508,8 +498,7 @@ export class GradesRepository {
   }
 
   /** Mọi điểm tại một item. */
-  async listGradesForItem(itemId: string, tx?: GradesDb): Promise<GradeRow[]> {
-    const db = tx ?? this.handle;
+  async listGradesForItem(itemId: string, db: GradesDb = this.db()): Promise<GradeRow[]> {
     return db
       .selectFrom('grade_grades')
       .select(GRADE_COLUMNS)
@@ -518,8 +507,7 @@ export class GradesRepository {
   }
 
   /** Ghi/cập nhật điểm (kèm ghi lịch sử ở tầng service). */
-  async upsertGrade(v: NewGrade, tx?: GradesDb): Promise<GradeRow> {
-    const db = tx ?? this.handle;
+  async upsertGrade(v: NewGrade, db: GradesDb = this.db()): Promise<GradeRow> {
     return db
       .insertInto('grade_grades')
       .values(gradeInsertValues(v))
@@ -531,8 +519,7 @@ export class GradesRepository {
   }
 
   /** Cập nhật một bản ghi điểm. */
-  async updateGrade(id: string, patch: Partial<GradeRow>, tx?: GradesDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateGrade(id: string, patch: Partial<GradeRow>, db: GradesDb = this.db()): Promise<void> {
     await db
       .updateTable('grade_grades')
       .set(gradeUpdateSet(patch))
@@ -541,8 +528,7 @@ export class GradesRepository {
   }
 
   /** Ghi một dòng lịch sử thay đổi điểm. */
-  async insertHistory(v: NewGradeHistory, tx?: GradesDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async insertHistory(v: NewGradeHistory, db: GradesDb = this.db()): Promise<void> {
     await db
       .insertInto('grade_grades_history')
       .values(historyInsertValues(v))
@@ -550,8 +536,7 @@ export class GradesRepository {
   }
 
   /** Lịch sử thay đổi điểm của một item/user. */
-  async listHistory(itemId: string, userId: string, tx?: GradesDb): Promise<GradeHistoryRow[]> {
-    const db = tx ?? this.handle;
+  async listHistory(itemId: string, userId: string, db: GradesDb = this.db()): Promise<GradeHistoryRow[]> {
     return db
       .selectFrom('grade_grades_history')
       .select(HISTORY_COLUMNS)
@@ -563,8 +548,7 @@ export class GradesRepository {
 
   // publications (PH-0, issue #116)
   /** Ghi một hành động công bố/rút công bố cho một item (bảng append-only grade_publications). */
-  async insertPublication(v: NewGradePublication, tx?: GradesDb): Promise<GradePublicationRow> {
-    const db = tx ?? this.handle;
+  async insertPublication(v: NewGradePublication, db: GradesDb = this.db()): Promise<GradePublicationRow> {
     return db
       .insertInto('grade_publications')
       .values(publicationInsertValues(v))
@@ -573,8 +557,7 @@ export class GradesRepository {
   }
 
   /** Mọi vết công bố của một khoá theo thứ tự thời gian tăng dần — trạng thái hiệu lực suy từ vết mới nhất của từng item. */
-  async listPublications(courseId: string, tx?: GradesDb): Promise<GradePublicationRow[]> {
-    const db = tx ?? this.handle;
+  async listPublications(courseId: string, db: GradesDb = this.db()): Promise<GradePublicationRow[]> {
     return db
       .selectFrom('grade_publications')
       .select(PUBLICATION_COLUMNS)

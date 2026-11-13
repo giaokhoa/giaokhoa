@@ -43,11 +43,13 @@ export class AudienceGuard {
       context.getHandler(),
       context.getClass(),
     ]);
-    const expectedAudience = isSupportRoute
-      ? 'support'
-      : isPlatformRoute
-        ? 'platform'
-        : undefined;
+    // Audience kỳ vọng theo bề mặt route: support → 'support',
+    // platform → 'platform', route nghiệp vụ thường → không mang
+    // audience (undefined).
+    let expectedAudience: 'support' | 'platform' | undefined;
+    if (isSupportRoute) expectedAudience = 'support';
+    else if (isPlatformRoute) expectedAudience = 'platform';
+    else expectedAudience = undefined;
     if (user.audience !== expectedAudience) {
       throw new ForbiddenException({
         message: 'Token audience does not match this API surface',

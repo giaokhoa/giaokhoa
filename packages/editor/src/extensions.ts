@@ -15,6 +15,37 @@ import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import './math.js';
 
 /**
+ * Bộ extension Tiptap của hợp đồng rich text — nguồn sự thật duy nhất
+ * về hình dạng tài liệu mà trình soạn thảo ({@link RichTextEditor}) và
+ * trình hiển thị chỉ-đọc ({@link RichTextView}) cùng chấp nhận, khớp
+ * với `richTextDocumentSchema` của `@giaokhoa/contracts`.
+ *
+ * Flow tổng thể của module này (tài liệu vào là Tiptap JSON đúng lát
+ * hợp đồng, tài liệu ra giữ nguyên hình dạng đó):
+ *
+ * 1. {@link plainTextExtensions} gom các node/mark của hợp đồng: node
+ *    `doc`/`paragraph`/`text`, năm mark định dạng chữ (`bold`,
+ *    `italic`, `strike`, `code`, `underline`), danh sách không thứ tự
+ *    (`bulletList`/`listItem`), công thức toán (`inlineMath`/
+ *    `blockMath` render bằng KaTeX), ảnh (`image`) và lịch sử soạn
+ *    thảo (`UndoRedo` — chỉ là hành vi soạn, không đổi hình dạng tài
+ *    liệu).
+ * 2. Hai biến thể tiếp nối (`ContinuableBlockMath`,
+ *    `ContinuableImage`) thêm phím Enter sau block nguyên tử: khi một
+ *    công thức tách dòng hoặc ảnh đang được chọn, Enter tạo/chuyển vào
+ *    một paragraph viết tiếp ngay sau block đó
+ *    ({@link ensureContinuationParagraph}).
+ * 3. `ContinuableImage` thu hẹp thuộc tính ảnh đúng về hợp đồng
+ *    (`src`/`alt`/`title`): extension gốc còn khai `width`/`height`
+ *    nên để lọt vào tài liệu thì schema strict của contracts sẽ từ
+ *    chối tài liệu ở biên API.
+ *
+ * Bất biến: thêm node/mark mới là thay đổi hợp đồng nội dung — phải
+ * nới schema ở contracts trong cùng feat và có đường render tương ứng
+ * ở phía xem.
+ */
+
+/**
  * Đảm bảo có một paragraph để viết tiếp ngay sau block đang được chọn
  * (công thức tách dòng, ảnh): nếu block tiếp theo đã là một paragraph
  * trống thì chỉ chuyển con trỏ vào đó; chưa có thì chèn một paragraph

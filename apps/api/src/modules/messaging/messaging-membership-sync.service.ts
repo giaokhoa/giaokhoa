@@ -141,6 +141,27 @@ export class MessagingMembershipSyncService {
     return this.syncLinkedConversationMembers(conversation, await this.repo.listClassConversationMemberIds(conversation.itemId!));
   }
 
+  /**
+   * Đồng bộ lười membership của MỌI conversation gắn cấu trúc mà user
+   * là thành viên (group/khoá/lớp): group/khoá/lớp user mới gia nhập
+   * (hoặc đã rời) phải phản ánh đúng trước khi đếm/liệt kê — cùng
+   * một lượt đồng bộ cho cả danh sách conversation lẫn cây nhóm,
+   * tránh nhân ba vòng lặp đồng bộ ở từng nơi gọi.
+   *
+   * @param userId - Người cần đồng bộ các conversation gắn cấu trúc.
+   */
+  async syncLinkedConversations(userId: string): Promise<void> {
+    for (const c of await this.repo.listGroupConversationsForGroupMember(userId)) {
+      await this.syncGroupConversationMembers(c);
+    }
+    for (const c of await this.repo.listCourseConversationsForMember(userId)) {
+      await this.syncCourseConversationMembers(c);
+    }
+    for (const c of await this.repo.listClassConversationsForMember(userId)) {
+      await this.syncClassConversationMembers(c);
+    }
+  }
+
   /** Đồng bộ nếu conversation gắn cấu trúc (group/khoá/lớp); conversation thường thì bỏ qua. */
   async syncGroupConversationIfLinked(conversation: ConversationRow): Promise<void> {
     if (this.isGroupLinked(conversation)) await this.syncGroupConversationMembers(conversation);

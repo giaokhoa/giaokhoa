@@ -24,11 +24,13 @@ export class CapabilityGuard {
     if (!ok) throw new ForbiddenException({ message: `Missing capability ${requirement.capability}`, code: 'access.capability_denied' });
     return true;
   }
-  private async resolveContextId(req: CapabilityRequirement, http: { params: Record<string, string>; query: Record<string, string>; body?: Record<string, unknown> }): Promise<string> {
-    switch (req.contextResolver) {
+  private async resolveContextId(requirement: CapabilityRequirement, http: { params: Record<string, string>; query: Record<string, string>; body?: Record<string, unknown> }): Promise<string> {
+    switch (requirement.contextResolver) {
       case 'param:contextId': return http.params.contextId!;
       case 'query:contextId': return http.query.contextId ?? (await this.contexts.ensureSystemContext()).id;
-      case 'body:contextId': return String(http.body?.contextId ?? http.body?.contextId ?? (await this.contexts.ensureSystemContext()).id);
+      // Body chỉ mang đúng một trường contextId (xem ReplaceRoleCapabilitiesDto / OverrideCapabilityDto);
+      // không có trường dự phòng thứ hai — toán hạng trùng trước đây là bản sao chép thừa, bỏ đi không đổi hành vi.
+      case 'body:contextId': return String(http.body?.contextId ?? (await this.contexts.ensureSystemContext()).id);
       case 'param:userId:userctx': {
         const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.USER, http.params.id!);
         if (ctx) return ctx.id;

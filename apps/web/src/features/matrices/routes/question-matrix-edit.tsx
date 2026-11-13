@@ -1,4 +1,11 @@
+/**
+ * Route module của màn sửa ma trận (`/matrices/:matrixId/edit`): chỉ tái xuất `MatrixEditPage` từ `./question-matrix` làm component mặc định của route.
+ * `clientLoader` prefetch chi tiết ma trận theo `matrixId` rồi prefetch tiếp cây chương trình và khả dụng kho câu vào QueryClient, đúng khoá trang sẽ đọc.
+ * File này không chứa form hay logic sửa nào; tiêu đề và biên lỗi theo route nằm ở `meta` và `ErrorBoundary` cuối file.
+ */
+
 export { MatrixEditPage as default } from './question-matrix';
+import { appKeyMeta } from '#lib/route-meta';
 
 import { curriculumTreeQueryOptions, matrixAvailabilityQueryOptions, matrixDetailQueryOptions } from '../queries/matrix';
 import { queryClient } from '#lib/query-client';
@@ -22,7 +29,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
-  return titleMeta('Sửa ma trận');
+  return appKeyMeta('matrixEditTitle');
 }

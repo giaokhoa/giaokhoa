@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import type { UserProfile } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { apiJson } from '#lib/api';
 import { useAuth } from '#lib/auth';
+import { appKeyMeta } from '#lib/route-meta';
 
 /**
  * Trang HỒ SƠ (`/profile`) — từ issue #288 (quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn) trang này CHỈ còn thông tin user: form họ/tên/email + các trường tuỳ biến, lưu qua `PATCH /api/v1/users/:id` rồi nạp lại phiên (`reload`) để mọi bề mặt dùng chung AuthContext thấy tên/email mới ngay.
@@ -43,9 +44,8 @@ export function ProfilePage() {
       }),
   });
 
-  const [previousUser, setPreviousUser] = useState<typeof user | undefined>(undefined);
-  if (previousUser !== user) {
-    setPreviousUser(user);
+  // Đồng bộ form theo phiên đăng nhập khi `user` đổi (nạp lại phiên sau khi lưu cũng đi qua đây): đặt trong `useEffect` để đồng bộ là side-effect sau render, không phải setState trong lúc render.
+  useEffect(() => {
     if (user) {
       setForm({
         firstName: user.firstName,
@@ -54,7 +54,7 @@ export function ProfilePage() {
         customFields: Object.fromEntries(user.customFields.map((f) => [f.shortName, f.value ?? ''])),
       });
     }
-  }
+  }, [user]);
 
   if (!user || !form)
     return (
@@ -70,13 +70,13 @@ export function ProfilePage() {
     event.preventDefault();
     setMessage(null);
     try {
-      const updated = await updateProfile.mutateAsync({
-        firstName: form!.firstName,
-        lastName: form!.lastName,
-        email: form!.email || undefined,
-        customFields: form!.customFields,
+      // Đáp ứng PATCH không dùng vào việc gì: `reload()` ngay sau đó mới nạp lại phiên thật từ server.
+      await updateProfile.mutateAsync({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        email: form.email || undefined,
+        customFields: form.customFields,
       });
-      void updated;
       await reload();
       setMessage(t('profileSaved'));
     } catch {
@@ -152,7 +152,6 @@ export default ProfilePage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navProfile');
 }

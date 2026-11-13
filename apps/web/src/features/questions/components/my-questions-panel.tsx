@@ -11,7 +11,7 @@ import { Label } from '@giaokhoa/ui/components/label';
 
 import { useDeleteBankQuestion, useProposeQuestionContribution, useRestoreQuestion, useWithdrawQuestion } from '../queries/questions';
 import type { AttributionLite, BankLite } from '../types/questions';
-import { questionExcerpt } from '../utils/shared';
+import { entryStatus, questionExcerpt } from '../utils/shared';
 
 /** Props của panel "Câu hỏi của tôi". */
 export interface MyQuestionsPanelProps {
@@ -59,7 +59,7 @@ export function MyQuestionsPanel({
 
   /** Rút / hoàn rút một câu khỏi bank của nó. */
   async function toggleWithdraw(view: QuestionView) {
-    const status = (view.entry as { status?: string }).status;
+    const status = entryStatus(view);
     try {
       if (status === 'hidden') {
         await restoreQuestionMutation.mutateAsync(view.question.id);
@@ -122,7 +122,7 @@ export function MyQuestionsPanel({
                 <li key={view.question.id} className="flex flex-wrap items-center gap-2">
                   <span className="min-w-0 flex-1">
                     {questionExcerpt(view)}
-                    {(view.entry as { status?: string }).status === 'hidden' ? (
+                    {entryStatus(view) === 'hidden' ? (
                       <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-xs">{t('withdrawnBadge')}</span>
                     ) : null}
                     <span className="ml-2 rounded bg-secondary px-2 py-0.5 text-xs">v{view.entry.latestVersion}</span>
@@ -136,7 +136,7 @@ export function MyQuestionsPanel({
                     {t('editRow')}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => void toggleWithdraw(view)}>
-                    {(view.entry as { status?: string }).status === 'hidden' ? t('restoreQuestion') : t('withdrawQuestion')}
+                    {entryStatus(view) === 'hidden' ? t('restoreQuestion') : t('withdrawQuestion')}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => void deleteMyQuestion(view.question.id)}>
                     {t('deleteRow')}

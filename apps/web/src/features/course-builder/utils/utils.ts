@@ -1,4 +1,28 @@
 import { LibraryItem } from '#features/content-bank/types/content-bank';
+import type { CourseContentType } from '@giaokhoa/contracts';
+
+/**
+ * Cách kết hợp các tiêu chí hoàn thành khoá: 1 = phải đạt TẤT CẢ tiêu chí, 2 = chỉ cần đạt BẤT KỲ tiêu chí nào. Backend đọc số trần — chưa có enum ở contracts.
+ */
+export const CRITERIA_METHOD = { all: 1, any: 2 } as const;
+
+/** Nhãn loại nội dung trong Builder Outline (menu chọn loại module). */
+export const CONTENT_TYPE_LABEL_KEYS: Record<CourseContentType, string> = {
+  mod_page: 'contentType_mod_page',
+  mod_resource: 'contentType_mod_resource',
+  mod_quiz: 'contentType_mod_quiz',
+  mod_assign: 'contentType_mod_assign',
+};
+
+/**
+ * Khoá i18n cho loại nội dung của module. `component` của module lưu dạng chuỗi tự do (contracts chưa khai enum ở module) nên tra Record theo 4 loại đã biết; loại lạ thì trả về chính chuỗi đó — giữ đúng hành vi cũ của `{ defaultValue: component }` ở chỗ gọi.
+ */
+export function contentTypeKey(component: string): string {
+  if (component === 'mod_page' || component === 'mod_resource' || component === 'mod_quiz' || component === 'mod_assign') {
+    return CONTENT_TYPE_LABEL_KEYS[component];
+  }
+  return component;
+}
 
 export type ItemStatusChoice = 'draft' | 'open' | 'scheduled';
 

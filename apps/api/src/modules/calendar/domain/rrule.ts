@@ -58,9 +58,9 @@ export function addStep(date: Date, freq: RruleSpec['freq']): Date {
   return next;
 }
 
-/** Các thời điểm bắt đầu của các lần xuất hiện trong một chuỗi bắt đầu tại `start` (lần xuất hiện đầu tiên chính là `start`). */
 /**
  * Sinh danh sách thời điểm bắt đầu của các occurrence trong chuỗi lặp, có hard cap chống lặp vô hạn.
+ * Các thời điểm bắt đầu của các lần xuất hiện trong một chuỗi bắt đầu tại `start` (lần xuất hiện đầu tiên chính là `start`).
  */
 export function occurrenceStarts(start: Date, spec: RruleSpec, hardCap = 366): Date[] {
   const out: Date[] = [];

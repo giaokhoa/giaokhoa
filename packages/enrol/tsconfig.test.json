@@ -1,0 +1,3 @@
+{"compilerOptions":{"declaration":false,"noEmit":true},"extends":"./tsconfig.json","include":["src"],
+  // Ghi đè tường minh `exclude` của tsconfig.json để typecheck bao phủ cả spec unit và helper giả (theo mẫu của grades).
+  "exclude":[]}

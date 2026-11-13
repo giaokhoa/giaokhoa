@@ -90,20 +90,20 @@ export class SystemBankSubmissionsRepository {
   }
 
   /** Một trung tâm chỉ xem lịch sử của chính mình. */
-  async listForCentre(centreSlug: string): Promise<SystemQuestionSubmissionRow[]> {
-    return this.db().selectFrom('system_question_submissions').select(COLUMNS)
+  async listForCentre(centreSlug: string, db: SystemBankDb = this.db()): Promise<SystemQuestionSubmissionRow[]> {
+    return db.selectFrom('system_question_submissions').select(COLUMNS)
       .where('centre_slug', '=', centreSlug).orderBy('created_at', 'desc').execute();
   }
 
   /** Hàng chờ của biên tập viên, không trả các dòng từ chối/duyệt. */
-  async listPending(): Promise<SystemQuestionSubmissionRow[]> {
-    return this.db().selectFrom('system_question_submissions').select(COLUMNS)
+  async listPending(db: SystemBankDb = this.db()): Promise<SystemQuestionSubmissionRow[]> {
+    return db.selectFrom('system_question_submissions').select(COLUMNS)
       .where('status', '=', 'pending').orderBy('created_at', 'asc').execute();
   }
 
   /** Dòng đầy đủ để người duyệt kiểm tra trước khi ra quyết định. */
-  async get(id: string): Promise<SystemQuestionSubmissionRow | null> {
-    return await this.db().selectFrom('system_question_submissions').select(COLUMNS)
+  async get(id: string, db: SystemBankDb = this.db()): Promise<SystemQuestionSubmissionRow | null> {
+    return await db.selectFrom('system_question_submissions').select(COLUMNS)
       .where('id', '=', id).executeTakeFirst() ?? null;
   }
 

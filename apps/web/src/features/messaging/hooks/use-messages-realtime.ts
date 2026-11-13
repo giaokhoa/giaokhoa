@@ -24,8 +24,10 @@
  * tín hiệu đang nhập).
  */
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { connectMessagingRealtime, type MessagingRealtimeHandle } from '../api/messaging-socket';
 import { withConversationMovedToSectionTop, withTreeUnread } from '../utils/page-helpers';
+import { queryKeys } from '../queries/keys';
 import type { ConversationGroupTreeView, ConversationView, MessageView } from '../types/types';
 
 export interface UseMessagesRealtimeParams {
@@ -93,6 +95,7 @@ export function useMessagesRealtime({
   realtimeRef,
   suspendRealtime,
 }: UseMessagesRealtimeParams) {
+  const queryClient = useQueryClient();
   // Kênh realtime: nối một lần khi trang mở; handlers đọc state mới nhất qua ref nên không phải nối lại khi state đổi. Người xem chọn hiện diện "ngoại tuyến" thì không nối (và lượt nối trước đã bị cleanup ngắt) — presence thật tắt đúng nghĩa của lựa chọn.
   useEffect(() => {
     if (!myId || suspendRealtime) return;
@@ -134,24 +137,32 @@ export function useMessagesRealtime({
         //   người xem đã bị server gỡ — gỡ mục khỏi tập đã lưu và dời bản đã vá sang danh sách chính ở bước dưới, cờ `archivedAt` làm sạch theo trạng thái server mới.
         // - Tin của CHÍNH người xem: trạng thái lưu trữ của
         //   người xem giữ nguyên — vá nội dung và dời hội thoại lên đầu phân mục của nó (Ghim / Gần đây) trong tập đã lưu, đúng thứ tự server trả khi tải lại (vòng sửa issue #623: vá tại chỗ giữ nguyên vị trí làm thứ tự của tab Lưu trữ lệch thứ tự server cho tới lần tải lại kế tiếp).
-        let moved: ConversationView | undefined;
+        // Hội thoại đã lưu cần dời sang danh sách chính thì đọc TRƯỚC từ cache (ngoài updater): bản cũ gán qua biến side-channel `moved`
+        // trong updater của tập đã lưu rồi đọc lại trong updater của danh sách chính — dựa vào giả định ngầm rằng `setQueryData` chạy
+        // updater đồng bộ theo thứ tự. Chỉ đọc khi tin là của NGƯỜI KHÁC: tin của chính người xem giữ hội thoại trong tập đã lưu
+        // (vá tại chỗ ở bước dưới), không dời sang danh sách chính.
+        const archivedTarget =
+          message.userIdFrom === myId
+            ? undefined
+            : queryClient.getQueryData<ConversationView[]>(queryKeys.messagingArchivedConversations)?.find((c) => c.id === conversationId);
         setArchivedConversations((prev) => {
           const target = prev.find((c) => c.id === conversationId);
           if (!target) return prev;
           if (message.userIdFrom === myId) {
             return withConversationMovedToSectionTop(prev, conversationId, applyUpdate);
           }
-          moved = target;
           return prev.filter((c) => c.id !== conversationId);
         });
         setConversations((prev) => {
           const target = prev.find((c) => c.id === conversationId);
           if (!target) {
             // Hội thoại vừa dời từ tập đã lưu sang: lên đầu danh sách như mọi hội thoại vừa có tin mới.
-            return moved ? [{ ...applyUpdate(moved), archivedAt: null }, ...prev] : prev;
+            return archivedTarget ? [{ ...applyUpdate(archivedTarget), archivedAt: null }, ...prev] : prev;
           }
-          // Danh sách tự sắp xếp lại theo hoạt động mới nhất (lát M1, issue #204): conversation vừa có tin mới được đưa lên đầu — cùng thứ tự server trả khi tải lại (updated_at giảm dần) nên realtime và reload không bao giờ lệch nhau.
-          return [applyUpdate(target), ...prev.filter((c) => c.id !== conversationId)];
+          // Danh sách tự sắp xếp lại theo hoạt động mới nhất (lát M1, issue #204): conversation vừa có tin mới được đưa lên đầu PHÂN MỤC
+          // của nó qua `withConversationMovedToSectionTop` — cùng thứ tự server trả khi tải lại (ghim trước rồi updated_at giảm dần) nên
+          // realtime và reload không bao giờ lệch nhau; dời thẳng lên đầu tuyệt đối sẽ để hội thoại chưa ghim nhảy qua hội thoại đã ghim.
+          return withConversationMovedToSectionTop(prev, conversationId, applyUpdate);
         });
         recountUnread();
         // Cây nhóm cũng nhận số chưa đọc mới của conversation này để huy hiệu trên các nút của tab Nhóm khớp ngay (lát MSG-T3).
@@ -170,6 +181,7 @@ export function useMessagesRealtime({
         if (activeRef.current?.id === conversationId) {
           invalidateConversationWindow(conversationId);
         }
+        // Nạp lại nền: `reload` chỉ invalidate các khoá (không fetch trực tiếp) nên không throw thực tế; lỗi nạp lại tự hiện qua trạng thái lỗi của query danh sách.
         void reload().catch(() => undefined);
       },
       onReadReceipt: ({ conversationId, userId, lastReadSeq }) => {
@@ -217,6 +229,7 @@ export function useMessagesRealtime({
         // Chu kỳ nối mới sinh ảnh chụp mới phản ánh thời điểm nối mới: xoá dấu sự kiện trực tiếp của chu kỳ trước để ảnh chụp sắp tới được toàn quyền bổ sung.
         presenceLiveUsers = new Set();
         // Nối lại: danh sách lấy tươi bằng REST (truy vấn tổng hợp đã rẻ), conversation đang mở xin đúng phần thiếu theo seq.
+        // Nạp lại nền: `reload` chỉ invalidate các khoá (không fetch trực tiếp) nên không throw thực tế; lỗi nạp lại tự hiện qua trạng thái lỗi của query danh sách.
         void reload().catch(() => undefined);
         const current = activeRef.current;
         if (current) {

@@ -21,7 +21,10 @@
  *   cũ: `getLastAccess` đọc theo user rồi khớp course trong bộ nhớ, `getModuleProgress` đọc theo cm rồi đối chiếu user trong bộ nhớ — không đổi thành điều kiện SQL để hành vi (và thứ tự dòng đầu tiên) giữ nguyên.
  */
 import type { InsertObject, UpdateObject } from 'kysely';
-import type { CentreDb, CentreDB } from '../client';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
+
+/** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
+export type ContentDb = CentreDb | CentreTx;
 
 /** Một dòng trang đọc (mod_page). */
 export interface PageRow {
@@ -266,18 +269,18 @@ export class ContentRepository {
   }
 
   /** Chèn trang đọc. */
-  async insertPage(v: NewPage): Promise<PageRow> {
-    const rows = await this.db()
+  async insertPage(v: NewPage, db: ContentDb = this.db()): Promise<PageRow> {
+    const row = await db
       .insertInto('pages')
       .values(pageInsertValues(v))
       .returning(PAGE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy trang đọc theo id. */
-  async getPage(id: string): Promise<PageRow | undefined> {
-    const row = await this.db()
+  async getPage(id: string, db: ContentDb = this.db()): Promise<PageRow | undefined> {
+    const row = await db
       .selectFrom('pages')
       .select(PAGE_COLUMNS)
       .where('id', '=', id)
@@ -286,8 +289,8 @@ export class ContentRepository {
   }
 
   /** Liệt kê trang đọc của khoá học. */
-  async listPages(courseId: string): Promise<PageRow[]> {
-    return this.db()
+  async listPages(courseId: string, db: ContentDb = this.db()): Promise<PageRow[]> {
+    return db
       .selectFrom('pages')
       .select(PAGE_COLUMNS)
       .where('course', '=', courseId)
@@ -296,8 +299,8 @@ export class ContentRepository {
   }
 
   /** Cập nhật trang đọc. */
-  async updatePage(id: string, v: Partial<NewPage>): Promise<void> {
-    await this.db()
+  async updatePage(id: string, v: Partial<NewPage>, db: ContentDb = this.db()): Promise<void> {
+    await db
       .updateTable('pages')
       .set({ ...pageUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
@@ -305,28 +308,28 @@ export class ContentRepository {
   }
 
   /** Xoá trang đọc. */
-  async deletePage(id: string): Promise<void> {
-    await this.db().deleteFrom('pages').where('id', '=', id).execute();
+  async deletePage(id: string, db: ContentDb = this.db()): Promise<void> {
+    await db.deleteFrom('pages').where('id', '=', id).execute();
   }
 
   /** Xoá trang đọc theo cm (dọn dẹp khi course module bị xoá). */
-  async deletePageByCm(cmId: string): Promise<void> {
-    await this.db().deleteFrom('pages').where('cm_id', '=', cmId).execute();
+  async deletePageByCm(cmId: string, db: ContentDb = this.db()): Promise<void> {
+    await db.deleteFrom('pages').where('cm_id', '=', cmId).execute();
   }
 
   /** Chèn tài nguyên. */
-  async insertResource(v: NewResource): Promise<ResourceRow> {
-    const rows = await this.db()
+  async insertResource(v: NewResource, db: ContentDb = this.db()): Promise<ResourceRow> {
+    const row = await db
       .insertInto('resources')
       .values(resourceInsertValues(v))
       .returning(RESOURCE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy tài nguyên theo id. */
-  async getResource(id: string): Promise<ResourceRow | undefined> {
-    const row = await this.db()
+  async getResource(id: string, db: ContentDb = this.db()): Promise<ResourceRow | undefined> {
+    const row = await db
       .selectFrom('resources')
       .select(RESOURCE_COLUMNS)
       .where('id', '=', id)
@@ -335,8 +338,8 @@ export class ContentRepository {
   }
 
   /** Liệt kê tài nguyên của khoá học. */
-  async listResources(courseId: string): Promise<ResourceRow[]> {
-    return this.db()
+  async listResources(courseId: string, db: ContentDb = this.db()): Promise<ResourceRow[]> {
+    return db
       .selectFrom('resources')
       .select(RESOURCE_COLUMNS)
       .where('course', '=', courseId)
@@ -345,8 +348,8 @@ export class ContentRepository {
   }
 
   /** Cập nhật tài nguyên. */
-  async updateResource(id: string, v: Partial<NewResource>): Promise<void> {
-    await this.db()
+  async updateResource(id: string, v: Partial<NewResource>, db: ContentDb = this.db()): Promise<void> {
+    await db
       .updateTable('resources')
       .set({ ...resourceUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
@@ -354,31 +357,31 @@ export class ContentRepository {
   }
 
   /** Xoá tài nguyên. */
-  async deleteResource(id: string): Promise<void> {
-    await this.db().deleteFrom('resources').where('id', '=', id).execute();
+  async deleteResource(id: string, db: ContentDb = this.db()): Promise<void> {
+    await db.deleteFrom('resources').where('id', '=', id).execute();
   }
 
   /** Xoá tài nguyên theo cm (dọn dẹp khi course module bị xoá). */
-  async deleteResourceByCm(cmId: string): Promise<void> {
-    await this.db().deleteFrom('resources').where('cm_id', '=', cmId).execute();
+  async deleteResourceByCm(cmId: string, db: ContentDb = this.db()): Promise<void> {
+    await db.deleteFrom('resources').where('cm_id', '=', cmId).execute();
   }
 
   /** Ghi/ghi đè dấu vết mở học gần nhất của một học sinh trong một khoá. */
-  async upsertLastAccess(userId: string, courseId: string, cmId: string): Promise<LastAccessRow> {
-    const rows = await this.db()
+  async upsertLastAccess(userId: string, courseId: string, cmId: string, db: ContentDb = this.db()): Promise<LastAccessRow> {
+    const row = await db
       .insertInto('course_last_access')
       .values({ user_id: userId, course_id: courseId, cm_id: cmId, accessed_at: new Date() })
       .onConflict((oc) =>
         oc.columns(['user_id', 'course_id']).doUpdateSet({ cm_id: cmId, accessed_at: new Date() }),
       )
       .returning(LAST_ACCESS_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Đọc dấu vết mở học gần nhất của một học sinh trong một khoá (khớp course trong bộ nhớ như repository cũ). */
-  async getLastAccess(userId: string, courseId: string): Promise<LastAccessRow | undefined> {
-    const rows = await this.db()
+  async getLastAccess(userId: string, courseId: string, db: ContentDb = this.db()): Promise<LastAccessRow | undefined> {
+    const rows = await db
       .selectFrom('course_last_access')
       .select(LAST_ACCESS_COLUMNS)
       .where('user_id', '=', userId)
@@ -394,12 +397,13 @@ export class ContentRepository {
     courseId: string,
     cmId: string,
     patch: { percent?: number; positionSeconds?: number; page?: number },
+    db: ContentDb = this.db(),
   ): Promise<ModuleProgressRow> {
-    const existing = await this.getModuleProgress(userId, cmId);
+    const existing = await this.getModuleProgress(userId, cmId, db);
     const percent = Math.max(existing?.percent ?? 0, patch.percent ?? 0);
     const positionSeconds = patch.positionSeconds ?? existing?.positionSeconds ?? null;
     const page = patch.page ?? existing?.page ?? null;
-    const rows = await this.db()
+    const row = await db
       .insertInto('course_module_progress')
       .values({
         user_id: userId,
@@ -419,13 +423,13 @@ export class ContentRepository {
         }),
       )
       .returning(MODULE_PROGRESS_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Đọc tiến độ xem một mục của một học sinh (đối chiếu user trong bộ nhớ như repository cũ). */
-  async getModuleProgress(userId: string, cmId: string): Promise<ModuleProgressRow | undefined> {
-    const row = await this.db()
+  async getModuleProgress(userId: string, cmId: string, db: ContentDb = this.db()): Promise<ModuleProgressRow | undefined> {
+    const row = await db
       .selectFrom('course_module_progress')
       .select(MODULE_PROGRESS_COLUMNS)
       .where('cm_id', '=', cmId)
@@ -436,8 +440,8 @@ export class ContentRepository {
   /**
    * Ghi bản ghi hồ sơ hoàn thành (chụp tên mục tại thời điểm hoàn thành). Idempotent: lần hoàn thành đầu tiên của mỗi (HS, mục) là bản ghi duy nhất — các lần hoàn thành sau không ghi đè.
    */
-  async insertLearningRecord(v: NewLearningRecord): Promise<void> {
-    await this.db()
+  async insertLearningRecord(v: NewLearningRecord, db: ContentDb = this.db()): Promise<void> {
+    await db
       .insertInto('learning_records')
       .values(learningRecordInsertValues(v))
       .onConflict((oc) => oc.columns(['user_id', 'cm_id']).doNothing())
@@ -445,8 +449,8 @@ export class ContentRepository {
   }
 
   /** Liệt kê bản ghi hồ sơ hoàn thành của một khoá (cho báo cáo giáo viên). */
-  async listLearningRecords(courseId: string): Promise<LearningRecordRow[]> {
-    return this.db()
+  async listLearningRecords(courseId: string, db: ContentDb = this.db()): Promise<LearningRecordRow[]> {
+    return db
       .selectFrom('learning_records')
       .select(LEARNING_RECORD_COLUMNS)
       .where('course_id', '=', courseId)

@@ -1,15 +1,22 @@
+/**
+ * Trang tự báo danh vào lớp bằng mã: học sinh nhập mã tham gia (hoặc mở link chứa
+ * ?code= để tự xem trước một lần) rồi xem trước tên lớp và chủ lớp trước khi xin vào.
+ * Kết quả theo luật API — lớp trống vào thẳng, lớp đã có học sinh vào hàng chờ duyệt
+ * trừ khi bật tự duyệt, đã là thành viên thì báo rõ — còn mã sai chỉ hiện một thông
+ * điệp chung, không lộ lớp nào tồn tại.
+ */
+
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
 import { Input } from '@giaokhoa/ui/components/input';
 import { ErrorAlert } from '#components/error-alert';
-import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { joinClassByCode, previewJoinClass } from '../api/classes';
+import { useJoinClassByCode, usePreviewJoinClass } from '../queries/classes';
 import type { ClassJoinPreview } from '../types/classes';
 
 /**
@@ -24,28 +31,31 @@ export function ClassJoinPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const previewMutation = useMutation({
-    mutationFn: (value: string) => previewJoinClass(value),
-    onSuccess: (data) => {
+  const previewMutation = usePreviewJoinClass();
+  const joinMutation = useJoinClassByCode();
+
+  async function runPreview(value: string) {
+    try {
+      const data = await previewMutation.mutateAsync(value);
       setPreview(data);
       setError(null);
-    },
-    onError: () => {
+    } catch {
       setPreview(null);
       setError(t('classJoinInvalid'));
-    },
-  });
+    }
+  }
 
-  const joinMutation = useMutation({
-    mutationFn: (value: string) => joinClassByCode(value),
-    onSuccess: (result) => {
+  async function runJoin(value: string) {
+    try {
+      const result = await joinMutation.mutateAsync(value);
       setError(null);
       if (result.outcome === 'joined') setMessage(t('classJoinJoined', { name: result.class.name }));
       else if (result.outcome === 'pending') setMessage(t('classJoinPendingMsg', { name: result.class.name }));
       else setMessage(t('classJoinAlready', { name: result.class.name }));
-    },
-    onError: () => setError(t('classJoinInvalid')),
-  });
+    } catch {
+      setError(t('classJoinInvalid'));
+    }
+  }
 
   // Tự xem trước cho mã có sẵn trong link: chỉ chạy đúng một lần lúc mở trang (gác bằng ref). `initialCode` là giá trị khởi tạo lấy từ URL lúc trang mở — không tự xem trước lại khi URL đổi trong lúc trang đang mở, khớp cách `code` được khởi tạo một lần bằng useState ở trên. Mảng phụ thuộc liệt kê đủ giá trị hiệu ứng đọc; ref gác làm các lần chạy thêm
   // (khi phụ thuộc đổi danh tính) thoát ngay, hành vi không đổi.
@@ -53,14 +63,14 @@ export function ClassJoinPage() {
   useEffect(() => {
     if (autoPreviewedRef.current) return;
     autoPreviewedRef.current = true;
-    if (initialCode) previewMutation.mutate(initialCode);
+    if (initialCode) void runPreview(initialCode);
   }, [initialCode, previewMutation]);
 
   function onPreview(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     setError(null);
-    if (code.trim()) previewMutation.mutate(code.trim());
+    if (code.trim()) void runPreview(code.trim());
   }
 
   return (
@@ -97,7 +107,7 @@ export function ClassJoinPage() {
               <p className="text-base font-medium">{preview.name}</p>
               <p className="text-muted-foreground">{t('classJoinPreviewOwner', { name: preview.ownerName })}</p>
               <div>
-                <Button type="button" disabled={joinMutation.isPending} onClick={() => joinMutation.mutate(code.trim())}>
+                <Button type="button" disabled={joinMutation.isPending} onClick={() => void runJoin(code.trim())}>
                   {t('classJoinSubmit')}
                 </Button>
               </div>

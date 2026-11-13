@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Route } from './+types/player';
 import { Link, useParams } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -7,6 +8,7 @@ import '#config/i18n';
 import { apiFetch, apiJson } from '#lib/api';
 import { playerViewQueryOptions, useMarkPlayerModuleLearned, usePlayerView } from '../queries/player';
 import { queryClient } from '#lib/query-client';
+import { titleMeta } from '#lib/route-meta';
 
 function isInlineMime(mime: string | null): boolean {
   return mime === 'application/pdf' || (mime?.startsWith('image/') ?? false) || (mime?.startsWith('video/') ?? false);
@@ -20,6 +22,8 @@ function isHls(fileName: string, mime: string | null): boolean {
  * Hàng đợi gửi bù sự kiện học (K2-B2): view/progress là hồ sơ quá trình học — khi mạng rớt, sự kiện được giữ trong localStorage và gửi lại khi có mạng hoặc lần mở player sau, học sinh mạng yếu không bị mất tiến độ đã học thật.
  */
 const QUEUE_KEY = 'giaokhoa-learn-event-queue';
+/** Số sự kiện học tối đa giữ trong hàng đợi gửi bù (cũ nhất bị cắt khi tràn). */
+const EVENT_QUEUE_MAX_LENGTH = 100;
 interface QueuedEvent { path: string; body: string }
 
 function enqueueEvent(event: QueuedEvent): void {
@@ -27,7 +31,7 @@ function enqueueEvent(event: QueuedEvent): void {
     const raw = localStorage.getItem(QUEUE_KEY);
     const queue: QueuedEvent[] = raw ? (JSON.parse(raw) as QueuedEvent[]) : [];
     queue.push(event);
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-100)));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-EVENT_QUEUE_MAX_LENGTH)));
   } catch {
     // localStorage không dùng được (chế độ riêng tư…) — bỏ qua lặng lẽ.
   }
@@ -68,6 +72,12 @@ async function postLearningEvent(path: string, body: unknown): Promise<boolean> 
 }
 
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
+/** Khoảng tối thiểu giữa hai lần báo tiến độ xem video (chống spam khi tua/seek liên tục). */
+const PROGRESS_REPORT_THROTTLE_MS = 5000;
+/** Ngưỡng "video chưa bắt đầu phát": dưới 1 giây thì coi như đang ở đầu, được phép tua tới vị trí dở. */
+const RESUME_START_THRESHOLD_SECONDS = 1;
+/** Chỉ tua tới vị trí dở khi lệch hơn 2 giây (tránh tua lại vì sai số nhỏ). */
+const RESUME_SEEK_MIN_DIFF_SECONDS = 2;
 
 /**
  * Trang học (player) của K2: nội dung của một mục khoá học kèm outline kề bên (dấu ✓ theo completion của chính học sinh), nút Trước/Tiếp, tự ghi nhận đã xem qua endpoint /view sẵn có, báo tiến độ xem cho video
@@ -153,7 +163,7 @@ export function PlayerPage() {
       const video = videoRef.current;
       if (!video || !id || !cmId || !video.duration) return;
       const now = Date.now();
-      if (!force && now - lastProgressSentAt.current < 5000) return;
+      if (!force && now - lastProgressSentAt.current < PROGRESS_REPORT_THROTTLE_MS) return;
       lastProgressSentAt.current = now;
       void postLearningEvent(`/api/v1/courses/${id}/modules/${cmId}/progress`, {
         percent: Math.min(100, Math.round((video.currentTime / video.duration) * 100)),
@@ -169,7 +179,7 @@ export function PlayerPage() {
     const video = videoRef.current;
     if (!video) return;
     video.playbackRate = rate;
-    if (resumeAt && video.currentTime < 1 && Math.abs(video.currentTime - resumeAt) > 2) {
+    if (resumeAt && video.currentTime < RESUME_START_THRESHOLD_SECONDS && Math.abs(video.currentTime - resumeAt) > RESUME_SEEK_MIN_DIFF_SECONDS) {
       video.currentTime = resumeAt;
     }
   }, [data, rate, resumeAt]);
@@ -363,7 +373,7 @@ export default PlayerPage;
  * khoá factory) trước khi component mount. prefetchQuery không ném
  * lỗi: tải hỏng thì component tự xử lý qua useQuery như trước.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.id && params.cmId) {
     await queryClient.prefetchQuery(playerViewQueryOptions(params.id, params.cmId));
   }
@@ -372,7 +382,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Học bài');
 }

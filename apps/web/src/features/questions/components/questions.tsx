@@ -71,6 +71,7 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
       : null;
   const displayMessage = message ?? loadError;
 
+  // Chọn danh mục đầu tiên khi danh sách về (setState trong lúc render: chỉ chạy khi chưa chọn danh mục nào mà đã có danh mục đầu, các lần render sau không đổi gì thêm).
   if (firstCategoryId && !qCategory) setQCategory(String(firstCategoryId));
   // Lớp bank của feat Ngân hàng câu hỏi chung (issue #70): khu vực ngân hàng riêng của giáo viên + khu vực Ngân hàng hệ thống (bank chung).
   const banks = useQuestionBanks('question').data ?? [];

@@ -62,9 +62,12 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       pub.on('error', (error: Error) => this.logger.warn(`Redis adapter (pub) của messaging lỗi: ${error.message}`));
       sub.on('error', (error: Error) => this.logger.warn(`Redis adapter (sub) của messaging lỗi: ${error.message}`));
       this.adapterClients = [pub, sub];
+      // `as never` là điểm đã biết về kiểu adapter của Socket.IO: kiểu
+      // của adapter Redis không khớp trực tiếp với kiểu adapter mà
+      // Server chờ nên ép kiểu tại đây, giữ nguyên.
       server.adapter(createAdapter(pub, sub) as never);
     } catch (error) {
-      this.logger.warn(`Không gắn được Redis adapter cho messaging, dùng adapter in-memory: ${(error as Error).message}`);
+      this.logger.warn(`Không gắn được Redis adapter cho messaging, dùng adapter in-memory: ${this.errorMessage(error)}`);
     }
   }
 
@@ -79,6 +82,14 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     this.adapterClients = [];
     this.stateClient = null;
     this.server = null;
+  }
+
+  /**
+   * Thông điệp lỗi dùng cho log cảnh báo: lỗi thường là Error, giá trị
+   * lạ thì ép thành chuỗi để log không bao giờ tự ném lỗi.
+   */
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   /** Connection Redis cho presence/typing (tách khỏi cặp adapter). */
@@ -121,7 +132,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
         }
       }
     } catch (error) {
-      this.logger.warn(`Không nối lại được room sau bỏ chặn cho ${userId}: ${(error as Error).message}`);
+      this.logger.warn(`Không nối lại được room sau bỏ chặn cho ${userId}: ${this.errorMessage(error)}`);
     }
   }
 
@@ -139,7 +150,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       const tenantId = await this.tenantIdOfConversation(conversationId);
       await this.server.in(userRoom(tenantId, userId)).socketsLeave(conversationRoom(tenantId, conversationId));
     } catch (error) {
-      this.logger.warn(`Không đẩy được socket của user ${userId} khỏi conversation ${conversationId}: ${(error as Error).message}`);
+      this.logger.warn(`Không đẩy được socket của user ${userId} khỏi conversation ${conversationId}: ${this.errorMessage(error)}`);
     }
   }
 
@@ -162,7 +173,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
         await this.broadcastPresence(userId, true);
       }
     } catch (error) {
-      this.logger.warn(`Không ghi được presence khi nối: ${(error as Error).message}`);
+      this.logger.warn(`Không ghi được presence khi nối: ${this.errorMessage(error)}`);
     }
   }
 
@@ -178,7 +189,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       const remaining = await redis.scard(`${PRESENCE_KEY_PREFIX}${subject}`);
       if (remaining === 0) await this.broadcastPresence(userId, false);
     } catch (error) {
-      this.logger.warn(`Không ghi được presence khi ngắt: ${(error as Error).message}`);
+      this.logger.warn(`Không ghi được presence khi ngắt: ${this.errorMessage(error)}`);
     }
   }
 
@@ -248,7 +259,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       });
       return [...online];
     } catch (error) {
-      this.logger.warn(`Không đọc được ảnh chụp presence cho ${viewerId}: ${(error as Error).message}`);
+      this.logger.warn(`Không đọc được ảnh chụp presence cho ${viewerId}: ${this.errorMessage(error)}`);
       return [];
     }
   }
@@ -290,7 +301,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
         await redis.expire(`${PRESENCE_KEY_PREFIX}${subject}`, this.presenceTtlSeconds);
       }));
     } catch (error) {
-      this.logger.warn(`Không gia hạn được presence: ${(error as Error).message}`);
+      this.logger.warn(`Không gia hạn được presence: ${this.errorMessage(error)}`);
     }
   }
 
@@ -320,7 +331,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
         .to(rooms)
         .emit(MESSAGING_SOCKET_EVENTS.presenceChanged, { userId, online });
     } catch (error) {
-      this.logger.warn(`Không phát được presence: ${(error as Error).message}`);
+      this.logger.warn(`Không phát được presence: ${this.errorMessage(error)}`);
     }
   }
 
@@ -339,7 +350,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       if (set !== 'OK') return;
       this.server.to(conversationRoom(tenantId, conversationId)).emit(MESSAGING_SOCKET_EVENTS.typing, { conversationId, userId });
     } catch (error) {
-      this.logger.warn(`Không phát được typing: ${(error as Error).message}`);
+      this.logger.warn(`Không phát được typing: ${this.errorMessage(error)}`);
     }
   }
 }

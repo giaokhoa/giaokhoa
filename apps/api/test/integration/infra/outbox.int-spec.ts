@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
-import { OutboxService } from './outbox.service';
+import { OutboxService } from '../../../src/infra/events/outbox.service';
 
 /**
  * Hợp đồng giao dịch của writer outbox (real DB, giaokhoa_test_api).

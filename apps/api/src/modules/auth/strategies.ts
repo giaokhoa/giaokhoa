@@ -5,11 +5,12 @@ import { Strategy as LocalStrategy } from 'passport-local';
 import { ExtractJwt, Strategy as JwtStrategy } from 'passport-jwt';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { resolveDedicatedSpace } from '../tenants/space-resolution';
+import { resolveDedicatedSpace, type DedicatedSpace } from '../tenants/space-resolution';
 import { isPublicLearningHost } from '../tenants/public-learning';
 import { TenantsService } from '../tenants/tenants.service';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import type { UserRow } from '@giaokhoa/db/repositories/users';
 
 /**
  * Yêu cầu tối thiểu của request mà hai chiến lược dưới đây cần để phân giải không gian kho riêng: chỉ header `Host` (địa chỉ trung tâm là tên miền con mang slug, xem `space-resolution.ts`).
@@ -51,7 +52,18 @@ export class LocalAuthStrategy extends PassportStrategy(LocalStrategy, 'local') 
   }
 }
 
-export interface JwtPayload { sub: string; username: string; sid: string; scope?: string; /** Tenant hiệu lực của phiên (TENANT-0, #168). */ tid?: string; /** Định danh đăng ký của trung tâm ở kho riêng mà phiên thuộc về (issue #582); vắng mặt khi tenant hiệu lực ở kho chung. */ centre_id?: string; /** Audience của token (issue #584): `platform` cho token của bề mặt đăng nhập quản trị platform, vắng mặt cho token nghiệp vụ thường. */ aud?: string }
+export interface JwtPayload {
+  sub: string;
+  username: string;
+  sid: string;
+  scope?: string;
+  /** Tenant hiệu lực của phiên (TENANT-0, #168). */
+  tid?: string;
+  /** Định danh đăng ký của trung tâm ở kho riêng mà phiên thuộc về (issue #582); vắng mặt khi tenant hiệu lực ở kho chung. */
+  centre_id?: string;
+  /** Audience của token (issue #584): `platform` cho token của bề mặt đăng nhập quản trị platform, vắng mặt cho token nghiệp vụ thường. */
+  aud?: string;
+}
 
 @Injectable()
 /**
@@ -79,27 +91,45 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
   }
   /** Chỉ danh tính — và tài khoản phải còn đang hoạt động: token của người dùng bị đình chỉ/đã xoá sẽ chết tại đây. */
   async validate(req: SpaceAwareRequest, payload: JwtPayload): Promise<AuthenticatedUser> {
-    // Challenge token của bước MFA (scope 'mfa_challenge', không có sid phiên) chỉ dùng được cho POST /auth/mfa/verify — không phải access token nên bị từ chối ở mọi route thường.
+    this.assertAccessToken(payload);
+    const space = await this.resolveSpace(payload, req);
+    this.assertPublicLearningSession(payload, req);
+    await this.assertCentreMatches(payload, space);
+    const user = await this.resolvePrincipalUser(payload, space);
+    return { id: user.id, username: user.username, sessionId: payload.sid, tenantId: payload.tid, centreId: payload.centre_id, audience: payload.aud };
+  }
+
+  /**
+   * Challenge token của bước MFA (scope 'mfa_challenge', không có sid phiên) chỉ dùng được cho POST /auth/mfa/verify — không phải access token nên bị từ chối ở mọi route thường.
+   */
+  private assertAccessToken(payload: JwtPayload): void {
     if (payload.scope !== undefined || !payload.sid) {
       throw new UnauthorizedException({ message: 'Token is not an access token', code: 'auth.unauthenticated' });
     }
-    // Token vận hành có audience riêng và danh tính CHỈ trong kho
-    // chung; không lấy principal từ kho công cộng dù cùng hostname.
-    const space = (payload.aud === 'platform' || payload.aud === 'support')
+  }
+
+  /**
+   * Phân giải không gian kho riêng từ địa chỉ request. Token vận hành có audience riêng và danh tính CHỈ trong kho chung; không lấy principal từ kho công cộng dù cùng hostname.
+   */
+  private async resolveSpace(payload: JwtPayload, req: SpaceAwareRequest): Promise<DedicatedSpace | null> {
+    return (payload.aud === 'platform' || payload.aud === 'support')
       ? null
       : await resolveDedicatedSpace(this.spaceDb, req.headers?.host);
-    // Khi đã tách host gốc, token nghiệp vụ thiếu định danh kho
-    // không được nhận từ kho vận hành (kể cả khi user đó là siteadmin).
-    // Hai audience vận hành platform/support được tra kho chung; token support chỉ dùng route hỗ trợ.
+  }
+
+  /**
+   * Khi đã tách host gốc, token nghiệp vụ thiếu định danh kho không được nhận từ kho vận hành (kể cả khi user đó là siteadmin). Hai audience vận hành platform/support được tra kho chung; token support chỉ dùng route hỗ trợ.
+   */
+  private assertPublicLearningSession(payload: JwtPayload, req: SpaceAwareRequest): void {
     if (isPublicLearningHost(req.headers?.host) && payload.aud !== 'platform' && payload.aud !== 'support' && !payload.centre_id) {
       throw new UnauthorizedException({ message: 'Public learning requires a store-bound session', code: 'auth.centre_mismatch' });
     }
-    // Token của trung tâm A/B không dùng được ở địa chỉ khác hay
-    // hostname gốc. Ngoại lệ có kiểm chứng: Trang chính còn dùng
-    // địa chỉ gốc và kho chung cho phiên của tenant platform trong
-    // giai đoạn này (việc tách Trang chính thuộc issue sau).
-    // Chỉ chấp nhận nếu id kho được nêu trong token khớp chính xác
-    // dòng đăng ký Trang chính, không nhận mọi token mang tid platform.
+  }
+
+  /**
+   * Token của trung tâm A/B không dùng được ở địa chỉ khác hay hostname gốc. Ngoại lệ có kiểm chứng: Trang chính còn dùng địa chỉ gốc và kho chung cho phiên của tenant platform trong giai đoạn này (việc tách Trang chính thuộc issue sau). Chỉ chấp nhận nếu id kho được nêu trong token khớp chính xác dòng đăng ký Trang chính, không nhận mọi token mang tid platform.
+   */
+  private async assertCentreMatches(payload: JwtPayload, space: DedicatedSpace | null): Promise<void> {
     if (payload.centre_id !== undefined && (!space || payload.centre_id !== space.spaceId)) {
       let rootIsPlatform = false;
       if (!space && payload.tid !== undefined) {
@@ -117,7 +147,12 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
         throw new UnauthorizedException({ message: 'Token belongs to another centre or address', code: 'auth.centre_mismatch' });
       }
     }
-    // Đường vận hành platform (issue #582): phiên KHÔNG mang claim `centre_id` và mang `tid` của tenant platform tra ở kho chung — tra trong kho riêng sẽ từ chối oan quản trị platform vốn không có tài khoản ở đó. Điều kiện thiếu claim là bắt buộc: phiên của site chính mang cùng `tid` (dòng tenant platform được sao sang kho riêng giữ nguyên id) NHƯNG mang `centre_id` của site chính, nên nó phải tra ở kho riêng, không được rơi vào nhánh này. Danh tính tenant platform lấy từ cache singleton của repository nên lần tra này rẻ sau lần đầu.
+  }
+
+  /**
+   * Tra tài khoản của principal và kiểm tài khoản còn hoạt động. Đường vận hành platform (issue #582): phiên KHÔNG mang claim `centre_id` và mang `tid` của tenant platform tra ở kho chung — tra trong kho riêng sẽ từ chối oan quản trị platform vốn không có tài khoản ở đó. Điều kiện thiếu claim là bắt buộc: phiên của site chính mang cùng `tid` (dòng tenant platform được sao sang kho riêng giữ nguyên id) NHƯNG mang `centre_id` của site chính, nên nó phải tra ở kho riêng, không được rơi vào nhánh này. Danh tính tenant platform lấy từ cache singleton của repository nên lần tra này rẻ sau lần đầu.
+   */
+  private async resolvePrincipalUser(payload: JwtPayload, space: DedicatedSpace | null): Promise<UserRow> {
     const isPlatformSession =
       space !== null &&
       payload.tid !== undefined &&
@@ -129,6 +164,6 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
     if (!user || user.deleted || user.suspended) {
       throw new UnauthorizedException({ message: 'Account is not active', code: 'auth.account_inactive' });
     }
-    return { id: user.id, username: user.username, sessionId: payload.sid, tenantId: payload.tid, centreId: payload.centre_id, audience: payload.aud };
+    return user;
   }
 }

@@ -1,3 +1,9 @@
+/**
+ * Bề mặt phụ huynh chỉ-xem: chọn con rồi hiện tóm tắt tuần, kết quả mới đã công bố, thông báo lớp, tiến độ theo khoá và kết quả học tập đã công bố theo môn.
+ * Con đang xem do path quyết định (`/guardian/students/:studentId`; gốc `/guardian` hiện con đầu tiên), link cũ dạng `/guardian?student=<id>` được chuyển hướng thay thế sang path mới.
+ * Ngoại lệ duy nhất thuộc về chính phụ huynh là khối cài đặt tần suất digest cho con đang chọn; dữ liệu đã qua cổng liên kết giám hộ và cổng công bố phía server.
+ */
+
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -5,23 +11,14 @@ import type { GuardianDigestFrequency } from '@giaokhoa/contracts';
 import '#config/i18n';
 import { guardianDigestPreferenceQueryOptions, guardianMyStudentsQueryOptions, guardianOverviewQueryOptions, guardianResultsQueryOptions, useUpdateGuardianDigestPreference } from '../queries/guardians';
 import { formatWithOptions } from '#utils/date-format';
+import { personName } from '#utils/name-format';
+import { scoreLabel } from '#utils/number-format';
 import { SectionCards, type StatCard } from '#components/section-cards';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { PageSkeleton } from '#components/page-skeleton';
 import { PageShell } from '#components/page-shell';
-
-/** Tên hiển thị của học sinh: Họ + Tên như hồ sơ người dùng. */
-function studentName(s: { firstName: string; lastName: string }): string {
-  return `${s.lastName} ${s.firstName}`.trim();
-}
-
-
-/** Số điểm hiển thị theo ngôn ngữ (tối đa 2 chữ số thập phân, không ép 0). */
-function scoreLabel(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
-}
 
 /** Tiêu đề một khối trên bề mặt phụ huynh. */
 function BlockTitle({ children }: { children: string }) {
@@ -175,13 +172,13 @@ export function GuardianPage() {
                   aria-pressed={entry.student.id === studentId}
                   onClick={() => navigate(`/guardian/students/${entry.student.id}`)}
                 >
-                  {studentName(entry.student)}
+                  {personName(entry.student)}
                 </Button>
               ))}
             </div>
           )}
           {students.length === 1 && (
-            <p className="px-4 text-base font-medium lg:px-6">{studentName(students[0]!.student)}</p>
+            <p className="px-4 text-base font-medium lg:px-6">{personName(students[0]!.student)}</p>
           )}
 
           {studentId && <DigestSettings studentId={studentId} />}

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { adjustedGrade } from '@giaokhoa/grades';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -13,6 +13,14 @@ import { GradesRepository, type GradeRow, type ItemRow } from '@giaokhoa/db/repo
 export const COMPLETION_PASS = 2;
 export const COMPLETION_FAIL = 3;
 export const COMPLETION_DONE = 1;
+
+/**
+ * Nhãn nguồn điểm ghi qua `recordActivityGrade` — theo quy ước tên
+ * hoạt động Moodle (`mod/...`), KHÔNG phải capability: 'mod/quiz' cho
+ * điểm quiz (mặc định), 'mod/assign' cho điểm bài tập.
+ */
+export const GRADE_SOURCE_QUIZ = 'mod/quiz';
+export const GRADE_SOURCE_ASSIGN = 'mod/assign';
 
 /** Trạng thái công bố của một item (PH-0, issue #116): policy neo trên item; published = điểm đang hiện phía học sinh. */
 export interface GradePublicationState {
@@ -41,6 +49,8 @@ export interface ActivityGradeView {
  */
 @Injectable()
 export class GradesService implements OnModuleInit {
+  private readonly logger = new Logger(GradesService.name);
+
   constructor(
     private readonly repo: GradesRepository,
     private readonly courses: CoursesService,
@@ -246,7 +256,7 @@ export class GradesService implements OnModuleInit {
    * khoá thì GIỮ NGUYÊN (hoạt động không đè quyết định của giáo viên —
    * trả về grade hiện có). Ghi history với source là tên hoạt động.
    */
-  async recordActivityGrade(itemId: string, userId: string, rawGrade: number | null, source = 'mod/quiz'): Promise<GradeRow | undefined> {
+  async recordActivityGrade(itemId: string, userId: string, rawGrade: number | null, source = GRADE_SOURCE_QUIZ): Promise<GradeRow | undefined> {
     const item = await this.getItem(itemId);
     if (item.locked) throw new ForbiddenException({ message: 'This grade item is locked', code: 'grades.item_locked' });
     const existing = await this.repo.getGrade(itemId, userId);
@@ -458,10 +468,13 @@ export class GradesService implements OnModuleInit {
     if (!hadExistingGrade) return;
     const state = await this.itemPublicationState(item).catch(() => null);
     if (!state?.published) return;
+    // Sự kiện audit này là best-effort (điểm đã đổi rồi) — nhưng ghi lỗi thì phải thấy trong log, vì vết kiểm toán thiếu là mất bằng chứng.
     await this.outbox.enqueueStandalone({
       aggregate: 'grades', type: 'grade_changed_after_publish',
       payload: { actorId, courseId: item.courseId, itemId: item.id, userId, objectId: item.id },
-    }).catch(() => undefined);
+    }).catch((err) => {
+      this.logger.warn(`auditGradeChangeAfterPublish: failed to enqueue audit event for item ${item.id} user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
+    });
   }
 
   // --- Lưới xem điểm theo bài (CHỈ-ĐỌC, issue #224) ----------------------------

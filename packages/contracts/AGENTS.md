@@ -44,6 +44,13 @@ Mọi code TypeScript viết mới hoặc sửa trong `packages/contracts` phả
 - Sửa schema thì căn cứ vào comment đang có trong code; thấy comment lệch schema/quyết định thật thì sửa comment **trong cùng lượt** với sửa schema.
 - Đội đánh giá độc lập soi chuẩn này như một tiêu chí đạt — code thiếu comment flow đạt chuẩn là chưa đạt. Code cũ chưa có comment được phủ theo đợt riêng của issue #272, không tự trộn việc phủ vào feat đang bay.
 
+## Quy ước đặt tên schema (chốt 13/11/2026, theo đợt dọn code style)
+
+- `Input` cho payload gửi vào (vd `CreateQuestion`, `UpdateCourse` suy từ `create…Schema`/`update…Schema`).
+- `View` cho dữ liệu trả ra (vd `QuestionView`, `DashboardDueItemView`).
+- Tên plain (không hậu tố) chỉ cho enum, tham số và hình dạng dùng chung không phân biệt vào/ra (vd `GroupMode`, `PlanStatus`).
+- Tên schema cũ chưa theo đúng quy ước này được giữ nguyên cho tới đợt đổi tên riêng: đổi tên schema là breaking change với `apps/api` và `apps/web`, không trộn vào feat hay đợt dọn khác.
+
 ## Bản đồ flow của package
 
 - **Cấu trúc:** mỗi miền một file trong `src/`, xuất tập trung qua `src/index.ts`. Các miền hiện có: `identity.ts` (định danh/người dùng), `course.ts`, `classes.ts`, `assessment.ts`, `engagement.ts`, `platform.ts`, `site-config.ts`, `tenants.ts`, `centres.ts`, `control-plane.ts`, `system-bank.ts`, `curriculum.ts`, `books.ts`, `dashboard.ts`, `guardian.ts`, `health.ts`, `mcp.ts`, `rich-text.ts` (hợp đồng editor), `problem-details.ts` (hợp đồng lỗi), `ids.ts` (UUIDv7) và `auth-mail.ts` (payload/định dạng mail xác thực dùng chung). Test đặt cạnh source: `src/contracts.spec.ts` và `src/auth-mail.spec.ts`. Package không import DB, app hoặc UI; mọi consumers dùng entrypoint `@giaokhoa/contracts`.

@@ -849,8 +849,8 @@ export class QuestionBanksService {
     versions: VersionRow[],
   ): QuestionBankInfo {
     const ready = versions.filter((v) => v.status === 'ready');
-    const latestReady = ready.length ? ready[ready.length - 1]! : null;
-    const latest = versions.length ? versions[versions.length - 1]! : null;
+    const latestReady = ready.length ? ready[ready.length - 1]! : null; // Bất biến: ready.length > 0 ở nhánh này.
+    const latest = versions.length ? versions[versions.length - 1]! : null; // Bất biến: versions.length > 0 ở nhánh này.
     return {
       bank,
       // bankExplicit: category gắn bank tường minh (bank_id) — phân biệt
@@ -964,7 +964,7 @@ export class QuestionBanksService {
         if (stimulus) {
           stimulusId = stimulus.categoryId === targetCategory.id
             ? stimulus.id
-            : (await this.questionsRepo.insertStimulus({ categoryId: targetCategory.id, createdBy: actorId, content: stimulus.content as never }, tx)).id;
+            : (await this.questionsRepo.insertStimulus({ categoryId: targetCategory.id, createdBy: actorId, content: stimulus.content }, tx)).id;
         }
       }
       const q = await this.questionsRepo.insertQuestion({
@@ -985,8 +985,8 @@ export class QuestionBanksService {
       }, tx);
       const version = await this.questionsRepo.insertVersion({
         questionBankEntryId: entry.id, questionId: q.id, version: 1,
-        questionText: sourceVersion.questionText as never,
-        generalFeedback: sourceVersion.generalFeedback as never,
+        questionText: sourceVersion.questionText,
+        generalFeedback: sourceVersion.generalFeedback,
         defaultMark: sourceVersion.defaultMark, penalty: sourceVersion.penalty,
         stimulusId,
       }, tx);
@@ -1497,7 +1497,7 @@ export class QuestionBanksService {
     if (!stimulus) return null;
     if (stimulus.categoryId === targetCategoryId) return stimulus.id;
     const copy = await this.questionsRepo.insertStimulus(
-      { categoryId: targetCategoryId, createdBy: actorId, content: stimulus.content as never }, tx);
+      { categoryId: targetCategoryId, createdBy: actorId, content: stimulus.content }, tx);
     return copy.id;
   }
 
@@ -1532,8 +1532,8 @@ export class QuestionBanksService {
         const stimulusId = await this.copyStimulusForCategory(tx, source.latestVersion.stimulusId, targetCategory.id, actorId);
         const version = await this.questionsRepo.insertVersion({
           questionBankEntryId: targetView.entry.id, questionId: targetView.question.id, version: nextVersion,
-          questionText: source.latestVersion.questionText as never,
-          generalFeedback: source.latestVersion.generalFeedback as never,
+          questionText: source.latestVersion.questionText,
+          generalFeedback: source.latestVersion.generalFeedback,
           defaultMark: source.latestVersion.defaultMark, penalty: source.latestVersion.penalty,
           stimulusId,
         }, tx);

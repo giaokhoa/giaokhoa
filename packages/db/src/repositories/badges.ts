@@ -17,9 +17,10 @@
  *
  * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
+import {type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type RepoDb = CentreDb | CentreTx;
@@ -198,19 +199,9 @@ const BADGE_MANUAL_AWARD_COLUMNS = [
   'date_met as dateMet',
 ] as const;
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — helper serialize duy nhất của file này cho mọi lần ghi jsonb
- * (khuôn của pilot: driver `pg` tự stringify object thường nhưng
- * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type json`). Khác pilot ở một điểm:
- * ba cột jsonb của cụm này không mang hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Ánh xạ dữ kiện ghi huy hiệu (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function badgeInsertValues(values: NewBadge): Insertable<CentreDB['badge']> {
-  const row: Insertable<CentreDB['badge']> = { name: values.name };
+function badgeInsertValues(values: NewBadge): InsertObject<CentreDB, 'badge'> {
+  const row: InsertObject<CentreDB, 'badge'> = { name: values.name };
   if (values.id !== undefined) row.id = values.id;
   if (values.description !== undefined) row.description = values.description;
   if (values.type !== undefined) row.type = values.type;
@@ -235,8 +226,8 @@ function badgeInsertValues(values: NewBadge): Insertable<CentreDB['badge']> {
  * (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa
  * trường nào thì chỉ trường đó đổi (quy tắc T-4).
  */
-function badgeUpdateSet(patch: Partial<BadgeRow>): Updateable<CentreDB['badge']> {
-  const set: Updateable<CentreDB['badge']> = {};
+function badgeUpdateSet(patch: Partial<BadgeRow>): UpdateObject<CentreDB, 'badge'> {
+  const set: UpdateObject<CentreDB, 'badge'> = {};
   if (patch.id !== undefined) set.id = patch.id;
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
@@ -322,8 +313,8 @@ function issuedUpdateSet(patch: Partial<IssuedRow>): UpdateObject<CentreDB, 'bad
 }
 
 /** Ánh xạ dữ kiện ghi lượt trao thủ công (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function manualAwardInsertValues(values: NewManualAward): Insertable<CentreDB['badge_manual_award']> {
-  const row: Insertable<CentreDB['badge_manual_award']> = {
+function manualAwardInsertValues(values: NewManualAward): InsertObject<CentreDB, 'badge_manual_award'> {
+  const row: InsertObject<CentreDB, 'badge_manual_award'> = {
     badge_id: values.badgeId,
     recipient_id: values.recipientId,
     issuer_id: values.issuerId,
@@ -353,8 +344,8 @@ export class BadgesRepository {
 
   /** Chèn huy hiệu. */
   async insertBadge(values: NewBadge, db: RepoDb = this.db()): Promise<BadgeRow> {
-    const rows = await db.insertInto('badge').values(badgeInsertValues(values)).returning(BADGE_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('badge').values(badgeInsertValues(values)).returning(BADGE_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy huy hiệu theo id. */
@@ -378,12 +369,12 @@ export class BadgesRepository {
 
   /** Thêm một tiêu chí vào bộ tiêu chí của huy hiệu. */
   async insertCriteria(values: NewCriteria, db: RepoDb = this.db()): Promise<CriteriaRow> {
-    const rows = await db
+    const row = await db
       .insertInto('badge_criteria')
       .values(criteriaInsertValues(values))
       .returning(BADGE_CRITERIA_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Tiêu chí của huy hiệu, theo id tăng dần. */

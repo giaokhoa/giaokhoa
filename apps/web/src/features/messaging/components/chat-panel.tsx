@@ -1,9 +1,15 @@
+/**
+ * Khung phải màn Tin nhắn: header hội thoại (tên, trạng thái hiện diện, tìm tin, panel thông tin) + luồng tin nhóm theo ngày và cụm người gửi + hộp soạn dính đáy.
+ * Dữ liệu vào qua props từ trang chứa (hội thoại đang mở, danh sách tin đang hiện, trạng thái đã đọc, trạng thái đang nhập, nháp); mọi hành động — gửi, thử lại, xoá, thu hồi, trích dẫn, ghim/tắt tiếng, chặn/báo cáo — đi lên trang chứa qua callback.
+ * Nội dung tin chỉ áp hai khuôn định dạng nhẹ (đậm và liên kết) và được dựng thành text node, không chèn HTML thô; ghi chú nội bộ là nháp cục bộ, không gọi API.
+ */
+
 import { useEffect, useRef, useState, type Dispatch, type FormEvent, type ReactNode, type RefObject, type SetStateAction } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bell, BellOff, Building2, Check, CheckCheck, ChevronLeft, Clock, Ellipsis, EllipsisVertical,
-  Eraser, FileText, Flag, Globe, Link2, Mail, MapPin, MessageSquare, MessagesSquare, Paperclip,
-  Phone, Pin, PinOff, Reply, Send, Smile, SmilePlus, Sparkles, Trash, Undo2, Video, X,
+  Eraser, FileText, Flag, Globe, Mail, MapPin, MessageSquare, MessagesSquare,
+  Phone, Pin, PinOff, Reply, SmilePlus, Sparkles, Trash, Undo2, Video, X,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
 import { Badge } from '@giaokhoa/ui/components/badge';
@@ -14,14 +20,10 @@ import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@giaokhoa/ui/components/dropdown-menu';
-import {
-  Popover, PopoverContent, PopoverTrigger,
-} from '@giaokhoa/ui/components/popover';
 import { Input } from '@giaokhoa/ui/components/input';
 import { Separator } from '@giaokhoa/ui/components/separator';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@giaokhoa/ui/components/tabs';
-import { Textarea } from '@giaokhoa/ui/components/textarea';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@giaokhoa/ui/components/tooltip';
@@ -34,11 +36,14 @@ import {
 } from '@giaokhoa/ui/components/message-scroller';
 import { useTranslation } from 'react-i18next';
 
-import { formatWithOptions } from '#utils/date-format';
+import { formatWithOptions, MS_PER_DAY } from '#utils/date-format';
 import { getPersonProfile, getSharedFiles, QUICK_REPLY_SHAPE_SAMPLES } from '../api/person-profile-adapter';
 import { messagingPersonProfileQueryOptions } from '../queries/messaging';
 import type { ConversationStatePatch, ConversationView, MessageQuoteView, MessageSearchResultView, MessageView, PersonSummary, ScrollerHandle } from '../types/types';
+import { CONVERSATION_TYPE_GROUP } from '../types/types';
+import { ChatInfoPanel } from './chat-info-panel';
 import { FileCard } from './file-card';
+import { MessageComposer } from './message-composer';
 import { MemberActionMenu, MemberPanel, MemberProfileSheet, useMemberProfile, type MemberPanelBundle } from './member-panel';
 import {
   CHAT_MENU_CONTENT_CLASS, CHAT_MENU_ITEM_CLASS, PRESENCE_DOT_CLASS, initialsOf,
@@ -76,7 +81,8 @@ function RichMessageText({ text }: { text: string }) {
           );
         }
         const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
-        if (link && /^(?:https?:\/\/|mailto:)/i.test(link[2]!)) {
+        const linkUrl = link?.[2];
+        if (link && linkUrl && /^(?:https?:\/\/|mailto:)/i.test(linkUrl)) {
           return (
             <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline">
               {link[1]}
@@ -89,15 +95,6 @@ function RichMessageText({ text }: { text: string }) {
   );
 }
 
-/**
- * Lưới emoji của bộ chọn ở ô soạn (issue #591; tập và thứ tự căn đúng theo bản demo ở issue #608 — trích nguyên mảng emoji từ chunk JS của demo): dựng trên component Popover của `@giaokhoa/ui` (vòng sửa PR #593 — bản trước dùng DropdownMenu đã bị cả hai lớp review bác vì khác component và khác ngữ nghĩa), dạng lưới 5 cột × 4 hàng. Chọn emoji chèn ký tự TẠI VỊ TRÍ CON TRỎ trong ô soạn (đúng hành vi bản demo; nối cuối nháp như trước là điểm lệch đã sửa ở giai đoạn 2 của vòng sửa PR #610); không thêm thư viện picker.
- */
-const EMOJI_GRID_OPTIONS = [
-  '😀', '😂', '😊', '😍', '🥳',
-  '👍', '👏', '🙏', '❤️', '🔥',
-  '✅', '👋', '🎉', '💯', '🤔',
-  '😅', '🙌', '💪', '✨', '🚀',
-];
 
 /**
  * Bộ cảm xúc của bộ chọn reactions trên tin — CHỈ HÌNH DẠNG
@@ -200,19 +197,6 @@ export function ChatPanel({
   messageSearch, onSearchMessages, onClearMessageSearch, onJumpToSearchResult, memberPanel,
 }: ChatPanelProps) {
   const { t, i18n } = useTranslation('app');
-  const [today] = useState(() => new Date());
-  const unblockContact = onUnblockContact;
-  const blockContact = onBlockContact;
-  const reportActiveConversation = onReportConversation;
-  const toggleActiveChat = onToggleChat;
-  const loadOlder = onLoadOlder;
-  const bulkRemoveSelected = onBulkRemove;
-  const retrySend = onRetrySend;
-  const deleteMessage = onDeleteMessage;
-  const recallMessage = onRecallMessage;
-  const hardDeleteMessage = onHardDeleteMessage;
-  const noteTyping = onNoteTyping;
-  const send = onSend;
   /** Ô nhập từ khoá tìm trong conversation (lát M4): nháp cục bộ của panel, gửi lên trang chạy tìm. */
   const [searchDraft, setSearchDraft] = useState('');
   /** Tìm trong hội thoại ẩn sau nút bật/tắt ở header (chuẩn app nhắn tin, issue #256). */
@@ -412,7 +396,7 @@ export function ChatPanel({
    * hội thoại 1–1). Query chỉ bật khi panel thông tin đang mở và
    * đang ở hội thoại 1–1; chưa mở panel thì không tải hồ sơ.
    */
-  const panelPartnerId = active && active.type !== 2
+  const panelPartnerId = active && active.type !== CONVERSATION_TYPE_GROUP
     ? active.members.find((memberId) => memberId !== myId)
     : undefined;
   const personProfileQuery = useQuery({
@@ -476,7 +460,7 @@ export function ChatPanel({
   }
 
   const others = active.members.filter((memberId) => memberId !== myId);
-  const isGroup = active.type === 2;
+  const isGroup = active.type === CONVERSATION_TYPE_GROUP;
   const otherId = !isGroup ? others[0] : undefined;
   /**
    * Trạng thái hiện diện của đối tác có BA trạng thái theo dữ
@@ -558,8 +542,8 @@ export function ChatPanel({
     ? {
       ...memberPanel,
       blockedIds: new Set(blocked),
-      onBlockContact: blockContact,
-      onUnblockContact: unblockContact,
+      onBlockContact: onBlockContact,
+      onUnblockContact: onUnblockContact,
     }
     : null;
   /**
@@ -593,7 +577,8 @@ export function ChatPanel({
    */
   const dayLabelOf = (iso: string) => {
     const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const diffDays = Math.round((startOfDay(today) - startOfDay(new Date(iso))) / 86_400_000);
+    // Ngày hiện tại lấy tươi mỗi lần tính nhãn (S24): `today` đóng băng lúc mount sẽ làm nhãn "Hôm nay" lỗi thời nếu panel mở qua nửa đêm.
+    const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / MS_PER_DAY);
     if (diffDays <= 0) return t('messagesToday');
     if (diffDays === 1) return t('messagesYesterday');
     return formatWithOptions(iso, i18n.language, { month: 'short', day: 'numeric' });
@@ -676,8 +661,8 @@ export function ChatPanel({
                 onRemoveMember={memberPanel.onRemoveMember}
                 onViewProfile={memberProfile.open}
                 isBlockedByMe={blocked.includes(authorEntry.userId)}
-                onBlockContact={blockContact}
-                onUnblockContact={unblockContact}
+                onBlockContact={onBlockContact}
+                onUnblockContact={onUnblockContact}
               >
                 <Avatar>
                   <AvatarFallback className="bg-muted text-foreground">{initialsOf(authorEntry.displayName)}</AvatarFallback>
@@ -938,13 +923,13 @@ export function ChatPanel({
                         {t('threadAction')}
                       </DropdownMenuItem>
                       {showRecallAction ? (
-                        <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void recallMessage(m)}>
+                        <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void onRecallMessage(m)}>
                           <Undo2 aria-hidden />
                           {t('recallMessage')}
                         </DropdownMenuItem>
                       ) : null}
                       {showDeleteMineAction ? (
-                        <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void deleteMessage(m)}>
+                        <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void onDeleteMessage(m)}>
                           <Trash aria-hidden />
                           {t('deleteMessage')}
                         </DropdownMenuItem>
@@ -964,7 +949,7 @@ export function ChatPanel({
                         </DropdownMenuCheckboxItem>
                       ) : null}
                       {showModerateActions ? (
-                        <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => void hardDeleteMessage(m)}>
+                        <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => void onHardDeleteMessage(m)}>
                           <Eraser aria-hidden />
                           {t('hardDeleteMessage')}
                         </DropdownMenuItem>
@@ -1001,7 +986,7 @@ export function ChatPanel({
               {m.localStatus === 'failed' ? (
                 <span className="flex items-center gap-2">
                   <span>{t('messageSendFailed')}</span>
-                  <Button type="button" variant="outline" onClick={() => void retrySend(m)}>
+                  <Button type="button" variant="outline" onClick={() => void onRetrySend(m)}>
                     {t('retrySend')}
                   </Button>
                 </span>
@@ -1259,11 +1244,11 @@ export function ChatPanel({
             {!isGroup && otherId ? (
               <>
                 {blocked.includes(otherId) ? (
-                  <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => void unblockContact(otherId)}>
+                  <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => void onUnblockContact(otherId)}>
                     {t('unblockContact')} {nameOf(otherId)}
                   </DropdownMenuItem>
                 ) : (
-                  <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => void blockContact(otherId)}>
+                  <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => void onBlockContact(otherId)}>
                     {t('blockContact')} {nameOf(otherId)}
                   </DropdownMenuItem>
                 )}
@@ -1280,11 +1265,11 @@ export function ChatPanel({
             >
               {t('messageSearchLabel')}
             </DropdownMenuItem>
-            <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void reportActiveConversation()}>
+            <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void onReportConversation()}>
               {t('reportConversation')}
             </DropdownMenuItem>
             {active.canManage ? (
-              <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void toggleActiveChat()}>
+              <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => void onToggleChat()}>
                 {(active.enabled ?? true) ? t('disableChat') : t('enableChat')}
               </DropdownMenuItem>
             ) : null}
@@ -1375,7 +1360,7 @@ export function ChatPanel({
       ) : null}
       {hasMoreBefore ? (
         <div className="px-3 pt-2">
-          <Button type="button" variant="outline" onClick={() => void loadOlder()}>
+          <Button type="button" variant="outline" onClick={() => void onLoadOlder()}>
             {t('loadOlderMessages')}
           </Button>
         </div>
@@ -1383,7 +1368,7 @@ export function ChatPanel({
       {active.canModerate && selectedForBulk.size > 0 ? (
         <div className="flex items-center gap-2 px-3 pt-2">
           <span className="text-sm text-muted-foreground">{t('bulkSelectedCount', { count: selectedForBulk.size })}</span>
-          <Button type="button" variant="destructive" onClick={() => void bulkRemoveSelected()}>
+          <Button type="button" variant="destructive" onClick={() => void onBulkRemove()}>
             {t('bulkRemoveMessages')}
           </Button>
         </div>
@@ -1539,119 +1524,26 @@ export function ChatPanel({
                     </div>
                   </div>
                 ) : null}
-                <form onSubmit={(e) => void send(e)} className="flex flex-col gap-2 px-3 pb-2">
-                  <Textarea
-                    ref={composerRef}
-                    aria-label={t('messageText')}
-                    placeholder={t('messagePlaceholder')}
-                    rows={1}
-                    className="max-h-32 min-h-10 min-w-0 resize-none rounded-none border-0 px-0 py-2 text-sm shadow-none focus-visible:ring-0"
-                    value={draft}
-                    onChange={(e) => {
-                      // Nháp ghi theo conversation đang mở (lát M1,
-                      // issue #204) — soạn dở ở conversation này
-                      // không lẫn sang conversation khác.
-                      setDrafts((prev) => ({ ...prev, [active.id]: e.target.value }));
-                      noteTyping();
-                    }}
-                    onKeyDown={(e) => {
-                      // Enter gửi, Shift+Enter xuống dòng (lát M1,
-                      // issue #204) — ngữ nghĩa chuẩn app nhắn tin
-                      // cho composer nhiều dòng. Đang có lượt gửi bay thì
-                      // Enter không kích thêm lượt gửi nào (fix nhân đôi
-                      // tin, issue #33); Shift+Enter vẫn xuống dòng.
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!sendInFlight) e.currentTarget.form?.requestSubmit();
-                      }
-                    }}
-                  />
-                  {/*
-                    Hàng công cụ soạn theo đúng thứ tự và khuôn
-                    phía demo (issue #608): hàng tách hai phía —
-                    nhóm trái khoảng 4px gồm Bold (nút ghost chứa
-                    chữ "B" như demo), Emoji, Attach, Link; nút
-                    Send ở phía phải với glyph Send. Bold và Link
-                    hoạt động thật (giai đoạn 2 của vòng sửa
-                    PR #610), Attach vẫn là hình dạng vô hiệu
-                    (điểm chưa có phán quyết); bộ chọn emoji dùng
-                    khuôn đã trích từ demo: PopoverContent
-                    `w-64 p-2`, lưới 5 cột khoảng 4px, nút emoji
-                    đệm 8px.
-                  */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('boldLabel')}
-                        onClick={applyBold}
-                      >
-                        <span className="text-base leading-none font-medium">B</span>
-                      </Button>
-                      <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-                        <PopoverTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t('emojiPickerLabel')}
-                            />
-                          }
-                        >
-                          <Smile aria-hidden />
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          sideOffset={4}
-                          data-testid="emoji-picker-popover"
-                          className="w-64 p-2"
-                        >
-                          <div className="grid grid-cols-5 gap-1">
-                            {EMOJI_GRID_OPTIONS.map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                className="rounded-md p-2 text-lg transition-colors hover:bg-muted"
-                                onClick={() => insertEmojiAtCursor(emoji)}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('attachFileLabel')}
-                        disabled
-                      >
-                        <Paperclip aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('insertLinkLabel')}
-                        onClick={insertLink}
-                      >
-                        <Link2 aria-hidden />
-                      </Button>
-                    </div>
-                    <Button
-                      type="submit"
-                      size="icon-sm"
-                      aria-label={t('send')}
-                      disabled={sendInFlight || !draft.trim()}
-                    >
-                      <Send aria-hidden />
-                    </Button>
-                  </div>
-                </form>
+                <MessageComposer
+                  textareaRef={composerRef}
+                  ariaLabel={t('messageText')}
+                  placeholder={t('messagePlaceholder')}
+                  value={draft}
+                  onValueChange={(value) => {
+                    // Nháp ghi theo conversation đang mở (lát M1, issue #204) — soạn dở ở conversation này không lẫn sang conversation khác.
+                    setDrafts((prev) => ({ ...prev, [active.id]: value }));
+                    onNoteTyping();
+                  }}
+                  onSubmit={(e) => void onSend(e)}
+                  onBold={applyBold}
+                  onInsertEmoji={insertEmojiAtCursor}
+                  onInsertLink={insertLink}
+                  emojiOpen={emojiOpen}
+                  onEmojiOpenChange={setEmojiOpen}
+                  emojiPickerTestId="emoji-picker-popover"
+                  sendDisabled={sendInFlight || !draft.trim()}
+                  canSubmitOnEnter={!sendInFlight}
+                />
               </TabsContent>
               <TabsContent value="note" className="m-0">
                 {/*
@@ -1671,100 +1563,25 @@ export function ChatPanel({
                   báo thoáng qua + xoá nháp) — form này không
                   chạm đường gửi tin, không gọi API.
                 */}
-                <form onSubmit={sendNote} className="flex flex-col gap-2 px-3 pb-2">
-                  <Textarea
-                    ref={noteComposerRef}
-                    aria-label={t('internalNoteTabLabel')}
-                    placeholder={t('internalNotePlaceholder')}
-                    rows={1}
-                    className="max-h-32 min-h-10 min-w-0 resize-none rounded-none border-0 px-0 py-2 text-sm shadow-none focus-visible:ring-0"
-                    value={noteDraft}
-                    onChange={(e) => {
-                      setNoteDrafts((prev) => ({ ...prev, [active.id]: e.target.value }));
-                      setNoteNoticeFor(null);
-                    }}
-                    onKeyDown={(e) => {
-                      // Enter gửi, Shift+Enter xuống dòng — cùng
-                      // ngữ nghĩa như ô soạn tin nhắn.
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        e.currentTarget.form?.requestSubmit();
-                      }
-                    }}
-                  />
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('boldLabel')}
-                        onClick={applyNoteBold}
-                      >
-                        <span className="text-base leading-none font-medium">B</span>
-                      </Button>
-                      <Popover open={noteEmojiOpen} onOpenChange={setNoteEmojiOpen}>
-                        <PopoverTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t('emojiPickerLabel')}
-                            />
-                          }
-                        >
-                          <Smile aria-hidden />
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          sideOffset={4}
-                          data-testid="note-emoji-picker-popover"
-                          className="w-64 p-2"
-                        >
-                          <div className="grid grid-cols-5 gap-1">
-                            {EMOJI_GRID_OPTIONS.map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                className="rounded-md p-2 text-lg transition-colors hover:bg-muted"
-                                onClick={() => insertNoteEmojiAtCursor(emoji)}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('attachFileLabel')}
-                        disabled
-                      >
-                        <Paperclip aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('insertLinkLabel')}
-                        onClick={insertNoteLink}
-                      >
-                        <Link2 aria-hidden />
-                      </Button>
-                    </div>
-                    <Button
-                      type="submit"
-                      size="icon-sm"
-                      aria-label={t('send')}
-                      disabled={!noteDraft.trim()}
-                    >
-                      <Send aria-hidden />
-                    </Button>
-                  </div>
-                </form>
+                <MessageComposer
+                  textareaRef={noteComposerRef}
+                  ariaLabel={t('internalNoteTabLabel')}
+                  placeholder={t('internalNotePlaceholder')}
+                  value={noteDraft}
+                  onValueChange={(value) => {
+                    setNoteDrafts((prev) => ({ ...prev, [active.id]: value }));
+                    setNoteNoticeFor(null);
+                  }}
+                  onSubmit={sendNote}
+                  onBold={applyNoteBold}
+                  onInsertEmoji={insertNoteEmojiAtCursor}
+                  onInsertLink={insertNoteLink}
+                  emojiOpen={noteEmojiOpen}
+                  onEmojiOpenChange={setNoteEmojiOpen}
+                  emojiPickerTestId="note-emoji-picker-popover"
+                  sendDisabled={!noteDraft.trim()}
+                  canSubmitOnEnter
+                />
               </TabsContent>
             </Tabs>
             {noteNoticeFor === active.id ? (
@@ -1778,304 +1595,28 @@ export function ChatPanel({
       </div>
       </div>
       {showInfoAside ? (
-        <aside
-          data-testid="info-aside"
-          className="absolute inset-y-0 right-0 z-20 flex w-[85vw] max-w-[320px] min-w-0 flex-col overflow-x-hidden overflow-y-auto border-l bg-background shadow-xl md:static md:z-auto md:w-[320px] md:shrink-0 md:shadow-none"
-        >
-          {/*
-            Panel không còn thanh tiêu đề riêng và nút đóng
-            riêng như trước (issue #608): phía demo đầu panel
-            là chính khối hồ sơ, panel là một cột của khung —
-            đóng panel bằng nút avatar ở đầu khung. Riêng ở
-            di động panel là lớp phủ che mất nút avatar đó
-            nên giữ một nút đóng nhỏ chỉ hiện ở di động.
-          */}
-          {isGroup && memberPanelBundle ? (
-            <>
-              <div className="flex justify-end px-3 pt-2 md:hidden">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('closeDialog')}
-                  onClick={() => setInfoOpen(false)}
-                >
-                  <X aria-hidden />
-                </Button>
-              </div>
-              {/*
-                Hàng hành động của panel nhóm (issue #591):
-                Tắt/Bật tiếng và Ghim/Bỏ ghim là hành động
-                THẬT trên trạng thái cá nhân của hội thoại —
-                cùng đường đổi trạng thái với menu đầu khung —
-                để trạng thái tắt tiếng hiện và đổi được nhất
-                quán ở mọi bề mặt của nhóm.
-              */}
-              <div className="flex flex-wrap gap-2 border-b px-3 py-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onUpdateConversationState(active, { muted: !active.muted })}
-                >
-                  {active.muted ? <Bell aria-hidden /> : <BellOff aria-hidden />}
-                  {active.muted ? t('unmuteConversation') : t('muteConversation')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onUpdateConversationState(active, { pinned: !active.pinnedAt })}
-                >
-                  {active.pinnedAt ? <PinOff aria-hidden /> : <Pin aria-hidden />}
-                  {active.pinnedAt ? t('unpinConversation') : t('pinConversation')}
-                </Button>
-              </div>
-              <MemberPanel
-                conversation={active}
-                bundle={memberPanelBundle}
-                myId={myId}
-                onlineUsers={onlineUsers}
-                readMarkers={readMarkers}
-                newestSeq={newestSeq}
-                onViewProfile={memberProfile.open}
-              />
-            </>
-          ) : null}
-          {!isGroup && otherId && partnerProfile ? (
-            /*
-              Panel HỒ SƠ NGƯỜI của chat 1–1 (issue #591;
-              hình dạng căn lại theo demo ở issue #608) —
-              đầu panel là khối hồ sơ dính trên cùng (avatar
-              40px bên trái tên, các thẻ), danh sách hành
-              động dọc bề ngang đầy đủ, các hàng trường kèm
-              icon, đoạn giới thiệu riêng và khối tệp đã
-              chia sẻ; nút Xoá nằm ở đáy panel. Dữ kiện đi
-              qua lớp adapter (`partnerProfile`): trường nào
-              backend chưa có thì KHÔNG dựng hàng tương ứng
-              (luật của demo, thay luật hiện dấu "—" trước
-              đây), không bịa giá trị, chờ đợt backend thay
-              nguồn.
-            */
-            <div data-testid="partner-panel" className="flex min-h-full flex-col">
-              {/*
-                Đầu panel là CHÍNH khối hồ sơ, dính trên cùng
-                khi cuộn (issue #608): avatar 40px ở bên trái
-                tên, dòng vai trò và dòng trạng thái chỉ hiện
-                khi có dữ kiện (trường trống không dựng hàng
-                — cùng luật với các trường hồ sơ bên dưới),
-                các thẻ là huy hiệu outline ở cuối khối.
-              */}
-              <div className="sticky top-0 z-10 flex items-start gap-3 bg-background px-4 py-4">
-                <span className="relative shrink-0">
-                  <Avatar size="lg">
-                    <AvatarFallback>{initialsOf(avatarLabel)}</AvatarFallback>
-                  </Avatar>
-                  {otherStatus !== undefined ? (
-                    <span
-                      className={cn(
-                        'absolute right-0 bottom-0 size-2.5 rounded-full ring-2 ring-background',
-                        PRESENCE_DOT_CLASS[otherStatus],
-                      )}
-                    />
-                  ) : null}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium break-words">{title}</p>
-                  {partnerProfile.roleLine ? (
-                    <p className="text-xs text-muted-foreground">{partnerProfile.roleLine}</p>
-                  ) : null}
-                  {otherStatus !== undefined ? (
-                    <p className="text-xs text-muted-foreground">
-                      {t(presenceLabelKey(otherStatus))}
-                    </p>
-                  ) : null}
-                  {blocked.includes(otherId) ? (
-                    <p className="text-sm">
-                      {nameOf(otherId)} {t('blockedSuffix')}
-                    </p>
-                  ) : null}
-                  {partnerProfile.tags.length > 0 ? (
-                    <div className="mt-1 flex flex-wrap justify-end gap-1">
-                      {partnerProfile.tags.map((tag) => (
-                        <Badge key={tag} variant="outline">{tag}</Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="md:hidden"
-                  aria-label={t('closeDialog')}
-                  onClick={() => setInfoOpen(false)}
-                >
-                  <X aria-hidden />
-                </Button>
-              </div>
-              <div className="space-y-4 px-4 pb-4">
-                <Separator />
-                {/*
-                  Danh sách hành động của panel theo đúng
-                  hình dạng demo (issue #608, trích từ chunk
-                  JS của demo): các nút outline bề ngang đầy
-                  đủ, chữ căn trái, xếp dọc cách 8px, chỉ chữ.
-                  Tắt tiếng / Ghim / Chặn là hành động THẬT
-                  qua cùng đường đổi trạng thái và chặn liên
-                  lạc như mọi bề mặt khác; Xoá lịch sử trò
-                  chuyện là chức năng sản phẩm chưa có — chỉ
-                  dựng hình dạng ở trạng thái vô hiệu theo
-                  luật điểm chưa quyết, ghi rõ trong thân PR.
-                  (Mục Thêm vào yêu thích từng đứng ở đây đã
-                  gỡ hẳn theo phán quyết issue #623 — yêu
-                  thích không có dữ kiện ở bất kỳ tầng nào.)
-                */}
-                <div className="flex flex-col gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => onUpdateConversationState(active, { muted: !active.muted })}
-                  >
-                    {active.muted ? t('unmuteConversation') : t('muteConversation')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => onUpdateConversationState(active, { pinned: !active.pinnedAt })}
-                  >
-                    {active.pinnedAt ? t('unpinConversation') : t('pinConversation')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start"
-                    disabled
-                  >
-                    {t('clearChat')}
-                  </Button>
-                  {blocked.includes(otherId) ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() => void unblockContact(otherId)}
-                    >
-                      {t('unblockContact')}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() => void blockContact(otherId)}
-                    >
-                      {t('blockContact')}
-                    </Button>
-                  )}
-                </div>
-                {/*
-                  Đoạn giới thiệu (About) là một đoạn văn
-                  riêng màu muted như demo — không còn là một
-                  hàng trong bảng trường. Chỉ dựng khi adapter
-                  có dữ kiện.
-                */}
-                {partnerProfile.bio ? (
-                  <div className="space-y-1">
-                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <FileText className="size-4" aria-hidden />
-                      {t('profileBio')}
-                    </p>
-                    <p className="text-sm leading-relaxed text-muted-foreground">{partnerProfile.bio}</p>
-                  </div>
-                ) : null}
-                {/*
-                  Các hàng trường hồ sơ theo khuôn demo: nhãn
-                  màu muted kèm icon 16px, giá trị đẩy phải
-                  (`ml-auto`) và cắt đúng một dòng. Trường nào
-                  adapter chưa có dữ kiện thì KHÔNG dựng hàng
-                  (issue #608 — thay luật hiện dấu "—" trước
-                  đây); dữ kiện vẫn đi qua lớp adapter như
-                  cũ, không bịa giá trị. Ba trường liên lạc
-                  (email/điện thoại/website) dựng giá trị thành
-                  LIÊN KẾT thật — mailto:, tel: (bỏ khoảng
-                  trắng) và mở tab mới — đúng hành vi neo của
-                  bản demo (giai đoạn 2 của vòng sửa PR #610,
-                  mục T-17); các trường còn lại giữ chữ thường.
-                */}
-                <dl className="space-y-2 text-sm">
-                  {([
-                    ['profileEmail', partnerProfile.email, Mail],
-                    ['profilePhone', partnerProfile.phone, Phone],
-                    ['profileWebsite', partnerProfile.website, Globe],
-                    ['profileCompany', partnerProfile.company, Building2],
-                    ['profileCountry', partnerProfile.country, Flag],
-                    ['profileTimezone', partnerProfile.timezone, Clock],
-                    ['profileLocation', partnerProfile.location, MapPin],
-                    ['profileAvailability', partnerProfile.availability, Sparkles],
-                  ] as const).filter(([, value]) => Boolean(value)).map(([key, value, Icon]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <dt className="flex items-center gap-2 text-muted-foreground">
-                        <Icon className="size-4" aria-hidden />
-                        {t(key)}
-                      </dt>
-                      <dd className="ml-auto min-w-0 truncate">
-                        {key === 'profileEmail' ? (
-                          <a href={`mailto:${value}`} className="hover:underline">{value}</a>
-                        ) : key === 'profilePhone' ? (
-                          <a href={`tel:${value!.replace(/\s+/g, '')}`} className="hover:underline">{value}</a>
-                        ) : key === 'profileWebsite' ? (
-                          <a href={value!} target="_blank" rel="noopener noreferrer" className="hover:underline">{value}</a>
-                        ) : (
-                          value
-                        )}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                {/*
-                  Khối tệp đã chia sẻ (điểm G9): đúng hành vi
-                  của bản demo — khối CHỈ hiện khi hội thoại
-                  có tệp đã chia sẻ, mỗi tệp là thẻ tệp theo
-                  khuôn demo (điểm E19, component FileCard).
-                  Nguồn dữ kiện qua adapter hiện luôn rỗng vì
-                  đính kèm chưa có phán quyết chức năng, nên
-                  khối không hiện ở trạng thái hiện tại; đợt
-                  backend chỉ thay nguồn của adapter.
-                */}
-                {sharedFiles.length > 0 ? (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">{t('sharedFilesTitle')}</h4>
-                    <ul className="space-y-1">
-                      {sharedFiles.map((file) => (
-                        <li key={file.id}>
-                          <FileCard name={file.name} sizeLabel={file.sizeLabel} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-              {/*
-                Nút Xoá ở ĐÁY panel theo đúng vị trí demo
-                (issue #608): nút destructive bề ngang đầy
-                đủ, icon thùng rác 16px, bị đẩy xuống đáy
-                bằng `mt-auto`. Chức năng xoá cuộc trò
-                chuyện chưa có đường dữ kiện phía client
-                nên chỉ dựng hình dạng ở trạng thái vô hiệu
-                như trước.
-              */}
-              <div className="mt-auto px-4 pb-4 pt-2">
-                <Button type="button" variant="destructive" className="w-full gap-2" disabled>
-                  <Trash className="size-4" aria-hidden />
-                  {t('deleteConversation')}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </aside>
+        <ChatInfoPanel
+          active={active}
+          isGroup={isGroup}
+          memberPanelBundle={memberPanelBundle}
+          myId={myId}
+          onlineUsers={onlineUsers}
+          readMarkers={readMarkers}
+          newestSeq={newestSeq}
+          onViewMemberProfile={memberProfile.open}
+          onUpdateConversationState={onUpdateConversationState}
+          otherId={otherId}
+          partnerProfile={partnerProfile}
+          title={title}
+          avatarLabel={avatarLabel}
+          otherStatus={otherStatus}
+          blocked={blocked}
+          nameOf={nameOf}
+          onBlockContact={onBlockContact}
+          onUnblockContact={onUnblockContact}
+          sharedFiles={sharedFiles}
+          onClose={() => setInfoOpen(false)}
+        />
       ) : null}
     </div>
   );

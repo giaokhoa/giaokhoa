@@ -9,6 +9,7 @@ import type {
 } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { CourseConversationView, MemberRow } from '../types/course-admin';
+import { ENROLMENT_STATUS } from '../types/course-admin';
 
 /**
  * Tầng gọi API thuần của trang quản trị khoá học thuộc feature courses: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/course-admin-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
@@ -345,7 +346,7 @@ export async function enrolUserManually(
  * @returns Đáp ứng của API.
  */
 export function toggleEnrolSuspend(courseId: string, ue: UserEnrolment) {
-  const action = ue.status === 1 ? 'reactivate' : 'suspend';
+  const action = ue.status === ENROLMENT_STATUS.suspended ? 'reactivate' : 'suspend';
   return apiJson(
     `/api/v1/courses/${courseId}/enrol/instances/${ue.enrolId}/users/${ue.userId}/${action}`,
     { method: 'POST' },

@@ -1,4 +1,5 @@
 import { useCallback, useState, type FormEvent } from 'react';
+import type { Route } from './+types/course-builder';
 import { Link, useNavigate, useParams } from 'react-router';
 import { CurriculumFramePanel, BookFramePanel } from '../components/curriculum-frame-panel';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -13,7 +14,8 @@ import { CompletionCard } from '../components/completion-card';
 import { CourseInfoCard } from '../components/course-info-card';
 import { ImportCard } from '../components/import-card';
 import { OutlineCard } from '../components/outline-card';
-import { statusChoiceOf, type ItemStatusChoice } from '../utils/utils';
+import { CRITERIA_METHOD, statusChoiceOf, type ItemStatusChoice } from '../utils/utils';
+import { titleMeta } from '#lib/route-meta';
 
 /**
  * Builder Outline (K1 — issue #68): trang xây dựng khoá học RIÊNG, tách khỏi trang quản trị khoá gộp theo chuẩn §9. Gồm: thông tin khoá
@@ -81,7 +83,7 @@ export function CourseBuilderPage() {
   const [importSections, setImportSections] = useState<string[]>([]);
   const [importModules, setImportModules] = useState<string[]>([]);
   // Tiêu chí hoàn thành.
-  const [criteriaMethod, setCriteriaMethod] = useState(1);
+  const [criteriaMethod, setCriteriaMethod] = useState(CRITERIA_METHOD.all);
   const [criteriaDraft, setCriteriaDraft] = useState<{ criteriaType: string; moduleInstance: string; date: string }[]>([]);
 
   // Khởi tạo các trường form/bản nháp từ gói dữ liệu mỗi khi gói
@@ -176,6 +178,7 @@ export function CourseBuilderPage() {
   const saveCriteriaMutation = useSaveBuilderCriteria(courseId);
   const recalculateMutation = useRecalculateBuilderCompletion(courseId);
 
+  // Đổi khoá nguồn "Dùng lại từ khoá khác" thì bỏ các tích chọn cũ (setState trong lúc render: chỉ chạy đúng nhịp đổi nguồn, các lần render sau không đổi gì thêm).
   const [previousImportSourceId, setPreviousImportSourceId] = useState(importSourceId);
   if (previousImportSourceId !== importSourceId) {
     setPreviousImportSourceId(importSourceId);
@@ -183,98 +186,109 @@ export function CourseBuilderPage() {
     setImportModules([]);
   }
 
-  async function saveCourse(event: FormEvent) {
-    event.preventDefault();
+  /**
+   * Khuôn chung cho các thao tác ghi của trang: xoá thông báo cũ, gọi thao tác, báo thành công khi xong, báo thất bại khi lỗi (không lộ chi tiết lỗi ra giao diện). `okKey` bỏ trống khi thành công không cần báo (đổi thứ tự); `onFailed` cho bước riêng khi lỗi (đổi thứ tự thất bại thì tải lại). Trả về true khi thành công để handler có bước riêng sau đó quyết định tiếp. Hai handler có nhịp riêng (createModule điều hướng theo loại, insertFromBank giữ cờ bận) giữ thân riêng, không dùng helper này.
+   */
+  async function runWithMessage(options: {
+    action: () => Promise<unknown>;
+    okKey?: string;
+    failedKey: string;
+    onFailed?: () => Promise<unknown> | unknown;
+  }): Promise<boolean> {
     setMessage(null);
     try {
-      await saveCourseMutation.mutateAsync({
-        fullName,
-        shortName,
-        category: courseCategory,
-        summary,
-        visible: courseVisible,
-        isTemplate,
-        startDate: startDate ? startDate : null,
-        endDate: endDate ? endDate : null,
-      });
-      setMessage(t('courseSaved'));
+      await options.action();
+      if (options.okKey) setMessage(t(options.okKey));
+      return true;
     } catch {
-      setMessage(t('courseSaveFailed'));
+      setMessage(t(options.failedKey));
+      await options.onFailed?.();
+      return false;
     }
+  }
+
+  async function saveCourse(event: FormEvent) {
+    event.preventDefault();
+    await runWithMessage({
+      action: () =>
+        saveCourseMutation.mutateAsync({
+          fullName,
+          shortName,
+          category: courseCategory,
+          summary,
+          visible: courseVisible,
+          isTemplate,
+          startDate: startDate ? startDate : null,
+          endDate: endDate ? endDate : null,
+        }),
+      okKey: 'courseSaved',
+      failedKey: 'courseSaveFailed',
+    });
   }
 
   async function createSection(event: FormEvent) {
     event.preventDefault();
-    setMessage(null);
-    try {
-      await createSectionMutation.mutateAsync(newSectionName.trim() ? { name: newSectionName.trim() } : {});
-      setNewSectionName('');
-      setMessage(t('sectionCreated'));
-    } catch {
-      setMessage(t('sectionCreateFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        createSectionMutation
+          .mutateAsync(newSectionName.trim() ? { name: newSectionName.trim() } : {})
+          .then(() => setNewSectionName('')),
+      okKey: 'sectionCreated',
+      failedKey: 'sectionCreateFailed',
+    });
   }
 
   /** Lưu tên + trạng thái mở của section: Nháp = ẩn; Đã mở = hiện, không lịch; Mở theo lịch = hiện + openAt. */
   async function saveSection(sectionId: string) {
     const edit = sectionEdits[sectionId];
     if (!edit) return;
-    setMessage(null);
-    try {
-      await saveSectionMutation.mutateAsync({
-        sectionId,
-        body: {
-          name: edit.name,
-          visible: edit.status !== 'draft',
-          openAt: edit.status === 'scheduled' && edit.openAt ? new Date(`${edit.openAt}T00:00:00`).toISOString() : null,
-        },
-      });
-      setMessage(t('sectionSaved'));
-    } catch {
-      setMessage(t('sectionSaveFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        saveSectionMutation.mutateAsync({
+          sectionId,
+          body: {
+            name: edit.name,
+            visible: edit.status !== 'draft',
+            openAt: edit.status === 'scheduled' && edit.openAt ? new Date(`${edit.openAt}T00:00:00`).toISOString() : null,
+          },
+        }),
+      okKey: 'sectionSaved',
+      failedKey: 'sectionSaveFailed',
+    });
   }
 
   async function deleteSection(sectionId: string, sectionName: string) {
     if (!window.confirm(t('confirmDeleteSection', { name: sectionName }))) return;
-    setMessage(null);
-    try {
-      await deleteSectionMutation.mutateAsync(sectionId);
-      setMessage(t('sectionDeleted'));
-    } catch {
-      setMessage(t('sectionDeleteFailed'));
-    }
+    await runWithMessage({
+      action: () => deleteSectionMutation.mutateAsync(sectionId),
+      okKey: 'sectionDeleted',
+      failedKey: 'sectionDeleteFailed',
+    });
   }
 
   async function duplicateSection(sectionId: string) {
-    setMessage(null);
-    try {
-      await duplicateSectionMutation.mutateAsync(sectionId);
-      setMessage(t('builderDuplicated'));
-    } catch {
-      setMessage(t('builderDuplicateFailed'));
-    }
+    await runWithMessage({
+      action: () => duplicateSectionMutation.mutateAsync(sectionId),
+      okKey: 'builderDuplicated',
+      failedKey: 'builderDuplicateFailed',
+    });
   }
 
   /** Đổi thứ tự section: gửi toàn bộ danh sách id theo thứ tự mới (API đòi đủ mọi section). */
   async function reorderSections(orderedIds: string[]) {
-    setMessage(null);
-    try {
-      await reorderSectionsMutation.mutateAsync(orderedIds);
-    } catch {
-      setMessage(t('builderReorderFailed'));
-      await reload();
-    }
+    await runWithMessage({
+      action: () => reorderSectionsMutation.mutateAsync(orderedIds),
+      failedKey: 'builderReorderFailed',
+      onFailed: reload,
+    });
   }
 
   async function reorderModules(sectionId: string, orderedIds: string[]) {
-    setMessage(null);
-    try {
-      await reorderModulesMutation.mutateAsync({ sectionId, moduleIds: orderedIds });
-    } catch {
-      setMessage(t('builderReorderFailed'));
-      await reload();
-    }
+    await runWithMessage({
+      action: () => reorderModulesMutation.mutateAsync({ sectionId, moduleIds: orderedIds }),
+      failedKey: 'builderReorderFailed',
+      onFailed: reload,
+    });
   }
 
   /**
@@ -361,114 +375,106 @@ export function CourseBuilderPage() {
   async function saveModule(cmId: string) {
     const edit = moduleEdits[cmId];
     if (!edit) return;
-    setMessage(null);
-    try {
-      await saveModuleMutation.mutateAsync({
-        cmId,
-        body: {
-          name: edit.name,
-          visible: edit.status !== 'draft',
-          openAt: edit.status === 'scheduled' && edit.openAt ? new Date(`${edit.openAt}T00:00:00`).toISOString() : null,
-        },
-      });
-      setMessage(t('moduleSaved'));
-    } catch {
-      setMessage(t('moduleSaveFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        saveModuleMutation.mutateAsync({
+          cmId,
+          body: {
+            name: edit.name,
+            visible: edit.status !== 'draft',
+            openAt: edit.status === 'scheduled' && edit.openAt ? new Date(`${edit.openAt}T00:00:00`).toISOString() : null,
+          },
+        }),
+      okKey: 'moduleSaved',
+      failedKey: 'moduleSaveFailed',
+    });
   }
 
   async function deleteModule(cmId: string, moduleName: string) {
     if (!window.confirm(t('confirmDeleteModule', { name: moduleName }))) return;
-    setMessage(null);
-    try {
-      await deleteModuleMutation.mutateAsync(cmId);
-      setMessage(t('moduleDeleted'));
-    } catch {
-      setMessage(t('moduleDeleteFailed'));
-    }
+    await runWithMessage({
+      action: () => deleteModuleMutation.mutateAsync(cmId),
+      okKey: 'moduleDeleted',
+      failedKey: 'moduleDeleteFailed',
+    });
   }
 
   async function duplicateModule(cmId: string) {
-    setMessage(null);
-    try {
-      await duplicateModuleMutation.mutateAsync(cmId);
-      setMessage(t('builderDuplicated'));
-    } catch {
-      setMessage(t('builderDuplicateFailed'));
-    }
+    await runWithMessage({
+      action: () => duplicateModuleMutation.mutateAsync(cmId),
+      okKey: 'builderDuplicated',
+      failedKey: 'builderDuplicateFailed',
+    });
   }
 
   async function saveSectionAvailability(sectionId: string) {
-    setMessage(null);
-    try {
-      await saveSectionMutation.mutateAsync({
-        sectionId,
-        body: { availability: availabilityDrafts[`section:${sectionId}`] ?? null },
-      });
-      setMessage(t('availabilitySaved'));
-    } catch {
-      setMessage(t('availabilitySaveFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        saveSectionMutation.mutateAsync({
+          sectionId,
+          body: { availability: availabilityDrafts[`section:${sectionId}`] ?? null },
+        }),
+      okKey: 'availabilitySaved',
+      failedKey: 'availabilitySaveFailed',
+    });
   }
 
   async function saveModuleAvailability(cmId: string) {
-    setMessage(null);
-    try {
-      await saveModuleMutation.mutateAsync({
-        cmId,
-        body: { availability: availabilityDrafts[`module:${cmId}`] ?? null },
-      });
-      setMessage(t('availabilitySaved'));
-    } catch {
-      setMessage(t('availabilitySaveFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        saveModuleMutation.mutateAsync({
+          cmId,
+          body: { availability: availabilityDrafts[`module:${cmId}`] ?? null },
+        }),
+      okKey: 'availabilitySaved',
+      failedKey: 'availabilitySaveFailed',
+    });
   }
 
   /** "Dùng lại từ khoá khác": POST import-content với các section/module đã tích chọn ở khoá nguồn. */
   async function submitImport(event: FormEvent) {
     event.preventDefault();
     if (!importSourceId || (importSections.length === 0 && importModules.length === 0)) return;
-    setMessage(null);
-    try {
-      await importContentMutation.mutateAsync({
-        sourceCourseId: importSourceId,
-        ...(importSections.length ? { sectionIds: importSections } : {}),
-        ...(importModules.length ? { moduleIds: importModules } : {}),
-      });
-      setMessage(t('builderImported'));
-      setImportSections([]);
-      setImportModules([]);
-    } catch {
-      setMessage(t('builderImportFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        importContentMutation
+          .mutateAsync({
+            sourceCourseId: importSourceId,
+            ...(importSections.length ? { sectionIds: importSections } : {}),
+            ...(importModules.length ? { moduleIds: importModules } : {}),
+          })
+          .then(() => {
+            setImportSections([]);
+            setImportModules([]);
+          }),
+      okKey: 'builderImported',
+      failedKey: 'builderImportFailed',
+    });
   }
 
   async function saveCriteria(event: FormEvent) {
     event.preventDefault();
-    setMessage(null);
-    try {
-      await saveCriteriaMutation.mutateAsync({
-        method: criteriaMethod,
-        criteria: criteriaDraft.map((criterion) => ({
-          criteriaType: criterion.criteriaType,
-          ...(criterion.criteriaType === 'module' ? { moduleInstance: criterion.moduleInstance } : {}),
-          ...(criterion.criteriaType === 'date' ? { date: criterion.date } : {}),
-        })),
-      });
-      setMessage(t('completionCriteriaSaved'));
-    } catch {
-      setMessage(t('completionCriteriaSaveFailed'));
-    }
+    await runWithMessage({
+      action: () =>
+        saveCriteriaMutation.mutateAsync({
+          method: criteriaMethod,
+          criteria: criteriaDraft.map((criterion) => ({
+            criteriaType: criterion.criteriaType,
+            ...(criterion.criteriaType === 'module' ? { moduleInstance: criterion.moduleInstance } : {}),
+            ...(criterion.criteriaType === 'date' ? { date: criterion.date } : {}),
+          })),
+        }),
+      okKey: 'completionCriteriaSaved',
+      failedKey: 'completionCriteriaSaveFailed',
+    });
   }
 
   async function recalculateCompletion() {
-    setMessage(null);
-    try {
-      await recalculateMutation.mutateAsync();
-      setMessage(t('recalculatedCompletion'));
-    } catch {
-      setMessage(t('recalculateFailed'));
-    }
+    await runWithMessage({
+      action: () => recalculateMutation.mutateAsync(),
+      okKey: 'recalculatedCompletion',
+      failedKey: 'recalculateFailed',
+    });
   }
 
   if (!canBuild) {
@@ -496,7 +502,6 @@ export function CourseBuilderPage() {
     const haystack = [item.name, item.description ?? '', ...(item.keywords ?? [])].join(' ').toLowerCase();
     return haystack.includes(bankQueryNormalized);
   });
-  const selectClass = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
   const statusBadge = (status: string | undefined) =>
     status === 'scheduled' ? t('builderStatusScheduled') : status === 'draft' ? t('builderStatusDraft') : t('builderStatusOpen');
 
@@ -541,48 +546,48 @@ export function CourseBuilderPage() {
       />
 
       <OutlineCard
-        content={content}
-        sections={sections}
-        newSectionName={newSectionName}
-        setNewSectionName={setNewSectionName}
-        onCreateSection={createSection}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        dragSectionId={dragSectionId}
-        setDragSectionId={setDragSectionId}
-        dragModule={dragModule}
-        setDragModule={setDragModule}
-        sectionEdits={sectionEdits}
-        setSectionEdits={setSectionEdits}
-        moduleEdits={moduleEdits}
-        setModuleEdits={setModuleEdits}
-        moduleDrafts={moduleDrafts}
-        setModuleDrafts={setModuleDrafts}
-        onSaveSection={saveSection}
-        onDeleteSection={deleteSection}
-        onDuplicateSection={duplicateSection}
-        onReorderSections={reorderSections}
-        onReorderModules={reorderModules}
-        onSaveModule={saveModule}
-        onDeleteModule={deleteModule}
-        onDuplicateModule={duplicateModule}
-        onCreateModule={createModule}
-        groups={groups}
-        groupings={groupings}
-        gradeItems={gradeItems}
-        setAvailabilityDrafts={setAvailabilityDrafts}
-        onSaveSectionAvailability={saveSectionAvailability}
-        onSaveModuleAvailability={saveModuleAvailability}
-        bankOpenSectionId={bankOpenSectionId}
-        onToggleBankPanel={toggleBankPanel}
-        bankQuery={bankQuery}
-        setBankQuery={setBankQuery}
-        bankLoadError={bankLoadError}
-        bankItems={bankItems}
-        bankFiltered={bankFiltered}
-        bankBusyId={bankBusyId}
-        onInsertFromBank={insertFromBank}
-        selectClass={selectClass}
+        state={{
+          content,
+          sections,
+          newSectionName,
+          setNewSectionName,
+          collapsed,
+          setCollapsed,
+          dragSectionId,
+          setDragSectionId,
+          dragModule,
+          setDragModule,
+        }}
+        edits={{ sectionEdits, setSectionEdits, moduleEdits, setModuleEdits, moduleDrafts, setModuleDrafts }}
+        actions={{
+          onCreateSection: createSection,
+          onSaveSection: saveSection,
+          onDeleteSection: deleteSection,
+          onDuplicateSection: duplicateSection,
+          onReorderSections: reorderSections,
+          onReorderModules: reorderModules,
+          onSaveModule: saveModule,
+          onDeleteModule: deleteModule,
+          onDuplicateModule: duplicateModule,
+          onCreateModule: createModule,
+        }}
+        context={{ groups, groupings, gradeItems }}
+        availability={{
+          setAvailabilityDrafts,
+          onSaveSectionAvailability: saveSectionAvailability,
+          onSaveModuleAvailability: saveModuleAvailability,
+        }}
+        bank={{
+          bankOpenSectionId,
+          onToggleBankPanel: toggleBankPanel,
+          bankQuery,
+          setBankQuery,
+          bankLoadError,
+          bankItems,
+          bankFiltered,
+          bankBusyId,
+          onInsertFromBank: insertFromBank,
+        }}
         statusBadge={statusBadge}
       />
 
@@ -596,7 +601,6 @@ export function CourseBuilderPage() {
         importModules={importModules}
         setImportModules={setImportModules}
         onSubmitImport={submitImport}
-        selectClass={selectClass}
       />
 
       <CompletionCard
@@ -608,7 +612,6 @@ export function CourseBuilderPage() {
         sections={sections}
         onSaveCriteria={saveCriteria}
         onRecalculate={recalculateCompletion}
-        selectClass={selectClass}
       />
     </main>
   );
@@ -623,7 +626,7 @@ export default CourseBuilderPage;
  * (đúng khoá factory) trước khi component mount. prefetchQuery
  * không ném lỗi: tải hỏng thì component tự xử lý qua useQuery.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.id) {
     await Promise.all([
       queryClient.prefetchQuery(courseBuilderQueryOptions(params.id)),
@@ -635,7 +638,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Xây dựng khoá học');
 }

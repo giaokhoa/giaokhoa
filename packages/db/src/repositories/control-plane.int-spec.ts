@@ -8,7 +8,9 @@ import type { SpaceRegistrySnapshot } from '../jsonb-types';
 import { FrozenSqlProvider } from '../migrate/frozen-sql-provider';
 import { MIGRATION_STORES } from '../migrate/stores';
 import { verifyStore } from '../migrate/verify';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import {
   ControlPlaneRepository,
   DEDICATED_DATABASE_NAME_UNIQUE_INDEX,
@@ -31,14 +33,11 @@ import {
  * - U5: insert không truyền id nhận id khớp regex UUIDv7 qua
  *   `returning`; insert có id tường minh giữ nguyên id. Và đo T-1 (registry ~20 instance) + kiểm chứng bộ máy migration trên kho control plane ở cả hai đường (từ rỗng / đã áp đủ no-op).
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
+const adminUrl = resolveTestAdminUrl();
 
 const CP_DB = 'giaokhoa_db_pilot640_cp';
 const T1_DB = 'giaokhoa_db_pilot640_t1';
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ACTOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';
 
 let cpUrl = '';
@@ -51,7 +50,7 @@ function registration(slug: string, patch: Partial<NewSpaceRegistration> = {}): 
   return {
     slug,
     name: `Trung tâm ${slug}`,
-    kind: 'center',
+    kind: TEST_TENANT_KIND,
     status: 'active',
     databaseName: `db_${slug.replaceAll('-', '_')}`,
     storageMode: 'dedicated',
@@ -97,7 +96,7 @@ describe('repository control plane trên Kysely — đối chiếu hành vi', ()
   it('U5: insert không truyền id nhận id khớp regex UUIDv7 qua returning; insert có id tường minh giữ nguyên id', async () => {
     const created = await repo.insertSpaceIfAbsent(registration('pilot-u5'));
     expect(created).toBeDefined();
-    expect(created!.id).toMatch(UUIDV7_PATTERN);
+    expect(created!.id).toMatch(UUIDV7_RE);
     expect(created!.slug).toBe('pilot-u5');
     expect(created!.databaseName).toBe('db_pilot_u5');
     expect(created!.createdAt).toBeInstanceOf(Date);
@@ -233,7 +232,7 @@ describe('repository control plane trên Kysely — đối chiếu hành vi', ()
       before: null,
       after: snapshot,
     });
-    expect(history.id).toMatch(UUIDV7_PATTERN);
+    expect(history.id).toMatch(UUIDV7_RE);
     expect(history.after).toEqual(snapshot);
     expect(history.before).toBeNull();
 
@@ -299,7 +298,7 @@ describe('repository control plane trên Kysely — đối chiếu hành vi', ()
       steps,
       finishedAt: new Date('2026-11-01T10:05:00.000Z'),
     });
-    expect(run.id).toMatch(UUIDV7_PATTERN);
+    expect(run.id).toMatch(UUIDV7_RE);
     expect(run.steps).toEqual(steps);
     const runs = await repo.listMigrationRuns(space!.id);
     expect(runs).toHaveLength(1);
@@ -328,7 +327,7 @@ describe('T-4 — ngữ nghĩa undefined trong values/set/where của Kysely (đ
       .values({
         slug: 't4-values',
         name: 'T4',
-        kind: 'center',
+        kind: TEST_TENANT_KIND,
         database_name: 'db_t4_values',
         storage_mode: 'dedicated',
         connection_role_ref: 'role_t4',
@@ -383,7 +382,7 @@ describe('T-7 (phần control plane) + T-10 — contract kiểu runtime và hìn
       .values({
         slug: 't7-space',
         name: 'T7',
-        kind: 'center',
+        kind: TEST_TENANT_KIND,
         status: 'active',
         database_name: 'db_t7',
         storage_mode: 'dedicated',
@@ -500,7 +499,7 @@ describe('T-7 (phần control plane) + T-10 — contract kiểu runtime và hìn
         .values({
           slug: 't10-second',
           name: 'T10',
-          kind: 'center',
+          kind: TEST_TENANT_KIND,
           status: 'active',
           database_name: 'db_t10_first',
           storage_mode: 'dedicated',
@@ -537,7 +536,7 @@ describe('T-7 (phần control plane) + T-10 — contract kiểu runtime và hìn
         .values({
           slug: 't10-first',
           name: 'T10 slug',
-          kind: 'center',
+          kind: TEST_TENANT_KIND,
           status: 'active',
           database_name: 'db_t10_slug_khac',
           storage_mode: 'dedicated',

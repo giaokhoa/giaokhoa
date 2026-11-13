@@ -114,11 +114,14 @@ export interface SystemPublishedVersion {
 }
 
 /** Chỉ câu đã duyệt; có thể lọc theo dạng và phân trang. */
+/** Số câu tối đa một trang khi khám phá câu đã xuất bản của bank hệ thống. */
+const DEFAULT_SYSTEM_BANK_PAGE_LIMIT = 20;
+
 export function fetchSystemPublishedQuestions(params: { qtype?: string; offset?: number; limit?: number }) {
   const search = new URLSearchParams();
   if (params.qtype) search.set('qtype', params.qtype);
   search.set('offset', String(params.offset ?? 0));
-  search.set('limit', String(params.limit ?? 20));
+  search.set('limit', String(params.limit ?? DEFAULT_SYSTEM_BANK_PAGE_LIMIT));
   return apiJson<SystemPublishedDiscovery>(`/api/v1/system-bank/discovery?${search.toString()}`);
 }
 

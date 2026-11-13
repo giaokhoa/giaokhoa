@@ -64,7 +64,7 @@ export class SystemBankMediaService {
       if (!match) {
         throw new BadRequestException({ message: 'Image must reference an owned file', code: 'system_bank.invalid_media' });
       }
-      const file = await this.files.getFile(match[1]!);
+      const file = await this.files.getFile(match[1]!); // Bất biến: match khác null (đã kiểm tra) và nhóm bắt của pattern luôn có khi khớp.
       if (file.component !== 'question' || file.contextId !== sourceContextId ||
         !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.mimeType ?? '')) {
         throw new BadRequestException({ message: 'Image does not belong to source question', code: 'system_bank.invalid_media' });

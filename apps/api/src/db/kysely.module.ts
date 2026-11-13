@@ -25,12 +25,9 @@ import {
   type OnApplicationShutdown,
   type Provider,
 } from '@nestjs/common';
-import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
-import {
-  createControlPlaneKysely,
-  type ControlPlaneDb,
-} from '@giaokhoa/db/control-plane';
-import { createSystemBankKysely, type SystemBankDb } from '@giaokhoa/db/system-bank';
+import { createCentreKysely } from '@giaokhoa/db';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
+import { createSystemBankKysely } from '@giaokhoa/db/system-bank';
 import type { Pool } from 'pg';
 import { KYSELY_CENTRE, KYSELY_CONTROL_PLANE, KYSELY_SYSTEM_BANK } from './inject-kysely';
 
@@ -81,23 +78,19 @@ export class KyselyModule {
     const providers: Provider[] = [];
     const exportsList: string[] = [];
 
-    if (options.centre) {
-      const centre: CentreDb = createCentreKysely(options.centre);
-      instances.push(centre);
-      providers.push({ provide: KYSELY_CENTRE, useValue: centre });
-      exportsList.push(KYSELY_CENTRE);
-    }
-    if (options.controlPlane) {
-      const controlPlane: ControlPlaneDb = createControlPlaneKysely(options.controlPlane);
-      instances.push(controlPlane);
-      providers.push({ provide: KYSELY_CONTROL_PLANE, useValue: controlPlane });
-      exportsList.push(KYSELY_CONTROL_PLANE);
-    }
-    if (options.systemBank) {
-      const systemBank: SystemBankDb = createSystemBankKysely(options.systemBank);
-      instances.push(systemBank);
-      providers.push({ provide: KYSELY_SYSTEM_BANK, useValue: systemBank });
-      exportsList.push(KYSELY_SYSTEM_BANK);
+    // Bảng kho → factory + token: một vòng lặp đăng ký thay cho ba khối
+    // `if (options.X)` giống hệt nhau; thêm kho mới chỉ thêm một dòng.
+    const handles: { pool: Pool | undefined; create: (pool: Pool) => DestroyableKysely; token: string }[] = [
+      { pool: options.centre, create: createCentreKysely, token: KYSELY_CENTRE },
+      { pool: options.controlPlane, create: createControlPlaneKysely, token: KYSELY_CONTROL_PLANE },
+      { pool: options.systemBank, create: createSystemBankKysely, token: KYSELY_SYSTEM_BANK },
+    ];
+    for (const { pool, create, token } of handles) {
+      if (!pool) continue;
+      const db = create(pool);
+      instances.push(db);
+      providers.push({ provide: token, useValue: db });
+      exportsList.push(token);
     }
 
     providers.push({ provide: KYSELY_INSTANCES, useValue: instances }, KyselyShutdownService);

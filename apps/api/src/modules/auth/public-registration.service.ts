@@ -44,6 +44,34 @@ export class PublicRegistrationService {
     private readonly roles: RolesService,
   ) {}
 
+  /**
+   * Bù cho một lần đăng ký thất bại sau khi user + credential đã commit: xoá user mới cùng các dòng quan hệ đã tạo để lần thử lại với cùng username/email không bị kẹt tài khoản mồ côi. Bước BA đã commit nên không được để trạng thái không membership/role làm kẹt lần retry. Role assignment không có FK user nên phải xoá tường minh; context USER cũng không FK tới users nên xoá trong cùng transaction với user, các account/session/membership còn lại được FK ON DELETE CASCADE dọn theo. Bù thất bại thì báo 503 — không trả lỗi gốc khi trạng thái dọn dẹp chưa chắc chắn.
+   */
+  private async compensateFailedRegistration(userId: string): Promise<void> {
+    try {
+      await this.spaces.routedKysely.transaction().execute(async (tx) => {
+        await tx.deleteFrom('role_assignments').where('user_id', '=', userId).execute();
+        await tx.deleteFrom('context')
+          .where('context_level', '=', CONTEXT_LEVELS.USER)
+          .where('instance_id', '=', userId)
+          .execute();
+        const removed = await tx.deleteFrom('users').where('id', '=', userId)
+          .returning('id').executeTakeFirst();
+        if (!removed) throw new Error('New public user disappeared during compensation');
+      });
+    } catch (cleanupError) {
+      // Log mã định danh nội bộ, KHÔNG log email hoặc mật khẩu.
+      this.logger.error(
+        'Unable to compensate public registration for ' + userId,
+        cleanupError instanceof Error ? cleanupError.stack : String(cleanupError),
+      );
+      throw new ServiceUnavailableException({
+        message: 'Public registration cleanup failed',
+        code: 'public_learning.registration_cleanup_failed',
+      });
+    }
+  }
+
   async register(host: string | string[] | undefined, input: PublicRegistrationInput): Promise<{ id: string }> {
     if (!isPublicLearningHost(host) || !this.betterAuth.enabled) {
       throw new ForbiddenException({ message: 'Registration is only available on the public learning site', code: 'public_learning.registration_denied' });
@@ -77,34 +105,7 @@ export class PublicRegistrationService {
           await this.tenants.ensureActiveMembership(tenant.id, user.id);
           await this.roles.assignRole(user.id, role.id, tenantContext.id);
         } catch (error) {
-          // Bước BA đã commit user + credential. Không được để
-          // trạng thái không membership/role làm kẹt lần retry.
-          // Role assignment không có FK user; phải xoá tường minh.
-          // Context USER cũng không FK tới users; xoá trong cùng
-          // transaction với user, các account/session/membership
-          // còn lại được FK ON DELETE CASCADE dọn theo.
-          try {
-            await this.spaces.routedKysely.transaction().execute(async (tx) => {
-              await tx.deleteFrom('role_assignments').where('user_id', '=', user.id).execute();
-              await tx.deleteFrom('context')
-                .where('context_level', '=', CONTEXT_LEVELS.USER)
-                .where('instance_id', '=', user.id)
-                .execute();
-              const removed = await tx.deleteFrom('users').where('id', '=', user.id)
-                .returning('id').executeTakeFirst();
-              if (!removed) throw new Error('New public user disappeared during compensation');
-            });
-          } catch (cleanupError) {
-            // Log mã định danh nội bộ, KHÔNG log email hoặc mật khẩu.
-            this.logger.error(
-              'Unable to compensate public registration for ' + user.id,
-              cleanupError instanceof Error ? cleanupError.stack : String(cleanupError),
-            );
-            throw new ServiceUnavailableException({
-              message: 'Public registration cleanup failed',
-              code: 'public_learning.registration_cleanup_failed',
-            });
-          }
+          await this.compensateFailedRegistration(user.id);
           throw error;
         }
         return { id: user.id };

@@ -1,7 +1,8 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
 import { SystemBankCentreRepository } from './system-bank-centre';
 
 /**
@@ -18,9 +19,7 @@ import { SystemBankCentreRepository } from './system-bank-centre';
  *   giữ nguyên (cài lại cập nhật nội dung tại chỗ, gồm nội dung YCCĐ là tài liệu jsonb), vết cài ghi phiên bản trước và cài lại cùng phiên bản chỉ làm mới vết.
  * - Tra slug trung tâm theo tenant id của kho chung.
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const CENTRE_DB = 'giaokhoa_db_g650_centre';
 const TENANT_ID = '01965000-0000-7000-8000-000000000201';
@@ -53,7 +52,7 @@ beforeAll(async () => {
   db = createCentreKysely(pool);
   repo = new SystemBankCentreRepository(db);
   // Dữ kiện nền tối thiểu: tenant (cho tra slug), môn + chương trình + node (cho upsert/tìm), và chuỗi cha tối thiểu của dòng truy vết nhập (category → question) vì `system_question_imports` mang khoá ngoại tới `question.id`.
-  await db.insertInto('tenants').values({ id: TENANT_ID, slug: 'trung-tam-650', name: 'Trung tâm 650', kind: 'centre' }).execute();
+  await db.insertInto('tenants').values({ id: TENANT_ID, slug: 'trung-tam-650', name: 'Trung tâm 650', kind: TEST_TENANT_KIND }).execute();
   await db
     .insertInto('question_categories')
     .values({ id: CATEGORY_ID, context_id: CONTEXT_ID, name: 'Bank cá nhân' })

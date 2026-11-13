@@ -11,12 +11,10 @@ import { sql } from 'kysely';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
 import { EventLogRepository, type EventLogFilters } from './event-log';
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g648_eventlog';
 

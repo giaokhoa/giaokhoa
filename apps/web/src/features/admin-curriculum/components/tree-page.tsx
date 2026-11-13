@@ -8,6 +8,7 @@ import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { ApiError } from '#lib/api';
 import { useAccessContexts } from '#lib/access';
+import { findSystemContext } from '#lib/permissions';
 import { queryClient } from '#lib/query-client';
 import {
   curriculumTreeScopedQueryOptions,
@@ -87,7 +88,7 @@ export function AdminCurriculumTreePage() {
   // (đọc qua tầng contexts như trang danh sách), chương trình theo
   // môn đang chọn ở bộ chọn. `pickedSubjectId` là môn người dùng vừa chọn khi khác môn của cây đang xem; chưa chọn thì bộ chọn neo theo môn của cây.
   const contextsQuery = useAccessContexts();
-  const systemContextId = contextsQuery.data?.find((c) => c.contextLevel === 10)?.id ?? null;
+  const systemContextId = findSystemContext(contextsQuery.data)?.id ?? null;
   const subjectsQuery = useCurriculumSubjectsScoped(systemContextId);
   const subjects = useMemo(
     () => [...(subjectsQuery.data ?? [])].sort((a, b) => a.position - b.position),
@@ -120,7 +121,8 @@ export function AdminCurriculumTreePage() {
     }
   }
 
-  async function deleteOutcome(_node: CurriculumTreeNode, outcomeId: string) {
+  /** Xoá một YCCĐ: chỉ cần id YCCĐ, node chứa nó không tham gia đột biến. */
+  async function deleteOutcome(outcomeId: string) {
     if (!window.confirm(t('curriculumConfirmDeleteOutcome'))) return;
     try {
       await deleteOutcomeMutation.mutateAsync(outcomeId);
@@ -229,7 +231,7 @@ export function AdminCurriculumTreePage() {
         rows={rows}
         curriculumId={tree.curriculum.id}
         onDeleteNode={(n) => void deleteNode(n)}
-        onDeleteOutcome={(n, id) => void deleteOutcome(n, id)}
+        onDeleteOutcome={(id) => void deleteOutcome(id)}
       />
     </PageShell>
   );

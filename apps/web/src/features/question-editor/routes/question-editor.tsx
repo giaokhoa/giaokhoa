@@ -18,7 +18,6 @@ import {
   editorFormContent,
   editorFormFromView,
   emptyEditorForm,
-  entryStatus,
   type Doc,
   type QuestionEditorFormState,
 } from '../types/form-model';
@@ -36,7 +35,7 @@ import {
 } from '#lib/curriculum';
 import { curriculaBySubjectQueryOptions } from '#features/matrices/queries/matrix';
 import { categoryQuestionsQueryOptions, categoryStimuliQueryOptions, clearQuestionBankListCache, editorQuestionVersionsQueryOptions, questionCategoriesQueryOptions, questionCurriculumLinksQueryOptions, useAttachQuestionOutcome, useAttachQuestionSubject, useCreateQuestion, useDetachQuestionOutcome, useDetachQuestionSubject, useSetQuestionStatus, useUpdateQuestionContent, useUpdateQuestionOutcomeLink } from '#features/questions/queries/questions';
-import { QTYPES, hasAllOptions, withApiReason } from '#features/questions/utils/shared';
+import { QTYPES, entryStatus, hasAllOptions, withApiReason } from '#features/questions/utils/shared';
 import type { CurriculumLinksView, Qtype } from '#features/questions/utils/shared';
 
 export { editorFormContent, editorFormFromView, emptyEditorForm, type QuestionEditorFormState };

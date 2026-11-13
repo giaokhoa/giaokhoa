@@ -16,6 +16,9 @@ import {
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
+import { errorText } from '#lib/api';
+import { platformKeyMeta } from '#lib/route-meta';
+import { pageLoadState } from '../queries/page-load-state';
 import { useCreateReport, usePlatformReports, useReportRun, useScheduleReport } from '../queries/platform';
 
 /**
@@ -24,7 +27,7 @@ import { useCreateReport, usePlatformReports, useReportRun, useScheduleReport } 
  * `clientLoader` của route nạp trước danh sách báo cáo); kết quả chạy chỉ tải khi người dùng bấm chạy một báo cáo, tạo báo cáo qua đột biến làm mới danh sách như lần tải lại thủ công trước đây.
  */
 export function ReportsPage() {
-  const { t: t } = useTranslation();
+  const { t } = useTranslation();
   const reportsQuery = usePlatformReports();
   const createReport = useCreateReport();
   const scheduleReport = useScheduleReport();
@@ -34,15 +37,25 @@ export function ReportsPage() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const runQuery = useReportRun(selectedReportId);
   const rows = runQuery.data?.rows ?? [];
-  const loading = reportsQuery.isPending || (reportsQuery.isError && reportsQuery.isFetching);
-  const loadError = reportsQuery.isError && !reportsQuery.isFetching ? t('reportsLoadFailed') : null;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { loading, loadError } = pageLoadState(reportsQuery, t('reportsLoadFailed'));
   async function create(event: FormEvent) {
     event.preventDefault();
-    await createReport.mutateAsync({ name, dataSource });
-    setName('');
+    setActionError(null);
+    try {
+      await createReport.mutateAsync({ name, dataSource });
+      setName('');
+    } catch (err) {
+      setActionError(errorText(err, t('actionFailed')));
+    }
   }
   async function schedule(id: string) {
-    await scheduleReport.mutateAsync(id);
+    setActionError(null);
+    try {
+      await scheduleReport.mutateAsync(id);
+    } catch (err) {
+      setActionError(errorText(err, t('actionFailed')));
+    }
   }
   return (
     <PageShell width="wide">
@@ -58,6 +71,11 @@ export function ReportsPage() {
             </Button>
           </div>
         </>
+      ) : null}
+      {actionError ? (
+        <ErrorAlert variant="destructive">
+          {actionError}
+        </ErrorAlert>
       ) : null}
       <Card>
         <CardContent className="space-y-3">
@@ -139,7 +157,6 @@ export { ReportsPage as default };
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('reportsTitle');
 }

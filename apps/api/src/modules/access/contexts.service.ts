@@ -11,8 +11,9 @@ import { CONTEXT_LEVELS } from './domain/capabilities';
 export class ContextsService {
   constructor(private readonly repo: AccessRepository) {}
 
-  /** Context hệ thống (level 10, instance null) được tạo lười (lazy) và là gốc của mọi path. */
   /**
+   * Context hệ thống (level 10, instance null) được tạo lười (lazy) và là gốc của mọi path.
+   *
    * Đảm bảo context hệ thống (level CONTEXT_SYSTEM, instance 0) tồn tại; idempotent.
    */
   async ensureSystemContext(tx?: CentreTx): Promise<ContextRow> {
@@ -105,8 +106,9 @@ export class ContextsService {
    * Liệt kê toàn bộ context.
    */
   async listContexts(): Promise<ContextRow[]> { return this.repo.listContexts(); }
-  /** Xoá một context (dùng khi instance sở hữu nó — category/course/cm — bị xoá). Các assignment/override bị xoá theo kiểu cascade. */
   /**
+   * Xoá một context (dùng khi instance sở hữu nó — category/course/cm — bị xoá). Các assignment/override bị xoá theo kiểu cascade.
+   *
    * Xoá context và dọn override quyền gắn với nó.
    */
   async deleteContext(id: string): Promise<void> { await this.repo.deleteContext(id); }
@@ -118,9 +120,10 @@ export class ContextsService {
     if (row) await this.repo.deleteContext(row.id);
   }
 
-  /** Chuỗi tổ tiên gồm cả chính context đó, sắp theo thứ tự lá → gốc, đi theo `path`. */
   /**
-   * Trả các context tổ tiên của một context (kèm chính nó) theo thứ tự từ gốc xuống.
+   * Chuỗi tổ tiên gồm cả chính context đó, sắp theo thứ tự lá → gốc, đi theo `path`.
+   *
+   * Trả các context tổ tiên của một context (kèm chính nó) theo thứ tự lá → gốc.
    */
   async getPathContexts(ctx: ContextRow): Promise<ContextRow[]> {
     const ids = ctx.path.split('/').filter(Boolean);
@@ -129,8 +132,9 @@ export class ContextsService {
     return ids.slice().reverse().map((id) => byId.get(id)!).filter(Boolean);
   }
 
-  /** Di chuyển một context (và toàn bộ cây con của nó) xuống dưới một context cha mới, viết lại path/depth. Dùng khi một category được di chuyển. */
   /**
+   * Di chuyển một context (và toàn bộ cây con của nó) xuống dưới một context cha mới, viết lại path/depth. Dùng khi một category được di chuyển.
+   *
    * Di chuyển context sang cha mới và viết lại path cho cả cây con.
    */
   async reparentContext(id: string, newParentId: string): Promise<void> {
@@ -147,16 +151,18 @@ export class ContextsService {
     }
   }
 
-  /** Đánh dấu dirty: mọi thay đổi quyền trong một context đều vô hiệu hoá kết quả đã cache của nó và của mọi context con cháu. */
   /**
+   * Đánh dấu dirty: mọi thay đổi quyền trong một context đều vô hiệu hoá kết quả đã cache của nó và của mọi context con cháu.
+   *
    * Đánh dấu cây context đã đổi để các cache phụ thuộc phải tính lại.
    */
   async markContextDirty(contextId: string, tx?: CentreTx): Promise<void> {
     const ctx = await this.repo.getContextById(contextId, tx);
     if (ctx) await this.repo.bumpContextVersions(ctx.path, tx);
   }
-  /** Dấu cache cho path của một context: thay đổi mỗi khi bất kỳ context nào trên path (hoặc gốc hệ thống) bị đánh dấu dirty. */
   /**
+   * Dấu cache cho path của một context: thay đổi mỗi khi bất kỳ context nào trên path (hoặc gốc hệ thống) bị đánh dấu dirty.
+   *
    * Dấu version hiện tại của cây context, gắn vào kết quả đánh giá quyền để phát hiện cache cũ.
    */
   pathVersionStamp(pathContexts: ContextRow[]): string {

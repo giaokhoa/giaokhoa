@@ -35,15 +35,22 @@ export type ReplaceRoleCapabilitiesDto = ReplaceRoleCapabilities;
 export type CapabilityMatrixQueryDto = CapabilityMatrixQuery;
 
 /**
+ * Các trường query phân trang/tìm kiếm dùng chung cho các schema liệt kê phía server: `search` cắt khoảng trắng hai đầu và
+ * chuỗi rỗng sau khi cắt coi như không tìm kiếm; `page`/`pageSize` ép kiểu bằng `z.coerce` (query string luôn là chuỗi) và nhận
+ * giá trị mặc định khi vắng mặt (trang 1, 20 dòng mỗi trang, trần 100 dòng). Schema nền vẫn giữ kiểu số cho bề mặt dùng chung.
+ */
+const paginationQueryFields = {
+  search: z.string().trim().transform((value) => (value === '' ? undefined : value)).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+};
+
+/**
  * Schema phía server cho query liệt kê gán vai — EXTEND từ schema nền ở contracts: query string luôn là chuỗi nên `page`/`pageSize` ép kiểu bằng `z.coerce` ở tầng server và nhận giá trị mặc định khi vắng mặt
  * (trang 1, 20 dòng mỗi trang, trần 100 dòng), còn `search` được cắt
  * khoảng trắng hai đầu và chuỗi rỗng sau khi cắt coi như không tìm kiếm. Schema nền vẫn giữ kiểu số cho bề mặt dùng chung.
  */
-export const listAssignmentsQueryServerSchema = listAssignmentsQuerySchema.extend({
-  search: z.string().trim().transform((value) => (value === '' ? undefined : value)).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const listAssignmentsQueryServerSchema = listAssignmentsQuerySchema.extend(paginationQueryFields);
 export type ListAssignmentsQueryDto = z.infer<typeof listAssignmentsQueryServerSchema>;
 export type ListAssignmentsFilter = Pick<ListAssignmentsQuery, 'userId' | 'contextId' | 'roleId' | 'search'>;
 
@@ -53,11 +60,7 @@ export type ListAssignmentsFilter = Pick<ListAssignmentsQuery, 'userId' | 'conte
  * (`roleId`, `status`) giữ nguyên validation của schema nền — status
  * ngoài tập đóng bị chặn ở đây trước khi vào tầng service.
  */
-export const listUsersWithAssignmentsQueryServerSchema = listUsersWithAssignmentsQuerySchema.extend({
-  search: z.string().trim().transform((value) => (value === '' ? undefined : value)).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const listUsersWithAssignmentsQueryServerSchema = listUsersWithAssignmentsQuerySchema.extend(paginationQueryFields);
 export type ListUsersWithAssignmentsQueryDto = z.infer<typeof listUsersWithAssignmentsQueryServerSchema>;
 export type ListUsersWithAssignmentsFilter = Pick<ListUsersWithAssignmentsQuery, 'search' | 'roleId' | 'status'>;
 

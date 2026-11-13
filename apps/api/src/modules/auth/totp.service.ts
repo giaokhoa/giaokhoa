@@ -8,6 +8,10 @@ import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 const TOTP_ISSUER = 'Giáo khoa';
 /** Cửa sổ kiểm chứng TOTP: ±30 giây = ±1 bước 30s quanh thời điểm hiện tại (lệch đồng hồ authenticator). */
 const TOTP_EPOCH_TOLERANCE_SECONDS = 30;
+/** Độ dài IV của AES-256-GCM (12 byte) — định dạng lưu là `iv | authTag | ciphertext` (xem `encryptSecret`). */
+const IV_LENGTH = 12;
+/** Độ dài auth tag của AES-256-GCM (16 byte). */
+const TAG_LENGTH = 16;
 
 @Injectable()
 /**
@@ -41,9 +45,18 @@ export class TotpService {
   /** Giải mã secret TOTP đã lưu; bản ghi bị sửa đổi sẽ làm GCM xác thực thất bại và ném lỗi. */
   private decryptSecret(stored: string): string {
     const raw = Buffer.from(stored, 'base64url');
-    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey(), raw.subarray(0, 12));
-    decipher.setAuthTag(raw.subarray(12, 28));
-    return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString('utf8');
+    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey(), raw.subarray(0, IV_LENGTH));
+    decipher.setAuthTag(raw.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH));
+    return Buffer.concat([decipher.update(raw.subarray(IV_LENGTH + TAG_LENGTH)), decipher.final()]).toString('utf8');
+  }
+
+  /**
+   * Kiểm mã TOTP so với secret đã mã hoá: mã sai thì ném `UnauthorizedException` mã `auth.mfa_invalid_code` — cùng một lỗi ở mọi bước (setup, confirm, disable) để client dịch thống nhất.
+   */
+  private async assertCodeValid(secretEncrypted: string, code: string): Promise<void> {
+    if (!(await this.verifyCode(this.decryptSecret(secretEncrypted), code))) {
+      throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+    }
   }
 
   /**
@@ -90,9 +103,7 @@ export class TotpService {
       if (!currentCode) {
         throw new UnauthorizedException({ message: 'Current two-factor authentication code is required to replace the active authenticator', code: 'auth.mfa_reauth_required' });
       }
-      if (!(await this.verifyCode(this.decryptSecret(existing.secretEncrypted), currentCode))) {
-        throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
-      }
+      await this.assertCodeValid(existing.secretEncrypted, currentCode);
     }
     const secret = generateSecret();
     if (existing?.confirmed) {
@@ -126,17 +137,13 @@ export class TotpService {
       // Đổi factor: xác minh chính secret đang chờ, rồi hoán đổi atomically.
       const pending = await this.repo.getPendingTotpReplacement(userId);
       if (!pending) throw new BadRequestException({ message: 'TOTP replacement has expired or was not started', code: 'auth.mfa_not_setup' });
-      if (!(await this.verifyCode(this.decryptSecret(pending.secretEncrypted), code))) {
-        throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
-      }
+      await this.assertCodeValid(pending.secretEncrypted, code);
       if (!(await this.repo.activateTotpReplacement(userId, pending))) {
         throw new ConflictException({ message: 'MFA factor changed during replacement confirmation', code: 'auth.mfa_state_changed' });
       }
       return;
     }
-    if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
-      throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
-    }
+    await this.assertCodeValid(row.secretEncrypted, code);
     if (!(await this.repo.confirmTotp(userId, row.secretEncrypted))) {
       throw new ConflictException({ message: 'MFA factor changed during confirmation', code: 'auth.mfa_state_changed' });
     }
@@ -148,9 +155,7 @@ export class TotpService {
   async disable(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
     if (!row?.confirmed) throw new BadRequestException({ message: 'Two-factor authentication is not enabled for this account', code: 'auth.mfa_not_enabled' });
-    if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
-      throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
-    }
+    await this.assertCodeValid(row.secretEncrypted, code);
     // Mã A chỉ được tắt chính A: nếu request khác đã kích hoạt C, yêu cầu tắt theo A cũ phải bị từ chối để không vô hiệu hoá C.
     if (!(await this.repo.disableTotpIfMatches(userId, row.secretEncrypted))) {
       throw new ConflictException({ message: 'MFA factor changed during disable', code: 'auth.mfa_state_changed' });

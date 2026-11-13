@@ -8,20 +8,16 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
-import { ApiError } from '#lib/api';
 import { type CurriculumSubject } from '#lib/curriculum';
 import { LEVELS, RESOURCE_TYPES, REVIEW_STATUSES } from '../types/content-bank';
 import type { LibraryItem, LibrarySpace, ReviewChecklist } from '../types/content-bank';
 import { useQueryClient } from '@tanstack/react-query';
+import { errorText } from '../utils/content-bank';
 import { contentBankItemFileUrlQueryOptions, contentBankItemsQueryOptions, contentBankSpacesQueryOptions, contentBankSubjectsQueryOptions, useDeleteContentBankItem, useInsertContentBankItem, useReviewContentBankItem, useSubmitContentBankItem } from '../queries/content-bank';
+import { selectClass } from '#lib/form-classes';
 import { coursesListQueryOptions } from '#features/courses/queries/courses';
 import { courseContentQueryOptions } from '#lib/course-content';
-
-const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
-
-function errorText(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? (err.problem.detail ?? err.problem.title ?? fallback) : fallback;
-}
+import { platformKeyMeta } from '#lib/route-meta';
 
 function spaceKey(space: LibrarySpace): string {
   return `${space.scope}:${space.spaceId ?? ''}`;
@@ -229,7 +225,7 @@ export function ContentBankLibraryPage() {
         <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
             <Label htmlFor="lib-filter-subject">{t('libraryFilterSubject')}</Label>
-            <select id="lib-filter-subject" className={SELECT_CLASS} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+            <select id="lib-filter-subject" className={selectClass} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
               <option value="">{t('libraryFilterAll')}</option>
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -238,7 +234,7 @@ export function ContentBankLibraryPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="lib-filter-grade">{t('libraryFilterGrade')}</Label>
-            <select id="lib-filter-grade" className={SELECT_CLASS} value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
+            <select id="lib-filter-grade" className={selectClass} value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
               <option value="">{t('libraryFilterAll')}</option>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
                 <option key={g} value={g}>{t('libraryGradeOption', { grade: g })}</option>
@@ -247,7 +243,7 @@ export function ContentBankLibraryPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="lib-filter-level">{t('libraryFormLevel')}</Label>
-            <select id="lib-filter-level" className={SELECT_CLASS} value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+            <select id="lib-filter-level" className={selectClass} value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
               <option value="">{t('libraryFilterAll')}</option>
               {LEVELS.map((lv) => (
                 <option key={lv} value={lv}>
@@ -258,7 +254,7 @@ export function ContentBankLibraryPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="lib-filter-type">{t('libraryFilterType')}</Label>
-            <select id="lib-filter-type" className={SELECT_CLASS} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <select id="lib-filter-type" className={selectClass} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
               <option value="">{t('libraryFilterAll')}</option>
               {RESOURCE_TYPES.map((type) => (
                 <option key={type} value={type}>{typeLabel(type)}</option>
@@ -267,7 +263,7 @@ export function ContentBankLibraryPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="lib-filter-status">{t('libraryFilterStatus')}</Label>
-            <select id="lib-filter-status" className={SELECT_CLASS} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select id="lib-filter-status" className={selectClass} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">{t('libraryFilterAll')}</option>
               {REVIEW_STATUSES.map((status) => (
                 <option key={status} value={status}>{statusLabel(status)}</option>
@@ -453,7 +449,7 @@ export function ContentBankLibraryPage() {
                               <div className="grid gap-2 sm:grid-cols-2">
                                 <select
                                   aria-label={t('libraryInsertCourse')}
-                                  className={SELECT_CLASS}
+                                  className={selectClass}
                                   value={insertCourseId}
                                   onChange={(e) => void pickCourse(e.target.value)}
                                 >
@@ -464,7 +460,7 @@ export function ContentBankLibraryPage() {
                                 </select>
                                 <select
                                   aria-label={t('libraryInsertSection')}
-                                  className={SELECT_CLASS}
+                                  className={selectClass}
                                   value={insertSectionId}
                                   onChange={(e) => setInsertSectionId(e.target.value)}
                                 >
@@ -513,7 +509,6 @@ export default ContentBankLibraryPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('libraryTitle');
 }

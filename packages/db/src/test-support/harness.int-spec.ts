@@ -12,6 +12,7 @@
  * (thay tên database thành `postgres`) như môi trường CI. Database
  * test (tên cố định dưới đây) bị xoá và dựng lại từ rỗng ở đầu suite, xoá hẳn khi suite xong. Vì superuser bỏ qua RLS, suite tạo một role thường riêng và chạy mọi truy vấn qua role đó.
  */
+import { randomUUID } from 'node:crypto';
 import { Client, Pool } from 'pg';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,8 +20,9 @@ import type { CentreDb, CentreTx } from '../client';
 import {
   buildTestDatabase,
   dropTestDatabase,
-  withDatabase,
+  resolveTestAdminUrl,
 } from './build-test-database';
+import { TEST_TENANT_KIND } from './test-constants';
 import { createTestKysely } from './create-test-kysely';
 import {
   runInTestPlatformContext,
@@ -30,11 +32,10 @@ import {
 
 const TEST_DATABASE = 'giaokhoa_db_kysely_smoke';
 const TEST_ROLE = 'giaokhoa_db_kysely_smoke';
-const TEST_ROLE_PASSWORD = 'giaokhoa_db_kysely_smoke_pw';
+// Mật khẩu role test sinh ngẫu nhiên mỗi lượt chạy (S35): tránh va chạm khi các lượt chạy song song cùng tạo role tên cố định; `ALTER ROLE` trong `beforeAll` luôn đặt lại mật khẩu nên role đã tồn tại vẫn dùng được mật khẩu mới.
+const TEST_ROLE_PASSWORD = randomUUID();
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 let tenantPool: TestTenantPool;
 let db: CentreDb;
@@ -45,7 +46,7 @@ let tenantBId: string;
 async function createTenantRow(handle: CentreDb | CentreTx, slug: string): Promise<string> {
   const row = await handle
     .insertInto('tenants')
-    .values({ slug, name: `Trung tâm ${slug}`, kind: 'centre' })
+    .values({ slug, name: `Trung tâm ${slug}`, kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   return row.id;

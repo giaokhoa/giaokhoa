@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { UserListStatus, UserWithAssignmentsListResponse } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
-import { AccessRepository, type AssignmentListRow, type RoleRow } from '@giaokhoa/db/repositories/access';
+import { AccessRepository, type AssignmentListRow, type AssignmentRow, type CapabilityRow, type RoleCapabilityRow, type RoleRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from './contexts.service';
 import { CAPABILITY_DEFINITIONS, DEFAULT_ROLES } from './domain/capabilities';
 import { CAP_ALLOW, CAP_INHERIT, CAP_PREVENT, CAP_PROHIBIT } from './domain/permission';
@@ -48,6 +48,15 @@ export function isEnrolManagedAssignment(assignment: { component?: string | null
   return assignment.component === ENROL_ASSIGNMENT_COMPONENT;
 }
 
+/**
+ * Role có archetype giảng dạy hay không — điểm kiểm tra duy nhất cho cả hai chốt ở `assignRole` (chặn slot gói và tách vai).
+ * Ép kiểu một chỗ tại đây là bắt buộc: `TEACHING_ROLE_ARCHETYPES` là tuple literal (`readonly ['editingteacher', 'teacher']`)
+ * nên `includes` của nó chỉ nhận đúng hai literal đó, trong khi `archetype` đọc từ DB là `string | null`.
+ */
+function isTeachingArchetype(archetype: string | null | undefined): boolean {
+  return (TEACHING_ROLE_ARCHETYPES as readonly string[]).includes(archetype ?? '');
+}
+
 @Injectable()
 /**
  * Quản trị role và gán role: role là tập override capability tại các context. Đối chiếu Moodle: lib/accesslib.php (create_role, assign_capability, role_assign).
@@ -61,8 +70,9 @@ export class RolesService {
     private readonly roleSeparation: RoleSeparationService,
   ) {}
 
-  /** Seed có tính idempotent: đồng bộ các định nghĩa capability từ code (định nghĩa không còn trong registry sẽ bị cắt bỏ, cùng với các override role của chúng), tạo các role core chuẩn của Moodle và giá trị mặc định theo archetype của chúng tại context hệ thống. */
   /**
+   * Seed có tính idempotent: đồng bộ các định nghĩa capability từ code (định nghĩa không còn trong registry sẽ bị cắt bỏ, cùng với các override role của chúng), tạo các role core chuẩn của Moodle và giá trị mặc định theo archetype của chúng tại context hệ thống.
+   *
    * Gieo các role archetype chuẩn của Moodle (manager, coursecreator, editingteacher, teacher, student, guest, user) cùng ma trận quyền mặc định tại context hệ thống; idempotent. Đồng bộ hai chiều: định nghĩa capability không còn trong sổ đăng ký ở code (vd tên cũ còn tiền tố, đã bỏ từ issue #35) bị xoá khỏi DB cùng mọi override trỏ tới chúng, để hai hệ tên không cùng tồn tại sau seed.
    */
   async seedDefaults(): Promise<void> {
@@ -208,7 +218,7 @@ export class RolesService {
    * vô hiệu hoá cache quyền — nửa còn lại nằm ở đường gỡ/xoá: xem
    * `unassignRole` và `deleteRole`.
    */
-  async assignRole(userId: string, roleId: string, contextId: string, modifierId?: string, source?: AssignmentSource, tx?: CentreTx): Promise<unknown> {
+  async assignRole(userId: string, roleId: string, contextId: string, modifierId?: string, source?: AssignmentSource, tx?: CentreTx): Promise<AssignmentRow> {
     const roleRow = await this.getRole(roleId);
     await this.contexts.getContext(contextId, tx);
     // Điểm chặn SLOT GÓI TRUNG TÂM (phần còn lại của lát 2, issue
@@ -222,7 +232,7 @@ export class RolesService {
     // dòng gán, không dòng gán nào được tạo. Người đã được đếm, vai
     // trò không phải giảng dạy, và context ngoài cây tenant khách
     // hàng (tenant platform, context hệ thống) đều không bị chặn.
-    if ((TEACHING_ROLE_ARCHETYPES as readonly string[]).includes(roleRow.archetype ?? '')) {
+    if (isTeachingArchetype(roleRow.archetype)) {
       const tenantId = await this.planLimits.tenantIdForContext(contextId, tx);
       if (tenantId) {
         const facts = await this.planLimits.describeUserInTenant(tenantId, userId);
@@ -243,7 +253,7 @@ export class RolesService {
     // được chốt ở funnel ghi danh, và instance cấp vai giảng dạy là
     // đường cấp vai của quản trị nằm ngoài quyết định tách vai.
     if (
-      (TEACHING_ROLE_ARCHETYPES as readonly string[]).includes(roleRow.archetype ?? '')
+      isTeachingArchetype(roleRow.archetype)
       && !isEnrolManagedAssignment({ component })
     ) {
       await this.roleSeparation.assertTeachingAssignmentAllowed(userId, contextId);
@@ -261,7 +271,7 @@ export class RolesService {
       // đường standalone như trước.
       const event = {
         aggregate: 'access', type: 'role_assigned',
-        payload: { assignmentId: (row as { id: string }).id, userId, roleId, contextId, actorId: modifierId ?? null, component, itemId },
+        payload: { assignmentId: row.id, userId, roleId, contextId, actorId: modifierId ?? null, component, itemId },
       } as const;
       if (tx) await this.outbox.enqueueKysely(tx, event);
       else await this.outbox.enqueueStandalone(event);
@@ -306,7 +316,7 @@ export class RolesService {
   /**
    * Liệt kê gán role, lọc tuỳ chọn theo user.
    */
-  async listAssignments(filter: { userId?: string; contextId?: string }, tx?: CentreTx): Promise<unknown[]> {
+  async listAssignments(filter: { userId?: string; contextId?: string }, tx?: CentreTx): Promise<AssignmentRow[]> {
     return this.repo.listAssignments(filter, tx);
   }
   /**
@@ -370,16 +380,18 @@ export class RolesService {
       pageSize,
     };
   }
-  /** Các assignment của một người dùng trên một tập context — ví dụ mọi context trên đường tổ tiên của đối tượng đích. Đây là phép tra cứu mà PermissionEvaluator dựa vào: assignment role được kế thừa xuống dưới theo cây context, nên assignment ở tổ tiên có hiệu lực tại lá. */
   /**
+   * Các assignment của một người dùng trên một tập context — ví dụ mọi context trên đường tổ tiên của đối tượng đích. Đây là phép tra cứu mà PermissionEvaluator dựa vào: assignment role được kế thừa xuống dưới theo cây context, nên assignment ở tổ tiên có hiệu lực tại lá.
+   *
    * Lấy mọi gán role của user tại một tập context (vd toàn bộ đường tổ tiên của context khoá học) — cùng phép tra cứu mà PermissionEvaluator dùng để thừa hưởng gán từ context tổ tiên.
    */
   async listAssignmentsInContexts(userId: string, contextIds: string[]): Promise<{ roleId: string; contextId: string }[]> {
     return this.repo.getAssignmentsForUserInContexts(userId, contextIds);
   }
 
-  /** Đặt (hoặc xoá, bằng CAP_INHERIT) một override capability cho một role tại một context; đánh dấu dirty cho toàn bộ cây con. */
   /**
+   * Đặt (hoặc xoá, bằng CAP_INHERIT) một override capability cho một role tại một context; đánh dấu dirty cho toàn bộ cây con.
+   *
    * Đặt override CAP_* cho role tại context (ALLOW/INHERIT/PREVENT/PROHIBIT).
    */
   async setCapabilityOverride(roleId: string, capability: string, contextId: string, permission: number, modifierId?: string, tx?: CentreTx): Promise<void> {
@@ -460,7 +472,7 @@ export class RolesService {
   /**
    * Liệt kê override đã lưu của role.
    */
-  async listRoleCapabilities(roleId: string): Promise<unknown[]> {
+  async listRoleCapabilities(roleId: string): Promise<RoleCapabilityRow[]> {
     await this.getRole(roleId);
     return this.repo.listRoleCapabilities(roleId);
   }
@@ -513,5 +525,5 @@ export class RolesService {
   /**
    * Liệt kê mọi capability đã khai báo.
    */
-  async listCapabilities(): Promise<unknown[]> { return this.repo.listCapabilities(); }
+  async listCapabilities(): Promise<CapabilityRow[]> { return this.repo.listCapabilities(); }
 }

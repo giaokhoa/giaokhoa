@@ -16,7 +16,7 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm lắp ráp là facade định tuyến theo không gian `routedKysely`) rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của handle đó.
  */
-import { sql, type Insertable } from 'kysely';
+import {sql, type InsertObject} from 'kysely';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
 
 /** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở. */
@@ -163,8 +163,8 @@ const LOGIN_ATTEMPT_COLUMNS = [
 /**
  * Ánh xạ dữ kiện tạo họ refresh token (camelCase) sang values insert (snake_case), LOẠI mọi trường mang `undefined` — trường vắng mặt để default của database quyết định (quy tắc T-4).
  */
-function refreshFamilyInsertValues(values: NewRefreshFamily): Insertable<CentreDB['refresh_token_family']> {
-  const row: Insertable<CentreDB['refresh_token_family']> = {
+function refreshFamilyInsertValues(values: NewRefreshFamily): InsertObject<CentreDB, 'refresh_token_family'> {
+  const row: InsertObject<CentreDB, 'refresh_token_family'> = {
     family_id: values.familyId,
     user_id: values.userId,
     current_token_hash: values.currentTokenHash,
@@ -182,8 +182,8 @@ function refreshFamilyInsertValues(values: NewRefreshFamily): Insertable<CentreD
 }
 
 /** Ánh xạ dữ kiện tạo liên kết OAuth (camelCase) sang values insert (snake_case), loại `undefined` như mọi đường ghi khác. */
-function oauthLinkInsertValues(values: NewOauthLink): Insertable<CentreDB['user_oauth_links']> {
-  const row: Insertable<CentreDB['user_oauth_links']> = {
+function oauthLinkInsertValues(values: NewOauthLink): InsertObject<CentreDB, 'user_oauth_links'> {
+  const row: InsertObject<CentreDB, 'user_oauth_links'> = {
     user_id: values.userId,
     issuer: values.issuer,
     issuer_user_id: values.issuerUserId,
@@ -195,8 +195,8 @@ function oauthLinkInsertValues(values: NewOauthLink): Insertable<CentreDB['user_
 }
 
 /** Ánh xạ dữ kiện ghi lần thử đăng nhập (camelCase) sang values insert (snake_case), loại `undefined` như mọi đường ghi khác. */
-function loginAttemptInsertValues(values: NewLoginAttempt): Insertable<CentreDB['login_attempts']> {
-  const row: Insertable<CentreDB['login_attempts']> = {
+function loginAttemptInsertValues(values: NewLoginAttempt): InsertObject<CentreDB, 'login_attempts'> {
+  const row: InsertObject<CentreDB, 'login_attempts'> = {
     username: values.username,
     success: values.success,
   };
@@ -213,19 +213,23 @@ function loginAttemptInsertValues(values: NewLoginAttempt): Insertable<CentreDB[
 export class AuthRepository {
   constructor(private readonly handle: AuthDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): AuthDb {
+    return this.handle;
+  }
+
   /** Tạo family mới cho một lần đăng nhập, lưu hash của refresh token đầu tiên. */
-  async createFamily(v: NewRefreshFamily): Promise<RefreshFamilyRow> {
-    const rows = await this.handle
+  async createFamily(v: NewRefreshFamily, db: AuthDb = this.db()): Promise<RefreshFamilyRow> {
+    return db
       .insertInto('refresh_token_family')
       .values(refreshFamilyInsertValues(v))
       .returning(REFRESH_FAMILY_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Tìm family theo hash refresh token (hash hiện tại hoặc hash trước đó vừa xoay). */
-  async getFamilyByHash(tokenHash: string): Promise<RefreshFamilyRow | undefined> {
-    return this.handle
+  async getFamilyByHash(tokenHash: string, db: AuthDb = this.db()): Promise<RefreshFamilyRow | undefined> {
+    return db
       .selectFrom('refresh_token_family')
       .select(REFRESH_FAMILY_COLUMNS)
       .where((eb) => eb.or([
@@ -236,8 +240,8 @@ export class AuthRepository {
   }
 
   /** Tìm family theo `familyId` (claim `sid` của access token). */
-  async getFamilyById(familyId: string): Promise<RefreshFamilyRow | undefined> {
-    return this.handle
+  async getFamilyById(familyId: string, db: AuthDb = this.db()): Promise<RefreshFamilyRow | undefined> {
+    return db
       .selectFrom('refresh_token_family')
       .select(REFRESH_FAMILY_COLUMNS)
       .where('family_id', '=', familyId)
@@ -245,8 +249,8 @@ export class AuthRepository {
   }
 
   /** Cập nhật tenant hiệu lực của family (khi refresh phân giải lại tenant). */
-  async setFamilyTenant(id: string, tenantId: string): Promise<void> {
-    await this.handle
+  async setFamilyTenant(id: string, tenantId: string, db: AuthDb = this.db()): Promise<void> {
+    await db
       .updateTable('refresh_token_family')
       .set({ tenant_id: tenantId })
       .where('id', '=', id)
@@ -254,8 +258,8 @@ export class AuthRepository {
   }
 
   /** Xoay family sang refresh token mới (ghi hash mới, đánh dấu hash cũ đã dùng). */
-  async rotateFamily(id: string, currentTokenHash: string, previousTokenHash: string): Promise<void> {
-    await this.handle
+  async rotateFamily(id: string, currentTokenHash: string, previousTokenHash: string, db: AuthDb = this.db()): Promise<void> {
+    await db
       .updateTable('refresh_token_family')
       .set({ current_token_hash: currentTokenHash, previous_token_hash: previousTokenHash, rotated_at: new Date() })
       .where('id', '=', id)
@@ -263,8 +267,8 @@ export class AuthRepository {
   }
 
   /** Thu hồi toàn bộ family (đăng xuất hoặc phát hiện tái sử dụng). */
-  async revokeFamily(id: string): Promise<void> {
-    await this.handle
+  async revokeFamily(id: string, db: AuthDb = this.db()): Promise<void> {
+    await db
       .updateTable('refresh_token_family')
       .set({ revoked: true })
       .where('id', '=', id)
@@ -272,8 +276,8 @@ export class AuthRepository {
   }
 
   /** Thu hồi mọi family của user (đổi mật khẩu, đình chỉ). */
-  async revokeAllForUser(userId: string): Promise<void> {
-    await this.handle
+  async revokeAllForUser(userId: string, db: AuthDb = this.db()): Promise<void> {
+    await db
       .updateTable('refresh_token_family')
       .set({ revoked: true })
       .where('user_id', '=', userId)
@@ -283,8 +287,8 @@ export class AuthRepository {
   /**
    * Các family đang hiệu lực của user (chưa thu hồi, chưa hết hạn) — nguồn cho danh sách "phiên API" ở trang quản lý phiên của chính user.
    */
-  async listActiveFamiliesByUser(userId: string): Promise<RefreshFamilyRow[]> {
-    return this.handle
+  async listActiveFamiliesByUser(userId: string, db: AuthDb = this.db()): Promise<RefreshFamilyRow[]> {
+    return db
       .selectFrom('refresh_token_family')
       .select(REFRESH_FAMILY_COLUMNS)
       .where('user_id', '=', userId)
@@ -297,8 +301,8 @@ export class AuthRepository {
   /**
    * Tìm family theo định danh family công khai (`family_id` — cũng là `sid` trong access token).
    */
-  async getFamilyByFamilyId(familyId: string): Promise<RefreshFamilyRow | undefined> {
-    return this.handle
+  async getFamilyByFamilyId(familyId: string, db: AuthDb = this.db()): Promise<RefreshFamilyRow | undefined> {
+    return db
       .selectFrom('refresh_token_family')
       .select(REFRESH_FAMILY_COLUMNS)
       .where('family_id', '=', familyId)
@@ -309,10 +313,10 @@ export class AuthRepository {
    * Thu hồi mọi family đang hiệu lực của user ngoại trừ một family giữ lại
    * (phiên hiện tại); trả số family đã thu hồi.
    */
-  async revokeOthersForUser(userId: string, keepFamilyId?: string): Promise<number> {
-    const active = await this.listActiveFamiliesByUser(userId);
+  async revokeOthersForUser(userId: string, keepFamilyId?: string, db: AuthDb = this.db()): Promise<number> {
+    const active = await this.listActiveFamiliesByUser(userId, db);
     const targets = active.filter((f) => f.familyId !== keepFamilyId);
-    for (const family of targets) await this.revokeFamily(family.id);
+    for (const family of targets) await this.revokeFamily(family.id, db);
     return targets.length;
   }
 
@@ -321,20 +325,19 @@ export class AuthRepository {
   /**
    * Tạo liên kết đăng nhập ngoài cho user; ràng buộc duy nhất ở DB chặn một tài khoản provider nối hai user hoặc một user hai liên kết/issuer.
    */
-  async createOauthLink(v: NewOauthLink): Promise<UserOauthLinkRow> {
-    const rows = await this.handle
+  async createOauthLink(v: NewOauthLink, db: AuthDb = this.db()): Promise<UserOauthLinkRow> {
+    return db
       .insertInto('user_oauth_links')
       .values(oauthLinkInsertValues(v))
       .returning(USER_OAUTH_LINK_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /**
    * Tìm liên kết theo tài khoản provider (issuer + định danh chủ thể) — bước khớp đầu tiên ở callback OAuth.
    */
-  async getOauthLinkBySubject(issuer: string, issuerUserId: string): Promise<UserOauthLinkRow | undefined> {
-    return this.handle
+  async getOauthLinkBySubject(issuer: string, issuerUserId: string, db: AuthDb = this.db()): Promise<UserOauthLinkRow | undefined> {
+    return db
       .selectFrom('user_oauth_links')
       .select(USER_OAUTH_LINK_COLUMNS)
       .where('issuer', '=', issuer)
@@ -345,8 +348,8 @@ export class AuthRepository {
   /**
    * Mọi liên kết đăng nhập ngoài của user, cũ nhất trước (trang Linked logins).
    */
-  async listOauthLinksByUser(userId: string): Promise<UserOauthLinkRow[]> {
-    return this.handle
+  async listOauthLinksByUser(userId: string, db: AuthDb = this.db()): Promise<UserOauthLinkRow[]> {
+    return db
       .selectFrom('user_oauth_links')
       .select(USER_OAUTH_LINK_COLUMNS)
       .where('user_id', '=', userId)
@@ -357,8 +360,8 @@ export class AuthRepository {
   /**
    * Tìm liên kết theo id (kèm userId ở phía gọi để kiểm tra sở hữu trước khi gỡ).
    */
-  async getOauthLinkById(id: string): Promise<UserOauthLinkRow | undefined> {
-    return this.handle
+  async getOauthLinkById(id: string, db: AuthDb = this.db()): Promise<UserOauthLinkRow | undefined> {
+    return db
       .selectFrom('user_oauth_links')
       .select(USER_OAUTH_LINK_COLUMNS)
       .where('id', '=', id)
@@ -368,8 +371,8 @@ export class AuthRepository {
   /**
    * Xoá một liên kết đăng nhập ngoài (gỡ liên kết ở trang Linked logins).
    */
-  async deleteOauthLink(id: string): Promise<void> {
-    await this.handle.deleteFrom('user_oauth_links').where('id', '=', id).execute();
+  async deleteOauthLink(id: string, db: AuthDb = this.db()): Promise<void> {
+    await db.deleteFrom('user_oauth_links').where('id', '=', id).execute();
   }
 
   // --- MFA TOTP ---------------------------------------------------------------
@@ -377,8 +380,8 @@ export class AuthRepository {
   /**
    * Bản ghi TOTP của user (secret đã mã hoá), hoặc undefined nếu chưa setup.
    */
-  async getTotpByUserId(userId: string): Promise<UserTotpRow | undefined> {
-    return this.handle
+  async getTotpByUserId(userId: string, db: AuthDb = this.db()): Promise<UserTotpRow | undefined> {
+    return db
       .selectFrom('user_totp')
       .select(USER_TOTP_COLUMNS)
       .where('user_id', '=', userId)
@@ -388,8 +391,9 @@ export class AuthRepository {
   /**
    * Ghi secret TOTP cho lần bật đầu tiên hoặc setup lại khi factor vẫn chưa xác nhận. Với factor đã bật, caller phải dùng stageTotpReplacement() để giữ trạng thái confirmed và secret cũ.
    */
-  async upsertPendingTotp(userId: string, secretEncrypted: string): Promise<UserTotpRow | undefined> {
-    const rows = await this.handle
+  async upsertPendingTotp(userId: string, secretEncrypted: string, db: AuthDb = this.db()): Promise<UserTotpRow | undefined> {
+    // Nếu confirm thắng cuộc đua, WHERE bảo vệ factor active và RETURNING rỗng để service báo 409, không lộ secret chưa lưu.
+    return db
       .insertInto('user_totp')
       .values({ user_id: userId, secret_encrypted: secretEncrypted, confirmed: false, confirmed_at: null })
       .onConflict((oc) => oc.column('user_id').doUpdateSet({
@@ -399,9 +403,7 @@ export class AuthRepository {
         created_at: new Date(),
       }).where('user_totp.confirmed', '=', false))
       .returning(USER_TOTP_COLUMNS)
-      .execute();
-    // Nếu confirm thắng cuộc đua, WHERE bảo vệ factor active và RETURNING rỗng để service báo 409, không lộ secret chưa lưu.
-    return rows[0];
+      .executeTakeFirst();
   }
 
   /**
@@ -446,8 +448,8 @@ export class AuthRepository {
    * @param userId Chủ thể của pending replacement.
    * @returns Secret chờ cùng phiên bản active nguồn, hoặc undefined.
    */
-  async getPendingTotpReplacement(userId: string): Promise<PendingTotpReplacement | undefined> {
-    const row = await this.handle.selectFrom('verification')
+  async getPendingTotpReplacement(userId: string, db: AuthDb = this.db()): Promise<PendingTotpReplacement | undefined> {
+    const row = await db.selectFrom('verification')
       .select(['value', 'expires_at'])
       .where('identifier', '=', 'totp-replace-' + userId)
       .executeTakeFirst();
@@ -506,8 +508,8 @@ export class AuthRepository {
   }
 
   /** Xoá pending replacement khi user tắt MFA hoặc quản trị reset factor. */
-  async clearPendingTotpReplacement(userId: string): Promise<void> {
-    await this.handle.deleteFrom('verification')
+  async clearPendingTotpReplacement(userId: string, db: AuthDb = this.db()): Promise<void> {
+    await db.deleteFrom('verification')
       .where('identifier', '=', 'totp-replace-' + userId)
       .execute();
   }
@@ -521,8 +523,8 @@ export class AuthRepository {
    * @param encryptedSecret Secret đã đọc trước khi xác minh mã.
    * @returns true khi đã xác nhận chính xác factor đó.
    */
-  async confirmTotp(userId: string, encryptedSecret: string): Promise<boolean> {
-    const row = await this.handle
+  async confirmTotp(userId: string, encryptedSecret: string, db: AuthDb = this.db()): Promise<boolean> {
+    const row = await db
       .updateTable('user_totp')
       .set({ confirmed: true, confirmed_at: new Date() })
       .where('user_id', '=', userId)
@@ -578,15 +580,15 @@ export class AuthRepository {
   /**
    * Ghi một lần thử đăng nhập (thành công/thất bại, IP) phục vụ khoá tạm thời.
    */
-  async recordAttempt(v: NewLoginAttempt): Promise<void> {
-    await this.handle.insertInto('login_attempts').values(loginAttemptInsertValues(v)).execute();
+  async recordAttempt(v: NewLoginAttempt, db: AuthDb = this.db()): Promise<void> {
+    await db.insertInto('login_attempts').values(loginAttemptInsertValues(v)).execute();
   }
 
   /**
    * Số lần đăng nhập thất bại gần đây của username — đầu vào của chính sách lockout.
    */
-  async recentFailedAttempts(userId: string, since: Date): Promise<LoginAttemptRow[]> {
-    return this.handle
+  async recentFailedAttempts(userId: string, since: Date, db: AuthDb = this.db()): Promise<LoginAttemptRow[]> {
+    return db
       .selectFrom('login_attempts')
       .select(LOGIN_ATTEMPT_COLUMNS)
       .where('user_id', '=', userId)
@@ -599,8 +601,8 @@ export class AuthRepository {
   /**
    * Thời điểm đăng nhập thành công gần nhất.
    */
-  async lastSuccessfulAttemptAt(userId: string): Promise<Date | undefined> {
-    const row = await this.handle
+  async lastSuccessfulAttemptAt(userId: string, db: AuthDb = this.db()): Promise<Date | undefined> {
+    const row = await db
       .selectFrom('login_attempts')
       .select(LOGIN_ATTEMPT_COLUMNS)
       .where('user_id', '=', userId)

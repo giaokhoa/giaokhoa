@@ -11,8 +11,9 @@
  *
  * Lưu ý giao dịch: không phía gọi nào của cụm này mở giao dịch qua repository (kiểm kê ở thân PR của issue #647) — phương thức `transaction` vẫn có mặt theo khuôn chung, và mọi phương thức nhận handle tuỳ chọn làm tham số cuối như các repository đã chuyển đổi khác.
  */
-import { sql, type Insertable } from 'kysely';
+import {sql, type InsertObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { CONTEXT_LEVEL_TENANT } from './dashboard';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type RepoDb = CentreDb | CentreTx;
@@ -98,8 +99,8 @@ const LINKED_SUBMISSION_COLUMNS = [
 ] as const;
 
 /** Ánh xạ dữ kiện ghi tệp (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function fileInsertValues(values: NewFile): Insertable<CentreDB['files']> {
-  const row: Insertable<CentreDB['files']> = {
+function fileInsertValues(values: NewFile): InsertObject<CentreDB, 'files'> {
+  const row: InsertObject<CentreDB, 'files'> = {
     content_hash: values.contentHash,
     storage_domain: values.storageDomain,
     context_id: values.contextId,
@@ -138,8 +139,7 @@ export class FilesRepository {
 
   /** Chèn bản ghi tệp mới. */
   async insert(values: NewFile, db: RepoDb = this.db()): Promise<FileRow> {
-    const rows = await db.insertInto('files').values(fileInsertValues(values)).returning(FILE_COLUMNS).execute();
-    return rows[0]!;
+    return db.insertInto('files').values(fileInsertValues(values)).returning(FILE_COLUMNS).executeTakeFirstOrThrow();
   }
 
   /** Lấy bản ghi theo id. */
@@ -148,7 +148,7 @@ export class FilesRepository {
   }
 
   /**
-   * Suy tenant chủ của context chứa file legacy theo context level 20 trong
+   * Suy tenant chủ của context chứa file legacy theo context level của tenant (`CONTEXT_LEVEL_TENANT`) trong
    * cây path; không tìm được context trả undefined (fail-closed), context
    * toàn cục hợp lệ trả null. Không dùng tenant_id từ chính file cũ.
    */
@@ -157,11 +157,11 @@ export class FilesRepository {
       .select(['context_level', 'instance_id', 'path'])
       .where('id', '=', contextId).executeTakeFirst();
     if (!context) return undefined;
-    if (context.context_level === 20) return context.instance_id ?? undefined;
+    if (context.context_level === CONTEXT_LEVEL_TENANT) return context.instance_id ?? undefined;
     const pathIds = context.path.split('/').filter(Boolean);
     if (!pathIds.length) return null;
     const owner = await db.selectFrom('context').select('instance_id')
-      .where('id', 'in', pathIds).where('context_level', '=', 20)
+      .where('id', 'in', pathIds).where('context_level', '=', CONTEXT_LEVEL_TENANT)
       .executeTakeFirst();
     return owner?.instance_id ?? null;
   }

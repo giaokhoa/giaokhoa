@@ -64,8 +64,9 @@ export function useMessageComposer({
   const [replyTargets, setReplyTargets] = useState<Record<string, MessageView | null>>({});
   /**
    * Lỗi gửi phải nói rõ lý do (lát M2, issue #212): vượt trần ký tự
-   * (400) hay gửi quá nhanh (429) hiện thành thông báo cạnh composer
-   * thay vì chỉ để tin rơi vào trạng thái failed câm như trước.
+   * (mã HTTP 400 — trần ký tự lấy từ hằng `MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT`,
+   * không phải số 400) hay gửi quá nhanh (mã HTTP 429) hiện thành thông
+   * báo cạnh composer thay vì chỉ để tin rơi vào trạng thái failed câm như trước.
    */
   const [sendError, setSendError] = useState<string | null>(null);
   const sendMessageMutation = useSendMessage();

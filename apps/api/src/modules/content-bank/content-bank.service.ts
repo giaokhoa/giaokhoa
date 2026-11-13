@@ -36,30 +36,48 @@ export interface LibraryItemInput {
   contentType?: string;
   visibility?: string;
   fileId?: string;
-  resourceType?: string;
-  scope?: string;
+  resourceType?: (typeof RESOURCE_TYPES)[number];
+  scope?: (typeof SCOPES)[number];
   spaceId?: string;
   subjectId?: string;
   grade?: number;
-  level?: string;
+  level?: (typeof LEVELS)[number];
   curriculumNodeId?: string;
   outcomeIds?: string[];
   questionCategoryId?: string;
   externalUrl?: string;
   description?: string;
   keywords?: string[];
-  targetAudience?: string;
-  lessonPosition?: string;
+  targetAudience?: (typeof TARGET_AUDIENCES)[number];
+  lessonPosition?: (typeof LESSON_POSITIONS)[number];
   techFormat?: string;
   sizeBytes?: number;
   durationSeconds?: number;
   language?: string;
   originalAuthor?: string;
-  sourceKind?: string;
+  sourceKind?: (typeof SOURCE_KINDS)[number];
   sourceCitation?: string;
   license?: string;
   derivedFromId?: string;
 }
+
+/** Các trường metadata chung của một học liệu — danh sách dùng chung cho create/update (thêm một trường metadata chỉ thêm ở đây). */
+type LibraryItemFields = Pick<ContentRow,
+  | 'name' | 'fileId' | 'resourceType' | 'subjectId' | 'grade' | 'level' | 'curriculumNodeId'
+  | 'outcomeIds' | 'questionCategoryId' | 'externalUrl' | 'description' | 'keywords'
+  | 'targetAudience' | 'lessonPosition' | 'techFormat' | 'sizeBytes' | 'durationSeconds'
+  | 'language' | 'originalAuthor' | 'sourceKind' | 'sourceCitation' | 'license' | 'derivedFromId'
+>;
+
+/** Các trường đưa một học liệu chia sẻ đã/chờ duyệt về draft để duyệt lại (khung chung của update/uploadFile). */
+type ReviewResetFields = {
+  reviewStatus: 'draft';
+  reviewedBy: null;
+  reviewedAt: null;
+  reviewNote: null;
+  reviewChecklist: null;
+  visibility: string;
+};
 
 export interface SpaceView {
   scope: string;
@@ -192,15 +210,15 @@ export class ContentBankService {
       (await this.evaluator.hasCapability(userId, 'contentbank:reviewcontent', contextId)) &&
       (await this.evaluator.hasCapability(userId, 'cohort:manage', contextId));
     const byId = new Map<string, SpaceView>();
-    for (const c of await this.repo.listCohortsForUser(userId)) {
-      byId.set(c.id, { scope: 'org', spaceId: c.id, name: c.name, canReview: await orgReview(c.contextId) });
-    }
+    const userCohorts = await this.repo.listCohortsForUser(userId);
+    const userCanReviews = await Promise.all(userCohorts.map((c) => orgReview(c.contextId)));
+    userCohorts.forEach((c, i) => byId.set(c.id, { scope: 'org', spaceId: c.id, name: c.name, canReview: userCanReviews[i] ?? false }));
     // Chỉ người quản trị cohort ở cấp hệ thống mới thấy MỌI tổ; tổ trưởng
     // chỉ thấy tổ của mình (đúng phạm vi duyệt của họ).
     if (await this.evaluator.hasCapability(userId, 'cohort:manage', sys)) {
-      for (const c of await this.repo.listAllCohorts()) {
-        if (!byId.has(c.id)) byId.set(c.id, { scope: 'org', spaceId: c.id, name: c.name, canReview: await orgReview(c.contextId) });
-      }
+      const missingCohorts = (await this.repo.listAllCohorts()).filter((c) => !byId.has(c.id));
+      const missingCanReviews = await Promise.all(missingCohorts.map((c) => orgReview(c.contextId)));
+      missingCohorts.forEach((c, i) => byId.set(c.id, { scope: 'org', spaceId: c.id, name: c.name, canReview: missingCanReviews[i] ?? false }));
     }
     return [
       { scope: 'personal', spaceId: null, name: 'Của tôi', canReview: false },
@@ -224,6 +242,63 @@ export class ContentBankService {
         throw new BadRequestException({ message: `Unknown value ${value}`, code });
       }
     }
+  }
+
+  /**
+   * Kiểm tra scope và loại học liệu (khung chung của create/update): giá trị lạ bị từ chối sớm với mã lỗi riêng. Mảng hằng được nới về `readonly string[]` vì đây là kiểm tra runtime trên chuỗi chưa tin cậy — scope của bản ghi hiện tại trong DB là `string` nên không narrow được ở biên dịch.
+   */
+  private assertScopeAndResourceType(scope: string, resourceType?: string): void {
+    if (!(SCOPES as readonly string[]).includes(scope)) throw new BadRequestException({ message: `Unknown scope ${scope}`, code: 'contentbank.bad_scope' });
+    if (resourceType && !(RESOURCE_TYPES as readonly string[]).includes(resourceType)) {
+      throw new BadRequestException({ message: `Unknown resourceType ${resourceType}`, code: 'contentbank.bad_resource_type' });
+    }
+  }
+
+  /**
+   * Map input tạo/sửa thành các trường metadata của bản ghi: trường nào input có thì lấy input, còn lại lấy giá trị dự phòng (create: mặc định null/`'reference'`/`'vi'`; update: giá trị của bản ghi hiện tại). Visibility, scope, spaceId, contextId và trạng thái duyệt không nằm trong map vì mặc định của chúng phụ thuộc scope (xem create/update).
+   */
+  private mapLibraryItemFields(
+    input: Partial<LibraryItemInput>, fallback: LibraryItemFields,
+  ): LibraryItemFields {
+    return {
+      name: input.name ?? fallback.name,
+      fileId: input.fileId ?? fallback.fileId,
+      resourceType: input.resourceType ?? fallback.resourceType,
+      subjectId: input.subjectId ?? fallback.subjectId,
+      grade: input.grade ?? fallback.grade,
+      level: input.level ?? fallback.level,
+      curriculumNodeId: input.curriculumNodeId ?? fallback.curriculumNodeId,
+      outcomeIds: input.outcomeIds ?? fallback.outcomeIds,
+      questionCategoryId: input.questionCategoryId ?? fallback.questionCategoryId,
+      externalUrl: input.externalUrl ?? fallback.externalUrl,
+      description: input.description ?? fallback.description,
+      keywords: input.keywords ?? fallback.keywords,
+      targetAudience: input.targetAudience ?? fallback.targetAudience,
+      lessonPosition: input.lessonPosition ?? fallback.lessonPosition,
+      techFormat: input.techFormat ?? fallback.techFormat,
+      sizeBytes: input.sizeBytes ?? fallback.sizeBytes,
+      durationSeconds: input.durationSeconds ?? fallback.durationSeconds,
+      language: input.language ?? fallback.language,
+      originalAuthor: input.originalAuthor ?? fallback.originalAuthor,
+      sourceKind: input.sourceKind ?? fallback.sourceKind,
+      sourceCitation: input.sourceCitation ?? fallback.sourceCitation,
+      license: input.license ?? fallback.license,
+      derivedFromId: input.derivedFromId ?? fallback.derivedFromId,
+    };
+  }
+
+  /**
+   * Các trường đưa một học liệu chia sẻ đã/chờ duyệt về draft để duyệt lại (khung chung của update/uploadFile): trạng thái về draft, xoá quyết định duyệt cũ, và học liệu đã duyệt thì ẩn khỏi công khai (chưa duyệt thì giữ nguyên visibility — bất biến "chưa duyệt thì không public" ở update vẫn ép về draft sau đó).
+   */
+  private reviewResetFields(row: ContentRow): ReviewResetFields {
+    return {
+      reviewStatus: 'draft',
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+      reviewChecklist: null,
+      visibility: row.reviewStatus === 'approved' ? 'draft' : row.visibility,
+    };
   }
 
   /** Giới hạn độ sâu duyệt chuỗi dẫn xuất khi chống vòng (CB1-B1). */
@@ -275,10 +350,7 @@ export class ContentBankService {
 
   async create(actorId: string, input: LibraryItemInput): Promise<ContentRow> {
     const scope = input.scope ?? 'personal';
-    if (!SCOPES.includes(scope as never)) throw new BadRequestException({ message: `Unknown scope ${scope}`, code: 'contentbank.bad_scope' });
-    if (input.resourceType && !RESOURCE_TYPES.includes(input.resourceType as never)) {
-      throw new BadRequestException({ message: `Unknown resourceType ${input.resourceType}`, code: 'contentbank.bad_resource_type' });
-    }
+    this.assertScopeAndResourceType(scope, input.resourceType);
     this.assertEnumFields(input);
     if (input.derivedFromId) await this.assertDerivedFromValid(null, input.derivedFromId);
     if (scope === 'org' && input.spaceId) await this.assertOrgMembership(actorId, input.spaceId);
@@ -292,24 +364,20 @@ export class ContentBankService {
     } else {
       await this.evaluator.requireCapability(actorId, 'contentbank:upload', contextId);
     }
+    const fields = this.mapLibraryItemFields(input, {
+      name: input.name, fileId: null, resourceType: 'reference', subjectId: null, grade: null, level: null,
+      curriculumNodeId: null, outcomeIds: null, questionCategoryId: null, externalUrl: null,
+      description: null, keywords: null, targetAudience: null, lessonPosition: null,
+      techFormat: null, sizeBytes: null, durationSeconds: null, language: 'vi',
+      originalAuthor: null, sourceKind: null, sourceCitation: null, license: null, derivedFromId: null,
+    });
     const row = await this.repo.insert({
-      name: input.name, contextId, creatorId: actorId,
+      ...fields,
+      contextId, creatorId: actorId,
       contentType: input.contentType ?? 'file-based',
       // Học liệu chia sẻ luôn bắt đầu ở draft (chỉ public sau khi duyệt).
       visibility: scope === 'personal' ? (input.visibility ?? 'draft') : 'draft',
-      fileId: input.fileId ?? null,
-      resourceType: input.resourceType ?? 'reference', scope, spaceId: scope === 'org' ? (input.spaceId ?? null) : null,
-      subjectId: input.subjectId ?? null, grade: input.grade ?? null, level: input.level ?? null,
-      curriculumNodeId: input.curriculumNodeId ?? null,
-      outcomeIds: input.outcomeIds ?? null, questionCategoryId: input.questionCategoryId ?? null,
-      externalUrl: input.externalUrl ?? null,
-      description: input.description ?? null, keywords: input.keywords ?? null,
-      targetAudience: input.targetAudience ?? null, lessonPosition: input.lessonPosition ?? null,
-      techFormat: input.techFormat ?? null, sizeBytes: input.sizeBytes ?? null,
-      durationSeconds: input.durationSeconds ?? null, language: input.language ?? 'vi',
-      originalAuthor: input.originalAuthor ?? null, sourceKind: input.sourceKind ?? null,
-      sourceCitation: input.sourceCitation ?? null, license: input.license ?? null,
-      derivedFromId: input.derivedFromId ?? null,
+      scope, spaceId: scope === 'org' ? (input.spaceId ?? null) : null,
       // Cá nhân không qua duyệt; chia sẻ lên tổ/trường bắt đầu ở draft chờ gửi duyệt.
       reviewStatus: scope === 'personal' ? 'approved' : 'draft',
     });
@@ -322,9 +390,8 @@ export class ContentBankService {
     const rows = filters.contextId
       ? await this.repo.listByContext(filters.contextId)
       : await this.repo.listFiltered(filters);
-    const out: ContentRow[] = [];
-    for (const row of rows) if (await this.canView(userId, row)) out.push(row);
-    return out;
+    const visible = await Promise.all(rows.map((row) => this.canView(userId, row)));
+    return rows.filter((_, i) => visible[i] ?? false);
   }
 
   private async assertCanEdit(actorId: string, row: ContentRow): Promise<void> {
@@ -336,55 +403,26 @@ export class ContentBankService {
     const row = await this.get(id);
     await this.assertCanEdit(actorId, row);
     const scope = input.scope ?? row.scope;
-    if (!SCOPES.includes(scope as never)) throw new BadRequestException({ message: `Unknown scope ${scope}`, code: 'contentbank.bad_scope' });
+    this.assertScopeAndResourceType(scope);
     const spaceId = scope === 'org' ? (input.spaceId ?? row.spaceId) : null;
     if (scope === 'org' && spaceId && spaceId !== row.spaceId) await this.assertOrgMembership(actorId, spaceId);
     // Đổi scope thì neo lại context (cá nhân neo theo context của CHỦ SỞ HỮU,
     // không theo người đang sửa); giữ nguyên scope thì giữ context cũ.
     const contextId = scope !== row.scope ? await this.resolveContext(row.creatorId, scope, spaceId) : row.contextId;
     this.assertEnumFields(input);
-    if (input.resourceType && !RESOURCE_TYPES.includes(input.resourceType as never)) {
-      throw new BadRequestException({ message: `Unknown resourceType ${input.resourceType}`, code: 'contentbank.bad_resource_type' });
-    }
+    this.assertScopeAndResourceType(scope, input.resourceType);
     // Kiểm kể cả khi derivedFromId không đổi so với bản ghi hiện tại: dữ
     // liệu cũ (trước khi có chặn) có thể đã chứa tự tham chiếu/vòng.
     if (input.derivedFromId) await this.assertDerivedFromValid(id, input.derivedFromId);
     const changes: Partial<typeof row> = {
-      name: input.name ?? row.name,
+      ...this.mapLibraryItemFields(input, row),
       visibility: input.visibility ?? row.visibility,
-      fileId: input.fileId ?? row.fileId,
-      resourceType: input.resourceType ?? row.resourceType,
       scope, spaceId, contextId,
-      subjectId: input.subjectId ?? row.subjectId,
-      grade: input.grade ?? row.grade,
-      level: input.level ?? row.level,
-      curriculumNodeId: input.curriculumNodeId ?? row.curriculumNodeId,
-      outcomeIds: input.outcomeIds ?? row.outcomeIds,
-      questionCategoryId: input.questionCategoryId ?? row.questionCategoryId,
-      externalUrl: input.externalUrl ?? row.externalUrl,
-      description: input.description ?? row.description,
-      keywords: input.keywords ?? row.keywords,
-      targetAudience: input.targetAudience ?? row.targetAudience,
-      lessonPosition: input.lessonPosition ?? row.lessonPosition,
-      techFormat: input.techFormat ?? row.techFormat,
-      sizeBytes: input.sizeBytes ?? row.sizeBytes,
-      durationSeconds: input.durationSeconds ?? row.durationSeconds,
-      language: input.language ?? row.language,
-      originalAuthor: input.originalAuthor ?? row.originalAuthor,
-      sourceKind: input.sourceKind ?? row.sourceKind,
-      sourceCitation: input.sourceCitation ?? row.sourceCitation,
-      license: input.license ?? row.license,
-      derivedFromId: input.derivedFromId ?? row.derivedFromId,
     };
     // Học liệu chia sẻ đã/chờ duyệt mà bị sửa (nội dung, metadata, phạm vi)
     // thì quay về draft để duyệt lại — duyệt là trên đúng bản đang chia sẻ.
     if (scope !== 'personal' && (row.reviewStatus === 'approved' || row.reviewStatus === 'pending')) {
-      changes.reviewStatus = 'draft';
-      changes.reviewedBy = null;
-      changes.reviewedAt = null;
-      changes.reviewNote = null;
-      changes.reviewChecklist = null;
-      if (row.reviewStatus === 'approved') changes.visibility = 'draft';
+      Object.assign(changes, this.reviewResetFields(row));
     }
     if (scope === 'personal') changes.reviewStatus = 'approved';
     // Bất biến của kho chia sẻ: chưa duyệt thì không được public — kể cả
@@ -419,7 +457,7 @@ export class ContentBankService {
     await this.repo.update(id, { fileId: file.id, sizeBytes: data.length, ...(ext ? { techFormat: ext } : {}) });
     // Thay file của học liệu đã/chờ duyệt → quay về draft chờ duyệt lại.
     if (row.scope !== 'personal' && (row.reviewStatus === 'approved' || row.reviewStatus === 'pending')) {
-      await this.repo.update(id, { reviewStatus: 'draft', reviewedBy: null, reviewedAt: null, reviewNote: null, reviewChecklist: null, visibility: row.reviewStatus === 'approved' ? 'draft' : row.visibility });
+      await this.repo.update(id, this.reviewResetFields(row));
       await this.search.removeDoc('contentbank', id);
     }
     return this.get(id);
@@ -518,6 +556,21 @@ export class ContentBankService {
     return updated;
   }
 
+  /**
+   * Sao chép một tệp vào context của course module vừa tạo (khung chung của hai nhánh insertIntoCourse: sao chép file gốc / tạo file `.url` trỏ về liên kết ngoài). Module vừa tạo phải có context — thiếu là trạng thái nội bộ không nhất quán nên báo không tìm thấy module thay vì ép non-null.
+   */
+  private async uploadCopy(args: {
+    cmId: string; fileName: string; data: Buffer; mimeType: string | undefined; userId: string;
+  }): Promise<string> {
+    const contextId = await this.courses.cmContextId(args.cmId);
+    if (!contextId) throw new NotFoundException({ message: `Course module ${args.cmId} not found`, code: 'course.cm_not_found' });
+    const copy = await this.files.upload({
+      contextId, component: 'mod_resource', fileArea: 'content', itemId: args.cmId,
+      fileName: args.fileName, data: args.data, mimeType: args.mimeType, userId: args.userId,
+    });
+    return copy.id;
+  }
+
   // --- điểm cắm "Thêm từ kho" ------------------------------------------------------
 
   /**
@@ -542,24 +595,27 @@ export class ContentBankService {
       throw new BadRequestException({ message: 'Question-set references are used from the question bank, not inserted as course resources', code: 'contentbank.question_set_not_insertable' });
     }
     const cm = await this.courses.createCm(actorId, input.courseId, { sectionId: input.sectionId, component: 'mod_resource', name: row.name });
-    const cmContextId = await this.courses.cmContextId(cm.id);
     let copiedFileId: string | null = null;
     if (row.fileId) {
       const { file, data } = await this.files.readContent(row.fileId);
-      const copy = await this.files.upload({
-        contextId: cmContextId!, component: 'mod_resource', fileArea: 'content', itemId: cm.id,
-        fileName: file.fileName, data, mimeType: file.mimeType ?? undefined, userId: actorId,
+      copiedFileId = await this.uploadCopy({
+        cmId: cm.id,
+        fileName: file.fileName,
+        data,
+        mimeType: file.mimeType ?? undefined,
+        userId: actorId,
       });
-      copiedFileId = copy.id;
     } else if (row.externalUrl) {
       // Học liệu liên kết: bản sao trong khoá là file .url trỏ về liên kết gốc
       // (mod_url chuyên dụng thuộc lát sau); nội dung kho không bị phụ thuộc.
       const shortcut = Buffer.from(`[InternetShortcut]\r\nURL=${row.externalUrl}\r\n`, 'utf8');
-      const copy = await this.files.upload({
-        contextId: cmContextId!, component: 'mod_resource', fileArea: 'content', itemId: cm.id,
-        fileName: `${row.name}.url`, data: shortcut, mimeType: 'text/plain', userId: actorId,
+      copiedFileId = await this.uploadCopy({
+        cmId: cm.id,
+        fileName: `${row.name}.url`,
+        data: shortcut,
+        mimeType: 'text/plain',
+        userId: actorId,
       });
-      copiedFileId = copy.id;
     }
     return { cmId: cm.id, courseId: input.courseId, sectionId: input.sectionId, fileId: copiedFileId, sourceContentId: row.id };
   }

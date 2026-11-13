@@ -13,17 +13,17 @@ import {
   buildTestDatabase,
   dropTestDatabase,
   withDatabase,
+  resolveTestAdminUrl,
 } from "../test-support/build-test-database";
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { SupportGrantsRepository } from "./support-grants";
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL
-    ? withDatabase(process.env.DATABASE_URL, "postgres")
-    : "postgres://postgres:postgres@localhost:5432/postgres");
+const adminUrl = resolveTestAdminUrl();
 const TEST_DB = "giaokhoa_db_support19";
 const ROLE_NAME = `giaokhoa_support_19_rls_${process.pid}`;
-const ROLE_PASSWORD = "Test-only-rls-19!";
+// Mật khẩu role test sinh ngẫu nhiên mỗi lượt chạy (S35): tên role đã gắn `process.pid`, mật khẩu cố định trước đây vẫn có thể va chạm giữa các lượt chạy song song.
+const ROLE_PASSWORD = randomUUID();
 
 let db: CentreDb;
 let repo: SupportGrantsRepository;
@@ -54,6 +54,9 @@ async function grant(
 }
 
 beforeAll(async () => {
+  if (!adminUrl) {
+    throw new Error('Thiếu kết nối quản trị cho spec tích hợp support grants: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+  }
   const url = await buildTestDatabase({
     adminUrl,
     database: TEST_DB,
@@ -67,7 +70,7 @@ beforeAll(async () => {
       .values({
         slug: "support-a-19",
         name: "Trung tâm A",
-        kind: "center",
+        kind: TEST_TENANT_KIND,
       })
       .returning("id")
       .executeTakeFirstOrThrow()
@@ -78,7 +81,7 @@ beforeAll(async () => {
       .values({
         slug: "support-b-19",
         name: "Trung tâm B",
-        kind: "center",
+        kind: TEST_TENANT_KIND,
       })
       .returning("id")
       .executeTakeFirstOrThrow()
@@ -144,7 +147,7 @@ describe("Quyền hỗ trợ hữu hạn và audit của từng trung tâm trên
       ["classes:read"],
       new Date(Date.now() + 60_000),
     );
-    expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/);
+    expect(created.id).toMatch(UUIDV7_RE);
     expect((await repo.findActiveGrant(a, staff, "classes:read"))?.id).toBe(
       created.id,
     );

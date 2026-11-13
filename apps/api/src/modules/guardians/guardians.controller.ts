@@ -101,7 +101,7 @@ export class GuardianController {
 
   @Get('students/:studentId/results')
   /**
-   * GET /guardian/students/:studentId/results — kết quả học tập ĐÃ CÔNG BỐ theo môn/khoá: ĐTB/mức + nhận xét tổng kỳ, kết quả năm, điểm tổng khoá đã qua cổng công bố. Không lời phê chi tiết, không bài nộp gốc.
+   * GET /guardian/students/:studentId/results — điểm theo từng bài ĐÃ CÔNG BỐ của con theo môn/khoá (mô hình điểm theo bài, issue #224: không còn kết quả kỳ/năm của Sổ điểm VN và không còn điểm tổng khoá). Không lời phê chi tiết, không bài nộp gốc.
    */
   async results(@Param('studentId', { schema: uuidIdSchema }) studentId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.view.results(actor.id, studentId);

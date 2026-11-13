@@ -1,3 +1,10 @@
+/**
+ * Cấu hình i18n phía frontend (i18next + react-i18next): catalog tiếng Việt cho bốn
+ * namespace platform/app/dashboard/guardian được đóng gói sẵn trong bundle, ngôn ngữ
+ * mặc định và dự phòng đều là vi; catalog tiếng Anh nằm ở module riêng i18n-en.ts
+ * và chỉ được nạp lười qua backend khi chuyển sang en. Mọi chuỗi hiển thị đều tra qua t().
+ */
+
 import i18n, { type BackendModule } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -28,6 +35,8 @@ export const platformResources = {
       reportsLoadFailed: 'Không tải được danh sách báo cáo',
       contentBankLoadFailed: 'Không tải được ngân hàng nội dung',
       privacyLoadFailed: 'Không tải được yêu cầu riêng tư',
+      actionFailed: 'Thao tác thất bại, thử lại sau.',
+      searchFailed: 'Tìm kiếm thất bại, thử lại sau.',
       noServicesYet: 'Chưa có dịch vụ nào.',
       noBackupJobsYet: 'Chưa có tác vụ sao lưu nào.',
       noReportsYet: 'Chưa có báo cáo nào.',
@@ -366,6 +375,7 @@ export const appResources = {
       navPrivacy: 'Quyền riêng tư',
       navUsers: 'Người dùng',
       navTenants: 'Trung tâm',
+      supportGrantsLink: 'Quyền hỗ trợ có thời hạn',
       navRoles: 'Vai trò',
       navPermissions: 'Quyền',
       navGroupRolesPermissions: 'Vai trò & Quyền',
@@ -468,6 +478,38 @@ export const appResources = {
       oauthCallbackDescription: 'Hệ thống đang xác nhận phiên đăng nhập của bạn.',
       oauthCallbackFailed: 'Không thể hoàn tất đăng nhập bằng tài khoản ngoài. Phiên có thể đã hết hạn — vui lòng thử lại.',
       backToLogin: 'Về trang đăng nhập',
+      // Khối chuỗi của hai trang MCP (đăng nhập + đồng ý uỷ quyền): giữ thành một khối liên tục gần các khoá auth để hai catalog vi/en dễ đối chiếu.
+      mcpLoginTitle: 'Đăng nhập để uỷ quyền ứng dụng AI',
+      mcpLoginDescription:
+        'Một ứng dụng AI đang xin quyền truy cập ngân hàng câu hỏi thay bạn. Đăng nhập bằng tài khoản Giáo khoa của bạn để tiếp tục tới bước xác nhận quyền.',
+      mcpCheckingSession: 'Đang kiểm tra phiên đăng nhập…',
+      mcpSignInContinue: 'Đăng nhập và tiếp tục',
+      mcpLoginFailed: 'Đăng nhập không thành công. Kiểm tra lại tên đăng nhập và mật khẩu.',
+      mcpServerUnreachable: 'Không kết nối được máy chủ. Thử lại sau ít phút.',
+      mcpMfaInstruction:
+        'Tài khoản của bạn đã bật xác thực hai lớp. Nhập mã 6 số từ ứng dụng xác thực để tiếp tục.',
+      mcpMfaInvalidCode:
+        'Mã xác thực không đúng hoặc đã hết hạn. Đăng nhập lại để nhận thử thách mới nếu mã vẫn bị từ chối.',
+      mcpMfaVerifyContinue: 'Xác thực và tiếp tục',
+      mcpConsentTitle: 'Uỷ quyền cho ứng dụng AI',
+      mcpConsentDescription:
+        'Ứng dụng "{{clientName}}" xin được thay bạn thực hiện các việc sau trong Giáo khoa. Chỉ cấp những quyền bạn thật sự cần — bạn thu hồi được bằng cách ngừng kết nối trong ứng dụng.',
+      mcpConsentLoading: 'Đang tải thông tin uỷ quyền…',
+      mcpConsentInvalidLink:
+        'Liên kết uỷ quyền không hợp lệ (thiếu thông tin ứng dụng). Hãy bắt đầu lại từ ứng dụng AI của bạn.',
+      mcpConsentRejected:
+        'Máy chủ không chấp nhận lựa chọn này. Hãy thử lại hoặc từ chối và bắt đầu lại từ ứng dụng AI.',
+      mcpScopeQuestionsRead: 'Xem ngân hàng câu hỏi: danh sách bank, thư mục, tìm và đọc câu hỏi',
+      mcpScopeQuestionsDraft:
+        'Tạo câu hỏi BẢN NHÁP trong ngân hàng cá nhân của bạn (chưa dùng được cho tới khi bạn duyệt)',
+      mcpScopeQuestionsWrite:
+        'PHÁT HÀNH câu hỏi: chuyển bản nháp của bạn thành câu hỏi chính thức dùng được trong đề thi',
+      mcpScopeBanksContribute:
+        'Đề xuất đóng góp câu hỏi đã phát hành của bạn lên ngân hàng chung (vẫn cần người duyệt phía bank chung)',
+      mcpScopeSensitiveNote: 'Quyền mạnh — chỉ bật khi bạn tin tưởng ứng dụng này.',
+      mcpConsentAccept: 'Đồng ý uỷ quyền',
+      mcpConsentDecline: 'Từ chối',
+      mcpConsentProcessing: 'Đang xử lý…',
       linkedAccountsTitle: 'Tài khoản liên kết',
       linkedAccountsDescription: 'Các tài khoản ngoài bạn có thể dùng để đăng nhập vào Giáo khoa.',
       linkedAccountsLoadFailed: 'Không tải được danh sách tài khoản liên kết.',
@@ -555,6 +597,49 @@ export const appResources = {
       tenantSetMemberActive: 'Kích hoạt lại',
       tenantSuspendMember: 'Tạm dừng',
       tenantEndMember: 'Kết thúc',
+      supportGrantsTitle: 'Quyền hỗ trợ trung tâm',
+      supportGrantsDescription:
+        'Chủ trung tâm quyết định ai được xem dữ liệu nào, đến thời điểm nào; mọi lần sử dụng đều có nhật ký.',
+      supportGrantsBackToCenter: 'Quay lại trung tâm',
+      supportGrantsLoading: 'Đang tải quyền hỗ trợ',
+      supportGrantsForbidden:
+        'Chỉ quản trị viên của trung tâm đang hoạt động mới được cấp, thu hồi hoặc xem nhật ký hỗ trợ.',
+      supportGrantCreateTitle: 'Cấp quyền hỗ trợ mới',
+      supportGrantRecipientLabel: 'ID nhân sự platform được nhận quyền',
+      supportGrantRecipientPlaceholder: 'UUID của nhân sự hỗ trợ',
+      supportGrantScopesLegend: 'Thao tác được phép (chỉ đọc)',
+      supportGrantExpiryLabel: 'Hết hạn (tối đa 30 ngày)',
+      supportGrantReasonLabel: 'Lý do cấp quyền',
+      supportGrantReasonPlaceholder: 'Ví dụ: kiểm tra lỗi hiển thị lớp',
+      supportGrantSubmit: 'Cấp quyền có thời hạn',
+      supportGrantInvalidForm: 'Chọn thời hạn và ít nhất một thao tác hợp lệ.',
+      supportGrantCreated: 'Đã cấp quyền hỗ trợ có thời hạn.',
+      supportGrantCreateFailed: 'Không thể cấp quyền. Kiểm tra người nhận, thời hạn và quyền quản trị.',
+      supportGrantRevoked: 'Đã thu hồi. Request hỗ trợ kế tiếp sẽ bị chặn.',
+      supportGrantRevokeFailed: 'Không thể thu hồi quyền hỗ trợ.',
+      supportGrantRevoke: 'Thu hồi',
+      supportGrantsListTitle: 'Quyền đã cấp',
+      supportGrantsLoadFailed: 'Không tải được danh sách quyền hỗ trợ.',
+      supportGrantsEmpty: 'Chưa có quyền hỗ trợ nào được cấp.',
+      supportGrantsUserColumn: 'Nhân sự',
+      supportGrantsScopeColumn: 'Thao tác',
+      supportGrantsExpiryColumn: 'Hết hạn',
+      supportGrantsManageColumn: 'Quản lý',
+      supportGrantsAuditTitle: 'Nhật ký cấp quyền và sử dụng',
+      supportGrantsAuditLoadFailed: 'Không tải được nhật ký hỗ trợ.',
+      supportGrantsAuditEmpty: 'Chưa có sự kiện hỗ trợ.',
+      supportGrantsAuditTimeColumn: 'Thời điểm',
+      supportGrantsAuditActorColumn: 'Người thực hiện',
+      supportGrantsAuditEventColumn: 'Sự kiện',
+      supportScopeClassesRead: 'Xem danh sách lớp',
+      supportScopeCoursesRead: 'Xem danh sách khoá học',
+      supportGrantStatusActive: 'Đang hiệu lực',
+      supportGrantStatusExpired: 'Đã hết hạn',
+      supportGrantStatusRevoked: 'Đã thu hồi',
+      supportGrantEventCreated: 'Đã cấp',
+      supportGrantEventRevoked: 'Đã thu hồi',
+      supportGrantEventAccessAllowed: 'Truy cập được phép',
+      supportGrantEventAccessDenied: 'Truy cập bị từ chối',
       navGuardianLinks: 'Liên kết phụ huynh',
       guardianLinksTitle: 'Quản lý liên kết phụ huynh',
       guardianLinksDescription:
@@ -868,6 +953,7 @@ export const appResources = {
       progressReportLink: 'Báo cáo tiến độ',
       progressReportTitle: 'Báo cáo tiến độ học',
       progressReportDenied: 'Bạn không có quyền xem báo cáo tiến độ của khoá học này.',
+      progressReportLoadFailed: 'Không tải được báo cáo tiến độ.',
       progressReportByItem: 'Theo từng mục',
       progressReportMatrix: 'Ma trận lớp × mục',
       progressReportStudent: 'Học sinh',
@@ -1721,6 +1807,7 @@ export const appResources = {
       userUpdated: 'Đã lưu thay đổi người dùng.',
       userUpdateFailed: 'Không lưu được thay đổi người dùng.',
       userCreateFailed: 'Không tạo được người dùng.',
+      userSuspendFailed: 'Không đổi được trạng thái khoá của người dùng.',
       userLoadFailed: 'Không tải được người dùng.',
       newPasswordOptional: 'Mật khẩu mới (để trống nếu không đổi)',
       usersStatTotal: 'Tổng số người dùng',
@@ -2422,6 +2509,7 @@ export const appResources = {
       badgeName: 'Tên huy hiệu',
       createBadge: 'Tạo huy hiệu',
       badgeId: 'ID huy hiệu',
+      criteriaChooseBadge: 'Chọn huy hiệu',
       criteriaCourseId: 'ID khoá học cho tiêu chí hoàn thành khoá học',
       setCriteriaAll: 'Đặt tiêu chí (TẤT CẢ)',
       badgeStatusInactive: 'chưa hoạt động',
@@ -2437,7 +2525,9 @@ export const appResources = {
       issuedLoadFailed: 'Không tải được danh sách đã cấp.',
       plansLoadFailed: 'Không tải được kế hoạch học tập',
       reviewRequested: 'Đã yêu cầu duyệt.',
+      reviewRequestFailed: 'Không gửi được yêu cầu duyệt kế hoạch.',
       competencySentForReview: 'Đã gửi năng lực để duyệt.',
+      competencyReviewRequestFailed: 'Không gửi được năng lực để duyệt.',
       myLearningPlans: 'Kế hoạch học tập của tôi',
       learningPlansLabel: 'Kế hoạch học tập',
       view: 'Xem',
@@ -2537,6 +2627,7 @@ export const appResources = {
       curriculumBackToList: 'Quay lại danh sách chương trình',
       curriculumSave: 'Lưu',
       curriculumSaveFailed: 'Lưu thất bại.',
+      curriculumInvalidNumber: 'Vị trí hoặc thời lượng nhập chưa phải số hợp lệ.',
       curriculumSubjectName: 'Tên môn',
       curriculumSubjectSlug: 'Mã môn (slug)',
       curriculumSubjectSlugHelp: 'Định danh ngắn không dấu, duy nhất cho môn — ví dụ: toan, ngu-van.',

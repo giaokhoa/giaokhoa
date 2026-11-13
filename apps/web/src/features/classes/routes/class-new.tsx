@@ -1,3 +1,9 @@
+/**
+ * Màn tạo lớp riêng: chỉ tên lớp là bắt buộc, mã/năm học/mô tả đều tuỳ chọn theo
+ * quyết định lớp tạo trước tối giản. Tạo thành công qua POST /classes thì đi thẳng
+ * tới trang chi tiết lớp để nạp roster ngay.
+ */
+
 import { useState, type FormEvent } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -5,12 +11,11 @@ import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
 import { Input } from '@giaokhoa/ui/components/input';
 import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { ErrorAlert } from '#components/error-alert';
-import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { createClass } from '../api/classes';
+import { useCreateClass } from '../queries/classes';
 
 /**
  * Màn tạo lớp riêng (CLASS-1, issue #184) — chuẩn giao diện: tạo mới là màn riêng, không phải hộp thoại. Chỉ TÊN lớp là bắt buộc (quyết định lớp tạo trước tối giản); mã/năm học/mô tả đều tuỳ chọn. Tạo xong đi thẳng tới chi tiết lớp để nạp roster ngay.
@@ -24,22 +29,22 @@ export function ClassNewPage() {
   const [description, setDescription] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      createClass({
+  const createMutation = useCreateClass();
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      const cls = await createMutation.mutateAsync({
         name: name.trim(),
         ...(code.trim() ? { code: code.trim() } : {}),
         ...(schoolYear.trim() ? { schoolYear: schoolYear.trim() } : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
-      }),
-    onSuccess: (cls) => void navigate(`/classes/${cls.id}`),
-    onError: () => setMessage(t('classCreateFailed')),
-  });
-
-  function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    createMutation.mutate();
+      });
+      void navigate(`/classes/${cls.id}`);
+    } catch {
+      setMessage(t('classCreateFailed'));
+    }
   }
 
   return (

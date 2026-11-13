@@ -1,4 +1,11 @@
-import { apiJson } from '#lib/api';
+/**
+ * Tầng gọi API thuần của feature calendar: chỉ chứa các hàm gọi HTTP, không phụ thuộc
+ * React hay React Query. Gồm đọc sự kiện theo khoảng ngày, đăng ký lịch ngoài, token
+ * xuất lịch, tạo/xoá/nhắc sự kiện, thêm và nhập ngay đăng ký, tạo/thu hồi token xuất,
+ * và tải tệp ICS của chính người dùng; tầng queries/ bọc các hàm này thành hook.
+ */
+
+import { apiFetch, apiJson, downloadBlob } from '#lib/api';
 import type { CalendarEventView, CalendarExportTokenView, CalendarSubscriptionView } from '../types/calendar';
 
 /**
@@ -13,7 +20,8 @@ import type { CalendarEventView, CalendarExportTokenView, CalendarSubscriptionVi
  * @returns Danh sách sự kiện.
  */
 export function fetchCalendarEvents(fromIso: string, toIso: string) {
-  return apiJson<CalendarEventView[]>(`/api/v1/calendar/events?from=${fromIso}&to=${toIso}`);
+  const query = new URLSearchParams({ from: fromIso, to: toIso });
+  return apiJson<CalendarEventView[]>(`/api/v1/calendar/events?${query}`);
 }
 
 /**
@@ -40,7 +48,20 @@ export function fetchCalendarExportToken() {
  * @param body - Thân tạo sự kiện.
  * @returns Đáp ứng của API.
  */
-export function createCalendarEvent(body: Record<string, unknown>) {
+/** Thân tạo sự kiện lịch (POST /calendar/events) — đúng DTO phía trang dựng: loại sự kiện quyết định id phạm vi đi kèm. */
+export interface CreateCalendarEventBody {
+  name: string;
+  description?: string;
+  eventType: 'user' | 'site' | 'category' | 'course' | 'group';
+  timeStart: string;
+  timeDuration?: number;
+  location?: string;
+  courseId?: string;
+  groupId?: string;
+  categoryId?: string;
+}
+
+export function createCalendarEvent(body: CreateCalendarEventBody) {
   return apiJson('/api/v1/calendar/events', { method: 'POST', body: JSON.stringify(body) });
 }
 
@@ -106,4 +127,17 @@ export function createCalendarExportToken() {
  */
 export function revokeCalendarExportToken() {
   return apiJson('/api/v1/calendar/export-token', { method: 'DELETE' });
+}
+
+/**
+ * Tải tệp ICS của chính user (GET /calendar/exports?format=ics).
+ *
+ * Endpoint đòi đăng nhập nên phải fetch kèm token rồi tải blob, không dùng link trực tiếp.
+ * Trước đây lời gọi này nằm ngay trong route; nay ở tầng api/ để route chỉ giữ logic hiển thị.
+ *
+ * @returns Promise hoàn tất sau khi lượt tải đã được kích hoạt.
+ */
+export async function downloadCalendarIcs(): Promise<void> {
+  const res = await apiFetch('/api/v1/calendar/exports?format=ics');
+  await downloadBlob(res, 'calendar.ics');
 }

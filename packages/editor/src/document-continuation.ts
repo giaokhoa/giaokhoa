@@ -1,6 +1,30 @@
 import type { RichTextBlockNode, RichTextDocument } from '@giaokhoa/contracts';
 
 /**
+ * Chuẩn hoá đuôi tài liệu rich text để người soạn luôn viết tiếp được
+ * sau một block nguyên tử (công thức tách dòng, ảnh).
+ *
+ * Flow tổng thể của module này (tài liệu vào là `RichTextDocument` của
+ * hợp đồng, tài liệu ra vẫn là `RichTextDocument` cùng hình dạng):
+ *
+ * 1. Khi nạp / tạo editor, {@link ensureTerminalContinuation} kiểm tra
+ *    block cuối: tài liệu đã kết thúc bằng paragraph (rỗng hay có chữ)
+ *    thì giữ nguyên; kết thúc bằng block nguyên tử
+ *    (`CONTINUATION_BLOCK_TYPES`: `blockMath`/`image`) thì thêm đúng
+ *    một paragraph rỗng vào cuối để có chỗ viết tiếp.
+ * 2. Khi phát thay đổi (`onChange`), {@link contentForSave} dọn đúng
+ *    các paragraph rỗng tiếp nối ở cuối tài liệu ngay sau một block
+ *    nguyên tử — đó là paragraph kỹ thuật do bước 1 và phím Enter sinh
+ *    ra, không phải nội dung người soạn chủ ý để lại; mọi paragraph
+ *    rỗng còn lại được giữ nguyên, và tài liệu bị rút tới rỗng thì trả
+ *    về một paragraph rỗng duy nhất theo hình dạng tài liệu rỗng của
+ *    hợp đồng.
+ *
+ * Bất biến: paragraph tiếp nối chỉ sống phía soạn — tài liệu đem lưu
+ * không bao giờ mang paragraph kỹ thuật ở cuối sau block nguyên tử.
+ */
+
+/**
  * Các node block nguyên tử mà sau chúng người soạn không gõ tiếp được nếu không có một paragraph tiếp nối: công thức tách dòng và ảnh. Khớp tập block mà phím Enter của `extensions.ts` đã xử lý
  * (`blockMath`/`image`); bảng thuộc lát E5 nên chưa nằm trong tập này.
  */

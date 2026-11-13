@@ -1,7 +1,16 @@
-import { Extension, mergeAttributes, Node, type JSONContent } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { mergeAttributes, Node, type JSONContent } from '@tiptap/core';
 import type { RichTextDocument } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
+import {
+  completeItemList,
+  createEmptyItemListDocument,
+  createItemUniqueIdExtension,
+  emptyParagraph,
+  itemFromBlocks,
+  jsonNodeHasContent,
+  newItemId,
+  splitItemListDocument,
+} from './item-list.js';
 
 /**
  * Tài liệu THỐNG NHẤT phía soạn của câu trắc nghiệm (multichoice) —
@@ -68,25 +77,17 @@ export interface MultipleChoiceDocumentJson {
 }
 
 /**
- * Sinh định danh cho một choice mới. Dùng `crypto.randomUUID` của nền
+ * Sinh định danh cho một choice mới — dùng chung {@link newItemId} với
+ * tiền tố `choice` (xem `item-list.ts`): `crypto.randomUUID` của nền
  * tảng; môi trường thiếu API đó (jsdom cũ) thì rơi về bộ đếm + thời
  * gian — id chỉ cần duy nhất trong vòng soạn, không phải định danh
  * bền xuyên phiên bản (bất biến R-2 của hồ sơ port).
  *
  * @returns Chuỗi định danh mới cho choice.
  */
-let fallbackIdCounter = 0;
 export function newChoiceId(): string {
-  const cryptoRef = globalThis.crypto as Crypto | undefined;
-  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
-    return cryptoRef.randomUUID();
-  }
-  fallbackIdCounter += 1;
-  return `choice-${Date.now().toString(36)}-${fallbackIdCounter}`;
+  return newItemId('choice');
 }
-
-/** Một paragraph rỗng — block đệm chuẩn của tài liệu soạn. */
-const emptyParagraph = (): JSONContent => ({ type: 'paragraph' });
 
 /**
  * Node gốc của tài liệu thống nhất: thay node `doc` mặc định của
@@ -144,7 +145,9 @@ export const Choice = Node.create({
  * Plugin bảo đảm mọi node `choice` trong tài liệu luôn có `attrs.id`:
  * sau mỗi transaction, choice nào thiếu id (vừa được tạo khi người
  * soạn tách/gộp đoạn, hoặc tài liệu nạp vào chưa có) được gán một id
- * mới bằng `setNodeMarkup` trong một transaction nối tiếp.
+ * mới bằng `setNodeMarkup` trong một transaction nối tiếp — dùng chung
+ * factory `createItemUniqueIdExtension` của `item-list.ts` với node
+ * type `choice`.
  *
  * Đây là bản thay thế gọn cho `@tiptap/extension-unique-id` của
  * giaokhoa — package đó không có trong workspace của hệ mình, và nhu
@@ -153,39 +156,10 @@ export const Choice = Node.create({
  * đều đi qua tài liệu: đáp án đúng (`correctChoiceId`) trỏ theo id
  * này nên lựa chọn đúng đi theo nội dung của nó qua mọi thao tác.
  */
-export const ChoiceUniqueId = Extension.create({
+export const ChoiceUniqueId = createItemUniqueIdExtension({
   name: 'choiceUniqueId',
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('choiceUniqueId'),
-        appendTransaction: (_transactions, _oldState, newState) => {
-          const missing: { pos: number; nodeSize: number }[] = [];
-          newState.doc.descendants((node, pos) => {
-            if (node.type.name === CHOICE_NODE_TYPE && typeof node.attrs.id !== 'string') {
-              missing.push({ pos, nodeSize: node.nodeSize });
-            }
-            return true;
-          });
-          if (missing.length === 0) {
-            return null;
-          }
-          const tr = newState.tr;
-          // Gán id từ cuối tài liệu ngược về đầu để vị trí đã ghi
-          // không bị lệch bởi các lần setNodeMarkup trước đó (dù
-          // setNodeMarkup không đổi kích thước node, thứ tự ngược
-          // giữ cho vòng lặp an toàn tuyệt đối).
-          for (const { pos } of [...missing].reverse()) {
-            const node = tr.doc.nodeAt(pos);
-            if (node && node.type.name === CHOICE_NODE_TYPE) {
-              tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: newChoiceId() });
-            }
-          }
-          return tr;
-        },
-      }),
-    ];
-  },
+  itemNodeType: CHOICE_NODE_TYPE,
+  newId: newChoiceId,
 });
 
 /**
@@ -218,35 +192,13 @@ export function splitMultipleChoiceDocument(content: MultipleChoiceDocumentJson)
   question: JSONContent;
   choices: MultipleChoiceChoiceJson[];
 } {
-  const nodes = content.content ?? [];
-  const choiceListIndex = nodes.findIndex((node) => node.type === CHOICE_LIST_NODE_TYPE);
-  if (choiceListIndex < 0) {
-    return { question: content, choices: [] };
-  }
-  const choiceList = nodes[choiceListIndex];
-  return {
-    question: { ...content, content: nodes.filter((_, index) => index !== choiceListIndex) },
-    choices: (choiceList?.content ?? []).filter(
-      (choice): choice is MultipleChoiceChoiceJson => choice.type === CHOICE_NODE_TYPE,
-    ),
-  };
-}
-
-/**
- * Dựng một choice từ nội dung block cho trước.
- *
- * @param id - Định danh của choice (id dòng answers khi nạp câu có
- *   sẵn; id mới khi soạn thêm).
- * @param blocks - Các block rich text của nội dung lựa chọn; rỗng thì
- *   đệm một paragraph rỗng để choice luôn mở soạn được.
- * @returns Node choice hoàn chỉnh cho tài liệu thống nhất.
- */
-function choiceFromBlocks(id: string, blocks: readonly JSONContent[] | undefined): MultipleChoiceChoiceJson {
-  return {
-    type: CHOICE_NODE_TYPE,
-    attrs: { id },
-    content: blocks && blocks.length > 0 ? [...blocks] : [emptyParagraph()],
-  };
+  const { body, items } = splitItemListDocument(content, {
+    listNodeType: CHOICE_LIST_NODE_TYPE,
+    itemNodeType: CHOICE_NODE_TYPE,
+    isItem: (choice): choice is MultipleChoiceChoiceJson =>
+      choice.type === CHOICE_NODE_TYPE,
+  });
+  return { question: body, choices: items };
 }
 
 /**
@@ -257,18 +209,12 @@ function choiceFromBlocks(id: string, blocks: readonly JSONContent[] | undefined
  * @returns Tài liệu thống nhất rỗng (chưa có đáp án đúng).
  */
 export function createEmptyMultipleChoiceDocument(): MultipleChoiceDocumentJson {
-  return {
-    type: 'doc',
-    content: [
-      emptyParagraph(),
-      {
-        type: CHOICE_LIST_NODE_TYPE,
-        content: Array.from({ length: MULTIPLE_CHOICE_COUNT }, () =>
-          choiceFromBlocks(newChoiceId(), undefined),
-        ),
-      },
-    ],
-  };
+  return createEmptyItemListDocument({
+    listNodeType: CHOICE_LIST_NODE_TYPE,
+    itemNodeType: CHOICE_NODE_TYPE,
+    itemCount: MULTIPLE_CHOICE_COUNT,
+    newId: newChoiceId,
+  });
 }
 
 /**
@@ -295,12 +241,13 @@ export function composeMultipleChoiceDocument(
   answers: readonly { id: string; answer: RichTextDocument; sortOrder: number }[],
 ): MultipleChoiceDocumentJson {
   const sorted = [...answers].sort((a, b) => a.sortOrder - b.sortOrder);
-  const choices = sorted
-    .slice(0, MULTIPLE_CHOICE_COUNT)
-    .map((answer) => choiceFromBlocks(answer.id, answer.answer.content));
-  while (choices.length < MULTIPLE_CHOICE_COUNT) {
-    choices.push(choiceFromBlocks(newChoiceId(), undefined));
-  }
+  const choices = completeItemList(
+    sorted.map((answer) =>
+      itemFromBlocks(CHOICE_NODE_TYPE, answer.id, answer.answer.content),
+    ),
+    MULTIPLE_CHOICE_COUNT,
+    () => itemFromBlocks(CHOICE_NODE_TYPE, newChoiceId(), undefined),
+  );
   const questionBlocks = questionText?.content ?? [];
   return {
     type: 'doc',
@@ -335,22 +282,17 @@ export function isCompleteMultipleChoice(
   if (choices.length !== MULTIPLE_CHOICE_COUNT) {
     return false;
   }
-  // Một node có nội dung thật khi có chữ khác rỗng ở bất kỳ mức nào,
-  // hoặc tự nó là node phi văn bản mang nội dung (ảnh, công thức).
-  const hasText = (node: JSONContent): boolean => {
-    if (typeof node.text === 'string' && node.text.trim() !== '') {
-      return true;
-    }
-    if (node.type === 'image' || node.type === 'inlineMath' || node.type === 'blockMath') {
-      return true;
-    }
-    return (node.content ?? []).some(hasText);
-  };
-  if (!(question.content ?? []).some(hasText)) {
+  // Một node có nội dung thật theo cùng ngữ nghĩa với hợp đồng
+  // (`jsonNodeHasContent` dùng chung của `item-list.ts`: chữ khác
+  // rỗng ở bất kỳ mức nào, ảnh tự nó là nội dung, công thức chỉ tính
+  // khi mã LaTeX khác rỗng).
+  if (!(question.content ?? []).some(jsonNodeHasContent)) {
     return false;
   }
   if (!choices.some((choice) => choice.attrs.id === correctChoiceId)) {
     return false;
   }
-  return choices.every((choice) => (choice.content ?? []).some(hasText));
+  return choices.every((choice) =>
+    (choice.content ?? []).some(jsonNodeHasContent),
+  );
 }

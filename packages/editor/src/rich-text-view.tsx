@@ -1,8 +1,40 @@
 import { renderToReactElement } from '@tiptap/static-renderer/pm/react';
 import { Fragment, type ReactNode } from 'react';
-import type { RichTextBlockNode, RichTextDocument } from '@giaokhoa/contracts';
+import {
+  richTextBlocksHaveContent,
+  type RichTextBlockNode,
+  type RichTextDocument,
+} from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
 import { renderMathHtml } from './math.js';
+
+/**
+ * Trình xem tĩnh chỉ-đọc một tài liệu rich text — không tạo instance
+ * trình soạn thảo, chỉ render đúng nội dung đã lưu để hiển thị.
+ *
+ * Flow tổng thể của file này (tài liệu vào là `RichTextDocument` của
+ * hợp đồng hoặc `null`, hiển thị ra là React element hoặc `null`):
+ *
+ * 1. Tài liệu `null` hoặc không có block nào mang nội dung thật
+ *    (`richTextBlocksHaveContent` của `@giaokhoa/contracts`: chữ khác
+ *    rỗng, công thức có mã LaTeX, ảnh, hoặc danh sách/mệnh đề chứa
+ *    nội dung) thì không render gì.
+ * 2. Tài liệu thuần (không có `statementList`) render bằng static
+ *    renderer của Tiptap (`renderPlainDocument`) theo đúng bộ extension
+ *    của hợp đồng; hai node công thức được ánh xạ thủ công sang KaTeX
+ *    vì static renderer mặc định chỉ cho ra thẻ chứa `data-latex`.
+ * 3. Tài liệu thân câu đúng/sai chùm (TF-A) mang `statementList` —
+ *    node này không thuộc bộ extension hiển thị thuần — nên tài liệu
+ *    được tách tại các `statementList`: các block thường render như
+ *    bước 2, mỗi danh sách mệnh đề render thành một `<ol>` mà từng
+ *    mệnh đề là một {@link RichTextView} đệ quy trên nội dung của
+ *    chính mệnh đề đó.
+ *
+ * Bất biến: phía xem chỉ render lát hợp đồng — nội dung ngoài hợp đồng
+ * không bao giờ xuất hiện ở đây; tài liệu thống nhất phía soạn của
+ * trắc nghiệm (mang node `choice`/`choiceList`) không đi qua trình xem
+ * này mà phải tách về hợp đồng trước.
+ */
 
 /**
  * Thuộc tính của {@link RichTextView}.
@@ -13,38 +45,17 @@ export interface RichTextViewProps {
 }
 
 /**
- * Một block có nội dung để hiển thị hay không: paragraph cần chữ hoặc một
- * công thức; blockMath cần mã LaTeX; ảnh tự nó đã là nội dung; danh sách
- * cần ít nhất một mục có nội dung.
- *
- * @param block - Block cần kiểm tra.
- * @returns `true` nếu block có nội dung hiển thị.
- */
-function blockHasContent(block: RichTextBlockNode): boolean {
-  switch (block.type) {
-    case 'paragraph':
-      return (block.content ?? []).some((node) =>
-        node.type === 'text' ? node.text.trim() !== '' : node.attrs.latex.trim() !== '',
-      );
-    case 'blockMath':
-      return block.attrs.latex.trim() !== '';
-    case 'image':
-      return true;
-    case 'bulletList':
-      return block.content.some((item) => item.content.some(blockHasContent));
-    case 'statementList':
-      return block.content.some((statement) => statement.content.some(blockHasContent));
-  }
-}
-
-/**
- * Kiểm tra tài liệu có nội dung nào để hiển thị hay không.
+ * Kiểm tra tài liệu có nội dung nào để hiển thị hay không — dùng chung
+ * `richTextBlocksHaveContent` của `@giaokhoa/contracts` để ngữ nghĩa
+ * "có nội dung" (chữ khác rỗng, công thức có mã LaTeX, ảnh, danh
+ * sách/mệnh đề chứa nội dung) là một nguồn sự thật duy nhất cho cả
+ * phía xem lẫn phía kiểm tra hoàn chỉnh của các loại câu hỏi.
  *
  * @param value - Tài liệu cần kiểm tra.
  * @returns `true` nếu tài liệu rỗng và không nên render gì.
  */
 function isEmptyDocument(value: RichTextDocument): boolean {
-  return !value.content.some(blockHasContent);
+  return !richTextBlocksHaveContent(value.content);
 }
 
 /**

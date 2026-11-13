@@ -22,9 +22,12 @@ import { fileURLToPath } from 'node:url';
 
 const packageDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/** Độ dài hậu tố ngẫu nhiên của tên database tạm — đủ phân biệt các lượt sinh kiểu chạy song song (S31). */
+const DB_SUFFIX_LENGTH = 8;
+
 /** Tái sử dụng đúng harness dựng database test của package đã build. */
 const require = createRequire(import.meta.url);
-const { buildTestDatabase, dropTestDatabase } = require('../dist/test-support/build-test-database.js');
+const { buildTestDatabase, dropTestDatabase, withDatabase } = require('../dist/test-support/build-test-database.js');
 
 /** Ba kho dữ liệu và vị trí carrier/codegen tương ứng của từng kho. */
 const STORES = [
@@ -48,17 +51,10 @@ const STORES = [
   },
 ];
 
-/** Suy URL của một database cụ thể từ URL quản trị. */
-function databaseUrl(adminUrl, database) {
-  const url = new URL(adminUrl);
-  url.pathname = `/${database}`;
-  return url.toString();
-}
-
 /** Lấy URL quản trị: ưu tiên `DB_TYPES_ADMIN_URL`, sau đó suy từ `DATABASE_URL`. */
 function resolveAdminUrl() {
   if (process.env.DB_TYPES_ADMIN_URL) return process.env.DB_TYPES_ADMIN_URL;
-  if (process.env.DATABASE_URL) return databaseUrl(process.env.DATABASE_URL, 'postgres');
+  if (process.env.DATABASE_URL) return withDatabase(process.env.DATABASE_URL, 'postgres');
   throw new Error(
     'Thiếu kết nối quản trị: đặt DB_TYPES_ADMIN_URL (hoặc DATABASE_URL) trỏ tới cụm PostgreSQL đích trước khi chạy db:types.',
   );
@@ -68,7 +64,7 @@ function resolveAdminUrl() {
 async function generateStore(adminUrl, store) {
   // Harness dùng lại Kysely Migrator và chính migration hiện hành,
   // tránh script codegen diễn giải SQL khác production/test.
-  const database = `${store.database}_${randomUUID().slice(0, 8)}`;
+  const database = `${store.database}_${randomUUID().slice(0, DB_SUFFIX_LENGTH)}`;
   try {
     const storeUrl = await buildTestDatabase({
       adminUrl,

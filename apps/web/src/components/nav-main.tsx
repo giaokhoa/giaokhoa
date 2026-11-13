@@ -1,3 +1,10 @@
+/**
+ * Cây điều hướng trong một SidebarGroup: mục lá điều hướng thẳng, mục cha thu/mở
+ * được (thân có thể là link tới trang danh sách của chính nó), kèm huy hiệu số đếm
+ * ở mục lá. Mục đang xem được xác định bằng khớp đường dẫn — kể cả route con và
+ * query — nên nhóm chứa route đang xem tự mở; việc lọc theo quyền do AppSidebar quyết định.
+ */
+
 import type { Icon } from '@tabler/icons-react';
 import { ChevronRightIcon } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router';
@@ -81,6 +88,16 @@ function isPathActive(url: string, pathname: string, search: string): boolean {
   return queryMatches;
 }
 
+/** Icon + nhãn của một mục điều hướng — dùng chung cho mục lá, mục con và mọi biến thể mục cha (tránh lặp cặp icon/title ở từng nhánh). */
+function NavItemLabel({ icon: ItemIcon, title }: { icon?: Icon; title: string }) {
+  return (
+    <>
+      {ItemIcon && <ItemIcon />}
+      <span>{title}</span>
+    </>
+  );
+}
+
 /** Mục lá ở cấp trực tiếp của sidebar (nút có icon + tooltip khi thu thành rail). */
 function NavLeafButton({ item, pathname, search }: { item: NavItem; pathname: string; search: string }) {
   return (
@@ -90,8 +107,7 @@ function NavLeafButton({ item, pathname, search }: { item: NavItem; pathname: st
         tooltip={item.title}
         isActive={isPathActive(item.url, pathname, search)}
       >
-        {item.icon && <item.icon />}
-        <span>{item.title}</span>
+        <NavItemLabel icon={item.icon} title={item.title} />
         {item.badgeCount != null && item.badgeCount > 0 ? (
           <Badge variant="destructive" className="ml-auto h-5 min-w-5 shrink-0 rounded-full px-1">
             {item.badgeCount}
@@ -141,8 +157,7 @@ function NavGroupCollapsible({
       {item.children.map((child) => (
         <SidebarMenuSubItem key={child.url}>
           <SidebarMenuSubButton render={<NavLink to={child.url} className={navPendingClassName} />} isActive={isPathActive(child.url, pathname, search)}>
-            {child.icon && <child.icon />}
-            <span>{child.title}</span>
+            <NavItemLabel icon={child.icon} title={child.title} />
           </SidebarMenuSubButton>
         </SidebarMenuSubItem>
       ))}
@@ -156,8 +171,7 @@ function NavGroupCollapsible({
     return (
       <SidebarMenuItem>
         <SidebarMenuButton render={<NavLink to={item.url} className={navPendingClassName} />} tooltip={item.title} isActive={isPathActive(item.url, pathname, search)}>
-          {item.icon && <item.icon />}
-          <span>{item.title}</span>
+          <NavItemLabel icon={item.icon} title={item.title} />
         </SidebarMenuButton>
       </SidebarMenuItem>
     );
@@ -186,8 +200,7 @@ function NavGroupCollapsible({
           isActive={isPathActive(item.url, pathname, search)}
           className="pr-8"
         >
-          {item.icon && <item.icon />}
-          <span>{item.title}</span>
+          <NavItemLabel icon={item.icon} title={item.title} />
         </SidebarMenuButton>
         <CollapsibleTrigger
           aria-label={item.toggleLabel ?? item.title}
@@ -203,8 +216,7 @@ function NavGroupCollapsible({
   return (
     <Collapsible open={open} onOpenChange={handleOpenChange} className="group/collapsible" render={<SidebarMenuItem />}>
       <CollapsibleTrigger render={<SidebarMenuButton tooltip={item.title} isActive={hasActiveChild} />}>
-        {item.icon && <item.icon />}
-        <span>{item.title}</span>
+        <NavItemLabel icon={item.icon} title={item.title} />
         <ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-[collapsible=icon]:hidden group-data-open/collapsible:rotate-90" />
       </CollapsibleTrigger>
       <CollapsibleContent>{subMenu}</CollapsibleContent>

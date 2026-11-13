@@ -19,6 +19,8 @@ import {
   ControlPlaneRepository,
   isDedicatedDatabaseNameConflict,
   type SpaceRegistryRow,
+  type SpaceSchemaMigrationRunRow,
+  type SpaceSchemaRegistryRow,
 } from '@giaokhoa/db/repositories/control-plane';
 import { emitSpaceRegistryChanged } from '../../db/routing/space-routing-events';
 import { ContextsService } from '../access/contexts.service';
@@ -107,6 +109,69 @@ export class ControlPlaneRegistryService {
   }
 
   /**
+   * Ánh xạ lỗi va chạm tên database dedicated trong transaction thành
+   * 409 cùng mã với kiểm tra ngoài transaction — chốt chặn cho cuộc
+   * đua dedicated-vs-dedicated: hai lượt ghi đồng thời cùng
+   * databaseName đều qua được kiểm tra ngoài transaction, lượt sau
+   * vấp chỉ số duy nhất riêng phần trong transaction. Mã 23505 một
+   * mình chưa đủ: chỉ khi tên ràng buộc là chỉ số dedicated mới là
+   * va chạm này; các vi phạm unique khác (ví dụ slug) giữ nguyên
+   * hành vi cũ qua nhánh ConflictException bên trong transaction.
+   * Trả null khi lỗi không phải va chạm này để bên gọi ném lại lỗi gốc.
+   */
+  private databaseNameConflict(error: unknown, databaseName: string | undefined): ConflictException | null {
+    if (!isDedicatedDatabaseNameConflict(error)) return null;
+    return new ConflictException({ message: `Database name ${databaseName} is already registered`, code: 'control_plane.database_name_taken' });
+  }
+
+  /** Ánh xạ một dòng lượt chạy migration sang hình dạng hợp đồng API. */
+  private toMigrationRun(run: SpaceSchemaMigrationRunRow): SpaceSchemaMigrationRun {
+    return {
+      id: run.id,
+      spaceId: run.spaceId,
+      runId: run.runId,
+      fromVersion: run.fromVersion,
+      toVersion: run.toVersion,
+      status: run.status as SpaceSchemaMigrationRun['status'],
+      steps: run.steps,
+      startedAt: run.startedAt.toISOString(),
+      finishedAt: run.finishedAt?.toISOString() ?? null,
+    };
+  }
+
+  /**
+   * Ánh xạ một dòng registry phiên bản schema sang hình dạng hợp đồng
+   * API; kho chưa có dòng thì trả trạng thái rỗng (mọi trường null,
+   * mốc cập nhật lấy từ dòng đăng ký).
+   */
+  private toSchemaRegistry(row: SpaceSchemaRegistryRow | null, spaceId: string, fallbackUpdatedAt: Date): SpaceSchemaRegistry {
+    return {
+      spaceId,
+      currentVersion: row?.currentVersion ?? null,
+      lastBackupStatus: row?.lastBackupStatus ?? null,
+      lastBackupAt: row?.lastBackupAt?.toISOString() ?? null,
+      lastRestoreStatus: row?.lastRestoreStatus ?? null,
+      lastRestoreAt: row?.lastRestoreAt?.toISOString() ?? null,
+      updatedAt: (row?.updatedAt ?? fallbackUpdatedAt).toISOString(),
+    };
+  }
+
+  /**
+   * Giá trị hiệu lực của một trường vô hướng khi hợp nhất trạng thái
+   * schema: giá trị DTO thắng (kể cả null = xoá), chỉ `undefined`
+   * mới giữ giá trị cũ, vắng cả hai thì null.
+   */
+  private mergeValue<T>(dtoValue: T | undefined, existingValue: T | null | undefined): T | null {
+    return dtoValue !== undefined ? dtoValue : (existingValue ?? null);
+  }
+
+  /** Như {@link mergeValue} nhưng giá trị DTO là chuỗi ISO cần đổi sang Date (null = xoá mốc). */
+  private mergeDate(dtoValue: string | null | undefined, existingValue: Date | null | undefined): Date | null {
+    if (dtoValue === undefined) return existingValue ?? null;
+    return dtoValue ? new Date(dtoValue) : null;
+  }
+
+  /**
    * Tạo dòng đăng ký không gian mới + dòng lịch sử `create` trong cùng transaction. Kiểm tra trùng slug có hai lớp: kiểm tra nhanh ngoài transaction cho đường thường, và insert-bỏ-qua-khi-trùng ngay trong transaction để hai lượt tạo đồng thời cùng slug chỉ một lượt thành công — lượt còn lại nhận lỗi xung đột (409), không vấp ràng buộc unique thành lỗi 500.
    */
   async createRegistration(actorId: string, dto: CreateSpaceRegistration): Promise<SpaceRegistration> {
@@ -151,17 +216,8 @@ export class ControlPlaneRegistryService {
         return row;
       });
     } catch (error) {
-      // Chốt chặn cho cuộc đua dedicated-vs-dedicated: hai lượt tạo
-      // đồng thời cùng databaseName đều qua được kiểm tra ngoài
-      // transaction, lượt sau vấp chỉ số duy nhất riêng phần trong
-      // transaction — ánh xạ thành 409 cùng mã với kiểm tra ngoài
-      // thay vì để lỗi 500 rò ra ngoài. Mã 23505 một mình chưa đủ:
-      // chỉ khi tên ràng buộc là chỉ số dedicated mới là va chạm
-      // này; các vi phạm unique khác (ví dụ slug) giữ nguyên hành
-      // vi cũ qua nhánh ConflictException bên trong transaction.
-      if (isDedicatedDatabaseNameConflict(error)) {
-        throw new ConflictException({ message: `Database name ${dto.databaseName} is already registered`, code: 'control_plane.database_name_taken' });
-      }
+      const conflict = this.databaseNameConflict(error, dto.databaseName);
+      if (conflict) throw conflict;
       throw error;
     }
     // Sổ vừa có dòng mới: báo khung định tuyến (issue #581) vô hiệu
@@ -236,9 +292,8 @@ export class ControlPlaneRegistryService {
         return row;
       });
     } catch (error) {
-      if (isDedicatedDatabaseNameConflict(error)) {
-        throw new ConflictException({ message: `Database name ${dto.databaseName} is already registered`, code: 'control_plane.database_name_taken' });
-      }
+      const conflict = this.databaseNameConflict(error, dto.databaseName);
+      if (conflict) throw conflict;
       throw error;
     }
     // Cập nhật có thể đổi đích định tuyến (database/role/chế độ
@@ -258,25 +313,23 @@ export class ControlPlaneRegistryService {
    */
   async changeStatus(actorId: string, id: string, dto: ChangeSpaceStatus): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);
-    let changedSlug: string | undefined;
-    const updated = await this.repo.transaction(async (tx) => {
+    const { row: updated, changed } = await this.repo.transaction(async (tx) => {
       const existing = await this.repo.findSpaceByIdForUpdate(id, tx);
       if (!existing) {
         throw new NotFoundException({ message: `Space registration ${id} not found`, code: 'control_plane.space_not_found' });
       }
-      if (existing.status === dto.status) return existing;
+      if (existing.status === dto.status) return { row: existing, changed: false };
       const row = await this.repo.updateSpace(id, { status: dto.status }, tx);
       await this.repo.insertHistory(
         { spaceId: id, actorId, action: 'status_change', before: this.snapshot(existing), after: this.snapshot(row) },
         tx,
       );
-      changedSlug = row.slug;
-      return row;
+      return { row, changed: true };
     });
     // Chỉ phát sự kiện khi trạng thái thật sự đổi (đổi về chính
     // trạng thái hiện tại là thao tác rỗng — sổ không đổi, đệm định
     // tuyến không cần vô hiệu hoá).
-    if (changedSlug) emitSpaceRegistryChanged(changedSlug);
+    if (changed) emitSpaceRegistryChanged(updated.slug);
     return this.toRegistration(updated);
   }
 
@@ -318,15 +371,7 @@ export class ControlPlaneRegistryService {
       throw new NotFoundException({ message: `Space registration ${spaceId} not found`, code: 'control_plane.space_not_found' });
     }
     const row = await this.repo.findSchemaRegistry(spaceId);
-    return {
-      spaceId,
-      currentVersion: row?.currentVersion ?? null,
-      lastBackupStatus: row?.lastBackupStatus ?? null,
-      lastBackupAt: row?.lastBackupAt?.toISOString() ?? null,
-      lastRestoreStatus: row?.lastRestoreStatus ?? null,
-      lastRestoreAt: row?.lastRestoreAt?.toISOString() ?? null,
-      updatedAt: (row?.updatedAt ?? space.updatedAt).toISOString(),
-    };
+    return this.toSchemaRegistry(row ?? null, spaceId, space.updatedAt);
   }
 
   /**
@@ -358,13 +403,11 @@ export class ControlPlaneRegistryService {
       const existing = await this.repo.findSchemaRegistry(spaceId, tx);
       const merged = {
         spaceId,
-        currentVersion: dto.currentVersion !== undefined ? dto.currentVersion : (existing?.currentVersion ?? null),
-        lastBackupStatus: dto.lastBackupStatus !== undefined ? dto.lastBackupStatus : (existing?.lastBackupStatus ?? null),
-        lastBackupAt:
-          dto.lastBackupAt !== undefined ? (dto.lastBackupAt ? new Date(dto.lastBackupAt) : null) : (existing?.lastBackupAt ?? null),
-        lastRestoreStatus: dto.lastRestoreStatus !== undefined ? dto.lastRestoreStatus : (existing?.lastRestoreStatus ?? null),
-        lastRestoreAt:
-          dto.lastRestoreAt !== undefined ? (dto.lastRestoreAt ? new Date(dto.lastRestoreAt) : null) : (existing?.lastRestoreAt ?? null),
+        currentVersion: this.mergeValue(dto.currentVersion, existing?.currentVersion),
+        lastBackupStatus: this.mergeValue(dto.lastBackupStatus, existing?.lastBackupStatus),
+        lastBackupAt: this.mergeDate(dto.lastBackupAt, existing?.lastBackupAt),
+        lastRestoreStatus: this.mergeValue(dto.lastRestoreStatus, existing?.lastRestoreStatus),
+        lastRestoreAt: this.mergeDate(dto.lastRestoreAt, existing?.lastRestoreAt),
       };
       const saved = await this.repo.upsertSchemaRegistry(merged, tx);
       if (dto.currentVersion !== undefined) {
@@ -375,15 +418,7 @@ export class ControlPlaneRegistryService {
     // Trạng thái/phiên bản của kho vừa đổi trên sổ: vô hiệu hoá đệm
     // định tuyến của slug sau khi đã commit.
     emitSpaceRegistryChanged(space.slug);
-    return {
-      spaceId: row.spaceId,
-      currentVersion: row.currentVersion,
-      lastBackupStatus: row.lastBackupStatus,
-      lastBackupAt: row.lastBackupAt?.toISOString() ?? null,
-      lastRestoreStatus: row.lastRestoreStatus,
-      lastRestoreAt: row.lastRestoreAt?.toISOString() ?? null,
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    return this.toSchemaRegistry(row, spaceId, space.updatedAt);
   }
 
   /**
@@ -448,17 +483,7 @@ export class ControlPlaneRegistryService {
     // Lượt migration thành công đã nâng phiên bản trên dòng đăng
     // ký: vô hiệu hoá đệm định tuyến của slug sau khi đã commit.
     if (versionChanged) emitSpaceRegistryChanged(space.slug);
-    return {
-      id: run.id,
-      spaceId: run.spaceId,
-      runId: run.runId,
-      fromVersion: run.fromVersion,
-      toVersion: run.toVersion,
-      status: run.status as SpaceSchemaMigrationRun['status'],
-      steps: run.steps,
-      startedAt: run.startedAt.toISOString(),
-      finishedAt: run.finishedAt?.toISOString() ?? null,
-    };
+    return this.toMigrationRun(run);
   }
 
   /** Các lượt chạy migration đã ghi của một kho, cũ nhất trước. */
@@ -468,17 +493,7 @@ export class ControlPlaneRegistryService {
       throw new NotFoundException({ message: `Space registration ${spaceId} not found`, code: 'control_plane.space_not_found' });
     }
     const rows = await this.repo.listMigrationRuns(spaceId);
-    return rows.map((run) => ({
-      id: run.id,
-      spaceId: run.spaceId,
-      runId: run.runId,
-      fromVersion: run.fromVersion,
-      toVersion: run.toVersion,
-      status: run.status as SpaceSchemaMigrationRun['status'],
-      steps: run.steps,
-      startedAt: run.startedAt.toISOString(),
-      finishedAt: run.finishedAt?.toISOString() ?? null,
-    }));
+    return rows.map((run) => this.toMigrationRun(run));
   }
 
   /**

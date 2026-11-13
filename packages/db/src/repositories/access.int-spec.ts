@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { AccessRepository } from './access';
 
 /**
@@ -21,13 +23,10 @@ import { AccessRepository } from './access';
  * - Transaction của repository rollback trọn vẹn khi hàm ném lỗi.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g651_access';
 
-const UUIDV7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let pool: Pool;
 let db: CentreDb;
@@ -66,7 +65,7 @@ beforeAll(async () => {
 
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g651-access', name: 'Trung tâm spec access', kind: 'center', status: 'active' })
+    .values({ slug: 'g651-access', name: 'Trung tâm spec access', kind: TEST_TENANT_KIND, status: 'active' })
     .returning('id')
     .executeTakeFirstOrThrow();
   tenantId = tenant.id;
@@ -104,7 +103,7 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB);
 });
 
-describe('context', () => {
+describe('context — chèn và đọc theo id/level/instance, tăng version theo cây path, xoá', () => {
   it('chèn context và đọc lại theo id, theo cặp level/instance và theo danh sách id; id sinh khớp uuidv7', async () => {
     const row = await repo.insertContext({ contextLevel: 50, instanceId: randomUUID(), path: '', depth: 0 });
     expect(row.id).toMatch(UUIDV7_RE);
@@ -160,7 +159,7 @@ describe('context', () => {
   });
 });
 
-describe('capability', () => {
+describe('capability — upsert theo tên, liệt kê theo tên, xoá ngoài danh sách giữ lại', () => {
   it('upsertCapability chèn mới và cập nhật đúng trường khi trùng tên; listCapabilities sắp theo tên', async () => {
     const name = `g651-cap-${randomUUID()}`;
     await repo.upsertCapability({ name, capType: 'read', contextLevel: 50, component: 'test' });
@@ -185,7 +184,7 @@ describe('capability', () => {
   });
 });
 
-describe('role', () => {
+describe('role — chèn và đọc theo id/shortname, cập nhật từng trường, xoá kèm gán, đếm người theo vai', () => {
   it('chèn role và đọc lại theo id và shortname; bỏ qua description/sortOrder thì nhận mặc định của bảng', async () => {
     const shortName = `g651-role-${randomUUID()}`;
     const row = await repo.insertRole({ name: 'Vai kiểm', shortName });
@@ -331,7 +330,7 @@ describe('gán vai', () => {
   });
 });
 
-describe('override capability', () => {
+describe('ghi đè capability theo vai', () => {
   it('upsertRoleCapability chèn mới và ghi đè theo khoá phức hợp 3 cột; deleteRoleCapability xoá đúng dòng', async () => {
     const roleId = await makeRole(`g651-ov-${randomUUID()}`);
     await repo.upsertRoleCapability({ contextId: courseCtxId, roleId, capability: 'test:view', permission: 1 });
@@ -406,7 +405,7 @@ describe('override capability', () => {
   });
 });
 
-describe('config', () => {
+describe('config — đọc giá trị cấu hình, ghi đè theo key, giữ nguyên mảng jsonb', () => {
   it('getConfigValue trả undefined khi chưa có; setConfigValue chèn và ghi đè theo key, giữ nguyên mảng jsonb cấp cao nhất', async () => {
     const key = `g651-cfg-${randomUUID()}`;
     await expect(repo.getConfigValue(key)).resolves.toBeUndefined();
@@ -419,18 +418,18 @@ describe('config', () => {
 
 describe('cổng tenant', () => {
   it('getTenantGateInfo(s) và getMembershipStatus(es) đọc thuần đúng dữ kiện, vắng mặt trả undefined/rỗng, lô rỗng trả rỗng', async () => {
-    await expect(repo.getTenantGateInfo(tenantId)).resolves.toEqual({ kind: 'center', status: 'active' });
+    await expect(repo.getTenantGateInfo(tenantId)).resolves.toEqual({ kind: TEST_TENANT_KIND, status: 'active' });
     await expect(repo.getTenantGateInfo(randomUUID())).resolves.toBeUndefined();
     await expect(repo.getMembershipStatus(tenantId, userAId)).resolves.toBe('active');
     await expect(repo.getMembershipStatus(tenantId, userCId)).resolves.toBeUndefined();
-    await expect(repo.getTenantGateInfos([tenantId])).resolves.toEqual([{ id: tenantId, kind: 'center', status: 'active' }]);
+    await expect(repo.getTenantGateInfos([tenantId])).resolves.toEqual([{ id: tenantId, kind: TEST_TENANT_KIND, status: 'active' }]);
     await expect(repo.getTenantGateInfos([])).resolves.toEqual([]);
     await expect(repo.getMembershipStatuses([tenantId], userAId)).resolves.toEqual([{ tenantId, status: 'active' }]);
     await expect(repo.getMembershipStatuses([], userAId)).resolves.toEqual([]);
   });
 });
 
-describe('transaction', () => {
+describe('transaction — rollback huỷ toàn bộ ghi, commit mới thấy ghi', () => {
   it('transaction rollback huỷ toàn bộ ghi khi hàm ném lỗi', async () => {
     const instanceId = randomUUID();
     const shortName = `g651-tx-${randomUUID()}`;

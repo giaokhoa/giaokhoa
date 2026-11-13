@@ -25,6 +25,8 @@ import { useTranslation } from 'react-i18next';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { messagingBlockedContactsQueryOptions, messagingContactRequestsQueryOptions, messagingContactsQueryOptions, rosterPageQueryOptions, useCreateDirectConversation, useRespondContactRequest, useSendContactRequest, useSetContactBlocked } from '../queries/messaging';
 import { queryKeys } from '../queries/keys';
+import { patchRosterRelationship as patchRosterRelationshipCache } from '../queries/patch-roster-relationship';
+import { rosterMembersUrl } from '../utils/utils';
 import type {
   ContactRelationship,
   ConversationGroupTreeView,
@@ -100,36 +102,31 @@ export function useContacts({ reload, open, patchPanelRelationship, groupTree, m
   const respondRequestMutation = useRespondContactRequest();
   const directConversationMutation = useCreateDirectConversation();
 
-  /** Chặn một liên hệ; danh sách đã chặn mới do đột biến vá thẳng vào cache từ đáp ứng. */
+  /** Đặt trạng thái chặn của một liên hệ; danh sách đã chặn mới do đột biến vá thẳng vào cache từ đáp ứng. */
+  async function setContactBlocked(userId: string, block: boolean) {
+    setBlockMessage(null);
+    try {
+      await contactBlockedMutation.mutateAsync({ userId, block });
+      setBlockMessage(t(block ? 'contactBlocked' : 'contactUnblocked'));
+    } catch {
+      setBlockMessage(t(block ? 'blockFailed' : 'unblockFailed'));
+    }
+  }
+
+  /** Chặn một liên hệ. */
   async function blockContact(userId: string) {
-    setBlockMessage(null);
-    try {
-      await contactBlockedMutation.mutateAsync({ userId, block: true });
-      setBlockMessage(t('contactBlocked'));
-    } catch {
-      setBlockMessage(t('blockFailed'));
-    }
+    await setContactBlocked(userId, true);
   }
 
-  /** Bỏ chặn một liên hệ; danh sách đã chặn mới do đột biến vá thẳng vào cache từ đáp ứng. */
+  /** Bỏ chặn một liên hệ. */
   async function unblockContact(userId: string) {
-    setBlockMessage(null);
-    try {
-      await contactBlockedMutation.mutateAsync({ userId, block: false });
-      setBlockMessage(t('contactUnblocked'));
-    } catch {
-      setBlockMessage(t('unblockFailed'));
-    }
+    await setContactBlocked(userId, false);
   }
 
-  /** Cập nhật trạng thái quan hệ của một dòng roster trong MỌI trang roster đang có ở cache ngay tại chỗ (không chờ tải lại). */
+  /** Cập nhật trạng thái quan hệ của một dòng roster trong MỌI trang roster đang có ở cache ngay tại chỗ (không chờ tải lại) — cùng helper với panel thành viên. */
   const patchRosterRelationship = useCallback(
     (userId: string, relationship: ContactRelationship) => {
-      queryClient.setQueriesData<{ members: RosterMember[]; nextCursor: string | null }>(
-        { queryKey: ['messages', 'roster'] },
-        (old) =>
-          old ? { ...old, members: old.members.map((m) => (m.userId === userId ? { ...m, relationship } : m)) } : old,
-      );
+      patchRosterRelationshipCache(queryClient, userId, relationship);
     },
     [queryClient],
   );
@@ -157,11 +154,7 @@ export function useContacts({ reload, open, patchPanelRelationship, groupTree, m
    */
   function pickerRosterUrl(context: PeoplePickerContext, cursor?: string): string | null {
     if (context.kind === 'contacts') return null;
-    const base =
-      context.kind === 'class'
-        ? `/api/v1/messages/classes/${context.id}/members?limit=50`
-        : `/api/v1/messages/courses/${context.id}/members?limit=50`;
-    return cursor ? `${base}&cursor=${encodeURIComponent(cursor)}` : base;
+    return rosterMembersUrl(context.kind, context.id, 50, cursor);
   }
 
   /** Chọn một ngữ cảnh trong bộ chọn người: liên hệ thì không nạp gì; lớp/khoá thì xin trang roster đầu (query trong cache tự nạp). */

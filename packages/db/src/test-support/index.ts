@@ -4,11 +4,15 @@
 export {
   buildTestDatabase,
   dropTestDatabase,
+  resolveTestAdminUrl,
   withDatabase,
   type BuildTestDatabaseOptions,
   type TestStoreKind,
 } from './build-test-database';
 export { createTestKysely, type TestKysely } from './create-test-kysely';
+export { createRecordingDb } from './recording-db';
+export { UUIDV7_RE } from './uuidv7';
+export { TEST_TENANT_KIND } from './test-constants';
 export {
   runInTestPlatformContext,
   runInTestTenantContext,

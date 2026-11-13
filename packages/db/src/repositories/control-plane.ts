@@ -17,9 +17,10 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
+import {sql, type InsertObject, type UpdateObject} from 'kysely';
 import type { ControlPlaneDb, ControlPlaneTx, ControlPlaneDB } from '../client';
 import type { SchemaMigrationStep, SpaceRegistrySnapshot } from '../jsonb-types';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /** Handle giao dịch của control plane — kiểu `Transaction<ControlPlaneDB>` của package. */
 export type CpTx = ControlPlaneTx;
@@ -141,27 +142,6 @@ export class ControlPlaneNotConfiguredError extends Error {
 export const DEDICATED_DATABASE_NAME_UNIQUE_INDEX = 'space_registry_database_name_dedicated_unique';
 
 /**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh.
- *
- * Vì sao cần (đo tại pilot): `pg` tự `JSON.stringify` các OBJECT
- * thường khi gắn tham số, nhưng một MẢNG ở cấp cao nhất bị driver
- * hiểu là mảng PostgreSQL và gửi theo cú pháp mảng — cột jsonb
- * nhận vào sẽ lỗi `invalid input syntax for type json`. bộ máy cũ
- * tránh được vì nó tự serialize mọi giá trị jsonb thành chuỗi JSON
- * trước khi gắn tham số. Khuôn ở đây: serialize tường minh +
- * ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi (object lẫn
- * mảng) để một khuôn duy nhất, không phụ thuộc nhánh xử lý riêng
- * của driver theo hình dạng giá trị.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
-/**
  * Lỗi có phải va chạm ĐÚNG chỉ số duy nhất riêng phần của tên
  * database dedicated hay không.
  *
@@ -251,23 +231,22 @@ const SPACE_SCHEMA_MIGRATION_RUN_COLUMNS = [
  * phải để default của database quyết định, không được biên dịch
  * thành tham số `null` (quy tắc T-4 trong playbook của package).
  */
-function spaceRegistryInsertValues(values: NewSpaceRegistration): Insertable<ControlPlaneDB['space_registry']> {
-  const row: Insertable<ControlPlaneDB['space_registry']> = {
+function spaceRegistryInsertValues(values: NewSpaceRegistration): InsertObject<ControlPlaneDB, 'space_registry'> {
+  return {
     slug: values.slug,
     name: values.name,
     kind: values.kind,
     database_name: values.databaseName,
     storage_mode: values.storageMode,
     connection_role_ref: values.connectionRoleRef,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.secretRef !== undefined ? { secret_ref: values.secretRef } : {}),
+    ...(values.schemaVersion !== undefined ? { schema_version: values.schemaVersion } : {}),
+    ...(values.plan !== undefined ? { plan: values.plan } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.secretRef !== undefined) row.secret_ref = values.secretRef;
-  if (values.schemaVersion !== undefined) row.schema_version = values.schemaVersion;
-  if (values.plan !== undefined) row.plan = values.plan;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -276,21 +255,21 @@ function spaceRegistryInsertValues(values: NewSpaceRegistration): Insertable<Con
  * trường nào thì chỉ trường đó đổi, đúng ngữ nghĩa bỏ qua
  * `undefined` của đường cũ trước đây (quy tắc T-4).
  */
-function spaceRegistryUpdateSet(patch: Partial<NewSpaceRegistration>): Updateable<ControlPlaneDB['space_registry']> {
-  const set: Updateable<ControlPlaneDB['space_registry']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.slug !== undefined) set.slug = patch.slug;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.databaseName !== undefined) set.database_name = patch.databaseName;
-  if (patch.storageMode !== undefined) set.storage_mode = patch.storageMode;
-  if (patch.connectionRoleRef !== undefined) set.connection_role_ref = patch.connectionRoleRef;
-  if (patch.secretRef !== undefined) set.secret_ref = patch.secretRef;
-  if (patch.schemaVersion !== undefined) set.schema_version = patch.schemaVersion;
-  if (patch.plan !== undefined) set.plan = patch.plan;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+function spaceRegistryUpdateSet(patch: Partial<NewSpaceRegistration>): UpdateObject<ControlPlaneDB, 'space_registry'> {
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.databaseName !== undefined ? { database_name: patch.databaseName } : {}),
+    ...(patch.storageMode !== undefined ? { storage_mode: patch.storageMode } : {}),
+    ...(patch.connectionRoleRef !== undefined ? { connection_role_ref: patch.connectionRoleRef } : {}),
+    ...(patch.secretRef !== undefined ? { secret_ref: patch.secretRef } : {}),
+    ...(patch.schemaVersion !== undefined ? { schema_version: patch.schemaVersion } : {}),
+    ...(patch.plan !== undefined ? { plan: patch.plan } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /**
@@ -458,19 +437,19 @@ export class ControlPlaneRepository {
     values: { spaceId: string; actorId: string; action: string; before: SpaceRegistrySnapshot | null; after: SpaceRegistrySnapshot },
     db: CpDb = this.db(),
   ): Promise<SpaceRegistryHistoryRow> {
-    const rows = await db
+    const row = await db
       .insertInto('space_registry_history')
       .values({
         space_id: values.spaceId,
         actor_id: values.actorId,
         action: values.action,
-        before: values.before === null ? null : jsonbValue(values.before),
+        before: jsonbField(values.before),
         after: jsonbValue(values.after),
         created_at: sql<Date>`clock_timestamp()`,
       })
       .returning(SPACE_REGISTRY_HISTORY_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lịch sử quản trị của một không gian, mới nhất trước. */
@@ -499,7 +478,7 @@ export class ControlPlaneRepository {
     values: NewSpaceSchemaRegistry,
     db: CpDb = this.db(),
   ): Promise<SpaceSchemaRegistryRow> {
-    const insert: Insertable<ControlPlaneDB['space_schema_registry']> = { space_id: values.spaceId };
+    const insert: InsertObject<ControlPlaneDB, 'space_schema_registry'> = { space_id: values.spaceId };
     if (values.currentVersion !== undefined) insert.current_version = values.currentVersion;
     if (values.lastBackupStatus !== undefined) insert.last_backup_status = values.lastBackupStatus;
     if (values.lastBackupAt !== undefined) insert.last_backup_at = values.lastBackupAt;
@@ -510,19 +489,19 @@ export class ControlPlaneRepository {
     // trường có mặt trong values (loại `undefined` như mọi đường
     // ghi khác), luôn kèm mốc cập nhật hiện tại — cùng hình dạng
     // set tường minh của đường cũ trước đây.
-    const updateSet: Updateable<ControlPlaneDB['space_schema_registry']> = { updated_at: new Date() };
+    const updateSet: UpdateObject<ControlPlaneDB, 'space_schema_registry'> = { updated_at: new Date() };
     if (values.currentVersion !== undefined) updateSet.current_version = values.currentVersion;
     if (values.lastBackupStatus !== undefined) updateSet.last_backup_status = values.lastBackupStatus;
     if (values.lastBackupAt !== undefined) updateSet.last_backup_at = values.lastBackupAt;
     if (values.lastRestoreStatus !== undefined) updateSet.last_restore_status = values.lastRestoreStatus;
     if (values.lastRestoreAt !== undefined) updateSet.last_restore_at = values.lastRestoreAt;
-    const rows = await db
+    const row = await db
       .insertInto('space_schema_registry')
       .values(insert)
       .onConflict((oc) => oc.column('space_id').doUpdateSet(updateSet))
       .returning(SPACE_SCHEMA_REGISTRY_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Đảm bảo có dòng registry phiên bản schema cho kho (đường gieo dữ kiện; đã có thì giữ nguyên). */
@@ -547,12 +526,12 @@ export class ControlPlaneRepository {
     if (values.steps !== undefined) insert.steps = jsonbValue(values.steps);
     if (values.startedAt !== undefined) insert.started_at = values.startedAt;
     if (values.finishedAt !== undefined) insert.finished_at = values.finishedAt;
-    const rows = await db
+    const row = await db
       .insertInto('space_schema_migration_runs')
       .values(insert)
       .returning(SPACE_SCHEMA_MIGRATION_RUN_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Các lượt chạy migration của một kho, cũ nhất trước (đúng thứ tự thời gian của nhật ký). */

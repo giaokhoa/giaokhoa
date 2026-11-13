@@ -1,4 +1,6 @@
 import { useCallback, useState, type FormEvent } from 'react';
+import type { Route } from './+types/quiz';
+import { titleMeta } from '#lib/route-meta';
 import { Link, useNavigate, useParams } from 'react-router';
 import { type PinRegradeLogEntry, type PinRegradeResult, type PinVersionUpdatePreview } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -375,7 +377,7 @@ export default function QuizRoute() {
  * khoá factory) trước khi component mount. prefetchQuery không ném
  * lỗi: tải hỏng thì component tự xử lý qua useQuery.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.pinId) {
     await queryClient.prefetchQuery(examPinQueryOptions(params.pinId));
   }
@@ -384,7 +386,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Bài kiểm tra');
 }

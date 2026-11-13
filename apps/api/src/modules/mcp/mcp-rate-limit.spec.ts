@@ -78,7 +78,7 @@ describe('McpRateLimiter — quyết định cho phép/chặn trong cửa sổ',
     expect(McpRateLimiter.bucketForTool('create_questions_batch')).toBe('create');
     expect(McpRateLimiter.bucketForTool('create_stimulus_with_questions')).toBe('create');
     expect(McpRateLimiter.bucketForTool('submit_contribution')).toBe('create');
-    expect(McpRateLimiter.bucketForTool('list_questions')).toBe('read');
+    expect(McpRateLimiter.bucketForTool('search_questions')).toBe('read');
     expect(McpRateLimiter.bucketForTool(undefined)).toBe('read');
   });
 });

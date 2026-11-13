@@ -16,6 +16,7 @@
 import type { PinRegradeLogEntry } from '@giaokhoa/contracts';
 import { formatDateTime } from '#utils/date-format';
 import { QuizForUser } from '../types/quiz';
+import { QUIZ_GRADE_METHOD_LABEL_KEYS, quizAttemptStateKey } from '../utils/utils';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
@@ -72,7 +73,7 @@ export function AttemptsPanel({ courseId, quizId, data, myRegrades, actionError,
           <li>
             {t('quizAttemptsLine', { count: eff.attemptsAllowed === 0 ? t('quizUnlimited') : eff.attemptsAllowed })}
           </li>
-          <li>{t('quizGradeMethodLine', { method: t(`quizGradeMethod_${quiz.gradeMethod}`) })}</li>
+          <li>{t('quizGradeMethodLine', { method: t(QUIZ_GRADE_METHOD_LABEL_KEYS[quiz.gradeMethod]) })}</li>
         </ul>
         {hasOwnOverride ? <p className="text-sm font-medium">{t('quizEffectiveNote')}</p> : null}
         {actionError ? (
@@ -120,7 +121,7 @@ export function AttemptsPanel({ courseId, quizId, data, myRegrades, actionError,
             <ul className="text-sm">
               {data.myAttempts.map((a) => (
                 <li key={a.id} data-testid={`my-attempt-${a.id}`}>
-                  {t('quizAttemptLine', { number: a.attemptNumber, state: t(`quizAttemptState_${a.state}`) })}
+                  {t('quizAttemptLine', { number: a.attemptNumber, state: t(quizAttemptStateKey(a.state)) })}
                   {a.grade !== null ? ` — ${a.grade}/${quiz.grade}` : ''}
                   {a.preview ? ` (${t('quizPreviewBadge')})` : ''}{' '}
                   <Link to={`/quiz-attempts/${a.id}`}>{t('quizViewAttempt')}</Link>

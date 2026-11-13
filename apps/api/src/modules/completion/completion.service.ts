@@ -267,7 +267,11 @@ export class CompletionService implements OnModuleInit {
    */
   async getCmCompletion(cmId: string, userId: string): Promise<{ cmId: string; userId: string; state: number; viewed: boolean }> {
     const row = await this.repo.getCmCompletion(cmId, userId);
-    const state = await this.computeCmState(cmId, userId).catch(() => row?.completionState ?? 0);
+    const state = await this.computeCmState(cmId, userId).catch((err) => {
+      // Tính trạng thái lỗi thì giữ trạng thái đã lưu thay vì chặn đường đọc — nhưng lỗi phải thấy trong log, không được nuốt im (trạng thái trả về có thể là dữ liệu cũ).
+      this.logger.warn(`getCmCompletion: computeCmState failed for cm ${cmId}, falling back to stored state: ${err instanceof Error ? err.message : String(err)}`);
+      return row?.completionState ?? 0;
+    });
     return { cmId, userId, state: row && row.completionState !== COMPLETION_INCOMPLETE ? row.completionState : state, viewed: row?.viewed ?? false };
   }
 
@@ -325,7 +329,8 @@ export class CompletionService implements OnModuleInit {
    * Moodle; tham số bắt buộc theo từng loại được kiểm tại đây (module →
    * moduleInstance, date → date, course → courseInstance trỏ tới khoá khác
    * có thật, duration → enrolPeriodDays, role → roleId có thật; self,
-   * grade, unenrol không tham số).
+   * grade, unenrol không tham số). Thay thế là nguyên tử: xoá cũ, chèn
+   * mới, cài đặt, cờ tính lại và sự kiện outbox cùng commit hoặc cùng lùi.
    */
   async setCriteria(actorId: string, courseId: string, input: {
     method?: number;
@@ -374,30 +379,39 @@ export class CompletionService implements OnModuleInit {
       }
     }
     const existing = await this.repo.listCriteria(courseId);
-    const hadData = (await this.repo.listCourseCompletions(courseId)).length > 0;
-    for (const old of existing) await this.repo.deleteCriteria(old.id);
-    let sortOrder = 0;
-    for (const c of input.criteria) {
-      await this.repo.insertCriteria({
-        course: courseId, criteriaType: c.criteriaType,
-        moduleInstance: c.moduleInstance ?? null,
-        date: c.date ? new Date(c.date) : null,
-        courseInstance: c.courseInstance ?? null,
-        enrolPeriodDays: c.enrolPeriodDays ?? null,
-        roleId: c.roleId ?? null,
-        sortOrder: sortOrder++,
-      });
-    }
-    await this.repo.setSettings(courseId, method);
-    if (hadData || existing.length) {
-      // Tiêu chí đổi sau khi đã có dữ liệu ⇒ tổng hợp lại có kiểm soát:
-      // gắn cờ mọi completion đã lưu để tính lại và xếp hàng job của worker.
-      const completions = await this.repo.listCourseCompletions(courseId);
-      for (const cc of completions) {
-        await this.repo.upsertCourseCompletion({ ...cc, reAggregate: new Date() });
+    const completions = await this.repo.listCourseCompletions(courseId);
+    const hadData = completions.length > 0;
+    // Thay toàn bộ tiêu chí nguyên tử: xoá cũ + chèn mới + cài đặt +
+    // cờ tính lại + sự kiện outbox chạy trong MỘT transaction — một lần
+    // chèn lỗi giữa chừng thì tiêu chí cũ vẫn nguyên, không để khoá học
+    // rơi vào trạng thái không đủ tiêu chí. Xếp hàng job tổng hợp lại
+    // (BullMQ, không tham gia transaction DB) chạy SAU khi commit.
+    await this.repo.transaction(async (tx) => {
+      for (const old of existing) await this.repo.deleteCriteria(old.id, tx);
+      let sortOrder = 0;
+      for (const c of input.criteria) {
+        await this.repo.insertCriteria({
+          course: courseId, criteriaType: c.criteriaType,
+          moduleInstance: c.moduleInstance ?? null,
+          date: c.date ? new Date(c.date) : null,
+          courseInstance: c.courseInstance ?? null,
+          enrolPeriodDays: c.enrolPeriodDays ?? null,
+          roleId: c.roleId ?? null,
+          sortOrder: sortOrder++,
+        }, tx);
       }
+      await this.repo.setSettings(courseId, method, tx);
+      if (hadData || existing.length) {
+        // Tiêu chí đổi sau khi đã có dữ liệu ⇒ tổng hợp lại có kiểm soát:
+        // gắn cờ mọi completion đã lưu để tính lại và báo cho worker.
+        for (const cc of completions) {
+          await this.repo.upsertCourseCompletion({ ...cc, reAggregate: new Date() }, tx);
+        }
+        await this.enqueueOutboxInTx(tx, { aggregate: 'completion', type: 'completion_criteria_changed', payload: { courseId, reAggregate: true } });
+      }
+    });
+    if (hadData || existing.length) {
       await this.recalcQueue.add('recalculate', { courseId }, { jobId: `completion-recalc-${courseId}-${Date.now()}`, attempts: 3 });
-      await this.outbox.enqueueStandalone({ aggregate: 'completion', type: 'completion_criteria_changed', payload: { courseId, reAggregate: true } });
     }
     return { method, criteria: await this.repo.listCriteria(courseId) };
   }

@@ -34,8 +34,10 @@ function identifierOf(path: string, body: unknown): LoginIdentifier | null {
     : null;
 }
 
-function clientIpOf(headers: Headers | undefined): string | undefined {
-  const forwarded = headers?.get('x-forwarded-for');
+/**
+ * IP khách thật từ chuỗi `X-Forwarded-For` thô: phần tử PHẢI NHẤT (chặng proxy ở biên nối thêm vào phía phải), chuẩn hoá qua `normalizeIpAddress`. Helper nhận chuỗi header thô để dùng chung cho mọi nơi chỉ có header mà không có `Request` — `common/client-ip.ts` chưa có helper dạng này (chỉ có `clientIpOf(req)` đọc `req.ip` và `normalizeIpAddress`).
+ */
+export function clientIpFromForwardedHeader(forwarded: string | null | undefined): string | undefined {
   if (!forwarded) return undefined;
   const parts = forwarded
     .split(',')
@@ -43,6 +45,10 @@ function clientIpOf(headers: Headers | undefined): string | undefined {
     .filter(Boolean);
   if (parts.length === 0) return undefined;
   return normalizeIpAddress(parts[parts.length - 1]);
+}
+
+function clientIpOf(headers: Headers | undefined): string | undefined {
+  return clientIpFromForwardedHeader(headers?.get('x-forwarded-for'));
 }
 
 /** Đáp ứng của endpoint có phải là thất bại kiểm chứng danh tính (sai mật khẩu / không có credential) hay không. */

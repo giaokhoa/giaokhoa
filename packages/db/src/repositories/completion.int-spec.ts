@@ -1,7 +1,9 @@
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { createTestKysely } from '../test-support/create-test-kysely';
 import {
   runInTestPlatformContext,
@@ -25,11 +27,8 @@ const TEST_DATABASE = 'giaokhoa_db_g649_completion';
 const TEST_ROLE = 'giaokhoa_db_g649_completion';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_completion_pw';
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let tenantPool: TestTenantPool;
 let db: CentreDb;
@@ -83,7 +82,7 @@ beforeAll(async () => {
   tenantId = await runInTestPlatformContext(async () => {
     const row = await db
       .insertInto('tenants')
-      .values({ slug: 'g649-completion', name: 'Trung tâm G9 completion', kind: 'centre' })
+      .values({ slug: 'g649-completion', name: 'Trung tâm G9 completion', kind: TEST_TENANT_KIND })
       .returning('id')
       .executeTakeFirstOrThrow();
     return row.id;
@@ -152,7 +151,7 @@ describe('CompletionRepository — trạng thái hoàn thành của course modul
   it('upsertCmCompletion chèn dòng mới với default của database cho trường vắng mặt, ghi lại thì cập nhật đúng dòng cũ', async () => {
     await runInTestTenantContext(tenantId, async () => {
       const inserted = await repo.upsertCmCompletion({ courseModuleId: cmId, userId, completionState: 1 });
-      expect(inserted.id).toMatch(UUIDV7_PATTERN);
+      expect(inserted.id).toMatch(UUIDV7_RE);
       expect(inserted.completionState).toBe(1);
       expect(inserted.viewed).toBe(false);
       expect(inserted.overrideBy).toBeNull();
@@ -199,7 +198,7 @@ describe('CompletionRepository — tiêu chí, dấu thủ công, cấu hình v�
         course: courseId, criteriaType: 'course', moduleInstance: null, date: null,
         courseInstance: otherCourseId, enrolPeriodDays: null, roleId: null, sortOrder: 0,
       });
-      expect(first.id).toMatch(UUIDV7_PATTERN);
+      expect(first.id).toMatch(UUIDV7_RE);
       const listed = await repo.listCriteria(courseId);
       expect(listed.map((c) => c.id)).toEqual([first.id, second.id]);
       await expect(repo.getCriteria(second.id)).resolves.toMatchObject({ criteriaType: 'self' });

@@ -4,7 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@giaokhoa/contracts';
 import { createCentreKysely, type CentreDb } from '../client';
 import type { ExamVariant } from '../jsonb-types';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { PaperGradingRepository } from './paper-grading';
 
 /**
@@ -24,12 +26,9 @@ import { PaperGradingRepository } from './paper-grading';
  *   (rủi ro R-G4-3) — spec này không kiểm tra tham số tx nào.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g644_paper_grading';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Định danh cố định cho các cột tham chiếu mềm (file/user) — không có khoá ngoại. */
 const ACTOR = '019276a1-4444-7000-8000-0000000000a9';
@@ -65,7 +64,7 @@ let seed: Seed;
 /** Gieo chuỗi neo tối thiểu tenant → khoá → bank → đề → version → pin qua Kysely thô. */
 async function seedData(): Promise<Seed> {
   const tenant = await db.insertInto('tenants')
-    .values({ slug: 'g644-paper', name: 'Tenant giấy G644', kind: 'centre' })
+    .values({ slug: 'g644-paper', name: 'Tenant giấy G644', kind: TEST_TENANT_KIND })
     .returning('id').executeTakeFirstOrThrow();
   const category = await db.insertInto('course_categories')
     .values({ name: 'Danh mục khoá giấy G644', tenant_id: tenant.id })
@@ -117,7 +116,7 @@ describe('PaperGradingRepository trên Kysely (issue #644)', () => {
       examPinId: seed.pinId, variantCode: 'A', examCode: '1001', codeDigits: 4,
       layout: LAYOUT, roster: ROSTER, createdBy: ACTOR,
     });
-    expect(batch.id).toMatch(UUIDV7_PATTERN);
+    expect(batch.id).toMatch(UUIDV7_RE);
     expect(batch.layout).toEqual(LAYOUT);
     expect(batch.roster).toEqual(ROSTER);
 
@@ -142,7 +141,7 @@ describe('PaperGradingRepository trên Kysely (issue #644)', () => {
       examPinId: seed.pinId, fileId: FILE_1, uploadedBy: ACTOR,
       createdAt: new Date('2026-01-01T00:00:00Z'),
     });
-    expect(scan.id).toMatch(UUIDV7_PATTERN);
+    expect(scan.id).toMatch(UUIDV7_RE);
     expect(scan.readings).toEqual([]);
     expect(scan.status).toBe('needs_identity');
     expect(scan.quality).toBeNull();

@@ -9,6 +9,9 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
+import { errorText } from '#lib/api';
+import { platformKeyMeta } from '#lib/route-meta';
+import { pageLoadState } from '../queries/page-load-state';
 import { useCreateWebserviceService, useCreateWebserviceToken, useRevokeWebserviceToken, useWebserviceServices, useWebserviceTokens } from '../queries/platform';
 
 /**
@@ -25,27 +28,40 @@ export function TokensPage() {
   const tokens = tokensQuery.data ?? [];
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const loading =
-    servicesQuery.isPending ||
-    tokensQuery.isPending ||
-    (servicesQuery.isError && servicesQuery.isFetching);
-  const loadError =
-    servicesQuery.isError && !servicesQuery.isFetching ? tr('tokensLoadFailed') : null;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const servicesState = pageLoadState(servicesQuery, tr('tokensLoadFailed'));
+  const loading = servicesState.loading || tokensQuery.isPending;
+  const loadError = servicesState.loadError;
   async function createService(event: FormEvent) {
     event.preventDefault();
-    await createServiceMutation.mutateAsync({
-      name,
-      shortName: `svc${Date.now()}`,
-      functions: ['core_course_get_courses'],
-    });
-    setName('');
+    setActionError(null);
+    try {
+      await createServiceMutation.mutateAsync({
+        name,
+        shortName: `svc${Date.now()}`,
+        functions: ['core_course_get_courses'],
+      });
+      setName('');
+    } catch (err) {
+      setActionError(errorText(err, tr('actionFailed')));
+    }
   }
   async function createToken(serviceId: string) {
-    const created = await createTokenMutation.mutateAsync(serviceId);
-    setCreatedToken(created.token);
+    setActionError(null);
+    try {
+      const created = await createTokenMutation.mutateAsync(serviceId);
+      setCreatedToken(created.token);
+    } catch (err) {
+      setActionError(errorText(err, tr('actionFailed')));
+    }
   }
   async function revoke(id: string) {
-    await revokeTokenMutation.mutateAsync(id);
+    setActionError(null);
+    try {
+      await revokeTokenMutation.mutateAsync(id);
+    } catch (err) {
+      setActionError(errorText(err, tr('actionFailed')));
+    }
   }
   return (
     <PageShell width="medium">
@@ -68,6 +84,11 @@ export function TokensPage() {
             </Button>
           </div>
         </>
+      ) : null}
+      {actionError ? (
+        <ErrorAlert variant="destructive">
+          {actionError}
+        </ErrorAlert>
       ) : null}
       <Card>
         <CardContent className="space-y-3">
@@ -139,7 +160,6 @@ export { TokensPage as default };
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('tokensTitle');
 }

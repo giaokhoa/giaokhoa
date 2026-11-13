@@ -1,6 +1,7 @@
-import { sql, type RawBuilder } from 'kysely';
-import type { CentreDb, CentreTx } from '../client';
+import { sql, type InsertObject, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { Json } from '../types/centre-db';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /**
  * Kho dữ liệu khoá học trên Kysely: quản lý cây danh mục, khoá học, section, course module, neo khung chương trình/SGK của section và tuỳ chọn định dạng.
@@ -413,219 +414,200 @@ const FORMAT_OPTION_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL NULL, giá trị thì xâu hoá qua `jsonbValue`.
 // ---------------------------------------------------------------------------
 
-/**
- * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh rồi ép `::jsonb` — pg không suy được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
-/**
- * Ánh xạ phần jsonb nullable cho values/set: giữ ba trạng thái như
- * ghi chú trên. Giá trị phía tiêu thụ là `unknown` (hợp đồng cũ
- * không có `$type<>` cho các cột này) nên ép về kiểu `Json` của
- * codegen tại điểm ghi — đúng kiểu cột mà Kysely kiểm chứng.
- */
-function jsonbField(value: unknown): RawBuilder<Json> | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  return jsonbValue(value as Json);
-}
-
-function categoryInsertValues(v: NewCategory) {
+function categoryInsertValues(values: NewCategory): InsertObject<CentreDB, 'course_categories'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    tenant_id: v.tenantId,
-    name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.parent !== undefined ? { parent: v.parent } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.path !== undefined ? { path: v.path } : {}),
-    ...(v.depth !== undefined ? { depth: v.depth } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    tenant_id: values.tenantId,
+    name: values.name,
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.parent !== undefined ? { parent: values.parent } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.path !== undefined ? { path: values.path } : {}),
+    ...(values.depth !== undefined ? { depth: values.depth } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
   };
 }
 
-function categoryUpdateValues(v: Partial<NewCategory>) {
+function categoryUpdateSet(patch: Partial<NewCategory>): UpdateObject<CentreDB, 'course_categories'> {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.parent !== undefined ? { parent: v.parent } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.path !== undefined ? { path: v.path } : {}),
-    ...(v.depth !== undefined ? { depth: v.depth } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...(patch.tenantId !== undefined ? { tenant_id: patch.tenantId } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.idNumber !== undefined ? { id_number: patch.idNumber } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.parent !== undefined ? { parent: patch.parent } : {}),
+    ...(patch.sortOrder !== undefined ? { sort_order: patch.sortOrder } : {}),
+    ...(patch.path !== undefined ? { path: patch.path } : {}),
+    ...(patch.depth !== undefined ? { depth: patch.depth } : {}),
+    ...(patch.visible !== undefined ? { visible: patch.visible } : {}),
   };
 }
 
-function courseInsertValues(v: NewCourse) {
+function courseInsertValues(values: NewCourse): InsertObject<CentreDB, 'course'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    tenant_id: v.tenantId,
-    category: v.category,
-    ...(v.classId !== undefined ? { class_id: v.classId } : {}),
-    full_name: v.fullName,
-    short_name: v.shortName,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.format !== undefined ? { format: v.format } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.startDate !== undefined ? { start_date: v.startDate } : {}),
-    ...(v.endDate !== undefined ? { end_date: v.endDate } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
-    ...(v.groupModeForce !== undefined ? { group_mode_force: v.groupModeForce } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.subjectId !== undefined ? { subject_id: v.subjectId } : {}),
-    ...(v.grade !== undefined ? { grade: v.grade } : {}),
-    ...(v.isTemplate !== undefined ? { is_template: v.isTemplate } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    tenant_id: values.tenantId,
+    category: values.category,
+    ...(values.classId !== undefined ? { class_id: values.classId } : {}),
+    full_name: values.fullName,
+    short_name: values.shortName,
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.summary !== undefined ? { summary: values.summary } : {}),
+    ...(values.format !== undefined ? { format: values.format } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
+    ...(values.startDate !== undefined ? { start_date: values.startDate } : {}),
+    ...(values.endDate !== undefined ? { end_date: values.endDate } : {}),
+    ...(values.groupMode !== undefined ? { group_mode: values.groupMode } : {}),
+    ...(values.groupModeForce !== undefined ? { group_mode_force: values.groupModeForce } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.subjectId !== undefined ? { subject_id: values.subjectId } : {}),
+    ...(values.grade !== undefined ? { grade: values.grade } : {}),
+    ...(values.isTemplate !== undefined ? { is_template: values.isTemplate } : {}),
   };
 }
 
-function courseUpdateValues(v: Partial<NewCourse>) {
+function courseUpdateSet(patch: Partial<NewCourse>): UpdateObject<CentreDB, 'course'> {
   return {
-    ...(v.category !== undefined ? { category: v.category } : {}),
-    ...(v.classId !== undefined ? { class_id: v.classId } : {}),
-    ...(v.fullName !== undefined ? { full_name: v.fullName } : {}),
-    ...(v.shortName !== undefined ? { short_name: v.shortName } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.format !== undefined ? { format: v.format } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.startDate !== undefined ? { start_date: v.startDate } : {}),
-    ...(v.endDate !== undefined ? { end_date: v.endDate } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
-    ...(v.groupModeForce !== undefined ? { group_mode_force: v.groupModeForce } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.subjectId !== undefined ? { subject_id: v.subjectId } : {}),
-    ...(v.grade !== undefined ? { grade: v.grade } : {}),
-    ...(v.isTemplate !== undefined ? { is_template: v.isTemplate } : {}),
+    ...(patch.category !== undefined ? { category: patch.category } : {}),
+    ...(patch.classId !== undefined ? { class_id: patch.classId } : {}),
+    ...(patch.fullName !== undefined ? { full_name: patch.fullName } : {}),
+    ...(patch.shortName !== undefined ? { short_name: patch.shortName } : {}),
+    ...(patch.idNumber !== undefined ? { id_number: patch.idNumber } : {}),
+    ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+    ...(patch.format !== undefined ? { format: patch.format } : {}),
+    ...(patch.visible !== undefined ? { visible: patch.visible } : {}),
+    ...(patch.startDate !== undefined ? { start_date: patch.startDate } : {}),
+    ...(patch.endDate !== undefined ? { end_date: patch.endDate } : {}),
+    ...(patch.groupMode !== undefined ? { group_mode: patch.groupMode } : {}),
+    ...(patch.groupModeForce !== undefined ? { group_mode_force: patch.groupModeForce } : {}),
+    ...(patch.sortOrder !== undefined ? { sort_order: patch.sortOrder } : {}),
+    ...(patch.subjectId !== undefined ? { subject_id: patch.subjectId } : {}),
+    ...(patch.grade !== undefined ? { grade: patch.grade } : {}),
+    ...(patch.isTemplate !== undefined ? { is_template: patch.isTemplate } : {}),
   };
 }
 
-function sectionInsertValues(v: NewSection) {
-  const availability = jsonbField(v.availability);
+function sectionInsertValues(values: NewSection): InsertObject<CentreDB, 'course_sections'> {
+  const availability = jsonbField(values.availability);
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course: v.course,
-    ...(v.section !== undefined ? { section: v.section } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course: values.course,
+    ...(values.section !== undefined ? { section: values.section } : {}),
+    ...(values.name !== undefined ? { name: values.name } : {}),
+    ...(values.summary !== undefined ? { summary: values.summary } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
     ...(availability !== undefined ? { availability } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
+    ...(values.openAt !== undefined ? { open_at: values.openAt } : {}),
   };
 }
 
-function sectionUpdateValues(v: Partial<NewSection>) {
-  const availability = jsonbField(v.availability);
+function sectionUpdateSet(patch: Partial<NewSection>): UpdateObject<CentreDB, 'course_sections'> {
+  const availability = jsonbField(patch.availability);
   return {
-    ...(v.course !== undefined ? { course: v.course } : {}),
-    ...(v.section !== undefined ? { section: v.section } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...(patch.course !== undefined ? { course: patch.course } : {}),
+    ...(patch.section !== undefined ? { section: patch.section } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+    ...(patch.visible !== undefined ? { visible: patch.visible } : {}),
     ...(availability !== undefined ? { availability } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
+    ...(patch.openAt !== undefined ? { open_at: patch.openAt } : {}),
   };
 }
 
-function cmInsertValues(v: NewCm) {
-  const availability = jsonbField(v.availability);
+function cmInsertValues(values: NewCm): InsertObject<CentreDB, 'course_modules'> {
+  const availability = jsonbField(values.availability);
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course: v.course,
-    section: v.section,
-    component: v.component,
-    ...(v.instanceId !== undefined ? { instance_id: v.instanceId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.added !== undefined ? { added: v.added } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course: values.course,
+    section: values.section,
+    component: values.component,
+    ...(values.instanceId !== undefined ? { instance_id: values.instanceId } : {}),
+    ...(values.name !== undefined ? { name: values.name } : {}),
+    ...(values.added !== undefined ? { added: values.added } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
+    ...(values.groupMode !== undefined ? { group_mode: values.groupMode } : {}),
     ...(availability !== undefined ? { availability } : {}),
-    ...(v.completion !== undefined ? { completion: v.completion } : {}),
-    ...(v.completionView !== undefined ? { completion_view: v.completionView } : {}),
-    ...(v.completionUseGrade !== undefined ? { completion_use_grade: v.completionUseGrade } : {}),
-    ...(v.completionManual !== undefined ? { completion_manual: v.completionManual } : {}),
-    ...(v.completionExpected !== undefined ? { completion_expected: v.completionExpected } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
-    ...(v.deletionInProgress !== undefined ? { deletion_in_progress: v.deletionInProgress } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
+    ...(values.completion !== undefined ? { completion: values.completion } : {}),
+    ...(values.completionView !== undefined ? { completion_view: values.completionView } : {}),
+    ...(values.completionUseGrade !== undefined ? { completion_use_grade: values.completionUseGrade } : {}),
+    ...(values.completionManual !== undefined ? { completion_manual: values.completionManual } : {}),
+    ...(values.completionExpected !== undefined ? { completion_expected: values.completionExpected } : {}),
+    ...(values.openAt !== undefined ? { open_at: values.openAt } : {}),
+    ...(values.deletionInProgress !== undefined ? { deletion_in_progress: values.deletionInProgress } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
   };
 }
 
-function cmUpdateValues(v: Partial<NewCm>) {
-  const availability = jsonbField(v.availability);
+function cmUpdateSet(patch: Partial<NewCm>): UpdateObject<CentreDB, 'course_modules'> {
+  const availability = jsonbField(patch.availability);
   return {
-    ...(v.course !== undefined ? { course: v.course } : {}),
-    ...(v.section !== undefined ? { section: v.section } : {}),
-    ...(v.component !== undefined ? { component: v.component } : {}),
-    ...(v.instanceId !== undefined ? { instance_id: v.instanceId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.added !== undefined ? { added: v.added } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
+    ...(patch.course !== undefined ? { course: patch.course } : {}),
+    ...(patch.section !== undefined ? { section: patch.section } : {}),
+    ...(patch.component !== undefined ? { component: patch.component } : {}),
+    ...(patch.instanceId !== undefined ? { instance_id: patch.instanceId } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.added !== undefined ? { added: patch.added } : {}),
+    ...(patch.visible !== undefined ? { visible: patch.visible } : {}),
+    ...(patch.groupMode !== undefined ? { group_mode: patch.groupMode } : {}),
     ...(availability !== undefined ? { availability } : {}),
-    ...(v.completion !== undefined ? { completion: v.completion } : {}),
-    ...(v.completionView !== undefined ? { completion_view: v.completionView } : {}),
-    ...(v.completionUseGrade !== undefined ? { completion_use_grade: v.completionUseGrade } : {}),
-    ...(v.completionManual !== undefined ? { completion_manual: v.completionManual } : {}),
-    ...(v.completionExpected !== undefined ? { completion_expected: v.completionExpected } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
-    ...(v.deletionInProgress !== undefined ? { deletion_in_progress: v.deletionInProgress } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
+    ...(patch.completion !== undefined ? { completion: patch.completion } : {}),
+    ...(patch.completionView !== undefined ? { completion_view: patch.completionView } : {}),
+    ...(patch.completionUseGrade !== undefined ? { completion_use_grade: patch.completionUseGrade } : {}),
+    ...(patch.completionManual !== undefined ? { completion_manual: patch.completionManual } : {}),
+    ...(patch.completionExpected !== undefined ? { completion_expected: patch.completionExpected } : {}),
+    ...(patch.openAt !== undefined ? { open_at: patch.openAt } : {}),
+    ...(patch.deletionInProgress !== undefined ? { deletion_in_progress: patch.deletionInProgress } : {}),
+    ...(patch.sortOrder !== undefined ? { sort_order: patch.sortOrder } : {}),
   };
 }
 
-function sectionAnchorInsertValues(v: NewSectionAnchor) {
+function sectionAnchorInsertValues(values: NewSectionAnchor): InsertObject<CentreDB, 'course_section_anchors'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    section_id: v.sectionId,
-    ...(v.curriculumId !== undefined ? { curriculum_id: v.curriculumId } : {}),
-    ...(v.nodeId !== undefined ? { node_id: v.nodeId } : {}),
-    node_title: v.nodeTitle,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    section_id: values.sectionId,
+    ...(values.curriculumId !== undefined ? { curriculum_id: values.curriculumId } : {}),
+    ...(values.nodeId !== undefined ? { node_id: values.nodeId } : {}),
+    node_title: values.nodeTitle,
   };
 }
 
-function sectionAnchorOutcomeInsertValues(v: NewSectionAnchorOutcome) {
+function sectionAnchorOutcomeInsertValues(values: NewSectionAnchorOutcome): InsertObject<CentreDB, 'course_section_anchor_outcomes'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    anchor_id: v.anchorId,
-    ...(v.outcomeId !== undefined ? { outcome_id: v.outcomeId } : {}),
-    content: v.content,
-    ...(v.position !== undefined ? { position: v.position } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    anchor_id: values.anchorId,
+    ...(values.outcomeId !== undefined ? { outcome_id: values.outcomeId } : {}),
+    content: values.content,
+    ...(values.position !== undefined ? { position: values.position } : {}),
   };
 }
 
-function sectionBookAnchorInsertValues(v: NewSectionBookAnchor) {
+function sectionBookAnchorInsertValues(values: NewSectionBookAnchor): InsertObject<CentreDB, 'course_section_book_anchors'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    section_id: v.sectionId,
-    ...(v.bookId !== undefined ? { book_id: v.bookId } : {}),
-    ...(v.bookNodeId !== undefined ? { book_node_id: v.bookNodeId } : {}),
-    node_title: v.nodeTitle,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    section_id: values.sectionId,
+    ...(values.bookId !== undefined ? { book_id: values.bookId } : {}),
+    ...(values.bookNodeId !== undefined ? { book_node_id: values.bookNodeId } : {}),
+    node_title: values.nodeTitle,
   };
 }
 
-function sectionBookItemInsertValues(v: NewSectionBookItem) {
+function sectionBookItemInsertValues(values: NewSectionBookItem): InsertObject<CentreDB, 'course_section_book_items'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    anchor_id: v.anchorId,
-    ...(v.bookNodeId !== undefined ? { book_node_id: v.bookNodeId } : {}),
-    title: v.title,
-    ...(v.position !== undefined ? { position: v.position } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    anchor_id: values.anchorId,
+    ...(values.bookNodeId !== undefined ? { book_node_id: values.bookNodeId } : {}),
+    title: values.title,
+    ...(values.position !== undefined ? { position: values.position } : {}),
   };
 }
 
-function sectionBookItemOutcomeInsertValues(v: NewSectionBookItemOutcome) {
+function sectionBookItemOutcomeInsertValues(values: NewSectionBookItemOutcome): InsertObject<CentreDB, 'course_section_book_item_outcomes'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    item_id: v.itemId,
-    ...(v.outcomeId !== undefined ? { outcome_id: v.outcomeId } : {}),
-    content: v.content,
-    ...(v.position !== undefined ? { position: v.position } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    item_id: values.itemId,
+    ...(values.outcomeId !== undefined ? { outcome_id: values.outcomeId } : {}),
+    content: values.content,
+    ...(values.position !== undefined ? { position: values.position } : {}),
   };
 }
 
@@ -636,72 +618,76 @@ function sectionBookItemOutcomeInsertValues(v: NewSectionBookItemOutcome) {
 export class CoursesRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  private db(): CoursesDb {
+    return this.handle;
+  }
+
   /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: CoursesTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
-  // categories
+  // danh mục
 
   /** Chèn category. */
-  async insertCategory(v: NewCategory, db: CoursesDb = this.handle): Promise<CategoryRow> {
+  async insertCategory(v: NewCategory, db: CoursesDb = this.db()): Promise<CategoryRow> {
     return db
       .insertInto('course_categories')
       .values(categoryInsertValues(v))
       .returning(CATEGORY_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<CategoryRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy category theo id. */
-  async getCategory(id: string): Promise<CategoryRow | undefined> {
-    return this.handle
+  async getCategory(id: string, db: CoursesDb = this.db()): Promise<CategoryRow | undefined> {
+    return db
       .selectFrom('course_categories')
       .select(CATEGORY_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<CategoryRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Liệt kê mọi category. */
-  async listCategories(): Promise<CategoryRow[]> {
-    return this.handle
+  async listCategories(db: CoursesDb = this.db()): Promise<CategoryRow[]> {
+    return db
       .selectFrom('course_categories')
       .select(CATEGORY_COLUMNS)
       .orderBy('sort_order', 'asc')
       .orderBy('id', 'asc')
-      .execute() as Promise<CategoryRow[]>;
+      .execute();
   }
 
   /** Các category con trực tiếp của một category. */
-  async childrenOf(parent: string): Promise<CategoryRow[]> {
-    return this.handle
+  async childrenOf(parent: string, db: CoursesDb = this.db()): Promise<CategoryRow[]> {
+    return db
       .selectFrom('course_categories')
       .select(CATEGORY_COLUMNS)
       .where('parent', '=', parent)
       .orderBy('sort_order', 'asc')
-      .execute() as Promise<CategoryRow[]>;
+      .execute();
   }
 
   /** Category và mọi con cháu qua tiền tố path (path có dạng như /1/4/9). */
-  async subtreeOf(cat: CategoryRow): Promise<CategoryRow[]> {
-    return this.handle
+  async subtreeOf(cat: CategoryRow, db: CoursesDb = this.db()): Promise<CategoryRow[]> {
+    return db
       .selectFrom('course_categories')
       .select(CATEGORY_COLUMNS)
       .where((eb) => eb.or([eb('id', '=', cat.id), eb('path', 'like', `${cat.path}/%`)]))
-      .execute() as Promise<CategoryRow[]>;
+      .execute();
   }
 
   /** Cập nhật category. */
-  async updateCategory(id: string, v: Partial<NewCategory>, db: CoursesDb = this.handle): Promise<void> {
+  async updateCategory(id: string, v: Partial<NewCategory>, db: CoursesDb = this.db()): Promise<void> {
     await db
       .updateTable('course_categories')
-      .set({ ...categoryUpdateValues(v), updated_at: new Date() })
+      .set({ ...categoryUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Viết lại path/depth khi di chuyển category. */
-  async updateCategoryPath(id: string, path: string, depth: number): Promise<void> {
-    await this.handle
+  async updateCategoryPath(id: string, path: string, depth: number, db: CoursesDb = this.db()): Promise<void> {
+    await db
       .updateTable('course_categories')
       .set({ path, depth })
       .where('id', '=', id)
@@ -709,94 +695,108 @@ export class CoursesRepository {
   }
 
   /** Xoá category. */
-  async deleteCategory(id: string, db: CoursesDb = this.handle): Promise<void> {
+  async deleteCategory(id: string, db: CoursesDb = this.db()): Promise<void> {
     await db.deleteFrom('course_categories').where('id', '=', id).execute();
   }
 
   /** Số category anh em (phục vụ sortOrder). */
-  async countSiblingCategories(parent: string | null): Promise<number> {
-    let query = this.handle.selectFrom('course_categories').select(sql<number>`count(*)::int`.as('n'));
+  async countSiblingCategories(parent: string | null, db: CoursesDb = this.db()): Promise<number> {
+    let query = db.selectFrom('course_categories').select(sql<number>`count(*)::int`.as('n'));
     query = parent === null ? query.where('parent', 'is', null) : query.where('parent', '=', parent);
     const row = await query.executeTakeFirst();
     return row?.n ?? 0;
   }
 
-  // courses
+  // khoá học
 
   /** Chèn khoá học. */
-  async insertCourse(v: NewCourse, db: CoursesDb = this.handle): Promise<CourseRow> {
+  async insertCourse(v: NewCourse, db: CoursesDb = this.db()): Promise<CourseRow> {
     return db
       .insertInto('course')
       .values(courseInsertValues(v))
       .returning(COURSE_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<CourseRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy khoá học theo id. */
-  async getCourse(id: string): Promise<CourseRow | undefined> {
-    return this.handle
+  async getCourse(id: string, db: CoursesDb = this.db()): Promise<CourseRow | undefined> {
+    return db
       .selectFrom('course')
       .select(COURSE_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<CourseRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Lấy khoá học theo shortName duy nhất. */
-  async getCourseByShortname(shortName: string): Promise<CourseRow | undefined> {
-    return this.handle
+  async getCourseByShortname(shortName: string, db: CoursesDb = this.db()): Promise<CourseRow | undefined> {
+    return db
       .selectFrom('course')
       .select(COURSE_COLUMNS)
       .where('short_name', '=', shortName)
-      .executeTakeFirst() as Promise<CourseRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Liệt kê khoá học. */
-  async listCourses(categoryId?: string): Promise<CourseRow[]> {
-    let query = this.handle
+  async listCourses(categoryId?: string, db: CoursesDb = this.db()): Promise<CourseRow[]> {
+    let query = db
       .selectFrom('course')
       .select(COURSE_COLUMNS)
       .orderBy('sort_order', 'asc')
       .orderBy('id', 'asc');
     if (categoryId !== undefined) query = query.where('category', '=', categoryId);
-    return query.execute() as Promise<CourseRow[]>;
+    return query.execute();
   }
 
-  /** Khoá học thuộc các category cho trước. */
-  async listCoursesInCategories(categoryIds: string[]): Promise<CourseRow[]> {
+  /**
+   * Khoá học thuộc các category cho trước.
+   *
+   * Một truy vấn `where category in (...)` thay cho vòng lặp N+1 gọi
+   * `listCourses` từng category; thứ tự trả về giữ nguyên như vòng lặp
+   * cũ: nhóm theo thứ tự `categoryIds` đầu vào, trong mỗi nhóm theo
+   * (`sort_order`, `id`) như `listCourses` (sắp xếp ổn định nên thứ tự
+   * trong nhóm không đổi).
+   */
+  async listCoursesInCategories(categoryIds: string[], db: CoursesDb = this.db()): Promise<CourseRow[]> {
     if (!categoryIds.length) return [];
-    const rows: CourseRow[] = [];
-    for (const id of categoryIds) rows.push(...(await this.listCourses(id)));
-    return rows;
+    const rows = (await db
+      .selectFrom('course')
+      .select(COURSE_COLUMNS)
+      .where('category', 'in', categoryIds)
+      .orderBy('sort_order', 'asc')
+      .orderBy('id', 'asc')
+      .execute()) as CourseRow[];
+    const order = new Map(categoryIds.map((id, i) => [id, i]));
+    return rows.sort((a, b) => (order.get(a.category) ?? 0) - (order.get(b.category) ?? 0));
   }
 
   /** Cập nhật khoá học. */
-  async updateCourse(id: string, v: Partial<NewCourse>, db: CoursesDb = this.handle): Promise<void> {
+  async updateCourse(id: string, v: Partial<NewCourse>, db: CoursesDb = this.db()): Promise<void> {
     await db
       .updateTable('course')
-      .set({ ...courseUpdateValues(v), updated_at: new Date() })
+      .set({ ...courseUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá khoá học. */
-  async deleteCourse(id: string, db: CoursesDb = this.handle): Promise<void> {
+  async deleteCourse(id: string, db: CoursesDb = this.db()): Promise<void> {
     await db.deleteFrom('course').where('id', '=', id).execute();
   }
 
-  // sections
+  // phần
 
   /** Chèn section. */
-  async insertSection(v: NewSection, db: CoursesDb = this.handle): Promise<SectionRow> {
+  async insertSection(v: NewSection, db: CoursesDb = this.db()): Promise<SectionRow> {
     return db
       .insertInto('course_sections')
       .values(sectionInsertValues(v))
       .returning(SECTION_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<SectionRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy môn học theo id (đối chiếu neo môn × khối của khoá — K0a). */
-  async getSubjectById(id: string): Promise<{ id: string } | undefined> {
-    return this.handle.selectFrom('subjects').select('id').where('id', '=', id).executeTakeFirst();
+  async getSubjectById(id: string, db: CoursesDb = this.db()): Promise<{ id: string } | undefined> {
+    return db.selectFrom('subjects').select('id').where('id', '=', id).executeTakeFirst();
   }
 
   /**
@@ -815,151 +815,151 @@ export class CoursesRepository {
   }
 
   /** Ghi neo khung cho một section vừa tạo từ khung chương trình. */
-  async insertSectionAnchor(v: NewSectionAnchor, db: CoursesDb = this.handle): Promise<SectionAnchorRow> {
+  async insertSectionAnchor(v: NewSectionAnchor, db: CoursesDb = this.db()): Promise<SectionAnchorRow> {
     return db
       .insertInto('course_section_anchors')
       .values(sectionAnchorInsertValues(v))
       .returning(ANCHOR_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<SectionAnchorRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Ghi các YCCĐ chụp kèm một neo khung (đúng thứ tự position truyền vào). */
-  async insertSectionAnchorOutcomes(v: NewSectionAnchorOutcome[], db: CoursesDb = this.handle): Promise<void> {
+  async insertSectionAnchorOutcomes(v: NewSectionAnchorOutcome[], db: CoursesDb = this.db()): Promise<void> {
     if (v.length === 0) return;
     await db.insertInto('course_section_anchor_outcomes').values(v.map(sectionAnchorOutcomeInsertValues)).execute();
   }
 
   /** Toàn bộ neo khung của nhiều section (dựng khung hiển thị trong nội dung khoá). */
-  async listAnchorsForSections(sectionIds: string[]): Promise<SectionAnchorRow[]> {
+  async listAnchorsForSections(sectionIds: string[], db: CoursesDb = this.db()): Promise<SectionAnchorRow[]> {
     if (sectionIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('course_section_anchors')
       .select(ANCHOR_COLUMNS)
       .where('section_id', 'in', sectionIds)
-      .execute() as Promise<SectionAnchorRow[]>;
+      .execute();
   }
 
   /** Toàn bộ YCCĐ chụp của nhiều neo khung, theo position. */
-  async listAnchorOutcomes(anchorIds: string[]): Promise<SectionAnchorOutcomeRow[]> {
+  async listAnchorOutcomes(anchorIds: string[], db: CoursesDb = this.db()): Promise<SectionAnchorOutcomeRow[]> {
     if (anchorIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('course_section_anchor_outcomes')
       .select(ANCHOR_OUTCOME_COLUMNS)
       .where('anchor_id', 'in', anchorIds)
       .orderBy('position', 'asc')
       .orderBy('created_at', 'asc')
-      .execute() as Promise<SectionAnchorOutcomeRow[]>;
+      .execute();
   }
 
   /** Ghi neo khung SGK cho một section vừa tạo từ khung sách (K0b). */
-  async insertSectionBookAnchor(v: NewSectionBookAnchor, db: CoursesDb = this.handle): Promise<SectionBookAnchorRow> {
+  async insertSectionBookAnchor(v: NewSectionBookAnchor, db: CoursesDb = this.db()): Promise<SectionBookAnchorRow> {
     return db
       .insertInto('course_section_book_anchors')
       .values(sectionBookAnchorInsertValues(v))
       .returning(BOOK_ANCHOR_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<SectionBookAnchorRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Ghi một mục bài SGK chụp trong một neo khung SGK. */
-  async insertSectionBookItem(v: NewSectionBookItem, db: CoursesDb = this.handle): Promise<SectionBookItemRow> {
+  async insertSectionBookItem(v: NewSectionBookItem, db: CoursesDb = this.db()): Promise<SectionBookItemRow> {
     return db
       .insertInto('course_section_book_items')
       .values(sectionBookItemInsertValues(v))
       .returning(BOOK_ITEM_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<SectionBookItemRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Ghi các YCCĐ chụp kèm một mục bài SGK (đúng thứ tự position truyền vào). */
-  async insertSectionBookItemOutcomes(v: NewSectionBookItemOutcome[], db: CoursesDb = this.handle): Promise<void> {
+  async insertSectionBookItemOutcomes(v: NewSectionBookItemOutcome[], db: CoursesDb = this.db()): Promise<void> {
     if (v.length === 0) return;
     await db.insertInto('course_section_book_item_outcomes').values(v.map(sectionBookItemOutcomeInsertValues)).execute();
   }
 
   /** Toàn bộ neo khung SGK của nhiều section (dựng khung SGK hiển thị trong nội dung khoá). */
-  async listBookAnchorsForSections(sectionIds: string[]): Promise<SectionBookAnchorRow[]> {
+  async listBookAnchorsForSections(sectionIds: string[], db: CoursesDb = this.db()): Promise<SectionBookAnchorRow[]> {
     if (sectionIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('course_section_book_anchors')
       .select(BOOK_ANCHOR_COLUMNS)
       .where('section_id', 'in', sectionIds)
-      .execute() as Promise<SectionBookAnchorRow[]>;
+      .execute();
   }
 
   /** Toàn bộ mục bài SGK chụp của nhiều neo, theo position. */
-  async listBookItems(anchorIds: string[]): Promise<SectionBookItemRow[]> {
+  async listBookItems(anchorIds: string[], db: CoursesDb = this.db()): Promise<SectionBookItemRow[]> {
     if (anchorIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('course_section_book_items')
       .select(BOOK_ITEM_COLUMNS)
       .where('anchor_id', 'in', anchorIds)
       .orderBy('position', 'asc')
       .orderBy('created_at', 'asc')
-      .execute() as Promise<SectionBookItemRow[]>;
+      .execute();
   }
 
   /** Toàn bộ YCCĐ chụp của nhiều mục bài SGK, theo position. */
-  async listBookItemOutcomes(itemIds: string[]): Promise<SectionBookItemOutcomeRow[]> {
+  async listBookItemOutcomes(itemIds: string[], db: CoursesDb = this.db()): Promise<SectionBookItemOutcomeRow[]> {
     if (itemIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('course_section_book_item_outcomes')
       .select(BOOK_ITEM_OUTCOME_COLUMNS)
       .where('item_id', 'in', itemIds)
       .orderBy('position', 'asc')
       .orderBy('created_at', 'asc')
-      .execute() as Promise<SectionBookItemOutcomeRow[]>;
+      .execute();
   }
 
   /** Lấy section theo id. */
-  async getSection(id: string): Promise<SectionRow | undefined> {
-    return this.handle
+  async getSection(id: string, db: CoursesDb = this.db()): Promise<SectionRow | undefined> {
+    return db
       .selectFrom('course_sections')
       .select(SECTION_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<SectionRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Liệt kê section của khoá học theo thứ tự. */
-  async listSections(courseId: string): Promise<SectionRow[]> {
-    return this.handle
+  async listSections(courseId: string, db: CoursesDb = this.db()): Promise<SectionRow[]> {
+    return db
       .selectFrom('course_sections')
       .select(SECTION_COLUMNS)
       .where('course', '=', courseId)
       .orderBy('section', 'asc')
-      .execute() as Promise<SectionRow[]>;
+      .execute();
   }
 
   /** Cập nhật section (tên, summary, availability JSON). */
-  async updateSection(id: string, v: Partial<NewSection>): Promise<void> {
-    await this.handle
+  async updateSection(id: string, v: Partial<NewSection>, db: CoursesDb = this.db()): Promise<void> {
+    await db
       .updateTable('course_sections')
-      .set({ ...sectionUpdateValues(v), updated_at: new Date() })
+      .set({ ...sectionUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá section. */
-  async deleteSection(id: string): Promise<void> {
-    await this.handle.deleteFrom('course_sections').where('id', '=', id).execute();
+  async deleteSection(id: string, db: CoursesDb = this.db()): Promise<void> {
+    await db.deleteFrom('course_sections').where('id', '=', id).execute();
   }
 
   // mô-đun của khoá học
 
   /** Chèn course module. */
-  async insertCm(v: NewCm, db: CoursesDb = this.handle): Promise<CmRow> {
+  async insertCm(v: NewCm, db: CoursesDb = this.db()): Promise<CmRow> {
     return db
       .insertInto('course_modules')
       .values(cmInsertValues(v))
       .returning(CM_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<CmRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy cm theo id. */
-  async getCm(id: string): Promise<CmRow | undefined> {
-    return this.handle
+  async getCm(id: string, db: CoursesDb = this.db()): Promise<CmRow | undefined> {
+    return db
       .selectFrom('course_modules')
       .select(CM_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<CmRow | undefined>;
+      .executeTakeFirst();
   }
 
   /**
@@ -967,50 +967,50 @@ export class CoursesRepository {
    * tường minh, id uuidv7 làm khoá phụ giữ nguyên thứ tự tạo cho dữ
    * liệu cũ mọi sortOrder đều bằng 0).
    */
-  async listCms(courseId: string): Promise<CmRow[]> {
-    return this.handle
+  async listCms(courseId: string, db: CoursesDb = this.db()): Promise<CmRow[]> {
+    return db
       .selectFrom('course_modules')
       .select(CM_COLUMNS)
       .where('course', '=', courseId)
       .where('deletion_in_progress', '=', false)
       .orderBy('sort_order', 'asc')
       .orderBy('id', 'asc')
-      .execute() as Promise<CmRow[]>;
+      .execute();
   }
 
   /** Cm trong một section theo thứ tự outline (K1). */
-  async listCmsInSection(sectionId: string): Promise<CmRow[]> {
-    return this.handle
+  async listCmsInSection(sectionId: string, db: CoursesDb = this.db()): Promise<CmRow[]> {
+    return db
       .selectFrom('course_modules')
       .select(CM_COLUMNS)
       .where('section', '=', sectionId)
       .where('deletion_in_progress', '=', false)
       .orderBy('sort_order', 'asc')
       .orderBy('id', 'asc')
-      .execute() as Promise<CmRow[]>;
+      .execute();
   }
 
   /**
    * Khoá mẫu tổ/trường (K1): các khoá `is_template` — danh sách nguồn
    * của đường 5 trong wizard tạo khoá.
    */
-  async listTemplateCourses(): Promise<CourseRow[]> {
-    return this.handle
+  async listTemplateCourses(db: CoursesDb = this.db()): Promise<CourseRow[]> {
+    return db
       .selectFrom('course')
       .select(COURSE_COLUMNS)
       .where('is_template', '=', true)
       .orderBy('sort_order', 'asc')
       .orderBy('id', 'asc')
-      .execute() as Promise<CourseRow[]>;
+      .execute();
   }
 
   /** Cập nhật cm. */
-  async updateCm(id: string, v: Partial<NewCm>): Promise<void> {
-    await this.handle.updateTable('course_modules').set(cmUpdateValues(v)).where('id', '=', id).execute();
+  async updateCm(id: string, v: Partial<NewCm>, db: CoursesDb = this.db()): Promise<void> {
+    await db.updateTable('course_modules').set(cmUpdateSet(v)).where('id', '=', id).execute();
   }
 
   /** Xoá cm. */
-  async deleteCm(id: string, db: CoursesDb = this.handle): Promise<void> {
+  async deleteCm(id: string, db: CoursesDb = this.db()): Promise<void> {
     await db.deleteFrom('course_modules').where('id', '=', id).execute();
   }
 
@@ -1023,12 +1023,13 @@ export class CoursesRepository {
     name: string,
     value: string | null,
     sectionId: string | null = null,
+    db: CoursesDb = this.db(),
   ): Promise<void> {
     if (sectionId === null) {
       // sectionId NULL không tham gia unique conflict (NULL luôn khác
       // nhau trong PostgreSQL) nên upsert thủ công cho tuỳ chọn cấp
       // khoá học.
-      const existing = await this.handle
+      const existing = await db
         .selectFrom('course_format_options')
         .select(FORMAT_OPTION_COLUMNS)
         .where('course_id', '=', courseId)
@@ -1037,20 +1038,20 @@ export class CoursesRepository {
         .where('name', '=', name)
         .executeTakeFirst();
       if (existing) {
-        await this.handle
+        await db
           .updateTable('course_format_options')
           .set({ value })
           .where('id', '=', existing.id)
           .execute();
         return;
       }
-      await this.handle
+      await db
         .insertInto('course_format_options')
         .values({ course_id: courseId, format, name, value, section_id: sectionId })
         .execute();
       return;
     }
-    await this.handle
+    await db
       .insertInto('course_format_options')
       .values({ course_id: courseId, format, name, value, section_id: sectionId })
       .onConflict((oc) => oc.columns(['course_id', 'format', 'section_id', 'name']).doUpdateSet({ value }))
@@ -1058,11 +1059,11 @@ export class CoursesRepository {
   }
 
   /** Đọc các tuỳ chọn định dạng của khoá học. */
-  async listFormatOptions(courseId: string): Promise<CourseFormatOptionRow[]> {
-    return this.handle
+  async listFormatOptions(courseId: string, db: CoursesDb = this.db()): Promise<CourseFormatOptionRow[]> {
+    return db
       .selectFrom('course_format_options')
       .select(FORMAT_OPTION_COLUMNS)
       .where('course_id', '=', courseId)
-      .execute() as Promise<CourseFormatOptionRow[]>;
+      .execute();
   }
 }

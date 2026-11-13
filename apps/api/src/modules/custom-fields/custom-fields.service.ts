@@ -1,16 +1,24 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CustomFieldsRepository, type FieldRow } from '@giaokhoa/db/repositories/custom-fields';
+import { CustomFieldsRepository, type CategoryRow, type FieldRow } from '@giaokhoa/db/repositories/custom-fields';
 
 export type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'date';
 export interface FieldConfig { required?: boolean; options?: string[]; defaultvalue?: string; maxlength?: number }
 export const FIELD_TYPES: CustomFieldType[] = ['text', 'textarea', 'select', 'checkbox', 'date'];
 
 /**
+ * Type guard cho `CustomFieldType`: biên controller dùng để thu hẹp `type`
+ * chuỗi từ DTO trước khi gọi service, thay cho ép kiểu.
+ */
+export function isCustomFieldType(value: string): value is CustomFieldType {
+  return FIELD_TYPES.some((type) => type === value);
+}
+
+/**
  * Facade của CustomFields (Moodle core_customfield). Các định nghĩa là metadata — các bảng nghiệp vụ không bao giờ bị thay đổi. Giá trị được kiểm chứng đối chiếu với khai báo của trường mỗi khi thực thể sở hữu (hồ sơ người dùng) được lưu.
  */
 @Injectable()
 /**
- * Trường tuỳ biến cho user/khoá học: định nghĩa theo category, kiểu dữ liệu (text, textarea, select, checkbox, datetime, password) và kiểm tra giá trị theo configData của từng field trước khi lưu. Đối chiếu Moodle: customfield_* (customfield/classes/handler.php).
+ * Trường tuỳ biến cho user/khoá học: định nghĩa theo category, kiểu dữ liệu (text, textarea, select, checkbox, date) và kiểm tra giá trị theo configData của từng field trước khi lưu. Đối chiếu Moodle: customfield_* (customfield/classes/handler.php).
  */
 export class CustomFieldsService {
   constructor(private readonly repo: CustomFieldsRepository) {}
@@ -18,14 +26,14 @@ export class CustomFieldsService {
   /**
    * Tạo category trường cho một component/area.
    */
-  async createCategory(input: { name: string; component: string; area: string }): Promise<unknown> {
+  async createCategory(input: { name: string; component: string; area: string }): Promise<CategoryRow> {
     const existing = await this.repo.listCategories(input.component, input.area);
     return this.repo.insertCategory({ ...input, sortOrder: existing.length });
   }
   /**
    * Liệt kê category.
    */
-  async listCategories(component: string, area: string): Promise<unknown[]> { return this.repo.listCategories(component, area); }
+  async listCategories(component: string, area: string): Promise<CategoryRow[]> { return this.repo.listCategories(component, area); }
   /**
    * Xoá category.
    */
@@ -36,10 +44,10 @@ export class CustomFieldsService {
   /**
    * Tạo field trong category với configData theo kiểu dữ liệu.
    */
-  async createField(categoryId: string, input: { shortName: string; name: string; type: string; configData?: FieldConfig }): Promise<FieldRow> {
+  async createField(categoryId: string, input: { shortName: string; name: string; type: CustomFieldType; configData?: FieldConfig }): Promise<FieldRow> {
     const category = await this.repo.getCategory(categoryId);
     if (!category) throw new NotFoundException({ message: `Category ${categoryId} not found`, code: 'customfield.category_not_found' });
-    if (!FIELD_TYPES.includes(input.type as CustomFieldType)) {
+    if (!FIELD_TYPES.includes(input.type)) {
       throw new BadRequestException({ message: `Unsupported field type ${input.type}`, code: 'customfield.invalid_type' });
     }
     const siblings = await this.repo.listFieldsByCategory(categoryId);
@@ -53,9 +61,8 @@ export class CustomFieldsService {
    */
   async listFields(component: string, area: string): Promise<FieldRow[]> {
     const categories = await this.repo.listCategories(component, area);
-    const all: FieldRow[] = [];
-    for (const c of categories) all.push(...(await this.repo.listFieldsByCategory(c.id)));
-    return all;
+    const nested = await Promise.all(categories.map((c) => this.repo.listFieldsByCategory(c.id)));
+    return nested.flat();
   }
   /**
    * Xoá field và giá trị của nó.
@@ -65,9 +72,10 @@ export class CustomFieldsService {
     await this.repo.deleteField(id);
   }
 
-  /** Kiểm chứng một giá trị đối chiếu với khai báo trường của nó; trả về thông báo lỗi hoặc null. Luật nghiệp vụ thuần theo từng kiểu. */
   /**
-   * Kiểm một giá trị theo định nghĩa field (bắt buộc, độ dài, danh sách lựa chọn của select, định dạng datetime).
+   * Kiểm chứng một giá trị đối chiếu với khai báo trường của nó (bắt buộc, độ dài,
+   * danh sách lựa chọn của select, định dạng date); trả về thông báo lỗi hoặc null.
+   * Luật nghiệp vụ thuần theo từng kiểu.
    */
   validateValue(field: FieldRow, raw: string | undefined | null): string | null {
     const config = (field.configData ?? {}) as FieldConfig;
@@ -89,9 +97,10 @@ export class CustomFieldsService {
     }
   }
 
-  /** Lượt chỉ kiểm chứng (không ghi) — bên gọi chạy bước này TRƯỚC khi lưu thực thể sở hữu để một hồ sơ lỗi không bao giờ để lại một bản ghi tạo dở. */
   /**
-   * Kiểm toàn bộ bộ giá trị của một instance trước khi ghi.
+   * Kiểm toàn bộ bộ giá trị của một instance trước khi ghi. Lượt chỉ kiểm chứng
+   * (không ghi) — bên gọi chạy bước này TRƯỚC khi lưu thực thể sở hữu để một hồ sơ
+   * lỗi không bao giờ để lại một bản ghi tạo dở.
    */
   async validateValuesForInstance(component: string, area: string, values: Record<string, string>): Promise<void> {
     const fields = await this.listFields(component, area);
@@ -103,29 +112,25 @@ export class CustomFieldsService {
     if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'customfield.validation_failed' });
   }
 
-  /** Kiểm chứng + lưu mọi giá trị cho một instance (ví dụ một id người dùng). Ném lỗi 400 liệt kê mọi vi phạm. */
   /**
-   * Ghi các giá trị field cho instance sau khi kiểm hợp lệ.
+   * Kiểm chứng + lưu mọi giá trị cho một instance (ví dụ một id người dùng) sau khi
+   * kiểm hợp lệ. Ném lỗi 400 liệt kê mọi vi phạm.
    */
   async setValuesForInstance(component: string, area: string, instanceId: string, values: Record<string, string>): Promise<void> {
+    await this.validateValuesForInstance(component, area, values);
     const fields = await this.listFields(component, area);
-    const errors: string[] = [];
     for (const field of fields) {
-      const err = this.validateValue(field, values[field.shortName]);
-      if (err) errors.push(err);
-    }
-    if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'customfield.validation_failed' });
-    for (const field of fields) {
-      if (values[field.shortName] !== undefined) await this.repo.upsertData(field.id, instanceId, values[field.shortName]!);
+      const value = values[field.shortName];
+      if (value !== undefined) await this.repo.upsertData(field.id, instanceId, value);
     }
   }
   /**
-   * Đọc giá trị field của instance để hiển thị hồ sơ.
+   * Đọc giá trị field của instance để hiển thị hồ sơ. Uỷ quyền cho bản theo lô
+   * `getValuesForInstances` với một id để dùng chung đường tra cứu theo `Map`.
    */
   async getValuesForInstance(component: string, area: string, instanceId: string): Promise<{ field: FieldRow; value: string | null }[]> {
-    const fields = await this.listFields(component, area);
-    const data = await this.repo.getDataForInstance(fields.map((f) => f.id), instanceId);
-    return fields.map((field) => ({ field, value: data.find((d) => d.fieldId === field.id)?.value ?? null }));
+    const values = await this.getValuesForInstances(component, area, [instanceId]);
+    return values.get(instanceId) ?? [];
   }
 
   /**

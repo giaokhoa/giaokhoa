@@ -15,9 +15,10 @@
  *
  * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import {type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type RepoDb = CentreDb | CentreTx;
@@ -199,18 +200,9 @@ const BOOK_RECORD_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — helper serialize duy nhất của file này cho mọi lần ghi jsonb
- * (khuôn của pilot: driver `pg` tự stringify object thường nhưng
- * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type json`). Cột `source` không mang hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Ánh xạ dữ kiện ghi sách (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function bookInsertValues(values: NewBook): Insertable<CentreDB['books']> {
-  const row: Insertable<CentreDB['books']> = { title: values.title };
+function bookInsertValues(values: NewBook): InsertObject<CentreDB, 'books'> {
+  const row: InsertObject<CentreDB, 'books'> = { title: values.title };
   if (values.id !== undefined) row.id = values.id;
   if (values.kind !== undefined) row.kind = values.kind;
   if (values.subjectId !== undefined) row.subject_id = values.subjectId;
@@ -228,8 +220,8 @@ function bookInsertValues(values: NewBook): Insertable<CentreDB['books']> {
 }
 
 /** Ánh xạ dữ kiện ghi node sách (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function bookNodeInsertValues(values: NewBookNode): Insertable<CentreDB['book_nodes']> {
-  const row: Insertable<CentreDB['book_nodes']> = { book_id: values.bookId, title: values.title };
+function bookNodeInsertValues(values: NewBookNode): InsertObject<CentreDB, 'book_nodes'> {
+  const row: InsertObject<CentreDB, 'book_nodes'> = { book_id: values.bookId, title: values.title };
   if (values.id !== undefined) row.id = values.id;
   if (values.parentId !== undefined) row.parent_id = values.parentId;
   if (values.kind !== undefined) row.kind = values.kind;
@@ -261,8 +253,8 @@ function bookNodeUpdateSet(patch: Partial<NewBookNode>): UpdateObject<CentreDB, 
 }
 
 /** Ánh xạ dữ kiện ghi ánh xạ (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function bookMappingInsertValues(values: NewBookMapping): Insertable<CentreDB['book_mappings']> {
-  const row: Insertable<CentreDB['book_mappings']> = {
+function bookMappingInsertValues(values: NewBookMapping): InsertObject<CentreDB, 'book_mappings'> {
+  const row: InsertObject<CentreDB, 'book_mappings'> = {
     book_node_id: values.bookNodeId,
     position: values.position,
   };
@@ -333,8 +325,8 @@ export class BookRepository {
 
   /** Chèn cuốn sách. */
   async insertBook(values: NewBook, db: RepoDb = this.db()): Promise<BookRow> {
-    const rows = await db.insertInto('books').values(bookInsertValues(values)).returning(BOOK_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('books').values(bookInsertValues(values)).returning(BOOK_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy cuốn sách theo id. */
@@ -374,12 +366,12 @@ export class BookRepository {
 
   /** Chèn node sách (chủ đề hoặc bài). */
   async insertBookNode(values: NewBookNode, db: RepoDb = this.db()): Promise<BookNodeRow> {
-    const rows = await db
+    const row = await db
       .insertInto('book_nodes')
       .values(bookNodeInsertValues(values))
       .returning(BOOK_NODE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy node sách theo id. */
@@ -411,12 +403,12 @@ export class BookRepository {
 
   /** Chèn một dòng ánh xạ bài → node chương trình hoặc → YCCĐ. */
   async insertMapping(values: NewBookMapping, db: RepoDb = this.db()): Promise<BookMappingRow> {
-    const rows = await db
+    const row = await db
       .insertInto('book_mappings')
       .values(bookMappingInsertValues(values))
       .returning(BOOK_MAPPING_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Mọi dòng ánh xạ của một node bài, theo position rồi thời gian tạo. */
@@ -472,12 +464,12 @@ export class BookRepository {
 
   /** Ghi dòng sổ cho một bản ghi vừa nạp. */
   async insertBookRecord(values: NewBookRecord, db: RepoDb = this.db()): Promise<BookRecordRow> {
-    const rows = await db
+    const row = await db
       .insertInto('book_records')
       .values(bookRecordInsertValues(values))
       .returning(BOOK_RECORD_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Cập nhật dòng sổ khi dataset đính chính; mốc `updated_at` luôn được làm mới ở đây. */

@@ -17,6 +17,7 @@ import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { ApiError } from '#lib/api';
+import { findSystemContext } from '#lib/permissions';
 import type { ContextRow } from '#lib/access';
 import { contextOptionLabel } from '../api/context-labels';
 import { adminUsersQueryOptions } from '../queries/admin-users';
@@ -30,7 +31,7 @@ import { AdminSelect } from './admin-select';
  * Luồng nghiệp vụ: người quản trị chọn người dùng (tìm theo tên hoặc
  * email qua danh sách người dùng phân trang phía server), chọn vai trò
  * và chọn ngữ cảnh, rồi gửi qua POST /access/assignments. Ngữ cảnh mặc
- * định là ngữ cảnh hệ thống (level 10), suy ra trực tiếp từ cây context
+ * định là ngữ cảnh hệ thống (CONTEXT_LEVEL.SYSTEM), suy ra trực tiếp từ cây context
  * mỗi lần render thay vì đặt bằng effect — tránh lỗi lint
  * set-state-in-effect mà form gán cũ từng mang. Nhãn của ô chọn ngữ
  * cảnh lấy qua adapter nhãn ngữ cảnh (tên cấp dạng chữ), không bày
@@ -121,10 +122,10 @@ export function RoleAssignmentDialog({
   const effectiveUser = presetUser ?? selectedUser;
 
   /**
-   * Ngữ cảnh gán hiệu lực: lựa chọn của người dùng, hoặc ngữ cảnh hệ thống (level 10) khi chưa chọn — suy ra mỗi lần render nên cây context về muộn vẫn tự thành mặc định mà không cần effect đặt state.
+   * Ngữ cảnh gán hiệu lực: lựa chọn của người dùng, hoặc ngữ cảnh hệ thống (CONTEXT_LEVEL.SYSTEM) khi chưa chọn — suy ra mỗi lần render nên cây context về muộn vẫn tự thành mặc định mà không cần effect đặt state.
    */
   const effectiveContextId =
-    contextId === '' ? (contexts.find((ctx) => ctx.contextLevel === 10)?.id ?? '') : contextId;
+    contextId === '' ? (findSystemContext(contexts)?.id ?? '') : contextId;
 
   /** Gán vai: lỗi thì giữ hộp thoại mở kèm lý do; thành công thì đóng. */
   async function submitAssign() {

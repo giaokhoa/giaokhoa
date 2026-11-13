@@ -6,7 +6,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import type { SupportGrant, SupportScope } from "@giaokhoa/contracts";
+import { SUPPORT_SCOPES, type SupportAuditEntry, type SupportGrant, type SupportScope } from "@giaokhoa/contracts";
 import { Badge } from "@giaokhoa/ui/components/badge";
 import { Button } from "@giaokhoa/ui/components/button";
 import {
@@ -24,12 +24,14 @@ import {
   TableHeader,
   TableRow,
 } from "@giaokhoa/ui/components/table";
+import { useTranslation } from "react-i18next";
 import { ErrorAlert } from "#components/error-alert";
 import { PageHeader, PageShell } from "#components/page-shell";
 import { PageSkeleton } from "#components/page-skeleton";
+import "#config/i18n";
 import { usePermissions } from "#lib/permissions";
-import { formatDateTime } from "#utils/date-format";
 import { titleMeta } from "#lib/route-meta";
+import { formatDateTime } from "#utils/date-format";
 import { currentTenantQueryOptions } from "../queries/tenant-admin";
 import {
   supportAuditQueryOptions,
@@ -38,36 +40,42 @@ import {
   useRevokeSupportGrant,
 } from "../queries/support-grants";
 
-/** Tên hiển thị của phạm vi đã cấp, không có thao tác cập nhật dữ liệu. */
-const SCOPE_LABELS: Record<SupportScope, string> = {
-  "classes:read": "Xem danh sách lớp",
-  "courses:read": "Xem danh sách khoá học",
-};
-
-const GRANT_LABELS: Record<SupportGrant["status"], string> = {
-  active: "Đang hiệu lực",
-  expired: "Đã hết hạn",
-  revoked: "Đã thu hồi",
-};
-
-const EVENT_LABELS = {
-  grant_created: "Đã cấp",
-  grant_revoked: "Đã thu hồi",
-  access_allowed: "Truy cập được phép",
-  access_denied: "Truy cập bị từ chối",
-};
-
 /**
  * Form và hai bảng hoạt động trong tenant hiệu lực của người dùng,
  * không có trường chọn tenant khác. Dữ liệu server là nguồn sự thật.
  */
 export default function AdminSupportGrantsPage() {
+  const { t } = useTranslation("app");
   const perms = usePermissions();
   const [recipientId, setRecipientId] = useState("");
   const [reason, setReason] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [scopes, setScopes] = useState<SupportScope[]>(["classes:read"]);
   const [message, setMessage] = useState<string | null>(null);
+
+  /**
+   * Bảng tra nhãn hiển thị của các tập cố định trên trang — dựng trong
+   * component vì nhãn lấy qua `t()` theo ngôn ngữ hiện tại; nguồn sự
+   * thật của tập phạm vi là `SUPPORT_SCOPES` của hợp đồng, không duyệt
+   * `Object.keys` của bảng nhãn rồi ép kiểu.
+   */
+  const scopeLabels: Record<SupportScope, string> = {
+    "classes:read": t("supportScopeClassesRead"),
+    "courses:read": t("supportScopeCoursesRead"),
+  };
+  /** Tên hiển thị của trạng thái grant, không có thao tác cập nhật dữ liệu. */
+  const grantLabels: Record<SupportGrant["status"], string> = {
+    active: t("supportGrantStatusActive"),
+    expired: t("supportGrantStatusExpired"),
+    revoked: t("supportGrantStatusRevoked"),
+  };
+  /** Tên hiển thị của sự kiện nhật ký hỗ trợ. */
+  const eventLabels: Record<SupportAuditEntry["action"], string> = {
+    grant_created: t("supportGrantEventCreated"),
+    grant_revoked: t("supportGrantEventRevoked"),
+    access_allowed: t("supportGrantEventAccessAllowed"),
+    access_denied: t("supportGrantEventAccessDenied"),
+  };
 
   const currentTenant = useQuery({
     ...currentTenantQueryOptions(),
@@ -94,7 +102,7 @@ export default function AdminSupportGrantsPage() {
     setMessage(null);
     const date = new Date(expiresAt);
     if (!expiresAt || !Number.isFinite(date.getTime()) || scopes.length === 0) {
-      setMessage("Chọn thời hạn và ít nhất một thao tác hợp lệ.");
+      setMessage(t("supportGrantInvalidForm"));
       return;
     }
     create.mutate(
@@ -109,12 +117,10 @@ export default function AdminSupportGrantsPage() {
           setRecipientId("");
           setReason("");
           setExpiresAt("");
-          setMessage("Đã cấp quyền hỗ trợ có thời hạn.");
+          setMessage(t("supportGrantCreated"));
         },
         onError: () =>
-          setMessage(
-            "Không thể cấp quyền. Kiểm tra người nhận, thời hạn và quyền quản trị.",
-          ),
+          setMessage(t("supportGrantCreateFailed")),
       },
     );
   }
@@ -133,8 +139,8 @@ export default function AdminSupportGrantsPage() {
     setMessage(null);
     revoke.mutate(grantId, {
       onSuccess: () =>
-        setMessage("Đã thu hồi. Request hỗ trợ kế tiếp sẽ bị chặn."),
-      onError: () => setMessage("Không thể thu hồi quyền hỗ trợ."),
+        setMessage(t("supportGrantRevoked")),
+      onError: () => setMessage(t("supportGrantRevokeFailed")),
     });
   }
 
@@ -143,7 +149,7 @@ export default function AdminSupportGrantsPage() {
       <PageShell width="wide">
         <PageSkeleton
           rows={["h-32 w-full", "h-64 w-full"]}
-          label="Đang tải quyền hỗ trợ"
+          label={t("supportGrantsLoading")}
         />
       </PageShell>
     );
@@ -152,28 +158,27 @@ export default function AdminSupportGrantsPage() {
   return (
     <PageShell width="wide">
       <PageHeader
-        title="Quyền hỗ trợ trung tâm"
-        description="Chủ trung tâm quyết định ai được xem dữ liệu nào, đến thời điểm nào; mọi lần sử dụng đều có nhật ký."
+        title={t("supportGrantsTitle")}
+        description={t("supportGrantsDescription")}
         actions={
           <Link
             className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium"
             to="/admin/tenants"
           >
-            Quay lại trung tâm
+            {t("supportGrantsBackToCenter")}
           </Link>
         }
       />
       {!canManage ? (
         <ErrorAlert variant="destructive">
-          Chỉ quản trị viên của trung tâm đang hoạt động mới được cấp, thu hồi
-          hoặc xem nhật ký hỗ trợ.
+          {t("supportGrantsForbidden")}
         </ErrorAlert>
       ) : (
         <>
           {message ? <ErrorAlert>{message}</ErrorAlert> : null}
           <Card>
             <CardHeader>
-              <CardTitle>Cấp quyền hỗ trợ mới</CardTitle>
+              <CardTitle>{t("supportGrantCreateTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreate} className="grid gap-4">
@@ -181,20 +186,20 @@ export default function AdminSupportGrantsPage() {
                   className="grid gap-1 text-sm"
                   htmlFor="support-recipient"
                 >
-                  ID nhân sự platform được nhận quyền
+                  {t("supportGrantRecipientLabel")}
                   <Input
                     id="support-recipient"
                     required
                     value={recipientId}
-                    placeholder="UUID của nhân sự hỗ trợ"
+                    placeholder={t("supportGrantRecipientPlaceholder")}
                     onChange={(e) => setRecipientId(e.target.value)}
                   />
                 </label>
                 <fieldset className="grid gap-2">
                   <legend className="text-sm font-medium">
-                    Thao tác được phép (chỉ đọc)
+                    {t("supportGrantScopesLegend")}
                   </legend>
-                  {(Object.keys(SCOPE_LABELS) as SupportScope[]).map(
+                  {SUPPORT_SCOPES.map(
                     (scope) => (
                       <label
                         key={scope}
@@ -205,13 +210,13 @@ export default function AdminSupportGrantsPage() {
                           checked={scopes.includes(scope)}
                           onChange={() => toggleScope(scope)}
                         />
-                        {SCOPE_LABELS[scope]}
+                        {scopeLabels[scope]}
                       </label>
                     ),
                   )}
                 </fieldset>
                 <label className="grid gap-1 text-sm" htmlFor="support-expiry">
-                  Hết hạn (tối đa 30 ngày)
+                  {t("supportGrantExpiryLabel")}
                   <Input
                     id="support-expiry"
                     type="datetime-local"
@@ -221,14 +226,14 @@ export default function AdminSupportGrantsPage() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm" htmlFor="support-reason">
-                  Lý do cấp quyền
+                  {t("supportGrantReasonLabel")}
                   <Input
                     id="support-reason"
                     required
                     maxLength={500}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    placeholder="Ví dụ: kiểm tra lỗi hiển thị lớp"
+                    placeholder={t("supportGrantReasonPlaceholder")}
                   />
                 </label>
                 <div>
@@ -236,7 +241,7 @@ export default function AdminSupportGrantsPage() {
                     type="submit"
                     disabled={create.isPending || !scopes.length}
                   >
-                    Cấp quyền có thời hạn
+                    {t("supportGrantSubmit")}
                   </Button>
                 </div>
               </form>
@@ -244,23 +249,23 @@ export default function AdminSupportGrantsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Quyền đã cấp</CardTitle>
+              <CardTitle>{t("supportGrantsListTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               {grants.isError ? (
                 <ErrorAlert variant="destructive">
-                  Không tải được danh sách quyền hỗ trợ.
+                  {t("supportGrantsLoadFailed")}
                 </ErrorAlert>
               ) : null}
-              {grants.isPending ? <p>Đang tải…</p> : null}
+              {grants.isPending ? <p>{t("loading")}</p> : null}
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nhân sự</TableHead>
-                    <TableHead>Thao tác</TableHead>
-                    <TableHead>Hết hạn</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead>Quản lý</TableHead>
+                    <TableHead>{t("supportGrantsUserColumn")}</TableHead>
+                    <TableHead>{t("supportGrantsScopeColumn")}</TableHead>
+                    <TableHead>{t("supportGrantsExpiryColumn")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead>{t("supportGrantsManageColumn")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -271,7 +276,7 @@ export default function AdminSupportGrantsPage() {
                       </TableCell>
                       <TableCell>
                         {grant.scopes
-                          .map((scope) => SCOPE_LABELS[scope])
+                          .map((scope) => scopeLabels[scope])
                           .join(", ")}
                       </TableCell>
                       <TableCell>{formatDateTime(grant.expiresAt)}</TableCell>
@@ -281,7 +286,7 @@ export default function AdminSupportGrantsPage() {
                             grant.status === "active" ? "default" : "secondary"
                           }
                         >
-                          {GRANT_LABELS[grant.status]}
+                          {grantLabels[grant.status]}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -292,7 +297,7 @@ export default function AdminSupportGrantsPage() {
                             disabled={revoke.isPending}
                             onClick={() => handleRevoke(grant.id)}
                           >
-                            Thu hồi
+                            {t("supportGrantRevoke")}
                           </Button>
                         ) : (
                           "—"
@@ -304,28 +309,28 @@ export default function AdminSupportGrantsPage() {
               </Table>
               {!grants.isPending && !grants.data?.length ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Chưa có quyền hỗ trợ nào được cấp.
+                  {t("supportGrantsEmpty")}
                 </p>
               ) : null}
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Nhật ký cấp quyền và sử dụng</CardTitle>
+              <CardTitle>{t("supportGrantsAuditTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               {audit.isError ? (
                 <ErrorAlert variant="destructive">
-                  Không tải được nhật ký hỗ trợ.
+                  {t("supportGrantsAuditLoadFailed")}
                 </ErrorAlert>
               ) : null}
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Thời điểm</TableHead>
-                    <TableHead>Người thực hiện</TableHead>
-                    <TableHead>Sự kiện</TableHead>
-                    <TableHead>Thao tác</TableHead>
+                    <TableHead>{t("supportGrantsAuditTimeColumn")}</TableHead>
+                    <TableHead>{t("supportGrantsAuditActorColumn")}</TableHead>
+                    <TableHead>{t("supportGrantsAuditEventColumn")}</TableHead>
+                    <TableHead>{t("supportGrantsScopeColumn")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -335,9 +340,9 @@ export default function AdminSupportGrantsPage() {
                       <TableCell className="font-mono text-xs">
                         {event.actorId}
                       </TableCell>
-                      <TableCell>{EVENT_LABELS[event.action]}</TableCell>
+                      <TableCell>{eventLabels[event.action]}</TableCell>
                       <TableCell>
-                        {event.scope ? SCOPE_LABELS[event.scope] : "—"}
+                        {event.scope ? scopeLabels[event.scope] : "—"}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -345,7 +350,7 @@ export default function AdminSupportGrantsPage() {
               </Table>
               {!audit.isPending && !audit.data?.length ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Chưa có sự kiện hỗ trợ.
+                  {t("supportGrantsAuditEmpty")}
                 </p>
               ) : null}
             </CardContent>

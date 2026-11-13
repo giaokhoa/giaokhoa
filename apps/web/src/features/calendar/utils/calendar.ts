@@ -2,6 +2,8 @@
  * Hàm thuần về múi giờ của trang lịch thuộc feature calendar. Tách từ module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
+import { MS_PER_DAY } from '#utils/date-format';
+
 /**
  * Múi giờ nghiệp vụ của ứng dụng (trường học Việt Nam): mọi khoảng ngày "tháng hiện tại" / "N ngày tới" mà query key phụ thuộc vào đều tính theo múi giờ này ở CẢ hai phía server và client.
  *
@@ -93,5 +95,5 @@ export function currentMonthRangeIso(now: Date = new Date()): { from: string; to
 export function upcomingDaysRangeIso(days: number, now: Date = new Date()): { from: string; to: string } {
   const { year, month, day } = zonedDateParts(now);
   const fromMs = zonedMidnightUtcMs(year, month, day);
-  return { from: new Date(fromMs).toISOString(), to: new Date(fromMs + days * 86_400_000).toISOString() };
+  return { from: new Date(fromMs).toISOString(), to: new Date(fromMs + days * MS_PER_DAY).toISOString() };
 }

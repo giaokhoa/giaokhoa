@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { GroupsRepository } from './groups';
 
 /**
@@ -19,12 +21,9 @@ import { GroupsRepository } from './groups';
  *   dữ kiện đã gieo.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g645_groups';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let pool: Pool;
 let db: CentreDb;
@@ -43,7 +42,7 @@ beforeAll(async () => {
 
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g645-groups', name: 'Trung tâm spec G5 groups', kind: 'center' })
+    .values({ slug: 'g645-groups', name: 'Trung tâm spec G5 groups', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   tenantId = tenant.id;
@@ -69,7 +68,7 @@ afterAll(async () => {
 describe('GroupsRepository trên Kysely (issue #645)', () => {
   it('thêm thành viên nhóm và chống nhân đôi đúng phạm vi của unique thật', async () => {
     const group = await repo.insertGroup({ courseId, name: 'Nhóm G5', idNumber: '', description: '', enrolmentKey: null });
-    expect(group.id).toMatch(UUIDV7_PATTERN);
+    expect(group.id).toMatch(UUIDV7_RE);
     const userId = randomUUID();
     await repo.addMember(group.id, userId);
     expect(await repo.listMembers(group.id)).toHaveLength(1);
@@ -101,7 +100,7 @@ describe('GroupsRepository trên Kysely (issue #645)', () => {
     const cohort = await repo.insertCohort({
       tenantId, name: 'Cohort G5', idNumber: '', description: '', contextId: randomUUID(), visible: true,
     });
-    expect(cohort.id).toMatch(UUIDV7_PATTERN);
+    expect(cohort.id).toMatch(UUIDV7_RE);
     const userId = randomUUID();
     expect(await repo.addCohortMember(cohort.id, userId)).toBe(true);
     expect(await repo.addCohortMember(cohort.id, userId)).toBe(false);

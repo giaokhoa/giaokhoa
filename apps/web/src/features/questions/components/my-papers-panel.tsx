@@ -6,19 +6,16 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { Button } from '@giaokhoa/ui/components/button';
-import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
-import { courseContentQueryOptions } from '#lib/course-content';
-import { coursesListQueryOptions } from '#features/course-builder/queries/course-builder';
-import { courseGroupsQueryOptions } from '#features/progress-report/queries/progress-report';
 import { queryKeys } from '#lib/query-keys';
 import { queryKeys as questionsQueryKeys } from '../queries/keys';
-import { useDeleteExamPaper, useDeployExamPin, useMyDossiers, useProposeExamDossierContribution, useProposeExamPaperContribution, useSetExamPaperStatus } from '../queries/questions';
+import { useDeleteExamPaper, useMyDossiers, useProposeExamDossierContribution, useProposeExamPaperContribution, useSetExamPaperStatus } from '../queries/questions';
 import type { BankLite, PaperSummaryLite } from '../types/questions';
 import { dossierStatusKey, withApiReason } from '../utils/shared';
+import { DeployPinForm } from './deploy-pin-form';
 
 /** Props của panel "Đề của tôi". */
 export interface MyPapersPanelProps {
@@ -59,7 +56,6 @@ export function MyPapersPanel({
   const paperStatusMutation = useSetExamPaperStatus();
   const deletePaperMutation = useDeleteExamPaper();
   const proposePaperMutation = useProposeExamPaperContribution();
-  const deployPinMutation = useDeployExamPin();
   const proposeDossierContributionMutation = useProposeExamDossierContribution();
   const [proposePaperId, setProposePaperId] = useState('');
   const [proposePaperBankId, setProposePaperBankId] = useState('');
@@ -67,23 +63,6 @@ export function MyPapersPanel({
   const [dossierPaperId, setDossierPaperId] = useState('');
   const [dossierBankId, setDossierBankId] = useState('');
   const [deployPaper, setDeployPaper] = useState<PaperSummaryLite | null>(null);
-  const deployCourses = useQuery({ ...coursesListQueryOptions(), enabled: !!deployPaper }).data ?? [];
-  const [deployCourseId, setDeployCourseId] = useState('');
-  const deployContentQuery = useQuery({
-    ...courseContentQueryOptions(deployCourseId),
-    enabled: !!deployCourseId,
-  });
-  const deploySections = deployContentQuery.data?.sections ?? [];
-  const [deploySectionId, setDeploySectionId] = useState('');
-  const deployGroups = useQuery({ ...courseGroupsQueryOptions(deployCourseId), enabled: !!deployCourseId }).data ?? [];
-  const [deployGroupId, setDeployGroupId] = useState('');
-  const [deployVariantCount, setDeployVariantCount] = useState('1');
-
-  // Chọn chương đầu tiên khi nội dung khoá đích tải về (nhịp của loadDeployQuizzes thủ công trước đây).
-  const firstDeploySectionId = deployContentQuery.data?.sections[0]?.id;
-  if (!deploySectionId && firstDeploySectionId) {
-    setDeploySectionId(firstDeploySectionId);
-  }
 
   async function setPaperStatus(paperId: string, status: 'ready' | 'hidden' | 'draft') {
     try {
@@ -122,30 +101,7 @@ export function MyPapersPanel({
    *  tươi như nhịp tải lại mỗi lần mở trước đây. */
   function openDeploy(paper: PaperSummaryLite) {
     setDeployPaper(paper);
-    setDeploySectionId('');
-    setDeployGroupId('');
     void queryClient.invalidateQueries({ queryKey: queryKeys.courses });
-  }
-
-  /** Ghim đề vào khoá đã chọn (toàn khoá hoặc một nhóm đích) — một thao tác exam-pins. */
-  async function runDeploy() {
-    if (!deployPaper || !deployCourseId || !deploySectionId) return;
-    try {
-      const pin = await deployPinMutation.mutateAsync({
-        courseId: deployCourseId,
-        body: {
-          sectionId: deploySectionId,
-          examId: deployPaper.id,
-          variantCount: Math.min(50, Math.max(1, Number(deployVariantCount) || 1)),
-          ...(deployGroupId ? { targetGroupId: deployGroupId } : {}),
-        },
-      });
-      setMessage(t('pinOk', { version: deployPaper.latestVersion }));
-      setDeployPaper(null);
-      navigate(`/courses/${deployCourseId}/exams/${pin.id}`);
-    } catch (err) {
-      setMessage(withApiReason(t('pinFailed'), err));
-    }
   }
 
   /**
@@ -232,71 +188,20 @@ export function MyPapersPanel({
           </ul>
         )}
         {deployPaper ? (
-          <div className="flex flex-wrap items-end gap-2 rounded-md border p-3">
-            <div>
-              <Label htmlFor="deploy-course">{t('deployPickCourse')}</Label>
-              <select
-                id="deploy-course"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs"
-                value={deployCourseId}
-                onChange={(e) => {
-                setDeployCourseId(e.target.value);
-                setDeploySectionId('');
-                setDeployGroupId('');
+          <div className="rounded-md border p-3">
+            <DeployPinForm
+              key={deployPaper.id}
+              examId={deployPaper.id}
+              examVersion={deployPaper.latestVersion}
+              enabled
+              idPrefix="deploy"
+              setMessage={setMessage}
+              onDeployed={({ id, courseId }) => {
+                setDeployPaper(null);
+                navigate(`/courses/${courseId}/exams/${id}`);
               }}
-              >
-                <option value="">—</option>
-                {deployCourses.map((c) => (
-                  <option key={c.id} value={c.id}>{c.fullName}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="deploy-section">{t('pinPickSection')}</Label>
-              <select
-                id="deploy-section"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs"
-                value={deploySectionId}
-                onChange={(e) => setDeploySectionId(e.target.value)}
-              >
-                <option value="">—</option>
-                {deploySections.map((sec) => (
-                  <option key={sec.id} value={sec.id}>{sec.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="deploy-group">{t('pinPickGroup')}</Label>
-              <select
-                id="deploy-group"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs"
-                value={deployGroupId}
-                onChange={(e) => setDeployGroupId(e.target.value)}
-              >
-                <option value="">{t('pinExamWholeCourse')}</option>
-                {deployGroups.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="deploy-variants">{t('deployVariantCount')}</Label>
-              <Input
-                id="deploy-variants"
-                type="number"
-                min={1}
-                max={50}
-                className="w-24"
-                value={deployVariantCount}
-                onChange={(e) => setDeployVariantCount(e.target.value)}
-              />
-            </div>
-            <Button type="button" disabled={!deployCourseId || !deploySectionId} onClick={() => void runDeploy()}>
-              {t('pinExamAction')}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setDeployPaper(null)}>
-              ✕
-            </Button>
+              onClose={() => setDeployPaper(null)}
+            />
           </div>
         ) : null}
         {sharedExamBanks.length > 0 && myPapers.length > 0 ? (

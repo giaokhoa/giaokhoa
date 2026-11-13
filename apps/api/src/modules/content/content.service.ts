@@ -2,7 +2,9 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { OnEvent } from '@nestjs/event-emitter';
 import { ContentRepository, type PageRow, type ResourceRow } from '@giaokhoa/db/repositories/content';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
-import { CompletionService } from '../completion/completion.service';
+import {
+  COMPLETION_COMPLETE, COMPLETION_INCOMPLETE, CompletionService,
+} from '../completion/completion.service';
 import { CoursesService } from '../courses/courses.service';
 import type { CmRow } from '@giaokhoa/db/repositories/courses';
 import { FilesService } from '../files/files.service';
@@ -14,22 +16,30 @@ export const RESOURCE_COMPONENT = 'mod_resource';
 /** Ngưỡng hoàn thành mặc định cho video (chế độ progress): xem ≥ 90% thời lượng thì hoàn thành — theo nghiên cứu học liệu số VN (K2-B1); điểm cấu hình duy nhất, đổi tại đây khi có site-config cho ngưỡng này. */
 export const VIDEO_COMPLETION_THRESHOLD_PERCENT = 90;
 
+/** Chế độ theo dõi hoàn thành của course module theo Moodle (cột `completion` của cm): 0 = không theo dõi, 1 = thủ công, 2 = tự động. Khác với TRẠNG THÁI hoàn thành (0 chưa xong / 1 đã xong) ở bảng `course_modules_completion` — xem COMPLETION_INCOMPLETE/COMPLETION_COMPLETE của CompletionService. */
+export const COMPLETION_TRACKING_NONE = 0;
+export const COMPLETION_TRACKING_MANUAL = 1;
+export const COMPLETION_TRACKING_AUTO = 2;
+
+/** Ngưỡng đồng thuận của mốc lớp: một cm được tính là "lớp đã học tới đây" khi ít nhất một nửa thành viên lớp đã hoàn thành cm đó (và mọi cm trước nó trong outline). */
+export const CLASS_MARKER_QUORUM = 0.5;
+
 type CompletionMode = 'view' | 'manual' | 'progress' | 'none';
 
 /** Ánh xạ chế độ hoàn thành của mục nội dung sang các trường completion của course module. */
 function completionFields(mode: CompletionMode): { completion: number; completionView: boolean; completionManual: boolean; completionUseGrade: boolean } {
-  if (mode === 'view') return { completion: 2, completionView: true, completionManual: false, completionUseGrade: false };
-  if (mode === 'manual') return { completion: 1, completionView: false, completionManual: true, completionUseGrade: false };
-  // progress: completion tự động nhưng không tiêu chí sẵn nào của engine áp được — trạng thái lưu trong bản ghi completion là nguồn quyết định (computeCmState trả về trạng thái đã lưu khi không có tiêu chí view/expected/grade), ContentService ghi state=1 khi % xem đạt ngưỡng, cùng khuôn với refreshGradeCompletion của Grades.
-  if (mode === 'progress') return { completion: 2, completionView: false, completionManual: false, completionUseGrade: false };
-  return { completion: 0, completionView: false, completionManual: false, completionUseGrade: false };
+  if (mode === 'view') return { completion: COMPLETION_TRACKING_AUTO, completionView: true, completionManual: false, completionUseGrade: false };
+  if (mode === 'manual') return { completion: COMPLETION_TRACKING_MANUAL, completionView: false, completionManual: true, completionUseGrade: false };
+  // progress: completion tự động nhưng không tiêu chí sẵn nào của engine áp được — trạng thái lưu trong bản ghi completion là nguồn quyết định (computeCmState trả về trạng thái đã lưu khi không có tiêu chí view/expected/grade), ContentService ghi trạng thái hoàn thành khi % xem đạt ngưỡng, cùng khuôn với refreshGradeCompletion của Grades.
+  if (mode === 'progress') return { completion: COMPLETION_TRACKING_AUTO, completionView: false, completionManual: false, completionUseGrade: false };
+  return { completion: COMPLETION_TRACKING_NONE, completionView: false, completionManual: false, completionUseGrade: false };
 }
 
 /** Suy chế độ hoàn thành từ các trường của course module (đảo ngược completionFields). */
 function modeOfCm(cm: CmRow): CompletionMode {
-  if (cm.completion === 0) return 'none';
+  if (cm.completion === COMPLETION_TRACKING_NONE) return 'none';
   if (cm.completionView) return 'view';
-  if (cm.completionManual || cm.completion === 1) return 'manual';
+  if (cm.completionManual || cm.completion === COMPLETION_TRACKING_MANUAL) return 'manual';
   return 'progress';
 }
 
@@ -81,6 +91,20 @@ export interface ClassMarker {
   percent: number | null;
 }
 
+/** Tệp đính kèm của một tài nguyên kèm URL đã ký để xem/tải. */
+export interface SignedFileView {
+  id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number;
+}
+
+/** Một học sinh trong báo cáo tiến độ của giáo viên (một hàng của ma trận lớp × mục). */
+export interface ProgressReportStudent {
+  userId: string; username: string; fullName: string;
+  completed: number; total: number; percent: number | null;
+  lastAccessAt: string | null;
+  states: Record<string, number>;
+  records: { cmId: string; cmName: string; completedAt: string }[];
+}
+
 @Injectable()
 /**
  * Học liệu trong khoá (K2): trang đọc mod_page, tài nguyên mod_resource
@@ -105,6 +129,68 @@ export class ContentService {
     });
   }
 
+  /**
+   * Tạo một bản ghi nội dung kèm course module của nó (khung chung của createPage/createResource): ghi bản ghi với cmId null → tạo cm → gắn cmId vào bản ghi. Tạo cm lỗi thì xoá bản ghi vừa tạo để không còn bản ghi mồ côi, rồi ném lại lỗi gốc.
+   */
+  private async createWithCm<T extends { id: string }>(args: {
+    actorId: string; courseId: string; sectionId: string; component: string; name: string; mode: CompletionMode;
+    insert: () => Promise<T>;
+    attachCmId: (id: string, cmId: string) => Promise<unknown>;
+    remove: (id: string) => Promise<unknown>;
+  }): Promise<T> {
+    const record = await args.insert();
+    try {
+      const cm = await this.courses.createCm(args.actorId, args.courseId, {
+        sectionId: args.sectionId, component: args.component, instanceId: record.id, name: args.name,
+        ...completionFields(args.mode),
+      });
+      await args.attachCmId(record.id, cm.id);
+    } catch (err) {
+      await args.remove(record.id).catch(() => undefined);
+      throw err;
+    }
+    return record;
+  }
+
+  /**
+   * Đồng bộ tên/chế độ hoàn thành của một bản ghi nội dung sang course module của nó (khung chung của updatePage/updateResource): chỉ gọi updateCm khi có cm và có trường cần đồng bộ.
+   */
+  private async syncNameAndModeToCm(
+    actorId: string, cmId: string | null, input: { name?: string; completionMode?: CompletionMode },
+  ): Promise<void> {
+    if (!cmId || (input.name === undefined && input.completionMode === undefined)) return;
+    await this.courses.updateCm(actorId, cmId, {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.completionMode !== undefined ? completionFields(input.completionMode) : {}),
+    });
+  }
+
+  /**
+   * Các course module có bật theo dõi hoàn thành của một khoá, xếp theo thứ tự section rồi tới thứ tự trong section (khung chung của getClassMarkers/getProgressReport).
+   */
+  private async listTrackedCms(courseId: string): Promise<CmRow[]> {
+    const sections = await this.courses.listSections(courseId);
+    const sectionOrder = new Map(sections.map((s) => [s.id, s.section]));
+    return (await this.courses.listCms(courseId))
+      .filter((cm) => cm.completion !== COMPLETION_TRACKING_NONE)
+      .sort((a, b) => (sectionOrder.get(a.section) ?? 0) - (sectionOrder.get(b.section) ?? 0));
+  }
+
+  /**
+   * Id các học sinh đang ghi danh hiệu lực của một khoá, khử trùng (khung chung của getClassMarkers/getProgressReport).
+   */
+  private async listEnrolledStudentIds(courseId: string): Promise<string[]> {
+    const rows = await this.repo.dbHandle
+      .selectFrom('user_enrolments')
+      .innerJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
+      .select(['user_enrolments.user_id as userId'])
+      .where((eb) =>
+        eb.and([eb('enrol.course_id', '=', courseId), eb('user_enrolments.status', '=', 0)]),
+      )
+      .execute();
+    return [...new Set(rows.map((r) => r.userId))];
+  }
+
   // --- mod_page ---------------------------------------------------------------
 
   /**
@@ -115,17 +201,12 @@ export class ContentService {
   }): Promise<PageRow & { completionMode: CompletionMode }> {
     await this.courses.getCourse(courseId);
     const mode = input.completionMode ?? 'manual';
-    const page = await this.repo.insertPage({ course: courseId, cmId: null, name: input.name, content: sanitizePageContent(input.content ?? '') });
-    try {
-      const cm = await this.courses.createCm(actorId, courseId, {
-        sectionId: input.sectionId, component: PAGE_COMPONENT, instanceId: page.id, name: input.name,
-        ...completionFields(mode),
-      });
-      await this.repo.updatePage(page.id, { cmId: cm.id });
-    } catch (err) {
-      await this.repo.deletePage(page.id).catch(() => undefined);
-      throw err;
-    }
+    const page = await this.createWithCm({
+      actorId, courseId, sectionId: input.sectionId, component: PAGE_COMPONENT, name: input.name, mode,
+      insert: () => this.repo.insertPage({ course: courseId, cmId: null, name: input.name, content: sanitizePageContent(input.content ?? '') }),
+      attachCmId: (id, cmId) => this.repo.updatePage(id, { cmId }),
+      remove: (id) => this.repo.deletePage(id),
+    });
     const created = await this.getPage(page.id);
     return { ...created, completionMode: mode };
   }
@@ -163,12 +244,7 @@ export class ContentService {
     if (input.name !== undefined) patch.name = input.name;
     if (input.content !== undefined) patch.content = sanitizePageContent(input.content);
     if (Object.keys(patch).length) await this.repo.updatePage(id, patch);
-    if (page.cmId && (input.name !== undefined || input.completionMode !== undefined)) {
-      await this.courses.updateCm(actorId, page.cmId, {
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.completionMode !== undefined ? completionFields(input.completionMode) : {}),
-      });
-    }
+    await this.syncNameAndModeToCm(actorId, page.cmId, input);
     return this.getPage(id);
   }
 
@@ -207,31 +283,29 @@ export class ContentService {
     fileId?: string; url?: string; transcript?: string; completionMode?: CompletionMode;
   }): Promise<ResourceRow & { completionMode: CompletionMode }> {
     await this.courses.getCourse(courseId);
+    // Nguồn tài nguyên đã narrow vào biến cục bộ: sau bước kiểm tra bắt buộc dưới đây, TypeScript biết chắc fileId/url là string trong đúng nhánh kind của nó.
+    let fileId: string | null = null;
+    let url: string | null = null;
     let fileMime: string | null = null;
     if (input.kind === 'file') {
       if (!input.fileId) throw new BadRequestException({ message: 'fileId is required for a file resource', code: 'content.file_required' });
-      fileMime = (await this.files.getFile(input.fileId)).mimeType;
+      fileId = input.fileId;
+      fileMime = (await this.files.getFile(fileId)).mimeType;
     } else {
       if (!input.url) throw new BadRequestException({ message: 'url is required for a link resource', code: 'content.url_required' });
-      this.assertSafeResourceUrl(input.url);
+      url = input.url;
+      this.assertSafeResourceUrl(url);
     }
     const mode = input.completionMode ?? (input.kind === 'file' ? defaultModeForFile(fileMime) : 'none');
-    const resource = await this.repo.insertResource({
-      course: courseId, cmId: null, name: input.name, kind: input.kind,
-      fileId: input.kind === 'file' ? input.fileId! : null,
-      url: input.kind === 'url' ? input.url! : null,
-      transcript: input.transcript ?? null,
+    const resource = await this.createWithCm({
+      actorId, courseId, sectionId: input.sectionId, component: RESOURCE_COMPONENT, name: input.name, mode,
+      insert: () => this.repo.insertResource({
+        course: courseId, cmId: null, name: input.name, kind: input.kind,
+        fileId, url, transcript: input.transcript ?? null,
+      }),
+      attachCmId: (id, cmId) => this.repo.updateResource(id, { cmId }),
+      remove: (id) => this.repo.deleteResource(id),
     });
-    try {
-      const cm = await this.courses.createCm(actorId, courseId, {
-        sectionId: input.sectionId, component: RESOURCE_COMPONENT, instanceId: resource.id, name: input.name,
-        ...completionFields(mode),
-      });
-      await this.repo.updateResource(resource.id, { cmId: cm.id });
-    } catch (err) {
-      await this.repo.deleteResource(resource.id).catch(() => undefined);
-      throw err;
-    }
     const created = await this.getResource(resource.id);
     return { ...created, completionMode: mode };
   }
@@ -253,13 +327,13 @@ export class ContentService {
    */
   async getResourceForUser(userId: string, id: string): Promise<{
     resource: ResourceRow & { completionMode: CompletionMode };
-    file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null;
+    file: SignedFileView | null;
     embedUrl: string | null;
   }> {
     const resource = await this.getResource(id);
     await this.courses.assertCourseAccess(userId, resource.course);
     const cm = resource.cmId ? await this.courses.getCm(resource.cmId) : null;
-    let file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null = null;
+    let file: SignedFileView | null = null;
     if (resource.kind === 'file' && resource.fileId) {
       const row = await this.files.getFile(resource.fileId);
       const signed = await this.files.createSignedUrl(resource.fileId, userId);
@@ -299,12 +373,7 @@ export class ContentService {
     }
     if (input.transcript !== undefined) patch.transcript = input.transcript;
     if (Object.keys(patch).length) await this.repo.updateResource(id, patch);
-    if (resource.cmId && (input.name !== undefined || input.completionMode !== undefined)) {
-      await this.courses.updateCm(actorId, resource.cmId, {
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.completionMode !== undefined ? completionFields(input.completionMode) : {}),
-      });
-    }
+    await this.syncNameAndModeToCm(actorId, resource.cmId, input);
     return this.getResource(id);
   }
 
@@ -341,13 +410,13 @@ export class ContentService {
       let sTotal = 0; let sCompleted = 0;
       for (const cm of section.modules) {
         const row = byCm.get(cm.id);
-        const state = row?.state ?? 0;
-        const done = cm.completion !== 0 && state !== 0;
+        const state = row?.state ?? COMPLETION_INCOMPLETE;
+        const done = cm.completion !== COMPLETION_TRACKING_NONE && state !== COMPLETION_INCOMPLETE;
         items.push({
           cmId: cm.id, name: cm.name, component: cm.component, instanceId: cm.instanceId,
           completion: cm.completion, state, viewed: row?.viewed ?? false, done,
         });
-        if (cm.completion !== 0) { sTotal += 1; if (state !== 0) sCompleted += 1; }
+        if (cm.completion !== COMPLETION_TRACKING_NONE) { sTotal += 1; if (state !== COMPLETION_INCOMPLETE) sCompleted += 1; }
       }
       total += sTotal; completed += sCompleted;
       sections.push({
@@ -376,10 +445,11 @@ export class ContentService {
     const byId = new Map(flat.map((i) => [i.cmId, i]));
     const last = lastCmId ? byId.get(lastCmId) : undefined;
     if (last && !last.done) return { cmId: last.cmId, reason: 'last_access' };
-    const next = flat.find((i) => i.completion !== 0 && !i.done);
+    const next = flat.find((i) => i.completion !== COMPLETION_TRACKING_NONE && !i.done);
     if (next) return { cmId: next.cmId, reason: last ? 'next_incomplete' : 'start' };
     if (last) return { cmId: last.cmId, reason: 'all_done' };
-    return { cmId: flat[0]!.cmId, reason: 'start' };
+    const first = flat[0];
+    return first ? { cmId: first.cmId, reason: 'start' } : null;
   }
 
   /**
@@ -391,11 +461,7 @@ export class ContentService {
   async getClassMarkers(userId: string, courseId: string): Promise<{ courseId: string; trackedTotal: number; markers: ClassMarker[] }> {
     await this.courses.assertCourseAccess(userId, courseId);
     const db = this.repo.dbHandle;
-    const sections = await this.courses.listSections(courseId);
-    const sectionOrder = new Map(sections.map((s) => [s.id, s.section]));
-    const cms = (await this.courses.listCms(courseId))
-      .filter((cm) => cm.completion !== 0)
-      .sort((a, b) => (sectionOrder.get(a.section) ?? 0) - (sectionOrder.get(b.section) ?? 0));
+    const cms = await this.listTrackedCms(courseId);
     const trackedIds = cms.map((cm) => cm.id);
     const completedByCm = new Map<string, Set<string>>();
     if (trackedIds.length) {
@@ -409,7 +475,7 @@ export class ContentService {
         .where('course_module_id', 'in', trackedIds)
         .execute();
       for (const row of rows) {
-        if (row.completionState === 0) continue;
+        if (row.completionState === COMPLETION_INCOMPLETE) continue;
         const set = completedByCm.get(row.courseModuleId) ?? new Set<string>();
         set.add(row.userId);
         completedByCm.set(row.courseModuleId, set);
@@ -419,16 +485,18 @@ export class ContentService {
       const members = new Set(memberIds);
       let markerIndex = -1;
       for (let i = 0; i < cms.length; i += 1) {
-        const doneBy = completedByCm.get(cms[i]!.id) ?? new Set<string>();
+        const cm = cms[i];
+        if (!cm) break;
+        const doneBy = completedByCm.get(cm.id) ?? new Set<string>();
         const done = [...members].filter((m) => doneBy.has(m)).length;
-        if (members.size > 0 && done / members.size >= 0.5) markerIndex = i; else break;
+        if (members.size > 0 && done / members.size >= CLASS_MARKER_QUORUM) markerIndex = i; else break;
       }
       let pairs = 0; let donePairs = 0;
       for (const cm of cms) {
         const doneBy = completedByCm.get(cm.id) ?? new Set<string>();
         for (const m of members) { pairs += 1; if (doneBy.has(m)) donePairs += 1; }
       }
-      const markerCm = markerIndex >= 0 ? cms[markerIndex]! : null;
+      const markerCm = markerIndex >= 0 ? (cms[markerIndex] ?? null) : null;
       return {
         scope, groupId, groupName, memberCount: members.size,
         markerCmId: markerCm?.id ?? null, markerName: markerCm?.name ?? null, markerIndex,
@@ -452,15 +520,7 @@ export class ContentService {
         markers.push(markerFor('group', group.id, group.name, ids));
       }
     } else {
-      const rows = await db
-        .selectFrom('user_enrolments')
-        .innerJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
-        .select(['user_enrolments.user_id as userId'])
-        .where((eb) =>
-          eb.and([eb('enrol.course_id', '=', courseId), eb('user_enrolments.status', '=', 0)]),
-        )
-        .execute();
-      markers.push(markerFor('course', null, 'Toàn khoá', [...new Set(rows.map((r) => r.userId))]));
+      markers.push(markerFor('course', null, 'Toàn khoá', await this.listEnrolledStudentIds(courseId)));
     }
     return { courseId, trackedTotal: cms.length, markers };
   }
@@ -487,22 +547,22 @@ export class ContentService {
     const row = await this.repo.upsertModuleProgress(userId, courseId, cmId, input);
     await this.repo.upsertLastAccess(userId, courseId, cmId);
     let state = (await this.completion.getCmCompletion(cmId, userId)).state;
-    if (modeOfCm(cm) === 'progress' && row.percent >= VIDEO_COMPLETION_THRESHOLD_PERCENT && state === 0) {
+    if (modeOfCm(cm) === 'progress' && row.percent >= VIDEO_COMPLETION_THRESHOLD_PERCENT && state === COMPLETION_INCOMPLETE) {
       const db = this.repo.dbHandle;
       await db
         .insertInto('course_modules_completion')
         .values({
-          course_module_id: cmId, user_id: userId, completion_state: 1, viewed: true, override_by: null,
+          course_module_id: cmId, user_id: userId, completion_state: COMPLETION_COMPLETE, viewed: true, override_by: null,
         })
         .onConflict((oc) =>
           oc.columns(['course_module_id', 'user_id']).doUpdateSet({
-            completion_state: 1, viewed: true, updated_at: new Date(),
+            completion_state: COMPLETION_COMPLETE, viewed: true, updated_at: new Date(),
           }),
         )
         .execute();
       await this.repo.insertLearningRecord({ userId, courseId, cmId, cmName: cm.name, component: cm.component });
       await this.completion.reaggregateCourseCompletion(userId, courseId);
-      state = 1;
+      state = COMPLETION_COMPLETE;
     }
     return { cmId, percent: row.percent, positionSeconds: row.positionSeconds, page: row.page, state };
   }
@@ -519,21 +579,11 @@ export class ContentService {
   async getProgressReport(actorId: string, courseId: string, groupId?: string): Promise<{
     courseId: string;
     items: { cmId: string; name: string; component: string; sectionId: string; completedCount: number; totalStudents: number; percent: number | null }[];
-    students: {
-      userId: string; username: string; fullName: string;
-      completed: number; total: number; percent: number | null;
-      lastAccessAt: string | null;
-      states: Record<string, number>;
-      records: { cmId: string; cmName: string; completedAt: string }[];
-    }[];
+    students: ProgressReportStudent[];
   }> {
     await this.completion.requireCompletionManage(actorId, courseId);
     const db = this.repo.dbHandle;
-    const sections = await this.courses.listSections(courseId);
-    const sectionOrder = new Map(sections.map((s) => [s.id, s.section]));
-    const cms = (await this.courses.listCms(courseId))
-      .filter((cm) => cm.completion !== 0)
-      .sort((a, b) => (sectionOrder.get(a.section) ?? 0) - (sectionOrder.get(b.section) ?? 0));
+    const cms = await this.listTrackedCms(courseId);
     let studentIds: string[];
     if (groupId) {
       const rows = await db
@@ -543,15 +593,7 @@ export class ContentService {
         .execute();
       studentIds = [...new Set(rows.map((r) => r.userId))];
     } else {
-      const rows = await db
-        .selectFrom('user_enrolments')
-        .innerJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
-        .select(['user_enrolments.user_id as userId'])
-        .where((eb) =>
-          eb.and([eb('enrol.course_id', '=', courseId), eb('user_enrolments.status', '=', 0)]),
-        )
-        .execute();
-      studentIds = [...new Set(rows.map((r) => r.userId))];
+      studentIds = await this.listEnrolledStudentIds(courseId);
     }
     const userRows = studentIds.length
       ? await db
@@ -579,32 +621,38 @@ export class ContentService {
       : [];
     const stateOf = new Map(completionRows.map((r) => [`${r.userId}:${r.courseModuleId}`, r.completionState]));
     const records = await this.repo.listLearningRecords(courseId);
+    const studentIdSet = new Set(studentIds);
     const recordsByUser = new Map<string, { cmId: string; cmName: string; completedAt: string }[]>();
     for (const record of records) {
-      if (!studentIds.includes(record.userId)) continue;
+      if (!studentIdSet.has(record.userId)) continue;
       const list = recordsByUser.get(record.userId) ?? [];
       list.push({ cmId: record.cmId, cmName: record.cmName, completedAt: record.completedAt.toISOString() });
       recordsByUser.set(record.userId, list);
     }
     const items = cms.map((cm) => {
-      const completedCount = studentIds.filter((uid) => (stateOf.get(`${uid}:${cm.id}`) ?? 0) !== 0).length;
+      const completedCount = studentIds.filter((uid) => (stateOf.get(`${uid}:${cm.id}`) ?? COMPLETION_INCOMPLETE) !== COMPLETION_INCOMPLETE).length;
       return {
         cmId: cm.id, name: cm.name, component: cm.component, sectionId: cm.section,
         completedCount, totalStudents: studentIds.length,
         percent: studentIds.length ? Math.round((completedCount / studentIds.length) * 100) : null,
       };
     });
-    const students = [];
+    // Nạp dấu vết mở học gần nhất của cả lớp song song thay vì chờ từng học sinh một. Repository chưa có phương thức nạp theo lô (một truy vấn cho nhiều user) nên vẫn là một lần đọc mỗi học sinh, chỉ không chờ nối tiếp nhau — muốn gộp thành một truy vấn thì thêm phương thức ở packages/db.
+    const lastAccessEntries = await Promise.all(
+      studentIds.map(async (userId) => ({ userId, last: await this.repo.getLastAccess(userId, courseId) })),
+    );
+    const lastAccessByUser = new Map(lastAccessEntries.map((entry) => [entry.userId, entry.last]));
+    const students: ProgressReportStudent[] = [];
     for (const userId of studentIds) {
       const user = userById.get(userId);
       const states: Record<string, number> = {};
       let completed = 0;
       for (const cm of cms) {
-        const state = stateOf.get(`${userId}:${cm.id}`) ?? 0;
+        const state = stateOf.get(`${userId}:${cm.id}`) ?? COMPLETION_INCOMPLETE;
         states[cm.id] = state;
-        if (state !== 0) completed += 1;
+        if (state !== COMPLETION_INCOMPLETE) completed += 1;
       }
-      const last = await this.repo.getLastAccess(userId, courseId);
+      const last = lastAccessByUser.get(userId);
       students.push({
         userId,
         username: user?.username ?? '',
@@ -626,7 +674,7 @@ export class ContentService {
     const header = ['Học sinh', 'Tên đăng nhập', ...report.items.map((i) => i.name), 'Đã hoàn thành', 'Tổng mục', '% hoàn thành', 'Lần học gần nhất'];
     const lines = [header.map(esc).join(',')];
     for (const student of report.students) {
-      const cells = report.items.map((item) => ((student.states[item.cmId] ?? 0) !== 0 ? 'x' : ''));
+      const cells = report.items.map((item) => ((student.states[item.cmId] ?? COMPLETION_INCOMPLETE) !== COMPLETION_INCOMPLETE ? 'x' : ''));
       lines.push([
         student.fullName, student.username, ...cells,
         String(student.completed), String(student.total),
@@ -673,7 +721,7 @@ export class ContentService {
     cm: CmRow;
     content:
       | { type: 'page'; page: PageRow }
-      | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null; embedUrl: string | null }
+      | { type: 'resource'; resource: ResourceRow; file: SignedFileView | null; embedUrl: string | null }
       | { type: 'other'; component: string };
     completion: { state: number; viewed: boolean; mode: CompletionMode };
     /** Tiến độ xem của chính học sinh ở mục này (video/trang): % cao nhất + vị trí dở để phát tiếp đúng chỗ. */
@@ -687,7 +735,7 @@ export class ContentService {
     const access = await this.courses.checkCmAccess(userId, cm);
     if (!access.available) throw new ForbiddenException({ message: 'This activity is not available to you yet', code: 'availability.not_available' });
     await this.repo.upsertLastAccess(userId, courseId, cmId);
-    let content: { type: 'page'; page: PageRow } | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null; embedUrl: string | null } | { type: 'other'; component: string };
+    let content: { type: 'page'; page: PageRow } | { type: 'resource'; resource: ResourceRow; file: SignedFileView | null; embedUrl: string | null } | { type: 'other'; component: string };
     if (cm.component === PAGE_COMPONENT && cm.instanceId) {
       content = { type: 'page', page: await this.getPage(cm.instanceId) };
     } else if (cm.component === RESOURCE_COMPONENT && cm.instanceId) {
@@ -708,8 +756,8 @@ export class ContentService {
       completion: { state: mine.state, viewed: mine.viewed, mode: modeOfCm(cm) },
       itemProgress: item ? { percent: item.percent, positionSeconds: item.positionSeconds, page: item.page } : null,
       progress,
-      prevCmId: idx > 0 ? flat[idx - 1]!.cmId : null,
-      nextCmId: idx >= 0 && idx < flat.length - 1 ? flat[idx + 1]!.cmId : null,
+      prevCmId: idx > 0 ? (flat[idx - 1]?.cmId ?? null) : null,
+      nextCmId: idx >= 0 && idx < flat.length - 1 ? (flat[idx + 1]?.cmId ?? null) : null,
     };
   }
 }

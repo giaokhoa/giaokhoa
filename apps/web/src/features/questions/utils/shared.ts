@@ -7,6 +7,7 @@
 import { extractRichTextPlainText, type QuestionView, type RichTextDocument } from '@giaokhoa/contracts';
 
 import { ApiError } from '#lib/api';
+import type { SystemQuestionSubmission } from '../api/questions';
 
 /**
  * Thông báo lỗi kèm lý do thật từ API (ProblemDetails.detail) — trước đây các catch nuốt lỗi gốc và chỉ hiện câu chung chung, giáo viên không biết sai ở đâu (issue #55 mục 3). Export để màn editor riêng
@@ -18,6 +19,11 @@ export function withApiReason(fallback: string, err: unknown): string {
     if (reason) return `${fallback} ${reason}`;
   }
   return fallback;
+}
+
+/** Trạng thái bank của một view như API trả về (contracts chưa khai `status` ở entry). */
+export function entryStatus(view: QuestionView | null | undefined): string | undefined {
+  return (view?.entry as { status?: string } | undefined)?.status;
 }
 
 /** Một lựa chọn ngữ cảnh cho form danh mục mới. */
@@ -60,19 +66,6 @@ export interface CurriculumTreeNode {
   outcomes: { id: string; content: string }[];
   children: CurriculumTreeNode[];
 }
-
-
-
-
-
-
-
-
-
-
-/** Khoá học cho hộp thoại triển khai đề vào quiz. */
-
-/** Nhóm của khoá cho hộp thoại ghim đề (GET /courses/:id/groups). */
 
 export function plainText(doc: RichTextDocument | null | undefined): string {
   return doc ? extractRichTextPlainText(doc) : '';
@@ -169,3 +162,28 @@ export function dossierStatusKey(status: string): string {
     ? 'dossierStatusPendingBoard'
     : `dossierStatus${status[0]!.toUpperCase()}${status.slice(1)}`;
 }
+
+/**
+ * Nhãn phạm vi bank câu hỏi (personal/team/school/course): tra Record tĩnh thay cho mẫu inline `bankScope${...}` (B1.9/B7). Phạm vi `platform` chưa có nhãn trong locale (cả vi lẫn en) nên `bankScopeKey` giữ đúng hành vi cũ với phạm vi lạ — ghép khoá để i18next fallback hiển thị khoá, thay vì tự đặt nhãn mới.
+ */
+const BANK_SCOPE_LABEL_KEYS: Record<'personal' | 'team' | 'school' | 'course', string> = {
+  personal: 'bankScopePersonal',
+  team: 'bankScopeTeam',
+  school: 'bankScopeSchool',
+  course: 'bankScopeCourse',
+};
+
+/** Khoá i18n cho phạm vi bank câu hỏi (xem BANK_SCOPE_LABEL_KEYS). */
+export function bankScopeKey(scope: string): string {
+  if (scope === 'personal' || scope === 'team' || scope === 'school' || scope === 'course') {
+    return BANK_SCOPE_LABEL_KEYS[scope];
+  }
+  return scope ? `bankScope${scope[0]!.toUpperCase()}${scope.slice(1)}` : 'bankScope';
+}
+
+/** Nhãn trạng thái bản gửi lên ngân hàng hệ thống (pending/approved/rejected). */
+export const SYSTEM_SUBMISSION_STATUS_LABEL_KEYS: Record<SystemQuestionSubmission['status'], string> = {
+  pending: 'systemSubmissionStatus_pending',
+  approved: 'systemSubmissionStatus_approved',
+  rejected: 'systemSubmissionStatus_rejected',
+};

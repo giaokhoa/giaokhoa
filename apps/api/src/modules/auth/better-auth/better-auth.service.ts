@@ -100,41 +100,13 @@ export class BetterAuthService {
       this.sessionCookieSecure = false;
       return;
     }
-    const secret = config.get<string>('BETTER_AUTH_SECRET');
-    if (!secret) {
-      throw new Error(
-        'BETTER_AUTH_SECRET is required when BETTER_AUTH_ENABLED or MCP_AS_ENABLED is true',
-      );
-    }
+    const secret = readAuthSecret(config);
     const baseURL =
       config.get<string>('BETTER_AUTH_URL') ?? `http://localhost:${config.get<number>('PORT') ?? 3000}`;
-    // Quy tắc cookie của chính Better Auth: baseURL https ⇒ cookie
-    // Secure + tiền tố `__Secure-` trong tên.
-    this.sessionCookieSecure = baseURL.startsWith('https://');
-    this.sessionCookieName = this.sessionCookieSecure
-      ? `__Secure-${BETTER_AUTH_SESSION_COOKIE}`
-      : BETTER_AUTH_SESSION_COOKIE;
-    const extraOrigins = (config.get<string>('BETTER_AUTH_TRUSTED_ORIGINS') ?? '')
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean);
-
-    // Resource của MCP phải là URI công khai mà client nhìn thấy (nó
-    // trở thành `aud` của access token và đích của PRM): ưu tiên
-    // MCP_PUBLIC_BASE_URL — cùng một origin mà mount MCP quảng bá —
-    // rồi rơi về origin của BA, cuối cùng là baseURL.
-    const mcpPublicBase = (
-      config.get<string>('MCP_PUBLIC_BASE_URL') ??
-      config.get<string>('BETTER_AUTH_URL') ??
-      baseURL
-    ).replace(/\/+$/, '');
-    this.mcpAs = this.mcpAsEnabled
-      ? {
-          resource: `${mcpPublicBase}/mcp`,
-          loginPage: '/mcp-login',
-          consentPage: '/mcp-consent',
-        }
-      : null;
+    const cookieNaming = resolveSessionCookieNaming(baseURL);
+    this.sessionCookieSecure = cookieNaming.secure;
+    this.sessionCookieName = cookieNaming.name;
+    this.mcpAs = buildMcpAsConfig(config, baseURL, this.mcpAsEnabled);
 
     this.auth = createBetterAuth({
       // Facade `routedKysely` đã mang đúng kiểu `CentreDb` của factory —
@@ -142,7 +114,7 @@ export class BetterAuthService {
       db: spaceDb.routedKysely,
       secret,
       baseURL,
-      trustedOrigins: [...new Set([baseURL, ...extraOrigins])],
+      trustedOrigins: readTrustedOrigins(config, baseURL),
       passwordService,
       authMail: authMail ?? null,
       mcpAs: this.mcpAs,
@@ -156,54 +128,70 @@ export class BetterAuthService {
       // gắn — app thật luôn có.
       mfa: totp ? { isMfaEnabled: (userId: string) => totp.isEnabled(userId) } : null,
       // Reset/đổi mật khẩu phía BA phải vô hiệu hoá cả JWT refresh family và Redis.
-      sessionRevocation: authRepository && sessionService
-        ? {
-            revokeLegacySessions: async (userId: string): Promise<void> => {
-              await Promise.all([
-                authRepository.revokeAllForUser(userId),
-                sessionService.destroyAllForUser(userId),
-              ]);
-            },
-          }
-        : null,
+      sessionRevocation: this.buildSessionRevocation(authRepository, sessionService),
       // Cửa sổ bake (chặng 2.7 bước A): mọi lần Better Auth ghi mật
       // khẩu credential mới (đổi mật khẩu, đặt lại qua reset, tạo
       // credential) đều đồng bộ ngược hash hiện hành về
       // `users.password_hash` — điều kiện để tắt AUTH_CUTOVER_STAGE
       // về 'off' là quay lại luồng cũ trọn vẹn (rollback trước bước
       // B). Ngoài cửa sổ bake: không hook, hành vi như hiện tại.
-      legacyPasswordSync:
-        this.cutoverStage === 'bake'
-          ? {
-              syncFromCredentialAccount: async (userId: string): Promise<void> => {
-                // Hash nguồn là hash ĐANG NẰM ở dòng credential —
-                // đọc tại thời điểm gọi (sau khi phía Better Auth đã
-                // ghi xong) nên không cần biết đường nào vừa ghi.
-                // Lỗi đồng bộ không được làm hỏng thao tác auth vừa
-                // thành công (mật khẩu mới đã là sự thật ở phía BA)
-                // — nhưng phải kêu to trong log thay vì âm thầm để
-                // hai hệ lệch mật khẩu trong cửa sổ bake.
-                try {
-                  const row = await spaceDb.routedKysely
-                    .selectFrom('account')
-                    .select('password')
-                    .where('user_id', '=', userId)
-                    .where('provider_id', '=', 'credential')
-                    .limit(1)
-                    .executeTakeFirst();
-                  if (!row?.password) return;
-                  await spaceDb.routedKysely
-                    .updateTable('users')
-                    .set({ password_hash: row.password })
-                    .where('id', '=', userId)
-                    .execute();
-                } catch (err) {
-                  this.logger.warn(`legacy password sync failed for user ${userId}: ${String(err)}`);
-                }
-              },
-            }
-          : null,
+      legacyPasswordSync: this.buildLegacyPasswordSync(spaceDb),
     });
+  }
+
+  /**
+   * Dựng cổng thu hồi phiên legacy cho factory: reset/đổi mật khẩu phía Better Auth phải vô hiệu hoá cả JWT refresh family và Redis trong cùng kho trung tâm. Thiếu một trong hai cổng thì không gắn — instance chạy không có thu hồi legacy.
+   */
+  private buildSessionRevocation(
+    authRepository?: AuthRepository,
+    sessionService?: SessionService,
+  ): { revokeLegacySessions: (userId: string) => Promise<void> } | null {
+    if (!authRepository || !sessionService) return null;
+    return {
+      revokeLegacySessions: async (userId: string): Promise<void> => {
+        await Promise.all([
+          authRepository.revokeAllForUser(userId),
+          sessionService.destroyAllForUser(userId),
+        ]);
+      },
+    };
+  }
+
+  /**
+   * Dựng hook đồng bộ ngược hash trong cửa sổ bake (chặng 2.7 bước A): mọi lần Better Auth ghi mật khẩu credential mới đều chép hash hiện hành về `users.password_hash` — điều kiện để tắt `AUTH_CUTOVER_STAGE` về 'off' là quay lại luồng cũ trọn vẹn (rollback trước bước B). Ngoài cửa sổ bake: không hook, hành vi như hiện tại.
+   */
+  private buildLegacyPasswordSync(
+    spaceDb: SpaceDatabaseService,
+  ): { syncFromCredentialAccount: (userId: string) => Promise<void> } | null {
+    if (this.cutoverStage !== 'bake') return null;
+    return {
+      syncFromCredentialAccount: async (userId: string): Promise<void> => {
+        // Hash nguồn là hash ĐANG NẰM ở dòng credential —
+        // đọc tại thời điểm gọi (sau khi phía Better Auth đã
+        // ghi xong) nên không cần biết đường nào vừa ghi.
+        // Lỗi đồng bộ không được làm hỏng thao tác auth vừa
+        // thành công (mật khẩu mới đã là sự thật ở phía BA)
+        // — nhưng phải kêu to trong log thay vì âm thầm để
+        // hai hệ lệch mật khẩu trong cửa sổ bake.
+        try {
+          const row = await spaceDb.routedKysely
+            .selectFrom('account')
+            .select('password')
+            .where('user_id', '=', userId)
+            .where('provider_id', '=', 'credential')
+            .limit(1)
+            .executeTakeFirst();
+          if (!row?.password) return;
+          await spaceDb.routedKysely
+            .updateTable('users')
+            .set({ password_hash: row.password })
+            .where('id', '=', userId)
+            .execute();
+        } catch (err) {
+          this.logger.warn(`legacy password sync failed for user ${userId}: ${String(err)}`);
+        }
+      },
+    };
   }
 
   /** Instance khi có cờ bật; ném lỗi rõ ràng nếu gọi lúc cả hai cờ tắt (lỗi lập trình, không phải lỗi người dùng). */
@@ -218,20 +206,85 @@ export class BetterAuthService {
 }
 
 /**
+ * Secret của Better Auth: bắt buộc khi instance được dựng (một trong hai cờ bật) — thiếu thì từ chối boot thay vì âm thầm chạy một hệ auth thiếu secret.
+ */
+function readAuthSecret(config: ConfigService): string {
+  const secret = config.get<string>('BETTER_AUTH_SECRET');
+  if (!secret) {
+    throw new Error(
+      'BETTER_AUTH_SECRET is required when BETTER_AUTH_ENABLED or MCP_AS_ENABLED is true',
+    );
+  }
+  return secret;
+}
+
+/**
+ * Tên + cờ Secure của cookie phiên theo đúng quy tắc của Better Auth: baseURL https ⇒ cookie Secure + tiền tố `__Secure-` trong tên.
+ */
+function resolveSessionCookieNaming(baseURL: string): { secure: boolean; name: string } {
+  const secure = baseURL.startsWith('https://');
+  return {
+    secure,
+    name: secure ? `__Secure-${BETTER_AUTH_SESSION_COOKIE}` : BETTER_AUTH_SESSION_COOKIE,
+  };
+}
+
+/** Origins tin cậy của instance: baseURL luôn có mặt, cộng thêm các origin khai trong env (đã cắt khoảng trắng, bỏ rỗng, khử trùng). */
+function readTrustedOrigins(config: ConfigService, baseURL: string): string[] {
+  const extraOrigins = (config.get<string>('BETTER_AUTH_TRUSTED_ORIGINS') ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return [...new Set([baseURL, ...extraOrigins])];
+}
+
+/**
+ * Cấu hình máy chủ OAuth cho MCP (lát MCP-1, issue #163): `null` khi cờ MCP_AS_ENABLED tắt.
+ *
+ * Resource phải là URI công khai mà client nhìn thấy (nó trở thành `aud` của access token và đích của PRM): ưu tiên MCP_PUBLIC_BASE_URL — cùng một origin mà mount MCP quảng bá — rồi rơi về origin của BA, cuối cùng là baseURL.
+ */
+function buildMcpAsConfig(
+  config: ConfigService,
+  baseURL: string,
+  mcpAsEnabled: boolean,
+): BetterAuthMcpAsConfig | null {
+  if (!mcpAsEnabled) return null;
+  const mcpPublicBase = (
+    config.get<string>('MCP_PUBLIC_BASE_URL') ??
+    config.get<string>('BETTER_AUTH_URL') ??
+    baseURL
+  ).replace(/\/+$/, '');
+  return {
+    resource: `${mcpPublicBase}/mcp`,
+    loginPage: '/mcp-login',
+    consentPage: '/mcp-consent',
+  };
+}
+
+/**
+ * Đọc một cặp id/secret của provider xã hội từ env: chỉ trả cặp khi CẢ hai đều có mặt — thiếu một phía thì provider đó tắt êm (không đăng ký, không lỗi boot), đúng luật "issuer chưa cấu hình thì không có bề mặt" của hệ.
+ */
+function readSocialProvider(
+  config: ConfigService,
+  idKey: string,
+  secretKey: string,
+): { clientId: string; clientSecret: string } | undefined {
+  const clientId = config.get<string>(idKey);
+  const clientSecret = config.get<string>(secretKey);
+  return clientId && clientSecret ? { clientId, clientSecret } : undefined;
+}
+
+/**
  * Đọc cấu hình đăng nhập xã hội từ env (issue #7, chặng 2.3): provider
  * chỉ vào cấu hình khi CẢ id lẫn secret đều có mặt — thiếu một phía
  * thì provider đó tắt êm (không đăng ký, không lỗi boot), đúng luật
  * "issuer chưa cấu hình thì không có bề mặt" của hệ.
  */
 function readSocialConfig(config: ConfigService): BetterAuthSocialConfig {
-  const googleId = config.get<string>('GOOGLE_CLIENT_ID');
-  const googleCred = config.get<string>('GOOGLE_CLIENT_SECRET');
-  const facebookId = config.get<string>('FACEBOOK_APP_ID');
-  const facebookCred = config.get<string>('FACEBOOK_APP_SECRET');
+  const google = readSocialProvider(config, 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET');
+  const facebook = readSocialProvider(config, 'FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET');
   return {
-    ...(googleId && googleCred ? { google: { clientId: googleId, clientSecret: googleCred } } : {}),
-    ...(facebookId && facebookCred
-      ? { facebook: { clientId: facebookId, clientSecret: facebookCred } }
-      : {}),
+    ...(google ? { google } : {}),
+    ...(facebook ? { facebook } : {}),
   };
 }

@@ -19,13 +19,16 @@ export interface CellLite {
   questionCount: number;
   cellScore: number;
 }
+/** Trạng thái vòng đời của ma trận — đúng enum hợp đồng (`draft`/`ready`/`hidden`). */
+export type MatrixStatus = 'draft' | 'ready' | 'hidden';
+
 export interface MatrixLite {
   id: string;
   name: string;
   subjectId: string;
   curriculumId: string;
   bankId: string | null;
-  status: string;
+  status: MatrixStatus;
   isTemplate: boolean;
   version: number;
   presetKind: string;

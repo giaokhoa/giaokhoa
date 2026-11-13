@@ -1,7 +1,9 @@
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { createTestKysely } from '../test-support/create-test-kysely';
 import {
   runInTestPlatformContext,
@@ -27,11 +29,8 @@ const TEST_DATABASE = 'giaokhoa_db_g649_assignments';
 const TEST_ROLE = 'giaokhoa_db_g649_assignments';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_assignments_pw';
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let tenantPool: TestTenantPool;
 let db: CentreDb;
@@ -83,7 +82,7 @@ beforeAll(async () => {
   tenantId = await runInTestPlatformContext(async () => {
     const row = await db
       .insertInto('tenants')
-      .values({ slug: 'g649-assignments', name: 'Trung tâm G9 assignments', kind: 'centre' })
+      .values({ slug: 'g649-assignments', name: 'Trung tâm G9 assignments', kind: TEST_TENANT_KIND })
       .returning('id')
       .executeTakeFirstOrThrow();
     return row.id;
@@ -144,14 +143,14 @@ afterAll(async () => {
 }, 60_000);
 
 describe('AssignmentsRepository — bài tập, bài nộp và tệp', () => {
-  it('insertAssignment/getAssignment/listAssignmentsInCourse/updateAssignment/deleteAssignment giữ đúng hợp đồng', async () => {
+  it('bài tập: chèn và đọc lại đúng dữ kiện, đổi tên giữ nguyên điểm, xoá thì đọc trả undefined', async () => {
     await runInTestTenantContext(tenantId, async () => {
       const created = await repo.insertAssignment({
         course: courseId, cmId: null, name: 'Bài tập 1', intro: '',
         dueDate: new Date('2026-11-10T10:00:00.000Z'), maxFiles: 5,
         acceptedFileTypes: null, grade: 10, resultMode: 'score_feedback',
       });
-      expect(created.id).toMatch(UUIDV7_PATTERN);
+      expect(created.id).toMatch(UUIDV7_RE);
       expect(created.maxFiles).toBe(5);
       await expect(repo.getAssignment(created.id)).resolves.toMatchObject({ name: 'Bài tập 1' });
       await expect(repo.listAssignmentsInCourse(courseId)).resolves.toHaveLength(1);
@@ -302,7 +301,7 @@ describe('AssignmentsRepository — gói chấm, dấu chấm và bảng chấm'
     });
   });
 
-  it('vết kiểm toán, hội thoại phản hồi và ngân hàng lời phê giữ đúng hợp đồng đọc/ghi', async () => {
+  it('vết kiểm toán điểm, hội thoại phản hồi và ngân hàng lời phê: ghi rồi liệt kê đủ một dòng, chỉ chủ sở hữu mới xoá được lời phê', async () => {
     await runInTestTenantContext(tenantId, async () => {
       const assignment = await repo.insertAssignment({
         course: courseId, cmId: null, name: 'Bài tập phản hồi', intro: '',

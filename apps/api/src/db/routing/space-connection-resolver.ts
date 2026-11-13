@@ -31,16 +31,31 @@ import { onSpaceRegistryChanged } from './space-routing-events';
  * trung tâm ở kho riêng và được đối chiếu với `spaceId` ở mỗi request tới địa chỉ của trung tâm — issue #582).
  */
 
+/** Trạng thái vòng đời của một không gian trong sổ đăng ký. */
+export type SpaceRegistryStatus = 'provisioning' | 'active' | 'suspended' | 'closed';
+/** Chế độ kho của một không gian trong sổ đăng ký. */
+export type SpaceStorageMode = 'shared' | 'dedicated';
+
+/** Thu hẹp chuỗi thô từ sổ đăng ký về union trạng thái — fail-closed khi sổ có giá trị lạ. */
+export function toSpaceRegistryStatus(status: string): SpaceRegistryStatus {
+  if (status === 'provisioning' || status === 'active' || status === 'suspended' || status === 'closed') return status;
+  throw new SpaceRoutingError('space_routing.invalid_status', `Space registry has unknown status ${status}`);
+}
+
+/** Thu hẹp chuỗi thô từ sổ đăng ký về union chế độ kho — fail-closed khi sổ có giá trị lạ. */
+export function toSpaceStorageMode(storageMode: string): SpaceStorageMode {
+  if (storageMode === 'shared' || storageMode === 'dedicated') return storageMode;
+  throw new SpaceRoutingError('space_routing.invalid_storage_mode', `Space registry has unknown storage mode ${storageMode}`);
+}
+
 /** Một dòng đăng ký không gian ở dạng bộ phân giải cần — hình chiếu tối thiểu của dòng sổ đăng ký. */
 export interface SpaceRegistryEntry {
   /** Định danh của chính dòng đăng ký (khoá chính của sổ) — nguồn đối chiếu của claim `centre_id` ở tầng ứng dụng. */
   id: string;
   slug: string;
-  /** provisioning | active | suspended | closed. */
-  status: string;
+  status: SpaceRegistryStatus;
   databaseName: string;
-  /** shared | dedicated. */
-  storageMode: string;
+  storageMode: SpaceStorageMode;
   /** Tên role kết nối của kho đích theo sổ đăng ký. */
   connectionRoleRef: string;
   /** Tham chiếu bí mật kết nối (dạng `env:<TÊN_BIẾN>`) hoặc null. */
@@ -57,7 +72,7 @@ export interface ResolvedSpaceConnection {
   /** Định danh của dòng đăng ký đã phân giải (khoá chính của sổ) — tầng ứng dụng đối chiếu với claim `centre_id` của token. */
   spaceId: string;
   /** Trạng thái vòng đời tại thời điểm phân giải — tầng ứng dụng dùng để chặn traffic nghiệp vụ khi cần. */
-  status: string;
+  status: SpaceRegistryStatus;
   schemaVersion: string | null;
   /** Tên database đích theo sổ đăng ký. */
   databaseName: string;
@@ -98,6 +113,16 @@ function defaultResolveSecretRef(secretRef: string): string | undefined {
   if (!secretRef.startsWith('env:')) return undefined;
   const name = secretRef.slice('env:'.length);
   return name ? process.env[name] : undefined;
+}
+
+/** Số lần đọc sổ tối đa cho một lần phân giải trước khi kết luận sổ đang đổi liên tục và dừng lại thay vì lặp vô hạn. */
+const MAX_RESOLVE_ATTEMPTS = 5;
+/** Trễ cơ số giữa hai lần đọc lại khi thế hệ đổi (mili giây) — nhân với số lần đã thử, để đợt vô hiệu hoá dồn dập có thời gian lắng xuống. */
+const RESOLVE_RETRY_BACKOFF_MS = 10;
+
+/** Chờ một khoảng ngắn — trễ giữa hai lần đọc lại sau khi thế hệ đổi. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 interface CacheEntry {
@@ -161,17 +186,31 @@ export class SpaceConnectionResolver {
    *   không phải URL kết nối hợp lệ;
    *   `space_routing.role_mismatch` khi role trong chuỗi kết nối
    *   lệch role sổ đã đăng ký; `space_routing.storage_mode_unknown`
-   *   khi sổ mang chế độ kho ngoài hai chế độ đã biết.
+   *   khi sổ mang chế độ kho ngoài hai chế độ đã biết;
+   *   `space_routing.too_many_invalidations` khi sổ đổi liên tục
+   *   trong lúc đọc (mỗi lần đọc đều bị sự kiện vô hiệu hoá xen vào)
+   *   tới hết số lần đọc lại cho phép — dừng rõ ràng thay vì lặp vô hạn.
    */
   async resolve(slug: string): Promise<ResolvedSpaceConnection> {
     const cached = this.cache.get(slug);
     if (cached && cached.expiresAt > Date.now()) return cached.target;
-    // Chốt thế hệ chống đua vô hiệu hoá: sự kiện đổi sổ có thể tới TRONG LÚC lần đọc sổ dưới đây còn đang chờ — lần đọc bắt đầu trước khi thay đổi được commit thì trả ảnh chụp cũ (ngữ nghĩa READ COMMITTED), và lúc sự kiện tới, mục đệm của slug vốn đang trống nên thao tác xoá đệm không ngăn được kết quả cũ bị đệm lại khi lần đọc hoàn tất (đích cũ sống lại tới hết TTL). Vì vậy: ghi slug vào bản đồ thế hệ rồi chụp số thế hệ ngay trước khi đọc (việc ghi trước bảo đảm đường vô hiệu hoá toàn bộ cũng chạm được slug này); sau khi đọc xong mà thế hệ đã đổi thì bỏ kết quả vừa đọc và đọc lại dưới thế hệ mới, lặp cho tới khi một lần đọc trọn vẹn không bị sự kiện nào xen vào mới đệm và trả kết quả đó.
+    // Chốt thế hệ chống đua vô hiệu hoá: sự kiện đổi sổ có thể tới TRONG LÚC lần đọc sổ dưới đây còn đang chờ — lần đọc bắt đầu trước khi thay đổi được commit thì trả ảnh chụp cũ (ngữ nghĩa READ COMMITTED), và lúc sự kiện tới, mục đệm của slug vốn đang trống nên thao tác xoá đệm không ngăn được kết quả cũ bị đệm lại khi lần đọc hoàn tất (đích cũ sống lại tới hết TTL). Vì vậy: ghi slug vào bản đồ thế hệ rồi chụp số thế hệ ngay trước khi đọc (việc ghi trước bảo đảm đường vô hiệu hoá toàn bộ cũng chạm được slug này); sau khi đọc xong mà thế hệ đã đổi thì bỏ kết quả vừa đọc và đọc lại dưới thế hệ mới, lặp cho tới khi một lần đọc trọn vẹn không bị sự kiện nào xen vào mới đệm và trả kết quả đó — nhưng có giới hạn: sổ đổi dồn dập thì dừng sau MAX_RESOLVE_ATTEMPTS lần đọc và ném lỗi rõ ràng, không lặp vô hạn (livelock).
     if (!this.invalidationGenerations.has(slug)) this.invalidationGenerations.set(slug, 0);
-    for (;;) {
+    for (let attempt = 1; attempt <= MAX_RESOLVE_ATTEMPTS; attempt += 1) {
       const generation = this.generationOf(slug);
       const entry = await this.deps.readRegistry(slug);
-      if (this.generationOf(slug) !== generation) continue;
+      if (this.generationOf(slug) !== generation) {
+        // Sổ đổi trong lúc đọc: kết quả vừa đọc có thể là ảnh chụp cũ — bỏ đi, đọc lại dưới thế hệ mới.
+        // Hết số lần thử thì dừng và báo rõ thay vì lặp vô hạn khi sự kiện đổi sổ tới dồn dập.
+        if (attempt === MAX_RESOLVE_ATTEMPTS) {
+          throw new SpaceRoutingError(
+            'space_routing.too_many_invalidations',
+            `Space registry for ${slug} changed too often while resolving; giving up after ${MAX_RESOLVE_ATTEMPTS} attempts`,
+          );
+        }
+        await sleep(RESOLVE_RETRY_BACKOFF_MS * attempt);
+        continue;
+      }
       if (!entry) {
         throw new SpaceRoutingError('space_routing.space_not_found', `Space slug ${slug} is not registered`);
       }

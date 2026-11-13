@@ -76,8 +76,8 @@ export class CompetenciesController {
   /**
    * GET /competencies/frameworks/:frameworkId/competencies/:competencyId/rule — xem rule points của competency cha.
    */
-  async getCompetencyRule(@Param('competencyId', { schema: uuidIdSchema }) competencyId: string, @CurrentUser() actor: AuthenticatedUser) {
-    return this.competencies.getCompetencyRuleFor(actor.id, competencyId);
+  async getCompetencyRule(@Param('frameworkId', { schema: uuidIdSchema }) frameworkId: string, @Param('competencyId', { schema: uuidIdSchema }) competencyId: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.competencies.getCompetencyRuleFor(actor.id, frameworkId, competencyId);
   }
   @Post('frameworks/:frameworkId/competencies/:competencyId/rule')
   /**

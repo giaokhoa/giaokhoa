@@ -1,3 +1,10 @@
+/**
+ * Tầng phiên phía client: `AuthProvider` giữ phiên Better Auth (đăng nhập email/mật
+ * khẩu, OTP email, OAuth) và resolve về ẩn danh khi API trả 401; các luồng đăng nhập
+ * đi chung một biên xử lý chuyển hướng 2FA và điều hướng ngoài. Không giữ credential
+ * nào ở localStorage — trình duyệt tự mang cookie phiên theo mọi request.
+ */
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { UserProfile } from '@giaokhoa/contracts';
 import { userProfileSchema } from '@giaokhoa/contracts';
@@ -159,14 +166,21 @@ export function AuthProvider({ children, initialUser }: { children: ReactNode; i
   }, []);
 
   /**
+   * Ném `TwoFactorRedirectError` khi đáp ứng đăng nhập mang `twoFactorRedirect`: tài khoản đã bật xác thực hai lớp thì đáp ứng CHƯA có phiên — trang login chuyển sang bước nhập mã TOTP.
+   */
+  function assertNoTwoFactorRedirect(data: unknown): void {
+    const redirect = (data as { twoFactorRedirect?: unknown } | null)?.twoFactorRedirect;
+    if (redirect) throw new TwoFactorRedirectError();
+  }
+
+  /**
    * Đăng nhập bằng tên đăng nhập + mật khẩu qua endpoint username của Better Auth. Khi tài khoản đã bật xác thực hai lớp, đáp ứng mang `twoFactorRedirect` và CHƯA có phiên nào — dịch thành `TwoFactorRedirectError` để trang login chuyển sang bước nhập mã.
    */
   const login = useCallback(
     async (username: string, password: string): Promise<UserProfile> => {
       const { data, error } = await authClient.signIn.username({ username, password });
       if (error) throw apiErrorFromAuthClient(error);
-      const redirect = (data as { twoFactorRedirect?: unknown } | null)?.twoFactorRedirect;
-      if (redirect) throw new TwoFactorRedirectError();
+      assertNoTwoFactorRedirect(data);
       return establishSession();
     },
     [establishSession],
@@ -200,8 +214,7 @@ export function AuthProvider({ children, initialUser }: { children: ReactNode; i
     async (email: string, otp: string): Promise<UserProfile> => {
       const { data, error } = await authClient.signIn.emailOtp({ email, otp });
       if (error) throw apiErrorFromAuthClient(error);
-      const redirect = (data as { twoFactorRedirect?: unknown } | null)?.twoFactorRedirect;
-      if (redirect) throw new TwoFactorRedirectError();
+      assertNoTwoFactorRedirect(data);
       return establishSession();
     },
     [establishSession],

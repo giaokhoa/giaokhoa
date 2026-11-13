@@ -52,6 +52,10 @@ Mọi code TypeScript/TSX viết mới hoặc sửa trong `apps/web` phải có 
 - Sửa code thì căn cứ vào comment flow đang có trong code; thấy comment lệch code thật thì sửa comment **trong cùng lượt** với sửa code.
 - Đội đánh giá độc lập soi chuẩn này như một tiêu chí đạt — code thiếu comment flow đạt chuẩn là chưa đạt. Code cũ chưa có comment được phủ theo đợt riêng của issue #272, không tự trộn việc phủ vào feat đang bay.
 
+## Idiom đồng bộ state khi dữ liệu về: setState trong lúc render (rà soát code style 2026-11-13)
+
+Khi dữ liệu query về cần đồng bộ vào state cục bộ (chọn mặc định, lấp form từ gói dữ liệu, dọn tích chọn khi đổi nguồn), dùng **một** idiom: setState trong lúc render, giữ bởi state `previousX` so sánh với giá trị mới — chỉ chạy đúng nhịp dữ liệu đổi, các lần render sau không đổi gì thêm — và **bắt buộc** kèm comment nội tuyến nói rõ nhịp chạy + lý do. Không dùng `useEffect` cho việc này ở code mới. Ngoại lệ duy nhất còn lại: màn soạn câu hỏi (`question-editor/routes/question-editor.tsx`, `useEffect` + `initStartedRef`) — khởi tạo form phức tạp, giữ nguyên, không đổi idiom khi chưa có lý do nghiệp vụ.
+
 ## Cấu trúc `features/` và kỷ luật import (issue #500)
 
 Từ đợt tổ chức lại theo mô hình features/, `apps/web` tổ chức theo feature: mỗi miền nghiệp vụ là một thư mục `src/features/<feature>/` tự chứa các tầng của chính nó — `routes/` (route module, export trực tiếp component/loader/clientLoader/meta/ErrorBoundary; config route riêng ở `features/<feature>/routes.ts` dùng `relative()`/`prefix()` của React Router), `components/`, `api/` (hàm gọi API thuần, không phụ thuộc React), `queries/` (hook React Query + query keys riêng của feature ở `queries/keys.ts` + prefetch/clientLoader), `types/`, `utils/`, `hooks/`. Mô hình `src/lib/*-data.ts` phẳng đã bỏ: tầng dữ liệu của mỗi miền nằm trong feature của nó, tách rõ tầng `api/` khỏi tầng `queries/`.

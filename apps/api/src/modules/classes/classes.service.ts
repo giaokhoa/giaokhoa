@@ -3,6 +3,8 @@ import {
   ConflictException,
   HttpException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
@@ -25,6 +27,7 @@ import type {
   RosterStudentIdentity,
   UpdateClass,
 } from '@giaokhoa/contracts';
+import { CLASS_ON_LEAVE_MODES, CLASS_STAFF_ROLES, CLASS_STATUSES } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import type { CentreTx } from '@giaokhoa/db';
 import { tenantAls } from '../tenants/tenant-als';
@@ -77,12 +80,109 @@ const CLASS_ROLE_GRANTS: Record<string, string[]> = {
   [CLASS_ROSTER_MANAGER_ROLE]: ['class:view', 'class:manageroster', 'cohort:manage', 'cohort:view'],
 };
 
+/** Hai chế độ rời lớp khi học sinh rời lớp — hai giá trị duy nhất của
+ * `CLASS_ON_LEAVE_MODES` phía contracts; đặt tên riêng để các nhánh rẽ
+ * đọc được ý nghĩa thay vì literal `'suspend'`/`'unenrol'`. */
+const CLASS_ON_LEAVE_SUSPEND: ClassView['onLeave'] = 'suspend';
+const CLASS_ON_LEAVE_UNENROL: ClassView['onLeave'] = 'unenrol';
+
+/** Ba trạng thái của yêu cầu tự báo danh — khớp `classJoinRequestSchema` phía contracts. */
+const JOIN_REQUEST_STATUSES = ['pending', 'approved', 'rejected'] as const;
+
+/** Số dòng tối đa của một file import roster (giới hạn theo thiết kế CLASS-1). */
+const ROSTER_IMPORT_MAX_ROWS = 500;
+
 /** Bảng chữ mã tham gia tự báo danh: bỏ ký tự dễ nhầm (0/O, 1/I/L). */
 const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function generateJoinCode(): string {
   const bytes = randomBytes(8);
   return Array.from(bytes, (b) => JOIN_CODE_ALPHABET[b % JOIN_CODE_ALPHABET.length]).join('');
+}
+
+/**
+ * Dòng gán vai tối thiểu mà module lớp cần: `id` để gỡ gán,
+ * `userId`/`roleId` để nhận diện người giữ vai, `component` để phân biệt
+ * gán tay (rỗng) với gán do ghi danh cấp. Định nghĩa một lần ở đây thay
+ * vì viết lại ở từng hàm dùng tới.
+ */
+type AssignmentRow = { id: string; userId: string; roleId: string; component: string };
+
+/** Type guard: một giá trị thô có phải object thường không — bước thu hẹp kiểu cho `toAssignmentRows` và `rosterRowErrorCode`. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Type guard: một dòng gán vai thô có đủ 4 trường đúng kiểu mà module lớp cần không. */
+function isAssignmentRow(row: unknown): row is AssignmentRow {
+  if (!isRecord(row)) return false;
+  const { id, userId, roleId, component } = row;
+  return typeof id === 'string' && typeof userId === 'string' && typeof roleId === 'string' && typeof component === 'string';
+}
+
+/**
+ * Thu hẹp danh sách gán vai thô mà `RolesService.listAssignments` trả về
+ * (`unknown[]` — service đó chưa khai kiểu trả về đúng, ngoài phạm vi
+ * module lớp) thành `AssignmentRow[]`: chỉ giữ dòng có đủ 4 trường đúng
+ * kiểu; dòng lạ là trạng thái hỏng nên ném 500 có mã thay vì ép kiểu mù
+ * hoặc lặng lẽ bỏ qua (danh sách nhân sự là dữ kiện nhạy cảm về quyền).
+ */
+function toAssignmentRows(rows: unknown[]): AssignmentRow[] {
+  const out: AssignmentRow[] = [];
+  for (const row of rows) {
+    if (!isAssignmentRow(row)) {
+      throw new InternalServerErrorException({ message: 'Role assignment row has an unexpected shape', code: 'class.invalid_assignment_row' });
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * Thu hẹp một chuỗi lấy từ DB về đúng tập giá trị của hợp đồng: tìm trong
+ * `allowed`, khớp thì trả chính phần tử đó; không khớp là dữ kiện hỏng
+ * trong DB (các cột này không có ràng buộc CHECK ở DB) nên ném 500 có mã
+ * thay vì lộ giá trị sai hợp đồng ra ngoài.
+ */
+function asContractValue<T extends string>(value: string, allowed: readonly T[], code: string, label: string): T {
+  const found = allowed.find((item) => item === value);
+  if (found === undefined) {
+    throw new InternalServerErrorException({ message: `Unknown ${label} value ${value}`, code });
+  }
+  return found;
+}
+
+/**
+ * Mã lỗi của một dòng roster import hỏng: lấy `code` trong thân
+ * ProblemDetails của exception HTTP mà đường nạp dòng đó ném (mọi lỗi
+ * nghiệp vụ trong `addStudentByIdentity` đều là Nest exception có mã
+ * `class.*`); lỗi không mang mã thì rơi về `message`, cuối cùng là mã
+ * chung của dòng. Thân response được đọc qua type guard thay vì đào bằng
+ * ép kiểu như trước.
+ */
+function rosterRowErrorCode(err: unknown): string {
+  if (err instanceof HttpException) {
+    const body = err.getResponse();
+    if (isRecord(body)) {
+      if (typeof body.code === 'string') return body.code;
+      if (typeof body.message === 'string') return body.message;
+    }
+  }
+  return 'class.roster_row_failed';
+}
+
+/**
+ * Vai hiển thị của người gọi trong gói tổng quan: chủ lớp → `owner`; giữ
+ * vai lớp gán tay, hoặc có cờ quản roster/phân vai → `staff`; thuộc
+ * roster → `member`; còn lại là người xem được lớp nhờ quyền quản trị cấp
+ * trên (site admin / `tenant:manage`) → `staff` ở mức xem, các thao tác
+ * quản trị vẫn gác riêng bằng `canManageRoster`/`canShare`.
+ */
+function resolveViewerRole(isOwner: boolean, hasStaffRole: boolean, canManageRoster: boolean, canShare: boolean, isMember: boolean): ClassViewerRole {
+  if (isOwner) return 'owner';
+  if (hasStaffRole || canManageRoster || canShare) return 'staff';
+  if (isMember) return 'member';
+  return 'staff';
 }
 
 /** Hình dạng lớp ở bề mặt API; `joinCode` chỉ lộ cho người có quyền quản roster (bí mật như enrolment_key). Học phí (`fee*`, CLASS-3) là thông tin gói công khai của lớp nên đi kèm mọi hình dạng lớp. */
@@ -98,8 +198,8 @@ export function toClassDto(row: ClassRow, canSeeJoinCode: boolean): ClassView {
     allowSelfReport: row.allowSelfReport,
     joinCode: canSeeJoinCode ? row.joinCode : null,
     joinAutoApprove: row.joinAutoApprove,
-    onLeave: row.onLeave as ClassView['onLeave'],
-    status: row.status as ClassView['status'],
+    onLeave: asContractValue(row.onLeave, CLASS_ON_LEAVE_MODES, 'class.invalid_on_leave', 'class onLeave'),
+    status: asContractValue(row.status, CLASS_STATUSES, 'class.invalid_status', 'class status'),
     description: row.description,
     feeCost: row.feeCost,
     feeCurrency: row.feeCurrency,
@@ -133,6 +233,8 @@ export interface ClassFeeTarget {
  *    (qua móc CourseClassHook đăng ký vào CoursesService).
  */
 export class ClassesService implements OnModuleInit {
+  private readonly logger = new Logger(ClassesService.name);
+
   constructor(
     private readonly repo: ClassesRepository,
     private readonly contexts: ContextsService,
@@ -309,7 +411,7 @@ export class ClassesService implements OnModuleInit {
         cohortId: cohortRow.id,
         allowSelfReport: false,
         joinCode: null,
-        onLeave: 'suspend',
+        onLeave: CLASS_ON_LEAVE_SUSPEND,
         status: 'active',
         description: input.description ?? '',
       }, tx);
@@ -317,7 +419,7 @@ export class ClassesService implements OnModuleInit {
       await this.groupsRepo.updateCohort(cohortRow.id, { contextId: classCtx.id }, tx);
       await this.applyClassRoleGrants(classCtx.id, actorId, tx);
       const ownerRole = await this.roles.getRoleByShortname(CLASS_OWNER_ROLE);
-      if (!ownerRole) throw new Error('editingteacher role not seeded');
+      if (!ownerRole) throw new InternalServerErrorException({ message: 'editingteacher role not seeded', code: 'class.role_not_seeded' });
       await this.roles.assignRole(ownerId, ownerRole.id, classCtx.id, actorId, undefined, tx);
       await this.outbox.enqueueKysely(tx, {
         aggregate: 'class', type: 'class_created',
@@ -338,14 +440,17 @@ export class ClassesService implements OnModuleInit {
     }
   }
 
-  /** Vật chất hoá bộ capability của 4 vai tại đúng context lớp này (gọi lúc tạo lớp, bên trong transaction của `createClass`). Hàm này KHÔNG tự đảm bảo vai: bên gọi phải đã chạy `ensureClassRoles` trước khi mở transaction — vai là dữ kiện toàn cục dùng chung, xem ghi chú ở `createClass`. */
+  /**
+   * Vật chất hoá bộ capability của 4 vai tại đúng context lớp này (gọi lúc tạo lớp, bên trong transaction của `createClass`). Hàm này KHÔNG tự đảm bảo vai: bên gọi phải đã chạy `ensureClassRoles` trước khi mở transaction — vai là dữ kiện toàn cục dùng chung, xem ghi chú ở `createClass`. Vai thiếu (seed hỏng) thì ném 500 `class.role_not_seeded` thay vì bỏ qua im lặng — lớp không được tạo mà thiếu bộ quyền.
+   */
   private async applyClassRoleGrants(classContextId: string, modifierId: string, tx?: CentreTx): Promise<void> {
     for (const [shortName, caps] of Object.entries(CLASS_ROLE_GRANTS)) {
       const role = await this.roles.getRoleByShortname(shortName);
-      if (!role) continue;
-      for (const cap of caps) {
-        await this.roles.setCapabilityOverride(role.id, cap, classContextId, CAP_ALLOW, modifierId, tx);
+      if (!role) {
+        throw new InternalServerErrorException({ message: `Class role ${shortName} is not seeded`, code: 'class.role_not_seeded' });
       }
+      // Các override của cùng một vai độc lập nhau nên ghi song song.
+      await Promise.all(caps.map((cap) => this.roles.setCapabilityOverride(role.id, cap, classContextId, CAP_ALLOW, modifierId, tx)));
     }
   }
 
@@ -376,8 +481,10 @@ export class ClassesService implements OnModuleInit {
       const isOwner = actorId === row.ownerId;
       const canUpdate = isOwner || (await this.evaluator.hasCapability(actorId, 'class:update', ctxId));
       const canManageRoster = isOwner || (await this.evaluator.hasCapability(actorId, 'class:manageroster', ctxId));
-      const canDelete = (isOwner || (tenantCtx ? await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id) : false))
-        && (isOwner || (await this.evaluator.hasCapability(actorId, 'class:delete', ctxId)));
+      // Cờ xoá = (chủ lớp hoặc quản trị tenant) VÀ (chủ lớp hoặc có `class:delete` tại lớp) — tách từng vế thành biến có tên; chủ lớp thì khỏi tra capability.
+      const isTenantManager = !isOwner && tenantCtx ? await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id) : false;
+      const hasDeleteCapability = !isOwner ? await this.evaluator.hasCapability(actorId, 'class:delete', ctxId) : false;
+      const canDelete = isOwner || (isTenantManager && hasDeleteCapability);
       return {
         ...toClassDto(row, await this.canSeeJoinCode(actorId, row, ctxId)),
         canCreate,
@@ -442,23 +549,12 @@ export class ClassesService implements OnModuleInit {
     // Đồng GV = được gán TAY (component rỗng) ít nhất một trong 3 vai
     // lớp tại đúng context lớp này — cùng khuôn liệt kê của listStaff;
     // các dòng gán do ghi danh cấp không phải vai lớp nên không lẫn vào.
-    const staffRoleIds = new Set<string>();
-    for (const shortName of [CLASS_ASSIGNER_ROLE, CLASS_GRADER_ROLE, CLASS_ROSTER_MANAGER_ROLE]) {
-      const role = await this.roles.getRoleByShortname(shortName);
-      if (role) staffRoleIds.add(role.id);
-    }
-    type AssignmentRow = { userId: string; roleId: string; component: string };
-    const assignments = (await this.roles.listAssignments({ contextId: ctxId })) as unknown as AssignmentRow[];
+    const { roles: staffRoles, assignments } = await this.listClassStaffAssignments(ctxId);
+    const staffRoleIds = new Set(staffRoles.map((r) => r.id));
     const hasStaffRole = assignments.some((a) => a.component === '' && a.userId === actorId && staffRoleIds.has(a.roleId));
     const isMember = await this.groups.isCohortMember(row.cohortId, actorId);
 
-    const viewerRole: ClassViewerRole = isOwner
-      ? 'owner'
-      : hasStaffRole || canManageRoster || canShare
-        ? 'staff'
-        : isMember
-          ? 'member'
-          : 'staff';
+    const viewerRole: ClassViewerRole = resolveViewerRole(isOwner, hasStaffRole, canManageRoster, canShare, isMember);
 
     const allCourses = await this.repo.listCoursesInClass(id);
     let courses = allCourses;
@@ -519,7 +615,8 @@ export class ClassesService implements OnModuleInit {
     if (patch.onLeave !== undefined && patch.onLeave !== row.onLeave) {
       await this.repo.syncOnLeaveToInstances(row.cohortId, patch.onLeave);
     }
-    const updated = (await this.repo.getClass(id))!;
+    const updated = await this.repo.getClass(id);
+    if (!updated) throw new NotFoundException({ message: `Class ${id} not found`, code: 'class.not_found' });
     return toClassDto(updated, await this.canSeeJoinCode(actorId, updated));
   }
 
@@ -536,7 +633,8 @@ export class ClassesService implements OnModuleInit {
         tenantId: row.tenantId,
       });
     }
-    const updated = (await this.repo.getClass(id))!;
+    const updated = await this.repo.getClass(id);
+    if (!updated) throw new NotFoundException({ message: `Class ${id} not found`, code: 'class.not_found' });
     return toClassDto(updated, await this.canSeeJoinCode(actorId, updated));
   }
 
@@ -765,10 +863,7 @@ export class ClassesService implements OnModuleInit {
         }
       } catch (err) {
         failed += 1;
-        const resp = err instanceof HttpException ? err.getResponse() : null;
-        const body = (typeof resp === 'object' && resp !== null ? resp : {}) as { code?: unknown; message?: unknown };
-        const error = typeof body.code === 'string' ? body.code : typeof body.message === 'string' ? body.message : 'class.roster_row_failed';
-        results.push({ row: i + 1, fullName: input.fullName, status: 'error', userId: null, username: null, temporaryPassword: null, error });
+        results.push({ row: i + 1, fullName: input.fullName, status: 'error', userId: null, username: null, temporaryPassword: null, error: rosterRowErrorCode(err) });
       }
     }
     return { total: rows.length, added, created, alreadyMembers, failed, results };
@@ -778,7 +873,7 @@ export class ClassesService implements OnModuleInit {
   async parseRosterWorkbook(buffer: Buffer): Promise<RosterStudentIdentity[]> {
     const ExcelJS = await import('exceljs');
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer as never);
+    await wb.xlsx.load(buffer as unknown as import('exceljs').Buffer);
     const ws = wb.worksheets[0];
     if (!ws) {
       throw new BadRequestException({ message: 'The workbook has no worksheet', code: 'class.import_file_empty' });
@@ -806,7 +901,10 @@ export class ClassesService implements OnModuleInit {
     });
     if (rawRows.length === 0) return [];
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
-    const header = rawRows[0]!.map(norm);
+    // Hàng tiêu đề: lấy kèm kiểm tra `undefined` thay cho non-null assertion (không còn dòng nào thì coi như file rỗng).
+    const headerRow = rawRows.at(0);
+    if (headerRow === undefined) return [];
+    const header = headerRow.map(norm);
     const findCol = (...keywords: string[]) => header.findIndex((h) => keywords.some((k) => h.includes(k)));
     const nameCol = findCol('ten', 'name');
     const hasHeader = nameCol >= 0;
@@ -814,8 +912,8 @@ export class ClassesService implements OnModuleInit {
       ? { name: nameCol, phone: findCol('dien thoai', 'sdt', 'phone'), email: findCol('email', 'mail'), dob: findCol('ngay sinh', 'sinh', 'birth') }
       : { name: 0, phone: 1, email: 2, dob: 3 };
     const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
-    if (dataRows.length > 500) {
-      throw new BadRequestException({ message: 'Roster import is limited to 500 rows per file', code: 'class.import_too_many_rows' });
+    if (dataRows.length > ROSTER_IMPORT_MAX_ROWS) {
+      throw new BadRequestException({ message: `Roster import is limited to ${ROSTER_IMPORT_MAX_ROWS} rows per file`, code: 'class.import_too_many_rows' });
     }
     const out: RosterStudentIdentity[] = [];
     for (const cells of dataRows) {
@@ -850,6 +948,26 @@ export class ClassesService implements OnModuleInit {
   // --- phân quyền đồng GV tại context lớp (CLASS-1) -----------------------------
 
   /**
+   * Ba vai lớp gán tay + danh sách gán vai tại một context lớp — dùng chung
+   * cho `getClassOverview` (chỉ cần biết người gọi có vai không), `listStaff`
+   * (cần biết ai giữ vai nào) và `setStaffRoles` (cần id vai để gán/gỡ).
+   * `userId` cho phép thu hẹp về một người như `setStaffRoles` vẫn làm.
+   * Vai chưa seed thì vắng khỏi danh sách (bên gọi tự quyết định cách xử
+   * lý — `createClass` đã đảm bảo vai trước khi cần tới chúng).
+   */
+  private async listClassStaffAssignments(ctxId: string, userId?: string): Promise<{ roles: { id: string; shortName: ClassStaffRole }[]; assignments: AssignmentRow[] }> {
+    const roles: { id: string; shortName: ClassStaffRole }[] = [];
+    for (const shortName of CLASS_STAFF_ROLES) {
+      const role = await this.roles.getRoleByShortname(shortName);
+      if (role) roles.push({ id: role.id, shortName });
+    }
+    const assignments = toAssignmentRows(
+      await this.roles.listAssignments(userId === undefined ? { contextId: ctxId } : { contextId: ctxId, userId }),
+    );
+    return { roles, assignments };
+  }
+
+  /**
    * Bề mặt phân quyền của lớp: chủ lớp + mọi đồng GV đang giữ một trong
    * 3 vai lớp tại context lớp (gán tay — component rỗng; các dòng do ghi
    * danh cấp không phải vai lớp nên không lẫn vào). Phân quyền vẫn là cơ
@@ -861,13 +979,8 @@ export class ClassesService implements OnModuleInit {
       throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
     }
     const ctxId = await this.classContextId(classId);
-    const roleIds = new Map<string, ClassStaffRole>();
-    for (const shortName of ['classassigner', 'classgrader', 'classrostermanager'] as const) {
-      const role = await this.roles.getRoleByShortname(shortName);
-      if (role) roleIds.set(role.id, shortName);
-    }
-    type AssignmentRow = { id: string; userId: string; roleId: string; component: string };
-    const assignments = (await this.roles.listAssignments({ contextId: ctxId })) as unknown as AssignmentRow[];
+    const { roles: staffRoles, assignments } = await this.listClassStaffAssignments(ctxId);
+    const roleIds = new Map(staffRoles.map((r) => [r.id, r.shortName]));
     const rolesByUser = new Map<string, Set<ClassStaffRole>>();
     for (const a of assignments) {
       if (a.component !== '') continue;
@@ -930,14 +1043,11 @@ export class ClassesService implements OnModuleInit {
     await this.ensureClassRoles();
     await this.users.getUser(targetId);
     await this.tenants.ensureActiveMembership(row.tenantId, targetId);
-    type AssignmentRow = { id: string; userId: string; roleId: string; component: string };
-    const assignments = (await this.roles.listAssignments({ contextId: ctxId, userId: targetId })) as unknown as AssignmentRow[];
-    for (const shortName of ['classassigner', 'classgrader', 'classrostermanager'] as const) {
-      const role = await this.roles.getRoleByShortname(shortName);
-      if (!role) continue;
-      const existing = assignments.find((a) => a.roleId === role.id && a.component === '');
+    const { roles: staffRoles, assignments } = await this.listClassStaffAssignments(ctxId, targetId);
+    for (const { id: roleId, shortName } of staffRoles) {
+      const existing = assignments.find((a) => a.roleId === roleId && a.component === '');
       const wanted = input.roles.includes(shortName);
-      if (wanted && !existing) await this.roles.assignRole(targetId, role.id, ctxId, actorId);
+      if (wanted && !existing) await this.roles.assignRole(targetId, roleId, ctxId, actorId);
       if (!wanted && existing) await this.roles.unassignRole(existing.id, actorId);
     }
     return this.listStaff(actorId, classId);
@@ -958,11 +1068,6 @@ export class ClassesService implements OnModuleInit {
       throw new NotFoundException({ message: 'Join code is not valid for any open class in this space', code: 'class.join_code_invalid' });
     }
     return row;
-  }
-
-  /** Tra lớp theo mã trong kho hiện tại, không tra control plane. */
-  private async classByJoinCode(joinCode: string): Promise<ClassRow> {
-    return this.resolveClassByJoinCode(joinCode);
   }
 
   /** Xem trước lớp từ mã tham gia (học sinh xác nhận đúng lớp trước khi xin vào). */
@@ -986,29 +1091,39 @@ export class ClassesService implements OnModuleInit {
     if (row.status === 'archived') {
       throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
     }
+    // Thân xử lý chạy trong ngữ cảnh platform (xem `executeJoinByCode`):
+    // mã tham gia được phân giải trong kho của Host, không dò kho khác.
+    return tenantAls.run({ ...tenantAls.getStore(), platform: true }, () => this.executeJoinByCode(row, actorId));
+  }
+
+  /**
+   * Thân xử lý của `joinByCode`, chạy trong ngữ cảnh platform tường minh
+   * (ngữ cảnh tenant của request không mang theo khi `tenantAls.run` bọc
+   * ngoài): đã là thành viên thì báo `already_member`; lớp tự duyệt hoặc
+   * chưa có học sinh thì vào thẳng roster; còn lại ghi yêu cầu chờ duyệt
+   * (đã có yêu cầu chờ thì không ghi trùng).
+   */
+  private async executeJoinByCode(row: ClassRow, actorId: string): Promise<JoinClassResult> {
     const view = { id: row.id, name: row.name, schoolYear: row.schoolYear };
-    const body = async (): Promise<JoinClassResult> => {
-      if (await this.groups.isCohortMember(row.cohortId, actorId)) {
-        return { outcome: 'already_member' as const, class: view };
-      }
-      const memberCount = (await this.groups.listCohortMembers(row.cohortId)).length;
-      if (row.joinAutoApprove || memberCount === 0) {
-        await this.tenants.ensureActiveMembership(row.tenantId, actorId);
-        await this.groups.addCohortMemberInternal(row.cohortId, actorId);
-        await this.outbox.enqueueStandalone({
-          aggregate: 'class', type: 'class_member_joined',
-          payload: { classId: row.id, tenantId: row.tenantId, userId: actorId, via: 'self_report' },
-          tenantId: row.tenantId,
-        });
-        return { outcome: 'joined' as const, class: view };
-      }
-      const pending = await this.repo.findPendingJoinRequest(row.id, actorId);
-      if (!pending) {
-        await this.repo.insertJoinRequest({ tenantId: row.tenantId, classId: row.id, userId: actorId, status: 'pending' });
-      }
-      return { outcome: 'pending' as const, class: view };
-    };
-    return tenantAls.run({ ...tenantAls.getStore(), platform: true }, body);
+    if (await this.groups.isCohortMember(row.cohortId, actorId)) {
+      return { outcome: 'already_member' as const, class: view };
+    }
+    const memberCount = (await this.groups.listCohortMembers(row.cohortId)).length;
+    if (row.joinAutoApprove || memberCount === 0) {
+      await this.tenants.ensureActiveMembership(row.tenantId, actorId);
+      await this.groups.addCohortMemberInternal(row.cohortId, actorId);
+      await this.outbox.enqueueStandalone({
+        aggregate: 'class', type: 'class_member_joined',
+        payload: { classId: row.id, tenantId: row.tenantId, userId: actorId, via: 'self_report' },
+        tenantId: row.tenantId,
+      });
+      return { outcome: 'joined' as const, class: view };
+    }
+    const pending = await this.repo.findPendingJoinRequest(row.id, actorId);
+    if (!pending) {
+      await this.repo.insertJoinRequest({ tenantId: row.tenantId, classId: row.id, userId: actorId, status: 'pending' });
+    }
+    return { outcome: 'pending' as const, class: view };
   }
 
   /** Hàng chờ duyệt tự báo danh của lớp (cổng quản roster). */
@@ -1030,7 +1145,7 @@ export class ClassesService implements OnModuleInit {
       lastName: user?.lastName ?? '',
       username: user?.username ?? '',
       email: user?.email ?? '',
-      status: r.status as ClassJoinRequestView['status'],
+      status: asContractValue(r.status, JOIN_REQUEST_STATUSES, 'class.invalid_join_request_status', 'join request status'),
       createdAt: r.createdAt.toISOString(),
       decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
     };
@@ -1054,7 +1169,8 @@ export class ClassesService implements OnModuleInit {
       decidedBy: actorId,
       decidedAt: new Date(),
     });
-    const updated = (await this.repo.getJoinRequest(requestId))!;
+    const updated = await this.repo.getJoinRequest(requestId);
+    if (!updated) throw new NotFoundException({ message: `Join request ${requestId} not found`, code: 'class.join_request_not_found' });
     const user = await this.users.getByIdOrUndefined(request.userId);
     return this.toJoinRequestView(updated, user);
   }
@@ -1118,7 +1234,7 @@ export class ClassesService implements OnModuleInit {
       schoolYear: row.schoolYear,
       description: row.description,
       ownerName: owner ? this.displayNameOf(owner) : '',
-      status: row.status as ClassPublicView['status'],
+      status: asContractValue(row.status, CLASS_STATUSES, 'class.invalid_status', 'class status'),
       feeCost: row.feeCost,
       feeCurrency: row.feeCurrency,
       feeEnabled,
@@ -1315,17 +1431,22 @@ export class ClassesService implements OnModuleInit {
   /**
    * Vật chất hoá phía lớp ngay khi một khoá được tạo trong lớp: group
    * "cả lớp" + enrol instance cohort trỏ vào backing cohort (backfill
-   * toàn bộ roster hiện có qua cơ chế instance cohort sẵn có).
+   * toàn bộ roster hiện có qua cơ chế instance cohort sẵn có). Lớp đích
+   * không tìm thấy (sự kiện mồ côi) thì bỏ qua và ghi cảnh báo để vận
+   * hành thấy, thay vì im lặng như trước.
    */
   async onCourseCreated(course: CourseRow): Promise<void> {
     if (!course.classId) return;
     const row = await this.repo.getClass(course.classId);
-    if (!row) return;
+    if (!row) {
+      this.logger.warn(`Skipping onCourseCreated for course ${course.id}: class ${course.classId} not found`);
+      return;
+    }
     const group = await this.groups.createGroupInternal(course.id, CLASS_WHOLE_GROUP_NAME);
     await this.enrol.ensureClassCohortInstance(
       course.id,
       row.cohortId,
-      row.onLeave === 'unenrol' ? 'unenrol' : 'suspend',
+      row.onLeave === CLASS_ON_LEAVE_UNENROL ? CLASS_ON_LEAVE_UNENROL : CLASS_ON_LEAVE_SUSPEND,
       group.id,
     );
   }

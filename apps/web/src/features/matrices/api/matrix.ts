@@ -1,26 +1,24 @@
+/**
+ * Tầng gọi API thuần của màn ma trận: chỉ chứa các hàm gọi HTTP và các luồng tải file qua API, không phụ thuộc React hay React Query.
+ * Gồm bank ma trận, chương trình và cây chương trình, chi tiết ma trận, khả dụng kho câu theo ô, bản đặc tả suy ra và xuất file đặc tả, tạo/sửa ma trận và thêm/xoá ô.
+ * Đồng thời giữ ba thao tác nhập ma trận từ file — tải workbook mẫu, xem trước và ghi — trong đó file là nguồn sự thật duy nhất và server tự kiểm luật.
+ */
+
 import type { ExamMatrixView, MatrixImportPreview } from '@giaokhoa/contracts';
-import { apiFetch, apiJson } from '#lib/api';
+import { apiFetch, apiJson, downloadBlobNamedByServer, probe } from '#lib/api';
 import type {
   AvailabilityLite,
   BankLite,
   CurriculumLite,
   MatrixLite,
   MatrixSpecificationLite,
+  MatrixStatus,
   MatrixTreeNode,
 } from '../types/matrix';
 
 /**
  * Tầng gọi API thuần của màn ma trận thuộc feature matrices: chỉ chứa các hàm gọi HTTP và các luồng tải file qua API, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/matrix-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
-
-/** Tải một endpoint độc lập: lỗi thì trả null (giữ nhịp probe thủ công trước đây). */
-async function probe<T>(path: string): Promise<T | null> {
-  try {
-    return await apiJson<T>(path);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Đọc danh sách bank ma trận của người dùng (GET /question-banks?kind=matrix).
@@ -40,8 +38,9 @@ export function fetchMatrixBanks() {
  * @returns Danh sách chương trình.
  */
 export function fetchCurriculaBySubject(subjectId: string, forCourseId?: string) {
-  const frame = forCourseId ? `&forCourseId=${forCourseId}` : '';
-  return apiJson<CurriculumLite[]>(`/api/v1/curriculum/curricula?subjectId=${subjectId}${frame}`);
+  const params = new URLSearchParams({ subjectId });
+  if (forCourseId) params.set('forCourseId', forCourseId);
+  return apiJson<CurriculumLite[]>(`/api/v1/curriculum/curricula?${params}`);
 }
 
 /**
@@ -106,19 +105,22 @@ export function fetchMatrixSpecification(matrixId: string) {
  */
 export async function downloadMatrixSpecification(matrixId: string, format: 'xlsx' | 'docx'): Promise<void> {
   const res = await apiFetch(`/api/v1/exam-matrices/${matrixId}/specification/export?format=${format}`);
-  if (!res.ok) throw new Error(String(res.status));
-  const blob = await res.blob();
   // Tên file ưu tiên lấy nguyên từ header của server (nguồn sự thật về
   // tên bản xuất); chỉ khi header vắng/sai dạng mới tự dựng tên dự
   // phòng theo cùng quy ước để lượt tải vẫn chạy được.
-  const disposition = res.headers.get('Content-Disposition') ?? '';
-  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `ban-dac-ta-${matrixId.slice(0, 8)}.${format}`;
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  await downloadBlobNamedByServer(res, `ban-dac-ta-${matrixId.slice(0, 8)}.${format}`);
+}
+
+/** Thân tạo ma trận mới trong bank ma trận cá nhân. */
+export interface CreateMatrixBody {
+  name: string;
+  subjectId: string;
+  curriculumId: string;
+  bankId: string;
+  levelSet: 'three' | 'four';
+  totalScore: number;
+  isTemplate: boolean;
+  status: MatrixStatus;
 }
 
 /**
@@ -127,20 +129,20 @@ export async function downloadMatrixSpecification(matrixId: string, format: 'xls
  * @param body - Thân tạo ma trận.
  * @returns Ma trận vừa tạo.
  */
-export function createMatrix(body: {
-  name: string;
-  subjectId: string;
-  curriculumId: string;
-  bankId: string;
-  levelSet: 'three' | 'four';
-  totalScore: number;
-  isTemplate: boolean;
-  status: string;
-}) {
+export function createMatrix(body: CreateMatrixBody) {
   return apiJson<MatrixLite>('/api/v1/exam-matrices', {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/** Thân sửa thông tin chung của ma trận. */
+export interface UpdateMatrixBody {
+  name: string;
+  status: MatrixStatus;
+  isTemplate: boolean;
+  totalScore: number;
+  levelSet?: 'three' | 'four';
 }
 
 /**
@@ -150,10 +152,7 @@ export function createMatrix(body: {
  * @param body - Thân sửa.
  * @returns Đáp ứng của API.
  */
-export function updateMatrix(
-  matrixId: string,
-  body: { name: string; status: string; isTemplate: boolean; totalScore: number; levelSet?: 'three' | 'four' },
-) {
+export function updateMatrix(matrixId: string, body: UpdateMatrixBody) {
   return apiJson(`/api/v1/exam-matrices/${matrixId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
@@ -167,16 +166,16 @@ export function updateMatrix(
  * @param body - Thân ô.
  * @returns Đáp ứng của API.
  */
-export function addMatrixCell(
-  matrixId: string,
-  body: {
-    curriculumNodeId: string;
-    cognitiveLevel: string;
-    qtype: string;
-    questionCount: number;
-    cellScore: number;
-  },
-) {
+/** Thân thêm một ô vào ma trận. */
+export interface AddMatrixCellBody {
+  curriculumNodeId: string;
+  cognitiveLevel: string;
+  qtype: string;
+  questionCount: number;
+  cellScore: number;
+}
+
+export function addMatrixCell(matrixId: string, body: AddMatrixCellBody) {
   return apiJson(`/api/v1/exam-matrices/${matrixId}/cells`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -236,17 +235,7 @@ export async function downloadMatrixImportTemplate(input: {
     levelSet: input.includeAdvanced ? 'four' : 'three',
   });
   const res = await apiFetch(`/api/v1/exam-matrices/template?${params.toString()}`);
-  if (!res.ok) throw new Error(String(res.status));
-  const blob = await res.blob();
-  const disposition = res.headers.get('Content-Disposition') ?? '';
-  const filename =
-    /filename="([^"]+)"/.exec(disposition)?.[1] ?? `mau-ma-tran-${input.subjectId.slice(0, 8)}.xlsx`;
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  await downloadBlobNamedByServer(res, `mau-ma-tran-${input.subjectId.slice(0, 8)}.xlsx`);
 }
 
 /**

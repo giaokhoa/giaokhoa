@@ -97,6 +97,20 @@ const PAYMENTS_COLUMNS = [
   'review_handled_by as reviewHandledBy', 'review_handled_at as reviewHandledAt', 'data', 'created_at as createdAt', 'updated_at as updatedAt',
 ] as const;
 
+/** Các bảng xoá được theo cột `user_id` (dùng chung helper `deleteWhere`). */
+type UserOwnedTable =
+  | 'user_enrolments'
+  | 'grade_grades'
+  | 'course_modules_completion'
+  | 'course_completions'
+  | 'calendar_events'
+  | 'badge_issued'
+  | 'competency_user_comp'
+  | 'learning_plans'
+  | 'comments'
+  | 'rating'
+  | 'notes';
+
 /**
  * Một PrivacyProvider đăng ký đảo ngược (§3.12/§2#28): khai báo metadata dữ liệu cá nhân của subsystem mình + export + delete cho một user. Kể cả subsystem tuyên bố không giữ dữ liệu cũng phải đăng ký.
  */
@@ -144,17 +158,48 @@ export class PrivacyService {
   }
 
   private registerBuiltinProviders(): void {
-    const db = this.repo.dbHandle;
-    const simple = (
-      subsystem: string, metadata: string[],
-      exportFn: (userId: string) => Promise<unknown>,
-      deleteFn: (userId: string) => Promise<number>,
-    ) => this.registerProvider({
+    this.registerUsersProvider();
+    this.registerEnrolProvider();
+    this.registerGradesProvider();
+    this.registerCompletionProvider();
+    this.registerFilesProvider();
+    this.registerMessagingProvider();
+    this.registerCalendarProvider();
+    this.registerBadgesProvider();
+    this.registerCompetenciesProvider();
+    this.registerSocialProvider();
+    this.registerSearchProvider();
+    this.registerContentBankProvider();
+    this.registerPaymentsProvider();
+  }
+
+  /**
+   * Đăng ký một provider đơn giản: export + delete trả số dòng đã
+   * xoá — khung chung của mọi provider tích hợp sẵn (helper `simple`
+   * cũ, đưa thành method để các phương thức đăng ký từng provider
+   * dùng chung).
+   */
+  private registerSimpleProvider(
+    subsystem: string,
+    metadata: string[],
+    exportFn: (userId: string) => Promise<unknown>,
+    deleteFn: (userId: string) => Promise<number>,
+  ): void {
+    this.registerProvider({
       subsystem, metadata, export: exportFn,
       delete: async (userId) => ({ deleted: await deleteFn(userId) }),
     });
+  }
 
-    simple('users', ['users.username/email/first_name/last_name', 'user_preferences'],
+  /** Xoá mọi dòng của một bảng thuộc về user (cột `user_id`), trả số dòng đã xoá. */
+  private async deleteWhere(table: UserOwnedTable, userId: string): Promise<number> {
+    return (await this.repo.dbHandle.deleteFrom(table).where('user_id', '=', userId).returning('id').execute()).length;
+  }
+
+  /** Provider `users`: danh tính + tuỳ chọn cá nhân. */
+  private registerUsersProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('users', ['users.username/email/first_name/last_name', 'user_preferences'],
       async (userId) => {
         const u = await db
           .selectFrom('users')
@@ -170,30 +215,56 @@ export class PrivacyService {
         await this.usersService.deleteUser(userId).catch(() => undefined);
         return 1;
       });
-    simple('enrol', ['user_enrolments.user_id'],
+  }
+
+  /** Provider `enrol`: ghi danh của user. */
+  private registerEnrolProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('enrol', ['user_enrolments.user_id'],
       async (userId) => db.selectFrom('user_enrolments').select(USER_ENROLMENTS_COLUMNS).where('user_id', '=', userId).execute(),
-      async (userId) => (await db.deleteFrom('user_enrolments').where('user_id', '=', userId).returning('id').execute()).length);
-    simple('grades', ['grade_grades.user_id/final_grade/feedback'],
+      async (userId) => this.deleteWhere('user_enrolments', userId));
+  }
+
+  /** Provider `grades`: điểm của user. */
+  private registerGradesProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('grades', ['grade_grades.user_id/final_grade/feedback'],
       async (userId) => db.selectFrom('grade_grades').select(GRADE_GRADES_COLUMNS).where('user_id', '=', userId).execute(),
-      async (userId) => (await db.deleteFrom('grade_grades').where('user_id', '=', userId).returning('id').execute()).length);
-    simple('completion', ['course_modules_completion.user_id', 'course_completions.user_id'],
+      async (userId) => this.deleteWhere('grade_grades', userId));
+  }
+
+  /** Provider `completion`: tiến độ hoàn thành khoá của user. */
+  private registerCompletionProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('completion', ['course_modules_completion.user_id', 'course_completions.user_id'],
       async (userId) => ({
         cm: await db.selectFrom('course_modules_completion').select(COURSE_MODULES_COMPLETION_COLUMNS).where('user_id', '=', userId).execute(),
         course: await db.selectFrom('course_completions').select(COURSE_COMPLETIONS_COLUMNS).where('user_id', '=', userId).execute(),
       }),
       async (userId) => {
-        const a = (await db.deleteFrom('course_modules_completion').where('user_id', '=', userId).returning('id').execute()).length;
-        const b = (await db.deleteFrom('course_completions').where('user_id', '=', userId).returning('id').execute()).length;
+        const a = await this.deleteWhere('course_modules_completion', userId);
+        const b = await this.deleteWhere('course_completions', userId);
         return a + b;
       });
-    simple('files', ['files.user_id'],
+  }
+
+  /** Provider `files`: file do user tải lên. */
+  private registerFilesProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('files', ['files.user_id'],
       async (userId) => db.selectFrom('files').select(FILES_COLUMNS).where('user_id', '=', userId).execute(),
       async (userId) => {
         const rows = await db.selectFrom('files').select(FILES_COLUMNS).where('user_id', '=', userId).execute();
+        // Một file lỗi không được chặn các file còn lại — xoá file là bước dọn dẹp, lỗi được nuốt để yêu cầu xoá vẫn hoàn tất (cùng lý do provider `users` nuốt lỗi deleteUser).
         for (const f of rows) await this.files.deleteFile(f.id).catch(() => undefined);
         return rows.length;
       });
-    simple('messaging', ['message.user_id_from', 'notifications.user_id_to'],
+  }
+
+  /** Provider `messaging`: tin nhắn đã gửi + thông báo nhận của user. */
+  private registerMessagingProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('messaging', ['message.user_id_from', 'notifications.user_id_to'],
       async (userId) => ({
         sent: await db.selectFrom('message').select(MESSAGE_COLUMNS).where('user_id_from', '=', userId).execute(),
         notifications: await db.selectFrom('notifications').select(NOTIFICATIONS_COLUMNS).where('user_id_to', '=', userId).execute(),
@@ -203,23 +274,43 @@ export class PrivacyService {
         const b = (await db.deleteFrom('message').where('user_id_from', '=', userId).returning('id').execute()).length;
         return a + b;
       });
-    simple('calendar', ['calendar_events.user_id'],
+  }
+
+  /** Provider `calendar`: sự kiện lịch của user. */
+  private registerCalendarProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('calendar', ['calendar_events.user_id'],
       async (userId) => db.selectFrom('calendar_events').select(CALENDAR_EVENTS_COLUMNS).where('user_id', '=', userId).execute(),
-      async (userId) => (await db.deleteFrom('calendar_events').where('user_id', '=', userId).returning('id').execute()).length);
-    simple('badges', ['badge_issued.user_id'],
+      async (userId) => this.deleteWhere('calendar_events', userId));
+  }
+
+  /** Provider `badges`: huy hiệu đã cấp cho user. */
+  private registerBadgesProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('badges', ['badge_issued.user_id'],
       async (userId) => db.selectFrom('badge_issued').select(BADGE_ISSUED_COLUMNS).where('user_id', '=', userId).execute(),
-      async (userId) => (await db.deleteFrom('badge_issued').where('user_id', '=', userId).returning('id').execute()).length);
-    simple('competencies', ['competency_user_comp.user_id', 'learning_plans.user_id'],
+      async (userId) => this.deleteWhere('badge_issued', userId));
+  }
+
+  /** Provider `competencies`: năng lực + kế hoạch học tập của user. */
+  private registerCompetenciesProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('competencies', ['competency_user_comp.user_id', 'learning_plans.user_id'],
       async (userId) => ({
         usercomp: await db.selectFrom('competency_user_comp').select(COMPETENCY_USER_COMP_COLUMNS).where('user_id', '=', userId).execute(),
         plans: await db.selectFrom('learning_plans').select(LEARNING_PLANS_COLUMNS).where('user_id', '=', userId).execute(),
       }),
       async (userId) => {
-        const a = (await db.deleteFrom('competency_user_comp').where('user_id', '=', userId).returning('id').execute()).length;
-        const b = (await db.deleteFrom('learning_plans').where('user_id', '=', userId).returning('id').execute()).length;
+        const a = await this.deleteWhere('competency_user_comp', userId);
+        const b = await this.deleteWhere('learning_plans', userId);
         return a + b;
       });
-    simple('social', ['comments.user_id', 'rating.user_id', 'notes.user_id/created_by', 'tag_instance.ti_user_id'],
+  }
+
+  /** Provider `social`: bình luận, đánh giá, ghi chú và gắn thẻ của user. */
+  private registerSocialProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('social', ['comments.user_id', 'rating.user_id', 'notes.user_id/created_by', 'tag_instance.ti_user_id'],
       async (userId) => ({
         comments: await db.selectFrom('comments').select(COMMENTS_COLUMNS).where('user_id', '=', userId).execute(),
         ratings: await db.selectFrom('rating').select(RATING_COLUMNS).where('user_id', '=', userId).execute(),
@@ -228,22 +319,37 @@ export class PrivacyService {
       }),
       async (userId) => {
         let n = 0;
-        n += (await db.deleteFrom('comments').where('user_id', '=', userId).returning('id').execute()).length;
-        n += (await db.deleteFrom('rating').where('user_id', '=', userId).returning('id').execute()).length;
-        n += (await db.deleteFrom('notes').where('user_id', '=', userId).returning('id').execute()).length;
+        n += await this.deleteWhere('comments', userId);
+        n += await this.deleteWhere('rating', userId);
+        n += await this.deleteWhere('notes', userId);
         n += (await db.deleteFrom('notes').where('created_by', '=', userId).returning('id').execute()).length;
         n += (await db.deleteFrom('tag_instance').where('ti_user_id', '=', userId).returning('id').execute()).length;
         return n;
       });
-    simple('search', ['search_documents.owner_id'],
+  }
+
+  /** Provider `search`: tài liệu tìm kiếm thuộc về user. */
+  private registerSearchProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('search', ['search_documents.owner_id'],
       async (userId) => db.selectFrom('search_documents').select(SEARCH_DOCUMENTS_COLUMNS).where('owner_id', '=', userId).execute(),
       async (userId) => (await db.deleteFrom('search_documents').where('owner_id', '=', userId).returning('id').execute()).length);
-    simple('contentbank', ['content_bank_content.creator_id'],
+  }
+
+  /** Provider `contentbank`: nội dung ngân hàng do user tạo. */
+  private registerContentBankProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('contentbank', ['content_bank_content.creator_id'],
       // sizeBytes là cột int8: qua Kysely nó đọc về là chuỗi (luật int8 của package @giaokhoa/db) — chuyển lại thành số tại biên này để bản xuất giữ nguyên hình dạng dữ kiện như trước.
       async (userId) => (await db.selectFrom('content_bank_content').select(CONTENT_BANK_CONTENT_COLUMNS).where('creator_id', '=', userId).execute())
         .map((row) => ({ ...row, sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes) })),
       async (userId) => (await db.deleteFrom('content_bank_content').where('creator_id', '=', userId).returning('id').execute()).length);
-    simple('payments', ['payments.user_id/amount/currency'],
+  }
+
+  /** Provider `payments`: khoản thu của user (ẩn danh hoá thay vì xoá cứng). */
+  private registerPaymentsProvider(): void {
+    const db = this.repo.dbHandle;
+    this.registerSimpleProvider('payments', ['payments.user_id/amount/currency'],
       async (userId) => db.selectFrom('payments').select(PAYMENTS_COLUMNS).where('user_id', '=', userId).execute(),
       // Dữ liệu tài chính được ẩn danh hoá (userId → 0) thay vì xoá cứng để giữ vết đối soát; danh tính không còn truy được.
       async (userId) => (await db.updateTable('payments').set({ user_id: '00000000-0000-0000-0000-000000000000' }).where('user_id', '=', userId).returning('id').execute()).length);
@@ -341,6 +447,11 @@ export class PrivacyService {
     }
     return this.getRequest(id);
   }
+  /**
+   * Danh sách file xuất của một yêu cầu — KHÔNG qua cổng sở hữu:
+   * chỉ dùng nội bộ khi quyền đã được kiểm ở tầng gọi; bề mặt HTTP
+   * phải qua {@link listExportFilesFor} (gác như `getRequestFor`).
+   */
   async listExportFiles(requestId: string) { return this.repo.listExportFiles(requestId); }
   /** Danh sách file xuất qua HTTP: qua cùng cổng sở hữu như getRequestFor (H15). */
   async listExportFilesFor(actorId: string, requestId: string) {

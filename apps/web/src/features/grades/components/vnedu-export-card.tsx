@@ -1,5 +1,5 @@
 /**
- * Card xuất vnEdu trên trang Điểm theo bài (pages/grades.tsx), chỉ render cho staff của khoá: bảng gán loại cột cho từng mục điểm đủ điều kiện, các trường học kỳ/năm học/môn/lớp và thông báo kết quả xuất. Chỉ các bài ĐÃ CÔNG BỐ mới chọn được loại cột (mục chưa công bố khóa chọn và hiện nhãn chưa công bố). State ánh xạ và các trường thông tin xuất do file trang giữ; thao tác tải file do handler của trang thực hiện (trang giữ lời gọi xuất qua apiFetch) và truyền xuống qua props.
+ * Card xuất vnEdu trên trang Điểm theo bài (pages/grades.tsx), chỉ render cho staff của khoá: bảng gán loại cột cho từng mục điểm đủ điều kiện, các trường học kỳ/năm học/môn/lớp và thông báo kết quả xuất. Chỉ các bài ĐÃ CÔNG BỐ mới chọn được loại cột (mục chưa công bố khóa chọn và hiện nhãn chưa công bố). State ánh xạ và các trường thông tin xuất do file trang giữ; thao tác tải file do handler của trang thực hiện qua `exportGradesVnedu` ở tầng api/ và truyền xuống qua props.
  */
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';

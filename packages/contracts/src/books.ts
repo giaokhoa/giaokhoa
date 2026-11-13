@@ -49,7 +49,7 @@ export type BookImportResult = z.infer<typeof bookImportResultSchema>;
 /** Một cuốn sách trong danh sách (hàng của bảng `books`). Môn/khối/series là metadata mô tả, nullable. */
 export const bookSchema = z.object({
   id: uuidIdSchema,
-  kind: z.string(),
+  kind: z.enum(BOOK_KINDS),
   title: z.string(),
   subjectId: uuidIdSchema.nullable(),
   grade: z.number().int().nullable(),

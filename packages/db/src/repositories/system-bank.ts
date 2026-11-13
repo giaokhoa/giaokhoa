@@ -13,17 +13,18 @@
  * - Giá trị `undefined` bị LOẠI khỏi values trước khi gọi builder
  *   (quy tắc T-4 đã đo ở pilot: dựa vào mặc định thư viện là đủ
  *   chạy nhưng repository loại tường minh để hành vi không phụ thuộc mặc định); mọi giá trị where là tham số bắt buộc.
- * - Mọi giá trị ghi vào cột jsonb đi qua helper `jsonbColumn`
+ * - Mọi giá trị ghi vào cột jsonb đi qua helper `jsonbValue`
  *   (serialize tường minh + `::jsonb`): driver `pg` hiểu MẢNG ở
  *   cấp cao nhất là mảng PostgreSQL chứ không phải tài liệu JSON
  *   (phát hiện của pilot).
  * - Chưa cấu hình (tầng ứng dụng chưa đặt
  *   `SYSTEM_BANK_DATABASE_URL`) thì handle là `null` và mọi thao tác ném lỗi chưa-cấu-hình mang mã `system_bank.not_configured` — ứng dụng vẫn khởi động, chỉ các đường kho ngân hàng báo 503. Package không phụ thuộc tầng ứng dụng nên hình dạng lỗi HTTP do tầng ứng dụng cấp qua hàm dựng lỗi lúc lắp ráp repository.
  */
-import { sql, type InsertObject, type RawBuilder } from 'kysely';
+import { type InsertObject } from 'kysely';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
 import type { SystemBankDb, SystemBankTx, SystemBankDB } from '../client';
 import type { Json } from '../types/system-bank-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle giao dịch của kho ngân hàng — kiểu `Transaction<SystemBankDB>` của package. */
 export type SbTx = SystemBankTx;
@@ -161,20 +162,6 @@ export class SystemBankNotConfiguredError extends Error {
   }
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + ép kiểu `::jsonb`) — khuôn duy nhất cho mọi đường
- * ghi jsonb của repository này, xem ghi chú ở đầu file về hành vi
- * mảng cấp cao nhất của driver `pg`.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu cột `T` ở tầng TypeScript.
- */
-function jsonbColumn<T>(value: unknown): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng câu hỏi hệ thống. */
 const SYSTEM_QUESTION_COLUMNS = [
   'id',
@@ -280,6 +267,118 @@ const SYSTEM_OUTCOME_PACKAGE_MAPPING_COLUMNS = [
   'note',
 ] as const;
 
+/** Một curriculum thuộc gói YCCĐ (đầu vào của `createPackageWithItems`). */
+export interface PackageCurriculumInput {
+  curriculumId: string;
+  subjectSlug: string;
+  grade: number;
+}
+
+/** Một nút chương trình thuộc gói YCCĐ (đầu vào của `createPackageWithItems`). */
+export interface PackageNodeInput {
+  nodeId: string;
+  curriculumId: string;
+  parentId: string | null;
+  title: string;
+  kind: string;
+  position: number;
+  durationPeriods: number | null;
+  durationPercent: number | null;
+}
+
+/** Một YCCĐ thuộc gói (đầu vào của `createPackageWithItems`). */
+export interface PackageOutcomeInput {
+  outcomeId: string;
+  nodeId: string;
+  position: number;
+  content: unknown;
+  sourceKind: string;
+  sourceRef: string | null;
+}
+
+/** Một ánh xạ giữa hai YCCĐ thuộc gói (đầu vào của `createPackageWithItems`). */
+export interface PackageMappingInput {
+  fromOutcomeId: string;
+  toOutcomeId: string;
+  note: string;
+}
+
+/**
+ * Bốn helper chèn items của một gói (S20): mỗi helper chèn đúng một bảng của gói trong transaction đã mở. Mảng rỗng được bỏ qua — `values([])` của Kysely là lỗi, và gói rỗng từng phần là trạng thái hợp lệ — nên `createPackageWithItems` không còn bốn khối `if` lặp lại.
+ */
+
+/** Chèn các curriculum của gói. */
+async function insertPackageCurricula(tx: SystemBankTx, packageId: string, items: PackageCurriculumInput[]): Promise<void> {
+  if (items.length === 0) return;
+  await tx
+    .insertInto('system_outcome_package_curricula')
+    .values(
+      items.map((curriculum) => ({
+        package_id: packageId,
+        curriculum_id: curriculum.curriculumId,
+        subject_slug: curriculum.subjectSlug,
+        grade: curriculum.grade,
+      })),
+    )
+    .execute();
+}
+
+/** Chèn các nút chương trình của gói. */
+async function insertPackageNodes(tx: SystemBankTx, packageId: string, items: PackageNodeInput[]): Promise<void> {
+  if (items.length === 0) return;
+  await tx
+    .insertInto('system_outcome_package_nodes')
+    .values(
+      items.map((node) => ({
+        package_id: packageId,
+        node_id: node.nodeId,
+        curriculum_id: node.curriculumId,
+        parent_id: node.parentId,
+        title: node.title,
+        kind: node.kind,
+        position: node.position,
+        duration_periods: node.durationPeriods,
+        duration_percent: node.durationPercent,
+      })),
+    )
+    .execute();
+}
+
+/** Chèn các YCCĐ của gói. */
+async function insertPackageOutcomes(tx: SystemBankTx, packageId: string, items: PackageOutcomeInput[]): Promise<void> {
+  if (items.length === 0) return;
+  await tx
+    .insertInto('system_outcome_package_outcomes')
+    .values(
+      items.map((outcome) => ({
+        package_id: packageId,
+        outcome_id: outcome.outcomeId,
+        node_id: outcome.nodeId,
+        position: outcome.position,
+        content: jsonbValue<Json>(outcome.content),
+        source_kind: outcome.sourceKind,
+        source_ref: outcome.sourceRef,
+      })),
+    )
+    .execute();
+}
+
+/** Chèn các ánh xạ giữa các YCCĐ của gói. */
+async function insertPackageMappings(tx: SystemBankTx, packageId: string, items: PackageMappingInput[]): Promise<void> {
+  if (items.length === 0) return;
+  await tx
+    .insertInto('system_outcome_package_mappings')
+    .values(
+      items.map((mapping) => ({
+        package_id: packageId,
+        from_outcome_id: mapping.fromOutcomeId,
+        to_outcome_id: mapping.toOutcomeId,
+        note: mapping.note,
+      })),
+    )
+    .execute();
+}
+
 /**
  * Repository của kho ngân hàng hệ thống trên Kysely: mọi truy cập
  * tới database kho ngân hàng tập trung ở đây, qua đúng một handle
@@ -338,7 +437,7 @@ export class SystemBankRepository {
             question_id: question.id,
             version: 1,
             checksum: input.checksum,
-            package: jsonbColumn<Json>(input.package),
+            package: jsonbValue<Json>(input.package),
           })
           .returning(SYSTEM_QUESTION_VERSION_COLUMNS)
           .execute();
@@ -387,7 +486,7 @@ export class SystemBankRepository {
             question_id: questionId,
             version: nextVersion,
             checksum,
-            package: jsonbColumn<Json>(pkg),
+            package: jsonbValue<Json>(pkg),
           })
           .returning(SYSTEM_QUESTION_VERSION_COLUMNS)
           .execute();
@@ -487,7 +586,7 @@ export class SystemBankRepository {
       .values({
         type: input.type,
         source_question_id: input.sourceQuestionId,
-        payload: jsonbColumn<Json>(input.payload),
+        payload: jsonbValue<Json>(input.payload),
       })
       .returning(SYSTEM_BANK_EVENT_COLUMNS)
       .execute();
@@ -639,26 +738,10 @@ export class SystemBankRepository {
     checksum: string;
     outcomeCount: number;
     createdBy: string | null;
-    curricula: Array<{ curriculumId: string; subjectSlug: string; grade: number }>;
-    nodes: Array<{
-      nodeId: string;
-      curriculumId: string;
-      parentId: string | null;
-      title: string;
-      kind: string;
-      position: number;
-      durationPeriods: number | null;
-      durationPercent: number | null;
-    }>;
-    outcomes: Array<{
-      outcomeId: string;
-      nodeId: string;
-      position: number;
-      content: unknown;
-      sourceKind: string;
-      sourceRef: string | null;
-    }>;
-    mappings: Array<{ fromOutcomeId: string; toOutcomeId: string; note: string }>;
+    curricula: PackageCurriculumInput[];
+    nodes: PackageNodeInput[];
+    outcomes: PackageOutcomeInput[];
+    mappings: PackageMappingInput[];
   }): Promise<SystemOutcomePackageRow> {
     return this.db()
       .transaction()
@@ -675,69 +758,10 @@ export class SystemBankRepository {
           .returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
           .execute();
         if (!pkg) throw new Error('system bank: failed to create outcome package');
-        // Các insert mảng đều được chặn mảng rỗng ở tầng TS như
-        // đường cũ: `values([])` của Kysely là lỗi, và gói rỗng
-        // từng phần là trạng thái hợp lệ của gói.
-        if (input.curricula.length > 0) {
-          await tx
-            .insertInto('system_outcome_package_curricula')
-            .values(
-              input.curricula.map((curriculum) => ({
-                package_id: pkg.id,
-                curriculum_id: curriculum.curriculumId,
-                subject_slug: curriculum.subjectSlug,
-                grade: curriculum.grade,
-              })),
-            )
-            .execute();
-        }
-        if (input.nodes.length > 0) {
-          await tx
-            .insertInto('system_outcome_package_nodes')
-            .values(
-              input.nodes.map((node) => ({
-                package_id: pkg.id,
-                node_id: node.nodeId,
-                curriculum_id: node.curriculumId,
-                parent_id: node.parentId,
-                title: node.title,
-                kind: node.kind,
-                position: node.position,
-                duration_periods: node.durationPeriods,
-                duration_percent: node.durationPercent,
-              })),
-            )
-            .execute();
-        }
-        if (input.outcomes.length > 0) {
-          await tx
-            .insertInto('system_outcome_package_outcomes')
-            .values(
-              input.outcomes.map((outcome) => ({
-                package_id: pkg.id,
-                outcome_id: outcome.outcomeId,
-                node_id: outcome.nodeId,
-                position: outcome.position,
-                content: jsonbColumn<Json>(outcome.content),
-                source_kind: outcome.sourceKind,
-                source_ref: outcome.sourceRef,
-              })),
-            )
-            .execute();
-        }
-        if (input.mappings.length > 0) {
-          await tx
-            .insertInto('system_outcome_package_mappings')
-            .values(
-              input.mappings.map((mapping) => ({
-                package_id: pkg.id,
-                from_outcome_id: mapping.fromOutcomeId,
-                to_outcome_id: mapping.toOutcomeId,
-                note: mapping.note,
-              })),
-            )
-            .execute();
-        }
+        await insertPackageCurricula(tx, pkg.id, input.curricula);
+        await insertPackageNodes(tx, pkg.id, input.nodes);
+        await insertPackageOutcomes(tx, pkg.id, input.outcomes);
+        await insertPackageMappings(tx, pkg.id, input.mappings);
         return pkg;
       });
   }

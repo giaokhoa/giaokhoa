@@ -83,9 +83,9 @@ export class TagsService {
     return this.repo.insertTag({ userId: actorId, tagCollId: collId, name, rawName: rawName.trim() });
   }
 
-  /** set_item_tags: thay toàn bộ tập tag của một item (oracle: taglib_test test_add_remove_item_tag). */
   /**
-   * Đặt toàn bộ tag của item (thay thế).
+   * Đặt toàn bộ tag của item (thay thế) — set_item_tags: thay toàn bộ
+   * tập tag của một item (oracle: taglib_test test_add_remove_item_tag).
    */
   async setItemTags(actorId: string, input: {
     component: string; itemType: string; itemId: string; contextId: string; tags: string[];
@@ -113,9 +113,9 @@ export class TagsService {
     return { tags: result };
   }
 
-  /** add_item_tag: gắn thêm một tag duy nhất (idempotent theo item). */
   /**
-   * Gắn thêm một tag vào item.
+   * Gắn thêm một tag vào item — add_item_tag: gắn thêm một tag duy nhất
+   * (idempotent theo item).
    */
   async addItemTag(actorId: string, input: { component: string; itemType: string; itemId: string; contextId: string; tag: string }) {
     const current = await this.listItemTags(input.component, input.itemType, input.itemId);

@@ -1,14 +1,15 @@
 import {
   sql,
   type ExpressionBuilder,
-  type Insertable,
   type InsertObject,
   type RawBuilder,
-  type Updateable,
+  type SqlBool,
+  type UpdateObject,
 } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
 import type { UserListStatus } from '@giaokhoa/contracts';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /**
  * Kho dữ liệu phân quyền trên Kysely: quản lý cây context, capability, vai trò và gán vai; đọc cấu hình quản trị hệ thống cùng thông tin tenant/membership cho các cổng kiểm tra quyền.
@@ -228,74 +229,78 @@ const ROLE_CAPABILITY_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
 // ---------------------------------------------------------------------------
 
-function contextInsertValues(v: NewContext): Insertable<CentreDB['context']> {
+function contextInsertValues(values: NewContext): InsertObject<CentreDB, 'context'> {
   return {
-    context_level: v.contextLevel,
-    instance_id: v.instanceId,
-    path: v.path,
-    depth: v.depth,
+    context_level: values.contextLevel,
+    instance_id: values.instanceId,
+    path: values.path,
+    depth: values.depth,
   };
 }
 
-function roleInsertValues(v: NewRole): Insertable<CentreDB['role']> {
-  const row: Insertable<CentreDB['role']> = {
-    name: v.name,
-    short_name: v.shortName,
+function roleInsertValues(values: NewRole): InsertObject<CentreDB, 'role'> {
+  return {
+    name: values.name,
+    short_name: values.shortName,
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.archetype !== undefined ? { archetype: values.archetype } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
   };
-  if (v.description !== undefined) row.description = v.description;
-  if (v.archetype !== undefined) row.archetype = v.archetype;
-  if (v.sortOrder !== undefined) row.sort_order = v.sortOrder;
-  return row;
 }
 
-function roleUpdateValues(v: Partial<NewRole>): Updateable<CentreDB['role']> {
-  const set: Updateable<CentreDB['role']> = {};
-  if (v.name !== undefined) set.name = v.name;
-  if (v.shortName !== undefined) set.short_name = v.shortName;
-  if (v.description !== undefined) set.description = v.description;
-  if (v.archetype !== undefined) set.archetype = v.archetype;
-  if (v.sortOrder !== undefined) set.sort_order = v.sortOrder;
-  return set;
-}
-
-function assignmentInsertValues(v: NewAssignment): Insertable<CentreDB['role_assignments']> {
-  const row: Insertable<CentreDB['role_assignments']> = {
-    role_id: v.roleId,
-    user_id: v.userId,
-    context_id: v.contextId,
+function roleUpdateSet(patch: Partial<NewRole>): UpdateObject<CentreDB, 'role'> {
+  return {
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.shortName !== undefined ? { short_name: patch.shortName } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.archetype !== undefined ? { archetype: patch.archetype } : {}),
+    ...(patch.sortOrder !== undefined ? { sort_order: patch.sortOrder } : {}),
   };
-  if (v.modifierId !== undefined) row.modifier_id = v.modifierId;
-  if (v.component !== undefined) row.component = v.component;
-  if (v.itemId !== undefined) row.item_id = v.itemId;
-  return row;
 }
 
-function roleCapabilityInsertValues(v: NewRoleCapability): Insertable<CentreDB['role_capabilities']> {
-  const row: Insertable<CentreDB['role_capabilities']> = {
-    context_id: v.contextId,
-    role_id: v.roleId,
-    capability: v.capability,
-    permission: v.permission,
+function assignmentInsertValues(values: NewAssignment): InsertObject<CentreDB, 'role_assignments'> {
+  return {
+    role_id: values.roleId,
+    user_id: values.userId,
+    context_id: values.contextId,
+    ...(values.modifierId !== undefined ? { modifier_id: values.modifierId } : {}),
+    ...(values.component !== undefined ? { component: values.component } : {}),
+    ...(values.itemId !== undefined ? { item_id: values.itemId } : {}),
   };
-  if (v.modifierId !== undefined) row.modifier_id = v.modifierId;
-  return row;
 }
 
-/**
- * Serialize một giá trị ghi vào cột jsonb (khuôn §4 của PLAYBOOK):
- * `pg` tự `JSON.stringify` object thường khi gắn tham số, nhưng mảng ở cấp cao nhất bị hiểu là mảng PostgreSQL → cột jsonb báo lỗi cú pháp. Mọi giá trị jsonb đều đi qua helper này.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
+function roleCapabilityInsertValues(values: NewRoleCapability): InsertObject<CentreDB, 'role_capabilities'> {
+  return {
+    context_id: values.contextId,
+    role_id: values.roleId,
+    capability: values.capability,
+    permission: values.permission,
+    ...(values.modifierId !== undefined ? { modifier_id: values.modifierId } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Repository
+// Kho dữ liệu
 // ---------------------------------------------------------------------------
 
 /** Kho dữ liệu phân quyền: context, capability, role, gán role và override. Thuần dữ liệu — quyết định quyền nằm ở tầng service/evaluator. */
+/**
+ * Điều kiện tìm kiếm người dùng theo tên/email (S19): khớp không phân biệt hoa thường trên họ, tên, họ+tên ghép, email và tên đăng nhập — cùng tập trường ở cả hai hàm phân trang. Tiền tố bảng đi qua `sql.ref` để vẫn là tham chiếu cột, không thành tham số: `listAssignmentsPage` ghép trái bảng `users` nên cần `users.`, `listUsersWithAssignmentsPage` truy vấn trực tiếp bảng `users` nên không tiền tố.
+ */
+function userSearchCondition(tablePrefix: '' | 'users.', pattern: string): RawBuilder<SqlBool> {
+  const firstName = sql.ref(`${tablePrefix}first_name`);
+  const lastName = sql.ref(`${tablePrefix}last_name`);
+  const email = sql.ref(`${tablePrefix}email`);
+  const username = sql.ref(`${tablePrefix}username`);
+  return sql<SqlBool>`(${firstName} ilike ${pattern} or ${lastName} ilike ${pattern} or ${email} ilike ${pattern} or ${username} ilike ${pattern} or ${firstName} || ' ' || ${lastName} ilike ${pattern})`;
+}
+
 export class AccessRepository {
   constructor(private readonly handle: CentreDb) {}
+
+  private db(): AccessDb {
+    return this.handle;
+  }
 
   /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: AccessTx) => Promise<T>): Promise<T> {
@@ -307,40 +312,36 @@ export class AccessRepository {
   /**
    * Chèn context mới; path/depth được service tính và cập nhật sau khi có id.
    */
-  async insertContext(values: NewContext, tx?: AccessDb): Promise<ContextRow> {
-    const db = tx ?? this.handle;
+  async insertContext(values: NewContext, db: AccessDb = this.db()): Promise<ContextRow> {
     return db
       .insertInto('context')
       .values(contextInsertValues(values))
       .returning(CONTEXT_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<ContextRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /**
    * Cập nhật path vật chất hoá (danh sách id tổ tiên) và depth của context sau khi chèn/di chuyển.
    */
-  async updateContextPath(id: string, path: string, depth: number, tx?: AccessDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateContextPath(id: string, path: string, depth: number, db: AccessDb = this.db()): Promise<void> {
     await db.updateTable('context').set({ path, depth }).where('id', '=', id).execute();
   }
 
   /**
    * Lấy context theo id; undefined nếu không tồn tại.
    */
-  async getContextById(id: string, tx?: AccessDb): Promise<ContextRow | undefined> {
-    const db = tx ?? this.handle;
+  async getContextById(id: string, db: AccessDb = this.db()): Promise<ContextRow | undefined> {
     return db
       .selectFrom('context')
       .select(CONTEXT_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<ContextRow | undefined>;
+      .executeTakeFirst();
   }
 
   /**
    * Lấy context theo cặp (contextLevel, instanceId) — khoá tự nhiên của cây context.
    */
-  async getContextByLevelInstance(contextLevel: number, instanceId: string | null, tx?: AccessDb): Promise<ContextRow | undefined> {
-    const db = tx ?? this.handle;
+  async getContextByLevelInstance(contextLevel: number, instanceId: string | null, db: AccessDb = this.db()): Promise<ContextRow | undefined> {
     let query = db
       .selectFrom('context')
       .select(CONTEXT_COLUMNS)
@@ -348,7 +349,7 @@ export class AccessRepository {
     query = instanceId === null
       ? query.where('instance_id', 'is', null)
       : query.where('instance_id', '=', instanceId);
-    return query.executeTakeFirst() as Promise<ContextRow | undefined>;
+    return query.executeTakeFirst();
   }
 
   /**
@@ -357,51 +358,50 @@ export class AccessRepository {
    * cho các đường đọc phải tra context của nhiều đối tượng cùng lúc
    * (vd context user của cả một trang danh sách tài khoản).
    */
-  async getContextsByLevelInstances(contextLevel: number, instanceIds: string[]): Promise<ContextRow[]> {
+  async getContextsByLevelInstances(contextLevel: number, instanceIds: string[], db: AccessDb = this.db()): Promise<ContextRow[]> {
     if (instanceIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('context')
       .select(CONTEXT_COLUMNS)
       .where('context_level', '=', contextLevel)
       .where('instance_id', 'in', instanceIds)
-      .execute() as Promise<ContextRow[]>;
+      .execute();
   }
 
   /**
    * Lấy nhiều context theo danh sách id (dùng khi duyệt path).
    */
-  async getContextsByIds(ids: string[]): Promise<ContextRow[]> {
+  async getContextsByIds(ids: string[], db: AccessDb = this.db()): Promise<ContextRow[]> {
     if (ids.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('context')
       .select(CONTEXT_COLUMNS)
       .where('id', 'in', ids)
-      .execute() as Promise<ContextRow[]>;
+      .execute();
   }
 
   /**
    * Liệt kê toàn bộ context (phục vụ quản trị).
    */
-  async listContexts(): Promise<ContextRow[]> {
-    return this.handle
+  async listContexts(db: AccessDb = this.db()): Promise<ContextRow[]> {
+    return db
       .selectFrom('context')
       .select(CONTEXT_COLUMNS)
       .orderBy('path')
-      .execute() as Promise<ContextRow[]>;
+      .execute();
   }
 
   /**
    * Xoá context theo id.
    */
-  async deleteContext(id: string): Promise<void> {
-    await this.handle.deleteFrom('context').where('id', '=', id).execute();
+  async deleteContext(id: string, db: AccessDb = this.db()): Promise<void> {
+    await db.deleteFrom('context').where('id', '=', id).execute();
   }
 
   /**
    * Tăng `version` cho một context và mọi context con cháu (theo tiền tố path) — cơ chế đánh dấu dirty đứng sau việc vô hiệu hoá cache của evaluator.
    */
-  async bumpContextVersions(pathPrefix: string, tx?: AccessDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async bumpContextVersions(pathPrefix: string, db: AccessDb = this.db()): Promise<void> {
     await db
       .updateTable('context')
       .set({ version: sql<number>`version + 1` })
@@ -421,8 +421,8 @@ export class AccessRepository {
    * Thông tin cổng của tenant (kind + status) theo id; undefined khi tenant không tồn tại.
    * Gọi trong ngữ cảnh platform do evaluator lập.
    */
-  async getTenantGateInfo(tenantId: string): Promise<{ kind: string; status: string } | undefined> {
-    return this.handle
+  async getTenantGateInfo(tenantId: string, db: AccessDb = this.db()): Promise<{ kind: string; status: string } | undefined> {
+    return db
       .selectFrom('tenants')
       .select(['kind', 'status'])
       .where('id', '=', tenantId)
@@ -430,8 +430,8 @@ export class AccessRepository {
   }
 
   /** Trạng thái membership của user trong tenant; undefined khi chưa từng là thành viên. Gọi trong ngữ cảnh platform do evaluator lập. */
-  async getMembershipStatus(tenantId: string, userId: string): Promise<string | undefined> {
-    const row = await this.handle
+  async getMembershipStatus(tenantId: string, userId: string, db: AccessDb = this.db()): Promise<string | undefined> {
+    const row = await db
       .selectFrom('tenant_memberships')
       .select(['status'])
       .where('tenant_id', '=', tenantId)
@@ -441,9 +441,9 @@ export class AccessRepository {
   }
 
   /** Thông tin cổng (kind + status) của NHIỀU tenant trong một truy vấn — bản theo lô của getTenantGateInfo, phục vụ phép phân giải theo lô của ảnh chụp quyền. Gọi trong ngữ cảnh platform do evaluator lập. */
-  async getTenantGateInfos(tenantIds: string[]): Promise<{ id: string; kind: string; status: string }[]> {
+  async getTenantGateInfos(tenantIds: string[], db: AccessDb = this.db()): Promise<{ id: string; kind: string; status: string }[]> {
     if (tenantIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('tenants')
       .select(['id', 'kind', 'status'])
       .where('id', 'in', tenantIds)
@@ -451,9 +451,9 @@ export class AccessRepository {
   }
 
   /** Trạng thái membership của một user trong NHIỀU tenant trong một truy vấn — bản theo lô của getMembershipStatus. Gọi trong ngữ cảnh platform do evaluator lập. */
-  async getMembershipStatuses(tenantIds: string[], userId: string): Promise<{ tenantId: string; status: string }[]> {
+  async getMembershipStatuses(tenantIds: string[], userId: string, db: AccessDb = this.db()): Promise<{ tenantId: string; status: string }[]> {
     if (tenantIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('tenant_memberships')
       .select(['tenant_id as tenantId', 'status'])
       .where('tenant_id', 'in', tenantIds)
@@ -466,8 +466,8 @@ export class AccessRepository {
   /**
    * Khai báo/cập nhật định nghĩa capability (tên, loại rủi ro, contextLevel, archetypes).
    */
-  async upsertCapability(def: { name: string; capType: string; contextLevel: number; component: string }): Promise<void> {
-    await this.handle
+  async upsertCapability(def: { name: string; capType: string; contextLevel: number; component: string }, db: AccessDb = this.db()): Promise<void> {
+    await db
       .insertInto('capabilities')
       .values({ name: def.name, cap_type: def.capType, context_level: def.contextLevel, component: def.component })
       .onConflict((oc) => oc.column('name').doUpdateSet({
@@ -481,27 +481,27 @@ export class AccessRepository {
   /**
    * Liệt kê mọi capability đã khai báo.
    */
-  async listCapabilities(): Promise<CapabilityRow[]> {
-    return this.handle
+  async listCapabilities(db: AccessDb = this.db()): Promise<CapabilityRow[]> {
+    return db
       .selectFrom('capabilities')
       .select(CAPABILITY_COLUMNS)
       .orderBy('name')
-      .execute() as Promise<CapabilityRow[]>;
+      .execute();
   }
 
   /**
    * Xoá các định nghĩa capability không còn trong sổ đăng ký ở code (đồng bộ seed:
    * tên đã đổi/bỏ thì hàng cũ không được sót lại trong DB).
    */
-  async deleteCapabilitiesNotIn(names: string[]): Promise<void> {
-    await this.handle.deleteFrom('capabilities').where('name', 'not in', names).execute();
+  async deleteCapabilitiesNotIn(names: string[], db: AccessDb = this.db()): Promise<void> {
+    await db.deleteFrom('capabilities').where('name', 'not in', names).execute();
   }
 
   /**
    * Xoá các override role_capabilities trỏ tới capability không còn trong sổ đăng ký ở code.
    */
-  async deleteRoleCapabilitiesNotIn(capabilityNames: string[]): Promise<void> {
-    await this.handle.deleteFrom('role_capabilities').where('capability', 'not in', capabilityNames).execute();
+  async deleteRoleCapabilitiesNotIn(capabilityNames: string[], db: AccessDb = this.db()): Promise<void> {
+    await db.deleteFrom('role_capabilities').where('capability', 'not in', capabilityNames).execute();
   }
 
   // --- roles ----------------------------------------------------------------
@@ -509,46 +509,45 @@ export class AccessRepository {
   /**
    * Chèn role mới.
    */
-  async insertRole(values: NewRole, tx?: AccessDb): Promise<RoleRow> {
-    const db = tx ?? this.handle;
+  async insertRole(values: NewRole, db: AccessDb = this.db()): Promise<RoleRow> {
     return db
       .insertInto('role')
       .values(roleInsertValues(values))
       .returning(ROLE_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<RoleRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /**
    * Lấy role theo id.
    */
-  async getRoleById(id: string): Promise<RoleRow | undefined> {
-    return this.handle
+  async getRoleById(id: string, db: AccessDb = this.db()): Promise<RoleRow | undefined> {
+    return db
       .selectFrom('role')
       .select(ROLE_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<RoleRow | undefined>;
+      .executeTakeFirst();
   }
 
   /**
    * Lấy role theo shortName duy nhất.
    */
-  async getRoleByShortname(shortName: string): Promise<RoleRow | undefined> {
-    return this.handle
+  async getRoleByShortname(shortName: string, db: AccessDb = this.db()): Promise<RoleRow | undefined> {
+    return db
       .selectFrom('role')
       .select(ROLE_COLUMNS)
       .where('short_name', '=', shortName)
-      .executeTakeFirst() as Promise<RoleRow | undefined>;
+      .executeTakeFirst();
   }
 
   /**
    * Liệt kê mọi role.
    */
-  async listRoles(): Promise<RoleRow[]> {
-    return this.handle
+  async listRoles(db: AccessDb = this.db()): Promise<RoleRow[]> {
+    return db
       .selectFrom('role')
       .select(ROLE_COLUMNS)
       .orderBy('sort_order')
-      .execute() as Promise<RoleRow[]>;
+      .execute();
   }
 
   /**
@@ -559,8 +558,8 @@ export class AccessRepository {
    * người giữ trên thẻ role. Role không có dòng gán nào vắng mặt trong
    * kết quả — tầng service hiểu là 0.
    */
-  async countDistinctUsersByRole(): Promise<{ roleId: string; userCount: number }[]> {
-    return this.handle
+  async countDistinctUsersByRole(db: AccessDb = this.db()): Promise<{ roleId: string; userCount: number }[]> {
+    return db
       .selectFrom('role_assignments')
       .select([
         'role_id as roleId',
@@ -580,8 +579,8 @@ export class AccessRepository {
    * trước dấu `:` của tên năng lực). Role chưa có ghi đè nào vắng mặt
    * trong kết quả — tầng service hiểu là toàn 0.
    */
-  async getRoleOverrideAggregates(): Promise<{ roleId: string; overrideCount: number; readOverrideCount: number; writeOverrideCount: number; resourceCount: number }[]> {
-    return this.handle
+  async getRoleOverrideAggregates(db: AccessDb = this.db()): Promise<{ roleId: string; overrideCount: number; readOverrideCount: number; writeOverrideCount: number; resourceCount: number }[]> {
+    return db
       .selectFrom('role_capabilities')
       .leftJoin('capabilities', 'capabilities.name', 'role_capabilities.capability')
       .select([
@@ -598,10 +597,10 @@ export class AccessRepository {
   /**
    * Cập nhật thông tin role.
    */
-  async updateRole(id: string, values: Partial<NewRole>): Promise<void> {
-    await this.handle
+  async updateRole(id: string, values: Partial<NewRole>, db: AccessDb = this.db()): Promise<void> {
+    await db
       .updateTable('role')
-      .set(roleUpdateValues(values))
+      .set(roleUpdateSet(values))
       .where('id', '=', id)
       .execute();
   }
@@ -609,10 +608,10 @@ export class AccessRepository {
   /**
    * Xoá role (kèm gán và override của nó).
    */
-  async deleteRole(id: string): Promise<void> {
-    await this.handle.deleteFrom('role_assignments').where('role_id', '=', id).execute();
-    await this.handle.deleteFrom('role_capabilities').where('role_id', '=', id).execute();
-    await this.handle.deleteFrom('role').where('id', '=', id).execute();
+  async deleteRole(id: string, db: AccessDb = this.db()): Promise<void> {
+    await db.deleteFrom('role_assignments').where('role_id', '=', id).execute();
+    await db.deleteFrom('role_capabilities').where('role_id', '=', id).execute();
+    await db.deleteFrom('role').where('id', '=', id).execute();
   }
 
   // --- assignments ------------------------------------------------------------
@@ -636,7 +635,7 @@ export class AccessRepository {
           ? [eb('item_id', '=', values.itemId)]
           : [eb('item_id', 'is', null)]),
       ]))
-      .executeTakeFirst() as Promise<AssignmentRow | undefined>;
+      .executeTakeFirst();
   }
 
   /**
@@ -650,8 +649,7 @@ export class AccessRepository {
    * rồi mới chèn; `onConflict doNothing` + đọc bù vẫn giữ làm lưới
    * chặn cho trường hợp itemId khác NULL và cho cuộc đua chèn song song.
    */
-  async insertAssignment(values: NewAssignment, tx?: AccessDb): Promise<AssignmentRow> {
-    const db = tx ?? this.handle;
+  async insertAssignment(values: NewAssignment, db: AccessDb = this.db()): Promise<AssignmentRow> {
     const preExisting = await this.findAssignmentByTuple(db, values);
     if (preExisting) return preExisting;
     const row = await db
@@ -671,19 +669,19 @@ export class AccessRepository {
   /**
    * Gỡ một gán role cụ thể.
    */
-  async deleteAssignment(id: string): Promise<void> {
-    await this.handle.deleteFrom('role_assignments').where('id', '=', id).execute();
+  async deleteAssignment(id: string, db: AccessDb = this.db()): Promise<void> {
+    await db.deleteFrom('role_assignments').where('id', '=', id).execute();
   }
 
   /**
    * Lấy một gán role theo id (phục vụ gỡ gán cần biết user/role/context của dòng sắp xoá).
    */
-  async getAssignment(id: string): Promise<AssignmentRow | undefined> {
-    return this.handle
+  async getAssignment(id: string, db: AccessDb = this.db()): Promise<AssignmentRow | undefined> {
+    return db
       .selectFrom('role_assignments')
       .select(ASSIGNMENT_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<AssignmentRow | undefined>;
+      .executeTakeFirst();
   }
 
   /**
@@ -691,23 +689,22 @@ export class AccessRepository {
    * đường xoá role: phải biết trước các context từng mang gán của role
    * để vô hiệu hoá cache quyền ở đúng các context đó sau khi xoá.
    */
-  async listAssignmentsByRole(roleId: string): Promise<AssignmentRow[]> {
-    return this.handle
+  async listAssignmentsByRole(roleId: string, db: AccessDb = this.db()): Promise<AssignmentRow[]> {
+    return db
       .selectFrom('role_assignments')
       .select(ASSIGNMENT_COLUMNS)
       .where('role_id', '=', roleId)
-      .execute() as Promise<AssignmentRow[]>;
+      .execute();
   }
 
   /**
    * Liệt kê gán role, lọc tuỳ chọn theo user.
    */
-  async listAssignments(filter: { userId?: string; contextId?: string }, tx?: AccessDb): Promise<AssignmentRow[]> {
-    const db = tx ?? this.handle;
+  async listAssignments(filter: { userId?: string; contextId?: string }, db: AccessDb = this.db()): Promise<AssignmentRow[]> {
     let query = db.selectFrom('role_assignments').select(ASSIGNMENT_COLUMNS);
     if (filter.userId !== undefined) query = query.where('user_id', '=', filter.userId);
     if (filter.contextId !== undefined) query = query.where('context_id', '=', filter.contextId);
-    return query.execute() as Promise<AssignmentRow[]>;
+    return query.execute();
   }
 
   /**
@@ -734,23 +731,17 @@ export class AccessRepository {
     filter: { userId?: string; contextId?: string; roleId?: string; search?: string },
     page: number,
     pageSize: number,
+    db: AccessDb = this.db(),
   ): Promise<{ rows: AssignmentListRow[]; total: number }> {
     const filtered = () => {
-      let query = this.handle
+      let query = db
         .selectFrom('role_assignments')
         .leftJoin('users', 'users.id', 'role_assignments.user_id');
       if (filter.userId !== undefined) query = query.where('role_assignments.user_id', '=', filter.userId);
       if (filter.contextId !== undefined) query = query.where('role_assignments.context_id', '=', filter.contextId);
       if (filter.roleId !== undefined) query = query.where('role_assignments.role_id', '=', filter.roleId);
       if (filter.search) {
-        const pattern = `%${filter.search}%`;
-        query = query.where((eb) => eb.or([
-          eb('users.first_name', 'ilike', pattern),
-          eb('users.last_name', 'ilike', pattern),
-          eb('users.email', 'ilike', pattern),
-          eb('users.username', 'ilike', pattern),
-          sql<boolean>`users.first_name || ' ' || users.last_name ilike ${pattern}`,
-        ]));
+        query = query.where(userSearchCondition('users.', `%${filter.search}%`));
       }
       return query;
     };
@@ -782,14 +773,6 @@ export class AccessRepository {
    * của trang vai trò — đơn vị phân trang là NGƯỜI DÙNG, khác
    * `listAssignmentsPage` phân trang theo từng dòng gán.
    *
-   * Flow: dựng điều kiện trên bảng người dùng từ ba bộ lọc → đếm tổng
-   * số NGƯỜI DÙNG khớp → lấy đúng một trang người dùng sắp theo id
-   * tăng dần cho thứ tự trang ổn định → chỉ khi trang không rỗng mới
-   * nạp dòng gán của đúng các người dùng trong trang (ghép nội với
-   * bảng vai để lấy tên vai và với bảng context để lấy số cấp) rồi
-   * gom theo người dùng. Nhờ vậy chi phí nạp gán tỉ lệ với kích thước
-   * trang, không tỉ lệ với toàn bộ tập khớp lọc.
-   *
    * Ngữ nghĩa lọc: trạng thái suy ra từ hai cờ của tài khoản đúng như
    * phép tìm kiếm người dùng của module users (không truyền thì chỉ
    * lấy tài khoản chưa xoá gồm cả đang bị đình chỉ; `active` thêm
@@ -812,6 +795,7 @@ export class AccessRepository {
     filter: { search?: string; roleId?: string; status?: UserListStatus },
     page: number,
     pageSize: number,
+    db: AccessDb = this.db(),
   ): Promise<{ rows: UserWithAssignmentsRow[]; total: number }> {
     const applyConditions = (eb: ExpressionBuilder<CentreDB, 'users'>) => {
       const conds = [eb('deleted', '=', filter.status === 'deleted')];
@@ -827,24 +811,17 @@ export class AccessRepository {
         ));
       }
       if (filter.search) {
-        const pattern = `%${filter.search}%`;
-        conds.push(eb.or([
-          eb('first_name', 'ilike', pattern),
-          eb('last_name', 'ilike', pattern),
-          eb('email', 'ilike', pattern),
-          eb('username', 'ilike', pattern),
-          sql<boolean>`first_name || ' ' || last_name ilike ${pattern}`,
-        ]));
+        conds.push(userSearchCondition('', `%${filter.search}%`));
       }
       return eb.and(conds);
     };
-    const count = await this.handle
+    const count = await db
       .selectFrom('users')
       .select(sql<number>`count(*)::int`.as('n'))
       .where((eb) => applyConditions(eb))
       .executeTakeFirst();
     const total = count?.n ?? 0;
-    const userRows = await this.handle
+    const userRows = await db
       .selectFrom('users')
       .select([
         'id',
@@ -862,7 +839,7 @@ export class AccessRepository {
       .offset((page - 1) * pageSize)
       .execute();
     if (userRows.length === 0) return { rows: [], total };
-    const assignmentRows = await this.handle
+    const assignmentRows = await db
       .selectFrom('role_assignments')
       .innerJoin('role', 'role.id', 'role_assignments.role_id')
       .innerJoin('context', 'context.id', 'role_assignments.context_id')
@@ -901,14 +878,14 @@ export class AccessRepository {
   /**
    * Lấy mọi gán role của user tại các context cho trước (đầu vào của PermissionEvaluator).
    */
-  async getAssignmentsForUserInContexts(userId: string, contextIds: string[]): Promise<AssignmentRow[]> {
+  async getAssignmentsForUserInContexts(userId: string, contextIds: string[], db: AccessDb = this.db()): Promise<AssignmentRow[]> {
     if (contextIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('role_assignments')
       .select(ASSIGNMENT_COLUMNS)
       .where('user_id', '=', userId)
       .where('context_id', 'in', contextIds)
-      .execute() as Promise<AssignmentRow[]>;
+      .execute();
   }
 
   // --- ghi đè capability ------------------------------------------------------
@@ -916,8 +893,7 @@ export class AccessRepository {
   /**
    * Ghi override quyền của role tại một context (CAP_*); ghi đè nếu đã có.
    */
-  async upsertRoleCapability(values: NewRoleCapability, tx?: AccessDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async upsertRoleCapability(values: NewRoleCapability, db: AccessDb = this.db()): Promise<void> {
     await db
       .insertInto('role_capabilities')
       .values(roleCapabilityInsertValues(values))
@@ -931,8 +907,7 @@ export class AccessRepository {
   /**
    * Xoá một override cụ thể.
    */
-  async deleteRoleCapability(contextId: string, roleId: string, capability: string, tx?: AccessDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async deleteRoleCapability(contextId: string, roleId: string, capability: string, db: AccessDb = this.db()): Promise<void> {
     await db
       .deleteFrom('role_capabilities')
       .where('context_id', '=', contextId)
@@ -944,15 +919,15 @@ export class AccessRepository {
   /**
    * Lấy mọi override của các role tại các context cho trước (đầu vào của PermissionEvaluator).
    */
-  async getOverridesForRoles(roleIds: string[], capability: string, contextIds: string[]): Promise<RoleCapabilityRow[]> {
+  async getOverridesForRoles(roleIds: string[], capability: string, contextIds: string[], db: AccessDb = this.db()): Promise<RoleCapabilityRow[]> {
     if (roleIds.length === 0 || contextIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('role_capabilities')
       .select(ROLE_CAPABILITY_COLUMNS)
       .where('role_id', 'in', roleIds)
       .where('capability', '=', capability)
       .where('context_id', 'in', contextIds)
-      .execute() as Promise<RoleCapabilityRow[]>;
+      .execute();
   }
 
   /**
@@ -961,19 +936,19 @@ export class AccessRepository {
    * truy vấn nạp trọn ma trận override cần cho mọi capability, thay cho một
    * truy vấn riêng cho từng capability như getOverridesForRoles.
    */
-  async getOverridesForRolesInContexts(roleIds: string[], contextIds: string[]): Promise<RoleCapabilityRow[]> {
+  async getOverridesForRolesInContexts(roleIds: string[], contextIds: string[], db: AccessDb = this.db()): Promise<RoleCapabilityRow[]> {
     if (roleIds.length === 0 || contextIds.length === 0) return [];
-    return this.handle
+    return db
       .selectFrom('role_capabilities')
       .select(ROLE_CAPABILITY_COLUMNS)
       .where('role_id', 'in', roleIds)
       .where('context_id', 'in', contextIds)
-      .execute() as Promise<RoleCapabilityRow[]>;
+      .execute();
   }
 
   /** Xoá các override mặc định đã seed của một role tại một context (seed dùng để giữ các giá trị mặc định theo archetype đồng bộ với code). */
-  async deleteRoleCapabilitiesAtContext(roleId: string, contextId: string, capabilityNames: string[]): Promise<void> {
-    await this.handle
+  async deleteRoleCapabilitiesAtContext(roleId: string, contextId: string, capabilityNames: string[], db: AccessDb = this.db()): Promise<void> {
+    await db
       .deleteFrom('role_capabilities')
       .where('role_id', '=', roleId)
       .where('context_id', '=', contextId)
@@ -984,26 +959,25 @@ export class AccessRepository {
   /**
    * Liệt kê override đã lưu của role (hiển thị ma trận capability).
    */
-  async listRoleCapabilities(roleId: string): Promise<RoleCapabilityRow[]> {
-    return this.handle
+  async listRoleCapabilities(roleId: string, db: AccessDb = this.db()): Promise<RoleCapabilityRow[]> {
+    return db
       .selectFrom('role_capabilities')
       .select(ROLE_CAPABILITY_COLUMNS)
       .where('role_id', '=', roleId)
-      .execute() as Promise<RoleCapabilityRow[]>;
+      .execute();
   }
 
   /**
    * Liệt kê override đã lưu của một role tại đúng một context — tập kết
    * quả của thao tác lưu ma trận thay toàn bộ và đầu vào kiểm chứng của nó.
    */
-  async listRoleCapabilitiesAtContext(roleId: string, contextId: string, tx?: AccessDb): Promise<RoleCapabilityRow[]> {
-    const db = tx ?? this.handle;
+  async listRoleCapabilitiesAtContext(roleId: string, contextId: string, db: AccessDb = this.db()): Promise<RoleCapabilityRow[]> {
     return db
       .selectFrom('role_capabilities')
       .select(ROLE_CAPABILITY_COLUMNS)
       .where('role_id', '=', roleId)
       .where('context_id', '=', contextId)
-      .execute() as Promise<RoleCapabilityRow[]>;
+      .execute();
   }
 
   /**
@@ -1018,13 +992,13 @@ export class AccessRepository {
    * @param contextId - Định danh của context cần đọc.
    * @returns Mọi dòng ghi đè thuộc context đó, của mọi role.
    */
-  async listAllRoleCapabilitiesAtContext(contextId: string): Promise<RoleCapabilityRow[]> {
-    return this.handle
+  async listAllRoleCapabilitiesAtContext(contextId: string, db: AccessDb = this.db()): Promise<RoleCapabilityRow[]> {
+    return db
       .selectFrom('role_capabilities')
       .select(ROLE_CAPABILITY_COLUMNS)
       .where('context_id', '=', contextId)
       .orderBy('capability')
-      .execute() as Promise<RoleCapabilityRow[]>;
+      .execute();
   }
 
   /**
@@ -1036,8 +1010,7 @@ export class AccessRepository {
    * sách tên cho đường seed, còn hàm này xoá trọn tập của cặp
    * (role, context) bất kể tên.
    */
-  async deleteRoleCapabilitiesInContext(roleId: string, contextId: string, tx?: AccessDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async deleteRoleCapabilitiesInContext(roleId: string, contextId: string, db: AccessDb = this.db()): Promise<void> {
     await db
       .deleteFrom('role_capabilities')
       .where('role_id', '=', roleId)
@@ -1050,24 +1023,24 @@ export class AccessRepository {
   /**
    * Đọc một giá trị cấu hình hệ thống (bảng config).
    */
-  async getConfigValue(key: string): Promise<unknown> {
-    const row = await this.handle
+  async getConfigValue(key: string, db: AccessDb = this.db()): Promise<unknown> {
+    const row = await db
       .selectFrom('config')
       .select(['value'])
       .where('key', '=', key)
       .executeTakeFirst();
-    return row?.value as unknown;
+    return row?.value;
   }
 
   /**
    * Ghi một giá trị cấu hình hệ thống.
    */
-  async setConfigValue(key: string, value: unknown): Promise<void> {
-    const row: InsertObject<CentreDB, 'config'> = { key, value: jsonbValue(value) };
-    await this.handle
+  async setConfigValue(key: string, value: unknown, db: AccessDb = this.db()): Promise<void> {
+    const row: InsertObject<CentreDB, 'config'> = { key, value: jsonbField(value) };
+    await db
       .insertInto('config')
       .values(row)
-      .onConflict((oc) => oc.column('key').doUpdateSet({ value: jsonbValue(value), updated_at: new Date() }))
+      .onConflict((oc) => oc.column('key').doUpdateSet({ value: jsonbField(value), updated_at: new Date() }))
       .execute();
   }
 }

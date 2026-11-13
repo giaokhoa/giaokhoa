@@ -4,10 +4,21 @@ import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
-import { apiFetch } from '#lib/api';
+import { apiFetch, errorText } from '#lib/api';
+import { appKeyMeta } from '#lib/route-meta';
 import { formatDateTime } from '#utils/date-format';
 import { courseGroupsQueryOptions, progressReportQueryOptions, useCourseGroups, useProgressReport } from '../queries/progress-report';
 import { queryClient } from '#lib/query-client';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@giaokhoa/ui/components/select';
+
+/** Trạng thái "chưa hoàn thành" của một mục trong ma trận tiến độ: API trả 0 cho ô chưa xong, khác 0 cho ô đã xong. */
+const COMPLETION_STATE_NOT_COMPLETED = 0;
 
 /**
  * Báo cáo tiến độ học cho giáo viên (K2-B4) — ba bề mặt trên một trang:
@@ -19,26 +30,40 @@ export function ProgressReportPage() {
   const { t } = useTranslation('app');
   const { id } = useParams();
   const [groupId, setGroupId] = useState('');
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): báo cáo theo khoá + nhóm lọc là một query (đổi nhóm = đổi khoá, keepPreviousData giữ bản cũ trong lúc tải bản mới như luồng thủ công); danh sách nhóm là query riêng. Lỗi tải báo cáo → data null → trạng thái không có quyền.
+  const [csvError, setCsvError] = useState<string | null>(null);
+  // Dữ liệu trang qua TanStack (F-01 đợt 1): báo cáo theo khoá + nhóm lọc là một query (đổi nhóm = đổi khoá, keepPreviousData giữ bản cũ trong lúc tải bản mới như luồng thủ công); danh sách nhóm là query riêng. Chỉ 403 mới cho data null → trạng thái không có quyền; lỗi tải khác nổi lên thành lỗi của query để trang hiện thông báo lỗi tải riêng thay vì báo không có quyền.
   const reportQuery = useProgressReport(id, groupId);
   const report = reportQuery.data ?? null;
   const denied = reportQuery.data === null;
+  const loadFailed =
+    reportQuery.isError && !reportQuery.isFetching
+      ? errorText(reportQuery.error, t('progressReportLoadFailed'))
+      : null;
   const groupsQuery = useCourseGroups(id);
   const groups = groupsQuery.data ?? [];
 
   /** Tải CSV qua fetch có xác thực rồi lưu bằng blob URL (đích xuất chuẩn: định dạng `csv` truyền qua tham số truy vấn `format`). */
   async function downloadCsv() {
     if (!id) return;
-    const query = groupId ? `?format=csv&groupId=${groupId}` : '?format=csv';
-    const res = await apiFetch(`/api/v1/courses/${id}/progress/reports${query}`);
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'progress-report.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    setCsvError(null);
+    const query = groupId ? `?format=csv&groupId=${encodeURIComponent(groupId)}` : '?format=csv';
+    try {
+      const res = await apiFetch(`/api/v1/courses/${id}/progress/reports${query}`);
+      if (!res.ok) {
+        setCsvError(t('progressReportLoadFailed'));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'progress-report.csv';
+      a.click();
+      // Thu hồi URL sau khi trình duyệt đã kịp bắt đầu tải, thay vì thu hồi ngay sau click (file lớn có thể chưa kịp tải).
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setCsvError(errorText(err, t('progressReportLoadFailed')));
+    }
   }
 
   return (
@@ -47,17 +72,24 @@ export function ProgressReportPage() {
         <Link to={`/courses/${id}`} className="text-sm underline">{t('playerBackToCourse')}</Link>
         <h1 className="text-lg font-semibold">{t('progressReportTitle')}</h1>
         {groups.length > 0 ? (
-          <select
-            className="rounded-md border border-input bg-transparent px-2 py-1 text-sm"
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            aria-label={t('progressReportGroupFilter')}
+          <Select
+            items={Object.fromEntries([
+              ['all', t('progressReportAllGroups')],
+              ...groups.map((g) => [g.id, g.name] as [string, string]),
+            ])}
+            value={groupId === '' ? 'all' : groupId}
+            onValueChange={(v) => setGroupId(v === 'all' || v === null ? '' : v)}
           >
-            <option value="">{t('progressReportAllGroups')}</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
+            <SelectTrigger aria-label={t('progressReportGroupFilter')} className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('progressReportAllGroups')}</SelectItem>
+              {groups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : null}
         {report ? (
           <Button type="button" variant="outline" size="sm" onClick={() => void downloadCsv()}>
@@ -65,7 +97,9 @@ export function ProgressReportPage() {
           </Button>
         ) : null}
       </div>
+      {csvError ? <p role="alert">{csvError}</p> : null}
       {denied ? <p role="alert">{t('progressReportDenied')}</p> : null}
+      {loadFailed ? <p role="alert">{loadFailed}</p> : null}
       {report ? (
         <>
           <Card>
@@ -106,7 +140,7 @@ export function ProgressReportPage() {
                     <tr key={student.userId}>
                       <td>{student.fullName || student.username}</td>
                       {report.items.map((item) => (
-                        <td key={item.cmId}>{(student.states[item.cmId] ?? 0) !== 0 ? '✓' : '—'}</td>
+                        <td key={item.cmId}>{(student.states[item.cmId] ?? COMPLETION_STATE_NOT_COMPLETED) !== COMPLETION_STATE_NOT_COMPLETED ? '✓' : '—'}</td>
                       ))}
                       <td>{student.percent !== null ? `${student.percent}%` : '—'}</td>
                       <td>{student.lastAccessAt ? formatDateTime(student.lastAccessAt) : '—'}</td>
@@ -121,7 +155,7 @@ export function ProgressReportPage() {
           </Card>
         </>
       ) : null}
-      {!report && !denied ? <p>{t('courseLoading')}</p> : null}
+      {!report && !denied && !loadFailed ? <p>{t('courseLoading')}</p> : null}
     </main>
   );
 }
@@ -146,7 +180,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
-  return titleMeta('Tiến độ học tập');
+  return appKeyMeta('progressReportTitle');
 }

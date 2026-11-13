@@ -1,3 +1,9 @@
+/**
+ * Trang Điểm theo bài của một khoá: học sinh xem điểm từng bài của mình (chỉ bài đã công bố mới hiện điểm).
+ * Giáo viên/staff của khoá xem lưới chỉ-đọc học sinh × các bài, quản trị mục điểm và công bố theo bài, nhập điểm, xem lịch sử điểm và xuất vnEdu từ các bài đã công bố.
+ * Dữ liệu đọc qua `useCourseGradeData`, thao tác ghi qua các đột biến của `queries/course-grade`; khu quản trị chỉ render khi có quyền staff của khoá.
+ */
+
 import { useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -7,7 +13,7 @@ import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { apiFetch } from '#lib/api';
+import { exportGradesVnedu } from '../api/course-grade';
 import { gradeItemHistoryQueryOptions, useCourseGradeData, useCreateGradeItem, useDeleteGradeItem, useSetGradeItemPublished, useSetGradePostingPolicy, useSubmitGrade, useUpdateGradeItem } from '../queries/course-grade';
 import type { GradeHistoryView } from '../types/course-grade';
 import { usePermissions } from '#lib/permissions';
@@ -197,27 +203,16 @@ export function GradebookPage() {
       return;
     }
     try {
-      const response = await apiFetch(`/api/v1/courses/${courseId}/grade-exports`, {
-        method: 'POST',
-        body: JSON.stringify({
-          provider: 'vnedu',
-          regularItemIds,
-          midtermItemId: midterms[0]!.id,
-          finalItemId: finals[0]!.id,
-          semester: Number(vneduSemester),
-          ...(vneduSchoolYear.trim() ? { schoolYear: vneduSchoolYear.trim() } : {}),
-          ...(vneduSubject.trim() ? { subjectName: vneduSubject.trim() } : {}),
-          ...(vneduClass.trim() ? { className: vneduClass.trim() } : {}),
-        }),
+      await exportGradesVnedu(courseId, {
+        provider: 'vnedu',
+        regularItemIds,
+        midtermItemId: midterms[0]!.id,
+        finalItemId: finals[0]!.id,
+        semester: Number(vneduSemester),
+        ...(vneduSchoolYear.trim() ? { schoolYear: vneduSchoolYear.trim() } : {}),
+        ...(vneduSubject.trim() ? { subjectName: vneduSubject.trim() } : {}),
+        ...(vneduClass.trim() ? { className: vneduClass.trim() } : {}),
       });
-      if (!response.ok) throw new Error('vnedu export failed');
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = `vnedu-${courseId}.xlsx`;
-      anchor.click();
-      URL.revokeObjectURL(objectUrl);
       setVneduMessage(t('vneduExported'));
     } catch {
       setVneduMessage(t('vneduExportFailed'));

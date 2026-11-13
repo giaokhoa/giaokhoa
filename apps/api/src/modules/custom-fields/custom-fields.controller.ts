@@ -1,9 +1,36 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
 import { RequireCapability } from '../../common/require-capability.decorator';
-import { CustomFieldsService, type FieldConfig } from './custom-fields.service';
+import { CustomFieldsService, isCustomFieldType, type FieldConfig } from './custom-fields.service';
 import { createCustomFieldCategorySchema, createCustomFieldSchema, type CreateCategoryDto, type CreateFieldDto } from './dto/custom-fields.dto';
+
+/**
+ * Chuyển `configData` thô từ DTO (`Record<string, unknown>` ở `@giaokhoa/contracts`)
+ * thành `FieldConfig` của service: chỉ giữ 4 khoá mà `FieldConfig` định nghĩa, khoá
+ * đã biết sai kiểu thì từ chối 400 ngay tại biên thay vì ghi rồi mới vỡ khi đọc.
+ * Khoá lạ bị bỏ vì `validateValue` chỉ đọc 4 khoá này nên chúng không có hiệu lực.
+ */
+function parseFieldConfig(configData: Record<string, unknown> | undefined): FieldConfig | undefined {
+  if (configData === undefined) return undefined;
+  const invalid = (msg: string): never => { throw new BadRequestException({ message: msg, code: 'customfield.invalid_config' }); };
+  const config: FieldConfig = {};
+  const required = configData.required;
+  if (typeof required === 'boolean') config.required = required;
+  else if (required !== undefined) invalid('configData.required must be a boolean');
+  const options = configData.options;
+  if (options !== undefined) {
+    if (Array.isArray(options) && options.every((option): option is string => typeof option === 'string')) config.options = options;
+    else invalid('configData.options must be an array of strings');
+  }
+  const defaultvalue = configData.defaultvalue;
+  if (typeof defaultvalue === 'string') config.defaultvalue = defaultvalue;
+  else if (defaultvalue !== undefined) invalid('configData.defaultvalue must be a string');
+  const maxlength = configData.maxlength;
+  if (typeof maxlength === 'number' && Number.isFinite(maxlength)) config.maxlength = maxlength;
+  else if (maxlength !== undefined) invalid('configData.maxlength must be a number');
+  return config;
+}
 
 
 @ApiTags('custom-fields')
@@ -36,7 +63,12 @@ export class CustomFieldsController {
   /**
    * POST /custom-fields/categories/:id/fields — thêm field vào category.
    */
-  async createField(@Body({ schema: createCustomFieldSchema }) dto: CreateFieldDto) { return this.service.createField(dto.categoryId, { ...dto, configData: dto.configData as FieldConfig | undefined }); }
+  async createField(@Body({ schema: createCustomFieldSchema }) dto: CreateFieldDto) {
+    if (!isCustomFieldType(dto.type)) {
+      throw new BadRequestException({ message: `Unsupported field type ${dto.type}`, code: 'customfield.invalid_type' });
+    }
+    return this.service.createField(dto.categoryId, { ...dto, type: dto.type, configData: parseFieldConfig(dto.configData) });
+  }
   @Get('fields')
   @RequireCapability('customfield:manage')
   /**

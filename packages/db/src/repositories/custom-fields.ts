@@ -9,9 +9,10 @@
  *
  * Khuôn hình dạng ở biên: tên cột snake_case của schema codegen ở bên trong, hình dạng camelCase ở bên ngoài qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues` loại `undefined` từng trường (luật T-4). Cột jsonb `config_data` khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`).
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder } from 'kysely';
+import {type InsertObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type CustomFieldsDb = CentreDb | CentreTx;
@@ -78,19 +79,6 @@ export interface NewField {
   updatedAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng custom_field_category. */
 const CATEGORY_COLUMNS = [
   'id',
@@ -128,8 +116,8 @@ const DATA_COLUMNS = [
 ] as const;
 
 /** Ánh xạ dữ kiện ghi category từ camelCase sang snake_case, loại `undefined` từng trường. */
-function categoryInsertValues(values: NewCategory): Insertable<CentreDB['custom_field_category']> {
-  const row: Insertable<CentreDB['custom_field_category']> = {
+function categoryInsertValues(values: NewCategory): InsertObject<CentreDB, 'custom_field_category'> {
+  const row: InsertObject<CentreDB, 'custom_field_category'> = {
     name: values.name,
     component: values.component,
     area: values.area,
@@ -162,22 +150,26 @@ function fieldInsertValues(values: NewField): InsertObject<CentreDB, 'custom_fie
 export class CustomFieldsRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): CustomFieldsDb {
+    return this.handle;
+  }
+
   /**
    * Chèn category trường tuỳ biến.
    */
-  async insertCategory(v: NewCategory, db: CustomFieldsDb = this.handle): Promise<CategoryRow> {
-    const rows = await db
+  async insertCategory(v: NewCategory, db: CustomFieldsDb = this.db()): Promise<CategoryRow> {
+    return db
       .insertInto('custom_field_category')
       .values(categoryInsertValues(v))
       .returning(CATEGORY_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /**
    * Liệt kê category theo component/area.
    */
-  async listCategories(component: string, area: string, db: CustomFieldsDb = this.handle): Promise<CategoryRow[]> {
+  async listCategories(component: string, area: string, db: CustomFieldsDb = this.db()): Promise<CategoryRow[]> {
     return db
       .selectFrom('custom_field_category')
       .select(CATEGORY_COLUMNS)
@@ -190,7 +182,7 @@ export class CustomFieldsRepository {
   /**
    * Lấy category theo id.
    */
-  async getCategory(id: string, db: CustomFieldsDb = this.handle): Promise<CategoryRow | undefined> {
+  async getCategory(id: string, db: CustomFieldsDb = this.db()): Promise<CategoryRow | undefined> {
     return db
       .selectFrom('custom_field_category')
       .select(CATEGORY_COLUMNS)
@@ -202,7 +194,7 @@ export class CustomFieldsRepository {
    * Xoá category: xoá dữ liệu của từng field trước, rồi các field,
    * rồi chính category — tuần tự, không transaction (xem đầu file).
    */
-  async deleteCategory(id: string, db: CustomFieldsDb = this.handle): Promise<void> {
+  async deleteCategory(id: string, db: CustomFieldsDb = this.db()): Promise<void> {
     const fields = await this.listFieldsByCategory(id, db);
     for (const f of fields) {
       await db.deleteFrom('custom_field_data').where('field_id', '=', f.id).execute();
@@ -214,19 +206,18 @@ export class CustomFieldsRepository {
   /**
    * Chèn định nghĩa field.
    */
-  async insertField(v: NewField, db: CustomFieldsDb = this.handle): Promise<FieldRow> {
-    const rows = await db
+  async insertField(v: NewField, db: CustomFieldsDb = this.db()): Promise<FieldRow> {
+    return db
       .insertInto('custom_field_field')
       .values(fieldInsertValues(v))
       .returning(FIELD_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /**
    * Lấy field theo id.
    */
-  async getField(id: string, db: CustomFieldsDb = this.handle): Promise<FieldRow | undefined> {
+  async getField(id: string, db: CustomFieldsDb = this.db()): Promise<FieldRow | undefined> {
     return db
       .selectFrom('custom_field_field')
       .select(FIELD_COLUMNS)
@@ -237,7 +228,7 @@ export class CustomFieldsRepository {
   /**
    * Liệt kê field trong category.
    */
-  async listFieldsByCategory(categoryId: string, db: CustomFieldsDb = this.handle): Promise<FieldRow[]> {
+  async listFieldsByCategory(categoryId: string, db: CustomFieldsDb = this.db()): Promise<FieldRow[]> {
     return db
       .selectFrom('custom_field_field')
       .select(FIELD_COLUMNS)
@@ -250,7 +241,7 @@ export class CustomFieldsRepository {
    * Xoá field: xoá dữ liệu của field trước, rồi chính field — tuần
    * tự, không transaction (xem đầu file).
    */
-  async deleteField(id: string, db: CustomFieldsDb = this.handle): Promise<void> {
+  async deleteField(id: string, db: CustomFieldsDb = this.db()): Promise<void> {
     await db.deleteFrom('custom_field_data').where('field_id', '=', id).execute();
     await db.deleteFrom('custom_field_field').where('id', '=', id).execute();
   }
@@ -258,7 +249,7 @@ export class CustomFieldsRepository {
   /**
    * Ghi giá trị field cho một instance (upsert theo field+instance).
    */
-  async upsertData(fieldId: string, instanceId: string, value: string | null, db: CustomFieldsDb = this.handle): Promise<void> {
+  async upsertData(fieldId: string, instanceId: string, value: string | null, db: CustomFieldsDb = this.db()): Promise<void> {
     await db
       .insertInto('custom_field_data')
       .values({ field_id: fieldId, instance_id: instanceId, value })
@@ -271,7 +262,7 @@ export class CustomFieldsRepository {
   /**
    * Đọc mọi giá trị field của một instance.
    */
-  async getDataForInstance(fieldIds: string[], instanceId: string, db: CustomFieldsDb = this.handle): Promise<DataRow[]> {
+  async getDataForInstance(fieldIds: string[], instanceId: string, db: CustomFieldsDb = this.db()): Promise<DataRow[]> {
     if (fieldIds.length === 0) return [];
     return db
       .selectFrom('custom_field_data')
@@ -286,7 +277,7 @@ export class CustomFieldsRepository {
    * hiệu dụng của đường lẻ (mọi dòng dữ liệu của các instance; tập
    * field do tầng service đối chiếu khi lắp giá trị).
    */
-  async getDataForInstances(fieldIds: string[], instanceIds: string[], db: CustomFieldsDb = this.handle): Promise<DataRow[]> {
+  async getDataForInstances(fieldIds: string[], instanceIds: string[], db: CustomFieldsDb = this.db()): Promise<DataRow[]> {
     if (fieldIds.length === 0 || instanceIds.length === 0) return [];
     return db
       .selectFrom('custom_field_data')

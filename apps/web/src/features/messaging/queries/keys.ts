@@ -13,7 +13,11 @@ export const queryKeys = {
   messagingMessagesPage: (conversationId: string, beforeSeq: number) =>
     ['messages', 'conversations', conversationId, 'messages', beforeSeq] as const,
   messagingSearch: (conversationId: string, q: string) => ['messages', 'conversations', conversationId, 'search', q] as const,
+  /** Tiền tố khóa của MỌI trang roster — dùng cho `setQueriesData`/`invalidateQueries` bao quát toàn bộ roster. */
+  messagingRoster: ['messages', 'roster'] as const,
   messagingRosterPage: (url: string) => ['messages', 'roster', url] as const,
+  /** Tiền tố khóa của MỌI trang tin của một conversation — dùng cho `setQueriesData` bao quát toàn bộ cửa sổ tin. */
+  messagingConversationMessages: (conversationId: string) => ['messages', 'conversations', conversationId, 'messages'] as const,
   messagingClassConversation: (classId: string) => ['messages', 'classes', classId, 'conversation'] as const,
   messagingPersonProfile: (userId: string) => ['messages', 'users', userId, 'profile'] as const,
 };

@@ -1,4 +1,5 @@
-import type { CentreDb, CentreTx } from '../client';
+import { type InsertObject, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /**
  * Kho dữ liệu nhóm trên Kysely: quản lý group, grouping, thành viên nhóm và cohort dùng cho phân nhóm theo ngữ cảnh.
@@ -169,59 +170,59 @@ const COHORT_MEMBER_COLUMNS = ['cohort_id as cohortId', 'user_id as userId', 'ti
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
 // ---------------------------------------------------------------------------
 
-function groupInsertValues(v: NewGroup) {
+function groupInsertValues(values: NewGroup): InsertObject<CentreDB, 'course_groups'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course_id: v.courseId,
-    name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course_id: values.courseId,
+    name: values.name,
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.enrolmentKey !== undefined ? { enrolment_key: values.enrolmentKey } : {}),
   };
 }
 
-function groupUpdateValues(v: Partial<NewGroup>) {
+function groupUpdateSet(patch: Partial<NewGroup>): UpdateObject<CentreDB, 'course_groups'> {
   return {
-    ...(v.courseId !== undefined ? { course_id: v.courseId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
+    ...(patch.courseId !== undefined ? { course_id: patch.courseId } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.idNumber !== undefined ? { id_number: patch.idNumber } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.enrolmentKey !== undefined ? { enrolment_key: patch.enrolmentKey } : {}),
   };
 }
 
-function groupingInsertValues(v: NewGrouping) {
+function groupingInsertValues(values: NewGrouping): InsertObject<CentreDB, 'groupings'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course_id: v.courseId,
-    name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course_id: values.courseId,
+    name: values.name,
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
   };
 }
 
-function cohortInsertValues(v: NewCohort) {
+function cohortInsertValues(values: NewCohort): InsertObject<CentreDB, 'cohort'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    tenant_id: v.tenantId,
-    name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    context_id: v.contextId,
-    ...(v.component !== undefined ? { component: v.component } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    tenant_id: values.tenantId,
+    name: values.name,
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    context_id: values.contextId,
+    ...(values.component !== undefined ? { component: values.component } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
   };
 }
 
-function cohortUpdateValues(v: Partial<NewCohort>) {
+function cohortUpdateSet(patch: Partial<NewCohort>): UpdateObject<CentreDB, 'cohort'> {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.contextId !== undefined ? { context_id: v.contextId } : {}),
-    ...(v.component !== undefined ? { component: v.component } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...(patch.tenantId !== undefined ? { tenant_id: patch.tenantId } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.idNumber !== undefined ? { id_number: patch.idNumber } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.contextId !== undefined ? { context_id: patch.contextId } : {}),
+    ...(patch.component !== undefined ? { component: patch.component } : {}),
+    ...(patch.visible !== undefined ? { visible: patch.visible } : {}),
   };
 }
 
@@ -232,56 +233,60 @@ function cohortUpdateValues(v: Partial<NewCohort>) {
 export class GroupsRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  private db(): GroupsDb {
+    return this.handle;
+  }
+
   /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: GroupsTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
   /** Chèn nhóm khoá học. */
-  async insertGroup(v: NewGroup): Promise<GroupRow> {
-    return this.handle
+  async insertGroup(v: NewGroup, db: GroupsDb = this.db()): Promise<GroupRow> {
+    return db
       .insertInto('course_groups')
       .values(groupInsertValues(v))
       .returning(GROUP_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<GroupRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy nhóm theo id. */
-  async getGroup(id: string): Promise<GroupRow | undefined> {
-    return this.handle
+  async getGroup(id: string, db: GroupsDb = this.db()): Promise<GroupRow | undefined> {
+    return db
       .selectFrom('course_groups')
       .select(GROUP_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<GroupRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Liệt kê nhóm của khoá học. */
-  async listGroups(courseId: string): Promise<GroupRow[]> {
-    return this.handle
+  async listGroups(courseId: string, db: GroupsDb = this.db()): Promise<GroupRow[]> {
+    return db
       .selectFrom('course_groups')
       .select(GROUP_COLUMNS)
       .where('course_id', '=', courseId)
       .orderBy('id', 'asc')
-      .execute() as Promise<GroupRow[]>;
+      .execute();
   }
 
   /** Cập nhật nhóm. */
-  async updateGroup(id: string, v: Partial<NewGroup>): Promise<void> {
-    await this.handle
+  async updateGroup(id: string, v: Partial<NewGroup>, db: GroupsDb = this.db()): Promise<void> {
+    await db
       .updateTable('course_groups')
-      .set({ ...groupUpdateValues(v), updated_at: new Date() })
+      .set({ ...groupUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá nhóm. */
-  async deleteGroup(id: string): Promise<void> {
-    await this.handle.deleteFrom('course_groups').where('id', '=', id).execute();
+  async deleteGroup(id: string, db: GroupsDb = this.db()): Promise<void> {
+    await db.deleteFrom('course_groups').where('id', '=', id).execute();
   }
 
   /** Thêm thành viên vào nhóm (trùng thì bỏ qua). */
-  async addMember(groupId: string, userId: string, component = '', itemId: string | null = null): Promise<void> {
-    await this.handle
+  async addMember(groupId: string, userId: string, component = '', itemId: string | null = null, db: GroupsDb = this.db()): Promise<void> {
+    await db
       .insertInto('groups_members')
       .values({ group_id: groupId, user_id: userId, component, item_id: itemId })
       .onConflict((oc) => oc.doNothing())
@@ -289,8 +294,8 @@ export class GroupsRepository {
   }
 
   /** Gỡ thành viên khỏi nhóm. */
-  async removeMember(groupId: string, userId: string): Promise<void> {
-    await this.handle
+  async removeMember(groupId: string, userId: string, db: GroupsDb = this.db()): Promise<void> {
+    await db
       .deleteFrom('groups_members')
       .where('group_id', '=', groupId)
       .where('user_id', '=', userId)
@@ -298,45 +303,45 @@ export class GroupsRepository {
   }
 
   /** Thành viên của một nhóm. */
-  async listMembers(groupId: string): Promise<GroupMemberRow[]> {
-    return this.handle
+  async listMembers(groupId: string, db: GroupsDb = this.db()): Promise<GroupMemberRow[]> {
+    return db
       .selectFrom('groups_members')
       .select(GROUP_MEMBER_COLUMNS)
       .where('group_id', '=', groupId)
       .orderBy('id', 'asc')
-      .execute() as Promise<GroupMemberRow[]>;
+      .execute();
   }
 
   /** Thành viên của nhiều nhóm (gộp). */
-  async listMembersOfGroups(groupIds: string[]): Promise<GroupMemberRow[]> {
+  async listMembersOfGroups(groupIds: string[], db: GroupsDb = this.db()): Promise<GroupMemberRow[]> {
     if (!groupIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('groups_members')
       .select(GROUP_MEMBER_COLUMNS)
       .where('group_id', 'in', groupIds)
-      .execute() as Promise<GroupMemberRow[]>;
+      .execute();
   }
 
   /** Các nhóm user thuộc về trong khoá học. */
-  async groupsOfUser(courseId: string, userId: string): Promise<GroupRow[]> {
-    const memberRows = (await this.handle
+  async groupsOfUser(courseId: string, userId: string, db: GroupsDb = this.db()): Promise<GroupRow[]> {
+    const memberRows = (await db
       .selectFrom('groups_members')
       .select(GROUP_MEMBER_COLUMNS)
       .where('user_id', '=', userId)
       .execute()) as GroupMemberRow[];
     const ids = memberRows.map((m) => m.groupId);
     if (!ids.length) return [];
-    return this.handle
+    return db
       .selectFrom('course_groups')
       .select(GROUP_COLUMNS)
       .where('course_id', '=', courseId)
       .where('id', 'in', ids)
-      .execute() as Promise<GroupRow[]>;
+      .execute();
   }
 
   /** User có là thành viên nhóm hay không. */
-  async isMember(groupId: string, userId: string): Promise<boolean> {
-    const row = await this.handle
+  async isMember(groupId: string, userId: string, db: GroupsDb = this.db()): Promise<boolean> {
+    const row = await db
       .selectFrom('groups_members')
       .select(GROUP_MEMBER_COLUMNS)
       .where('group_id', '=', groupId)
@@ -346,41 +351,41 @@ export class GroupsRepository {
   }
 
   /** Chèn grouping (nhóm của các nhóm). */
-  async insertGrouping(v: NewGrouping): Promise<GroupingRow> {
-    return this.handle
+  async insertGrouping(v: NewGrouping, db: GroupsDb = this.db()): Promise<GroupingRow> {
+    return db
       .insertInto('groupings')
       .values(groupingInsertValues(v))
       .returning(GROUPING_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<GroupingRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy grouping theo id. */
-  async getGrouping(id: string): Promise<GroupingRow | undefined> {
-    return this.handle
+  async getGrouping(id: string, db: GroupsDb = this.db()): Promise<GroupingRow | undefined> {
+    return db
       .selectFrom('groupings')
       .select(GROUPING_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<GroupingRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Liệt kê grouping của khoá học. */
-  async listGroupings(courseId: string): Promise<GroupingRow[]> {
-    return this.handle
+  async listGroupings(courseId: string, db: GroupsDb = this.db()): Promise<GroupingRow[]> {
+    return db
       .selectFrom('groupings')
       .select(GROUPING_COLUMNS)
       .where('course_id', '=', courseId)
       .orderBy('id', 'asc')
-      .execute() as Promise<GroupingRow[]>;
+      .execute();
   }
 
   /** Xoá grouping. */
-  async deleteGrouping(id: string): Promise<void> {
-    await this.handle.deleteFrom('groupings').where('id', '=', id).execute();
+  async deleteGrouping(id: string, db: GroupsDb = this.db()): Promise<void> {
+    await db.deleteFrom('groupings').where('id', '=', id).execute();
   }
 
   /** Đưa nhóm vào grouping (trùng thì bỏ qua). */
-  async addGroupToGrouping(groupingId: string, groupId: string): Promise<void> {
-    await this.handle
+  async addGroupToGrouping(groupingId: string, groupId: string, db: GroupsDb = this.db()): Promise<void> {
+    await db
       .insertInto('groupings_groups')
       .values({ grouping_id: groupingId, group_id: groupId })
       .onConflict((oc) => oc.doNothing())
@@ -388,8 +393,8 @@ export class GroupsRepository {
   }
 
   /** Gỡ nhóm khỏi grouping. */
-  async removeGroupFromGrouping(groupingId: string, groupId: string): Promise<void> {
-    await this.handle
+  async removeGroupFromGrouping(groupingId: string, groupId: string, db: GroupsDb = this.db()): Promise<void> {
+    await db
       .deleteFrom('groupings_groups')
       .where('grouping_id', '=', groupingId)
       .where('group_id', '=', groupId)
@@ -397,66 +402,64 @@ export class GroupsRepository {
   }
 
   /** Các nhóm thuộc grouping. */
-  async groupsInGrouping(groupingId: string): Promise<GroupRow[]> {
-    const links = await this.handle
+  async groupsInGrouping(groupingId: string, db: GroupsDb = this.db()): Promise<GroupRow[]> {
+    const links = await db
       .selectFrom('groupings_groups')
       .select(['grouping_id as groupingId', 'group_id as groupId', 'time_added as timeAdded'])
       .where('grouping_id', '=', groupingId)
       .execute();
     if (!links.length) return [];
-    return this.handle
+    return db
       .selectFrom('course_groups')
       .select(GROUP_COLUMNS)
       .where('id', 'in', links.map((l) => l.groupId))
-      .execute() as Promise<GroupRow[]>;
+      .execute();
   }
 
   /** Chèn cohort; nhận handle giao dịch khi gọi trong transaction tạo lớp. */
-  async insertCohort(v: NewCohort, tx?: GroupsDb): Promise<CohortRow> {
-    const db = tx ?? this.handle;
+  async insertCohort(v: NewCohort, db: GroupsDb = this.db()): Promise<CohortRow> {
     return db
       .insertInto('cohort')
       .values(cohortInsertValues(v))
       .returning(COHORT_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<CohortRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy cohort theo id. */
-  async getCohort(id: string): Promise<CohortRow | undefined> {
-    return this.handle
+  async getCohort(id: string, db: GroupsDb = this.db()): Promise<CohortRow | undefined> {
+    return db
       .selectFrom('cohort')
       .select(COHORT_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<CohortRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Liệt kê cohort. */
-  async listCohorts(): Promise<CohortRow[]> {
-    return this.handle
+  async listCohorts(db: GroupsDb = this.db()): Promise<CohortRow[]> {
+    return db
       .selectFrom('cohort')
       .select(COHORT_COLUMNS)
       .orderBy('id', 'asc')
-      .execute() as Promise<CohortRow[]>;
+      .execute();
   }
 
   /** Cập nhật cohort; nhận handle giao dịch khi gọi trong transaction tạo lớp. */
-  async updateCohort(id: string, v: Partial<NewCohort>, tx?: GroupsDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateCohort(id: string, v: Partial<NewCohort>, db: GroupsDb = this.db()): Promise<void> {
     await db
       .updateTable('cohort')
-      .set({ ...cohortUpdateValues(v), updated_at: new Date() })
+      .set({ ...cohortUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá cohort. */
-  async deleteCohort(id: string): Promise<void> {
-    await this.handle.deleteFrom('cohort').where('id', '=', id).execute();
+  async deleteCohort(id: string, db: GroupsDb = this.db()): Promise<void> {
+    await db.deleteFrom('cohort').where('id', '=', id).execute();
   }
 
   /** Thêm thành viên cohort; trả `true` khi dòng thật sự được chèn (chưa là thành viên). */
-  async addCohortMember(cohortId: string, userId: string): Promise<boolean> {
-    const inserted = await this.handle
+  async addCohortMember(cohortId: string, userId: string, db: GroupsDb = this.db()): Promise<boolean> {
+    const inserted = await db
       .insertInto('cohort_members')
       .values({ cohort_id: cohortId, user_id: userId })
       .onConflict((oc) => oc.doNothing())
@@ -466,7 +469,7 @@ export class GroupsRepository {
   }
 
   /** Gỡ thành viên cohort; trả `true` khi có dòng bị xoá. */
-  async removeCohortMember(cohortId: string, userId: string, db: GroupsDb = this.handle): Promise<boolean> {
+  async removeCohortMember(cohortId: string, userId: string, db: GroupsDb = this.db()): Promise<boolean> {
     const deleted = await db
       .deleteFrom('cohort_members')
       .where('cohort_id', '=', cohortId)
@@ -477,18 +480,18 @@ export class GroupsRepository {
   }
 
   /** Thành viên của cohort. */
-  async listCohortMembers(cohortId: string): Promise<CohortMemberRow[]> {
-    return this.handle
+  async listCohortMembers(cohortId: string, db: GroupsDb = this.db()): Promise<CohortMemberRow[]> {
+    return db
       .selectFrom('cohort_members')
       .select(COHORT_MEMBER_COLUMNS)
       .where('cohort_id', '=', cohortId)
       .orderBy('time_added', 'asc')
-      .execute() as Promise<CohortMemberRow[]>;
+      .execute();
   }
 
   /** User có thuộc cohort hay không. */
-  async isCohortMember(cohortId: string, userId: string): Promise<boolean> {
-    const row = await this.handle
+  async isCohortMember(cohortId: string, userId: string, db: GroupsDb = this.db()): Promise<boolean> {
+    const row = await db
       .selectFrom('cohort_members')
       .select(COHORT_MEMBER_COLUMNS)
       .where('cohort_id', '=', cohortId)

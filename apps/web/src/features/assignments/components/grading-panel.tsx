@@ -12,7 +12,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { commentBankQueryOptions, submissionDetailQueryOptions, useAddSubmissionAnnotation, useCreateCommentBankEntry, useDeleteSubmissionAnnotation, useGradeSubmission, useReleaseSubmission } from '../queries/assignment';
 import { FeedbackMessages } from './feedback-messages';
 import { ANNOTATION_KINDS, SubmissionFileView, type AnnotationKind } from './submission-file';
-import { dateLabel, selectClass } from '../utils/shared';
+import { ASSIGN_BANK_CATEGORY_LABEL_KEYS, ASSIGN_KIND_LABEL_KEYS, dateLabel } from '../utils/shared';
+import { selectClass } from '#lib/form-classes';
 
 const BANK_CATEGORIES = ['strengths', 'weaknesses', 'improvement', 'progress', 'general'] as const;
 
@@ -200,7 +201,7 @@ export function GradingPanel({
             <select id="ann-kind" className={selectClass} value={annKind} onChange={(e) => setAnnKind(e.target.value as AnnotationKind)}>
               {ANNOTATION_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {t(`assignKind_${k}`)}
+                  {t(ASSIGN_KIND_LABEL_KEYS[k])}
                 </option>
               ))}
             </select>
@@ -222,7 +223,7 @@ export function GradingPanel({
               {detail.annotations.map((a) => (
                 <li key={a.id} className="flex items-center gap-2">
                   <span>
-                    {t(`assignKind_${a.kind}`)}
+                    {t(ASSIGN_KIND_LABEL_KEYS[a.kind])}
                     {a.text ? `: ${a.text}` : ''}
                   </span>
                   <Button
@@ -323,7 +324,7 @@ export function GradingPanel({
             <select aria-label={t('assignCommentBankCategoryLabel')} className={selectClass} value={bankCategory} onChange={(e) => setBankCategory(e.target.value)}>
               {BANK_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
-                  {t(`assignBankCat_${c}`)}
+                  {t(ASSIGN_BANK_CATEGORY_LABEL_KEYS[c])}
                 </option>
               ))}
             </select>

@@ -35,8 +35,8 @@ import { deleteSessionCookie } from 'better-auth/cookies';
 const TWO_FACTOR_COOKIE_NAME = 'two_factor';
 /** Tên cookie tin cậy thiết bị của plugin twoFactor. */
 const TRUST_DEVICE_COOKIE_NAME = 'trust_device';
-/** Hạn của dấu chờ bước hai — mặc định `twoFactorCookieMaxAge` của plugin (600 giây). */
-const TWO_FACTOR_CHALLENGE_MAX_AGE_SECONDS = 600;
+/** Hạn của dấu chờ bước hai — mặc định `twoFactorCookieMaxAge` của plugin (600 giây). Dùng chung với `two-factor-completion.service.ts` (cùng một hạn cho cả phía phát lẫn phía tiêu thụ challenge). */
+export const TWO_FACTOR_CHALLENGE_MAX_AGE_SECONDS = 600;
 /** Hạn cookie trust device — mặc định của plugin (720 giờ = 30 ngày). */
 const TRUST_DEVICE_MAX_AGE_SECONDS = 720 * 60 * 60;
 
@@ -75,7 +75,19 @@ function locationOf(returned: unknown): string | null {
   return headers.location ?? headers.Location ?? null;
 }
 
-type GateContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+/**
+ * Kiểu context của after-hook Better Auth (suy ra từ `createAuthMiddleware`) — kiểu dùng chung cho cổng MFA và cho `invokeChainedHook` trong `better-auth.instance.ts` (chuỗi hook gọi cổng này bên trong một after-hook khác), để hai nơi không lặp lại biểu thức kiểu lồng nhau.
+ */
+export type GateContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+
+/**
+ * Huỷ phiên vừa tạo ở cả hai tầng như plugin twoFactor làm: cookie phiên khỏi response (kèm scrub header thô) + xoá dòng session trong DB + xoá phiên mới khỏi context. Dùng chung cho đường cổng kích hoạt và đường fail-closed khi tra cứu trạng thái MFA lỗi, để hai nơi không lệch nhau.
+ */
+async function killNewSession(ctx: GateContext, sessionToken: string): Promise<void> {
+  deleteSessionCookie(ctx, true);
+  await ctx.context.internalAdapter.deleteSession(sessionToken);
+  ctx.context.setNewSession(null);
+}
 
 /**
  * Kiểm cookie trust device theo đúng semantics của plugin: cookie ký chứa `<hmac>!<trustIdentifier>`, hmac trên `<userId>!<trustIdentifier>`, và phải còn bản ghi verification tương ứng chưa hết hạn. Hợp lệ thì XOAY VÒNG (huỷ dấu cũ, phát dấu mới) như plugin làm ở luồng credential.
@@ -160,9 +172,7 @@ export function createMfaGateHook(deps: MfaGateDeps = {}) {
       ctx.context.logger?.error(
         `MFA gate could not verify MFA status for user ${user.id}: ${String(err)}`,
       );
-      deleteSessionCookie(ctx, true);
-      await ctx.context.internalAdapter.deleteSession(session.token);
-      ctx.context.setNewSession(null);
+      await killNewSession(ctx, session.token);
       throw new APIError('INTERNAL_SERVER_ERROR', {
         message: 'Could not verify multi-factor authentication status',
         code: 'mfa_status_unavailable',
@@ -173,9 +183,7 @@ export function createMfaGateHook(deps: MfaGateDeps = {}) {
 
     // Xoá phiên vừa tạo ở cả hai tầng như plugin làm: cookie trên
     // response (kèm scrub header thô) và dòng session trong DB.
-    deleteSessionCookie(ctx, true);
-    await ctx.context.internalAdapter.deleteSession(session.token);
-    ctx.context.setNewSession(null);
+    await killNewSession(ctx, session.token);
 
     // Phát dấu chờ bước hai đúng định dạng của plugin.
     const identifier = `2fa-${randomIdentifier(20)}`;

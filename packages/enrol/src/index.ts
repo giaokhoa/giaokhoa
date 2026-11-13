@@ -4,6 +4,7 @@
 export * from './errors';
 export * from './types';
 export * from './contexts';
+export * from './enrol-status';
 export * from './plan-limits';
 export * from './role-separation';
 export * from './role-assignment';

@@ -32,9 +32,9 @@
  *   các bảng liên kết template/plan dùng `doNothing()` không đích
  *   (mọi va chạm unique đều bỏ qua như đường cũ trước chuyển đổi).
  */
-import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import { type InsertObject, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
-import type { JsonValue } from '../types/centre-db';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type CompetenciesTx = CentreTx;
@@ -283,21 +283,6 @@ export interface NewEvidence {
   createdAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi, vì driver `pg` hiểu mảng ở cấp cao nhất là mảng
- * PostgreSQL và cột jsonb sẽ lỗi `invalid input syntax for type
- * json`.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng competency_framework (dùng cho cả select lẫn returning). */
 const FRAMEWORK_COLUMNS = [
   'id',
@@ -419,207 +404,198 @@ const EVIDENCE_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Ánh xạ dữ kiện ghi khung năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4); `scale_configuration` qua {@link jsonbValue}. */
+/** Ánh xạ dữ kiện ghi khung năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4); `scale_configuration` qua {@link jsonbField}. */
 function frameworkInsertValues(values: NewFramework): InsertObject<CentreDB, 'competency_framework'> {
-  const row: InsertObject<CentreDB, 'competency_framework'> = {
+  return {
     short_name: values.shortName,
     context_id: values.contextId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.scaleConfiguration !== undefined ? { scale_configuration: jsonbField(values.scaleConfiguration) } : {}),
+    ...(values.taxonomies !== undefined ? { taxonomies: values.taxonomies } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.idNumber !== undefined) row.id_number = values.idNumber;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.scaleConfiguration !== undefined) row.scale_configuration = jsonbValue<JsonValue>(values.scaleConfiguration as JsonValue);
-  if (values.taxonomies !== undefined) row.taxonomies = values.taxonomies;
-  if (values.visible !== undefined) row.visible = values.visible;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
-/** Ánh xạ dữ kiện ghi năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4); `rule_config` qua {@link jsonbValue}. */
+/** Ánh xạ dữ kiện ghi năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4); `rule_config` qua {@link jsonbField}. */
 function competencyInsertValues(values: NewCompetency): InsertObject<CentreDB, 'competency'> {
-  const row: InsertObject<CentreDB, 'competency'> = {
+  return {
     framework_id: values.frameworkId,
     short_name: values.shortName,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.idNumber !== undefined ? { id_number: values.idNumber } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.parentId !== undefined ? { parent_id: values.parentId } : {}),
+    ...(values.path !== undefined ? { path: values.path } : {}),
+    ...(values.depth !== undefined ? { depth: values.depth } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.ruleType !== undefined ? { rule_type: values.ruleType } : {}),
+    ...(values.ruleConfig !== undefined ? { rule_config: jsonbField(values.ruleConfig) } : {}),
+    ...(values.ruleOutcome !== undefined ? { rule_outcome: values.ruleOutcome } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.idNumber !== undefined) row.id_number = values.idNumber;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.parentId !== undefined) row.parent_id = values.parentId;
-  if (values.path !== undefined) row.path = values.path;
-  if (values.depth !== undefined) row.depth = values.depth;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.ruleType !== undefined) row.rule_type = values.ruleType;
-  if (values.ruleConfig !== undefined) row.rule_config = values.ruleConfig === null ? null : jsonbValue<JsonValue>(values.ruleConfig as JsonValue);
-  if (values.ruleOutcome !== undefined) row.rule_outcome = values.ruleOutcome;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
  * Ánh xạ một patch năng lực (hình dạng dòng đầy đủ từng phần như
  * phía tiêu thụ đang truyền) sang set update (snake_case), loại
  * `undefined` từng trường (quy tắc T-4); `rule_config` qua
- * {@link jsonbValue}, giữ NULL tường minh khi patch đặt null.
+ * {@link jsonbField}, giữ NULL tường minh khi patch đặt null.
  */
 function competencyUpdateSet(patch: Partial<CompetencyRow>): UpdateObject<CentreDB, 'competency'> {
-  const set: UpdateObject<CentreDB, 'competency'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.frameworkId !== undefined) set.framework_id = patch.frameworkId;
-  if (patch.shortName !== undefined) set.short_name = patch.shortName;
-  if (patch.idNumber !== undefined) set.id_number = patch.idNumber;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.parentId !== undefined) set.parent_id = patch.parentId;
-  if (patch.path !== undefined) set.path = patch.path;
-  if (patch.depth !== undefined) set.depth = patch.depth;
-  if (patch.sortOrder !== undefined) set.sort_order = patch.sortOrder;
-  if (patch.ruleType !== undefined) set.rule_type = patch.ruleType;
-  if (patch.ruleConfig !== undefined) set.rule_config = patch.ruleConfig === null ? null : jsonbValue<JsonValue>(patch.ruleConfig as JsonValue);
-  if (patch.ruleOutcome !== undefined) set.rule_outcome = patch.ruleOutcome;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.frameworkId !== undefined ? { framework_id: patch.frameworkId } : {}),
+    ...(patch.shortName !== undefined ? { short_name: patch.shortName } : {}),
+    ...(patch.idNumber !== undefined ? { id_number: patch.idNumber } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.parentId !== undefined ? { parent_id: patch.parentId } : {}),
+    ...(patch.path !== undefined ? { path: patch.path } : {}),
+    ...(patch.depth !== undefined ? { depth: patch.depth } : {}),
+    ...(patch.sortOrder !== undefined ? { sort_order: patch.sortOrder } : {}),
+    ...(patch.ruleType !== undefined ? { rule_type: patch.ruleType } : {}),
+    ...(patch.ruleConfig !== undefined ? { rule_config: jsonbField(patch.ruleConfig) } : {}),
+    ...(patch.ruleOutcome !== undefined ? { rule_outcome: patch.ruleOutcome } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện ghi liên kết khoá học ↔ năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function courseLinkInsertValues(values: NewCourseLink): InsertObject<CentreDB, 'competency_course_comp'> {
-  const row: InsertObject<CentreDB, 'competency_course_comp'> = {
+  return {
     course_id: values.courseId,
     competency_id: values.competencyId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.ruleOutcome !== undefined ? { rule_outcome: values.ruleOutcome } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.ruleOutcome !== undefined) row.rule_outcome = values.ruleOutcome;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi liên kết course module ↔ năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function moduleLinkInsertValues(values: NewModuleLink): InsertObject<CentreDB, 'competency_module_comp'> {
-  const row: InsertObject<CentreDB, 'competency_module_comp'> = {
+  return {
     course_module_id: values.courseModuleId,
     competency_id: values.competencyId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.ruleOutcome !== undefined ? { rule_outcome: values.ruleOutcome } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.ruleOutcome !== undefined) row.rule_outcome = values.ruleOutcome;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi mẫu kế hoạch sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function templateInsertValues(values: NewTemplate): InsertObject<CentreDB, 'competency_template'> {
-  const row: InsertObject<CentreDB, 'competency_template'> = {
+  return {
     short_name: values.shortName,
     context_id: values.contextId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.dueDate !== undefined ? { due_date: values.dueDate } : {}),
+    ...(values.visible !== undefined ? { visible: values.visible } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.dueDate !== undefined) row.due_date = values.dueDate;
-  if (values.visible !== undefined) row.visible = values.visible;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi kế hoạch học tập sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function planInsertValues(values: NewPlan): InsertObject<CentreDB, 'learning_plans'> {
-  const row: InsertObject<CentreDB, 'learning_plans'> = {
+  return {
     name: values.name,
     user_id: values.userId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.templateId !== undefined ? { template_id: values.templateId } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.dueDate !== undefined ? { due_date: values.dueDate } : {}),
+    ...(values.reviewerId !== undefined ? { reviewer_id: values.reviewerId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.templateId !== undefined) row.template_id = values.templateId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.dueDate !== undefined) row.due_date = values.dueDate;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Ánh xạ một patch kế hoạch học tập sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function planUpdateSet(patch: Partial<PlanRow>): UpdateObject<CentreDB, 'learning_plans'> {
-  const set: UpdateObject<CentreDB, 'learning_plans'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.templateId !== undefined) set.template_id = patch.templateId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.dueDate !== undefined) set.due_date = patch.dueDate;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...(patch.templateId !== undefined ? { template_id: patch.templateId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.dueDate !== undefined ? { due_date: patch.dueDate } : {}),
+    ...(patch.reviewerId !== undefined ? { reviewer_id: patch.reviewerId } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện ghi một dòng lịch sử duyệt sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function planReviewInsertValues(values: NewPlanReview): InsertObject<CentreDB, 'competency_plan_review'> {
-  const row: InsertObject<CentreDB, 'competency_plan_review'> = {
+  return {
     plan_id: values.planId,
     actor_id: values.actorId,
     action: values.action,
     status_from: values.statusFrom,
     status_to: values.statusTo,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi usercomp sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function usercompInsertValues(values: NewUsercomp): InsertObject<CentreDB, 'competency_user_comp'> {
-  const row: InsertObject<CentreDB, 'competency_user_comp'> = {
+  return {
     user_id: values.userId,
     competency_id: values.competencyId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.planId !== undefined ? { plan_id: values.planId } : {}),
+    ...(values.courseId !== undefined ? { course_id: values.courseId } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.proficiency !== undefined ? { proficiency: values.proficiency } : {}),
+    ...(values.grade !== undefined ? { grade: values.grade } : {}),
+    ...(values.reviewerId !== undefined ? { reviewer_id: values.reviewerId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.planId !== undefined) row.plan_id = values.planId;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.proficiency !== undefined) row.proficiency = values.proficiency;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Ánh xạ một patch usercomp sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function usercompUpdateSet(patch: Partial<UsercompRow>): UpdateObject<CentreDB, 'competency_user_comp'> {
-  const set: UpdateObject<CentreDB, 'competency_user_comp'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.competencyId !== undefined) set.competency_id = patch.competencyId;
-  if (patch.planId !== undefined) set.plan_id = patch.planId;
-  if (patch.courseId !== undefined) set.course_id = patch.courseId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.proficiency !== undefined) set.proficiency = patch.proficiency;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...(patch.competencyId !== undefined ? { competency_id: patch.competencyId } : {}),
+    ...(patch.planId !== undefined ? { plan_id: patch.planId } : {}),
+    ...(patch.courseId !== undefined ? { course_id: patch.courseId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.proficiency !== undefined ? { proficiency: patch.proficiency } : {}),
+    ...(patch.grade !== undefined ? { grade: patch.grade } : {}),
+    ...(patch.reviewerId !== undefined ? { reviewer_id: patch.reviewerId } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện ghi bằng chứng sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function evidenceInsertValues(values: NewEvidence): InsertObject<CentreDB, 'competency_evidence'> {
-  const row: InsertObject<CentreDB, 'competency_evidence'> = {
+  return {
     user_competency_id: values.userCompetencyId,
     action_user_id: values.actionUserId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.contextId !== undefined ? { context_id: values.contextId } : {}),
+    ...(values.action !== undefined ? { action: values.action } : {}),
+    ...(values.description !== undefined ? { description: values.description } : {}),
+    ...(values.url !== undefined ? { url: values.url } : {}),
+    ...(values.grade !== undefined ? { grade: values.grade } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.contextId !== undefined) row.context_id = values.contextId;
-  if (values.action !== undefined) row.action = values.action;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.url !== undefined) row.url = values.url;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /**
@@ -649,12 +625,12 @@ export class CompetenciesRepository {
    * Chèn framework năng lực.
    */
   async insertFramework(v: NewFramework, db: Db = this.db()): Promise<FrameworkRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency_framework')
       .values(frameworkInsertValues(v))
       .returning(FRAMEWORK_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -685,12 +661,12 @@ export class CompetenciesRepository {
    * Chèn competency.
    */
   async insertCompetency(v: NewCompetency, db: Db = this.db()): Promise<CompetencyRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency')
       .values(competencyInsertValues(v))
       .returning(COMPETENCY_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -750,15 +726,15 @@ export class CompetenciesRepository {
    * giá trị đường insert cũng sẽ nhận — để mệnh đề SET không rỗng.
    */
   async insertCourseLink(v: NewCourseLink, db: Db = this.db()): Promise<CourseLinkRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency_course_comp')
       .values(courseLinkInsertValues(v))
       .onConflict((oc) =>
         oc.columns(['course_id', 'competency_id']).doUpdateSet({ rule_outcome: v.ruleOutcome ?? 'nothing' }),
       )
       .returning(COURSE_LINK_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -777,15 +753,15 @@ export class CompetenciesRepository {
    * lực) thì cập nhật `rule_outcome` như {@link insertCourseLink}.
    */
   async insertModuleLink(v: NewModuleLink, db: Db = this.db()): Promise<ModuleLinkRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency_module_comp')
       .values(moduleLinkInsertValues(v))
       .onConflict((oc) =>
         oc.columns(['course_module_id', 'competency_id']).doUpdateSet({ rule_outcome: v.ruleOutcome ?? 'nothing' }),
       )
       .returning(MODULE_LINK_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -803,12 +779,12 @@ export class CompetenciesRepository {
    * Chèn template kế hoạch học tập.
    */
   async insertTemplate(v: NewTemplate, db: Db = this.db()): Promise<TemplateRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency_template')
       .values(templateInsertValues(v))
       .returning(TEMPLATE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -847,6 +823,12 @@ export class CompetenciesRepository {
 
   /**
    * Competency của template.
+   *
+   * Đọc bằng ĐÚNG handle `db` đã nhận (kể cả transaction đang mở): bản cũ
+   * gọi `getCompetency` không truyền `db` nên mỗi lần đọc rơi về handle
+   * gốc, ngoài transaction của người gọi. Một truy vấn `where id in (...)`
+   * thay cho vòng lặp N+1; thứ tự `sort_order` của template và việc bỏ qua
+   * liên kết trỏ tới competency đã xoá được giữ nguyên.
    */
   async listTemplateCompetencies(templateId: string, db: Db = this.db()): Promise<CompetencyRow[]> {
     const links = await db
@@ -855,9 +837,17 @@ export class CompetenciesRepository {
       .where('template_id', '=', templateId)
       .orderBy('sort_order', 'asc')
       .execute();
+    if (!links.length) return [];
+    const rows = await db
+      .selectFrom('competency')
+      .select(COMPETENCY_COLUMNS)
+      .where('id', 'in', links.map((link) => link.competencyId))
+      .execute();
+    const byId = new Map<string, CompetencyRow>();
+    for (const row of rows) byId.set(row.id, row);
     const out: CompetencyRow[] = [];
     for (const link of links) {
-      const c = await this.getCompetency(link.competencyId);
+      const c = byId.get(link.competencyId);
       if (c) out.push(c);
     }
     return out;
@@ -890,12 +880,12 @@ export class CompetenciesRepository {
    * Chèn learning plan.
    */
   async insertPlan(v: NewPlan, db: Db = this.db()): Promise<PlanRow> {
-    const rows = await db
+    const row = await db
       .insertInto('learning_plans')
       .values(planInsertValues(v))
       .returning(PLAN_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -1032,12 +1022,12 @@ export class CompetenciesRepository {
    * Chèn usercomp.
    */
   async insertUsercomp(v: NewUsercomp, db: Db = this.db()): Promise<UsercompRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency_user_comp')
       .values(usercompInsertValues(v))
       .returning(USERCOMP_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
@@ -1078,12 +1068,12 @@ export class CompetenciesRepository {
    * Ghi một bằng chứng (evidence) cho usercomp.
    */
   async insertEvidence(v: NewEvidence, db: Db = this.db()): Promise<EvidenceRow> {
-    const rows = await db
+    const row = await db
       .insertInto('competency_evidence')
       .values(evidenceInsertValues(v))
       .returning(EVIDENCE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**

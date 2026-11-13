@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { sql, type SqlBool } from '@giaokhoa/db';
 import { SearchRepository, type SearchDocRow } from '@giaokhoa/db/repositories/search';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
+import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { ContextsService } from '../access/contexts.service';
 
 /** Một Search Area đăng ký vào registry: biết cách lấy tài liệu gốc để indexer lập chỉ mục và để re-check. */
@@ -82,7 +83,7 @@ export class SearchService {
           .where('id', '=', itemId)
           .executeTakeFirst();
         if (!c || !c.visible) return null;
-        const ctx = await this.contexts.getByLevelInstance(50, itemId);
+        const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, itemId);
         if (!ctx) return null;
         return { title: c.fullName, content: `${c.shortName} ${c.summary}`, contextId: ctx.id };
       },
@@ -110,7 +111,7 @@ export class SearchService {
           .where('id', '=', itemId)
           .executeTakeFirst();
         if (!u || u.suspended || u.deleted || u.isGuest) return null;
-        const ctx = await this.contexts.getByLevelInstance(30, itemId);
+        const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.USER, itemId);
         const sys = ctx ?? (await this.contexts.ensureSystemContext());
         return { title: `${u.firstName} ${u.lastName}`.trim() || u.username, content: u.username, contextId: sys.id, ownerId: u.id, privilegedContent: `${u.username} ${u.email}` };
       },

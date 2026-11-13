@@ -555,7 +555,7 @@ export class QuizService {
 
   /** View đầy đủ của một dòng ma trận (ô + cảnh báo) — bản công khai cho lớp bank (MB-1) dùng sau khi đã tự gác quyền. */
   async viewMatrixRow(row: ExamMatrixRow): Promise<ExamMatrixView> {
-    return this.matrices.viewMatrixRow(row);
+    return this.matrices.matrixView(row);
   }
 
   /**

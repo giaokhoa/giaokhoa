@@ -7,26 +7,39 @@ import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
+import { errorText } from '#lib/api';
+import { platformKeyMeta } from '#lib/route-meta';
+import { pageLoadState } from '../queries/page-load-state';
 import { useCreatePrivacyRequest, useDecidePrivacyRequest, usePrivacyRequests } from '../queries/platform';
 
 /**
  * Privacy requests (platform services): user tự gửi yêu cầu export/delete cho chính mình; admin thấy mọi yêu cầu và duyệt/từ chối. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `privacyRequests`; `clientLoader` của route nạp trước đúng khoá này); gửi yêu cầu và duyệt/từ chối qua đột biến, thành công thì làm mới danh sách như lần tải lại thủ công trước đây.
  */
 export function PrivacyPage() {
-  const { t: t } = useTranslation();
+  const { t } = useTranslation();
   const requestsQuery = usePrivacyRequests();
   const createRequest = useCreatePrivacyRequest();
   const decideRequest = useDecidePrivacyRequest();
   const requests = requestsQuery.data ?? [];
   const [sent, setSent] = useState<string | null>(null);
-  const loading = requestsQuery.isPending || (requestsQuery.isError && requestsQuery.isFetching);
-  const loadError = requestsQuery.isError && !requestsQuery.isFetching ? t('privacyLoadFailed') : null;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { loading, loadError } = pageLoadState(requestsQuery, t('privacyLoadFailed'));
   async function send(type: 'export' | 'delete') {
-    const created = await createRequest.mutateAsync(type);
-    setSent(t('requestSent', { id: created.id, type: created.type, status: created.status }));
+    setActionError(null);
+    try {
+      const created = await createRequest.mutateAsync(type);
+      setSent(t('requestSent', { id: created.id, type: created.type, status: created.status }));
+    } catch (err) {
+      setActionError(errorText(err, t('actionFailed')));
+    }
   }
   async function decide(id: string, decision: 'approved' | 'rejected') {
-    await decideRequest.mutateAsync({ id, decision });
+    setActionError(null);
+    try {
+      await decideRequest.mutateAsync({ id, decision });
+    } catch (err) {
+      setActionError(errorText(err, t('actionFailed')));
+    }
   }
   return (
     <PageShell width="medium">
@@ -42,6 +55,11 @@ export function PrivacyPage() {
             </Button>
           </div>
         </>
+      ) : null}
+      {actionError ? (
+        <ErrorAlert variant="destructive">
+          {actionError}
+        </ErrorAlert>
       ) : null}
       <Card>
         <CardContent className="space-y-3">
@@ -99,7 +117,6 @@ export { PrivacyPage as default };
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('privacyTitle');
 }

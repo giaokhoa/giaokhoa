@@ -5,7 +5,7 @@ import { queryKeys } from './keys';
 
 /**
  * Tầng dữ liệu trang báo cáo tiến độ (F-01 đợt 1, rà soát #133):
- * options dùng chung cho hook của trang và clientLoader của route module. Báo cáo lỗi tải → null (trang hiểu là không có quyền), giữ nguyên ngữ nghĩa probe thủ công trước đây. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá báo cáo riêng của feature nằm ở `keys.ts` cùng tầng này, riêng khoá danh sách nhóm `courseGroups` là khoá dùng chung ở factory tập trung.
+ * options dùng chung cho hook của trang và clientLoader của route module. Chỉ 403 mới cho data null (trang hiểu là không có quyền); lỗi tải khác nổi lên thành lỗi của query để trang hiện thông báo lỗi tải riêng. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá báo cáo riêng của feature nằm ở `keys.ts` cùng tầng này, riêng khoá danh sách nhóm `courseGroups` là khoá dùng chung ở factory tập trung.
  */
 
 /**
@@ -39,7 +39,7 @@ export function courseGroupsQueryOptions(courseId: string) {
   });
 }
 
-/** Đọc danh sách nhóm của khoá; lỗi → danh sách rỗng. */
+/** Đọc danh sách nhóm của khoá; chưa có dữ liệu thì danh sách rỗng, lỗi 403 cũng cho danh sách rỗng, lỗi tải khác nổi lên thành lỗi của query. */
 export function useCourseGroups(courseId: string | undefined) {
   return useQuery({
     ...courseGroupsQueryOptions(courseId ?? ''),

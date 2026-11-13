@@ -1,4 +1,10 @@
-import { apiJson } from '#lib/api';
+/**
+ * Tầng gọi API thuần của trang Tin nhắn: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
+ * Gồm cây nhóm, danh sách hội thoại (chính và đã lưu), danh bạ, yêu cầu kết bạn, hồ sơ người, chi tiết và phân trang tin, tìm tin trong hội thoại, roster lớp/khoá và ensure chat cấp lớp/khoá/nhóm con.
+ * Đồng thời giữ các thao tác ghi: gửi tin, đặt trạng thái ghim/lưu/tắt tiếng, đánh dấu đã đọc, chặn/bỏ chặn, kết bạn, tạo hội thoại 1–1 và nhóm, báo cáo, gỡ thành viên, bật/tắt chat và xoá/thu hồi tin.
+ */
+
+import { EMPTY_JSON_BODY, apiJson } from '#lib/api';
 import type {
   ContactRequestView,
   ConversationDetailView,
@@ -12,6 +18,7 @@ import type {
   PersonSummary,
   RosterMember,
 } from '../types/types';
+import { CONVERSATION_TYPE_GROUP } from '../types/types';
 
 /**
  * Tầng gọi API thuần của trang Tin nhắn thuộc feature messaging:
@@ -192,7 +199,7 @@ export function setConversationState(conversationId: string, patch: Conversation
 export function markConversationRead(conversationId: string) {
   return apiJson<{ marked: number; lastReadSeq: number }>(`/api/v1/messages/conversations/${conversationId}/read`, {
     method: 'POST',
-    body: '{}',
+    body: EMPTY_JSON_BODY,
   });
 }
 
@@ -206,7 +213,7 @@ export function markConversationRead(conversationId: string) {
 export function setContactBlocked(userId: string, block: boolean) {
   return apiJson<{ blocked: string[] }>(`/api/v1/messages/contacts/${userId}/block`, {
     method: block ? 'POST' : 'DELETE',
-    ...(block ? { body: '{}' } : {}),
+    ...(block ? { body: EMPTY_JSON_BODY } : {}),
   });
 }
 
@@ -217,7 +224,14 @@ export function setContactBlocked(userId: string, block: boolean) {
  * @param body - Thân tin.
  * @returns Tin vừa gửi.
  */
-export function sendMessage(conversationId: string, body: Record<string, unknown>) {
+/** Thân gửi một tin (POST .../messages). */
+export interface SendMessageBody {
+  text: string;
+  clientMessageId: string;
+  replyToMessageId?: string;
+}
+
+export function sendMessage(conversationId: string, body: SendMessageBody) {
   return apiJson<MessageView>(`/api/v1/messages/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -233,7 +247,7 @@ export function sendMessage(conversationId: string, body: Record<string, unknown
 export function sendContactRequest(userId: string) {
   return apiJson<{ status: 'pending' | 'accepted' }>(`/api/v1/messages/contacts/${userId}`, {
     method: 'POST',
-    body: '{}',
+    body: EMPTY_JSON_BODY,
   });
 }
 
@@ -245,7 +259,7 @@ export function sendContactRequest(userId: string) {
  * @returns Đáp ứng của API.
  */
 export function respondContactRequest(userId: string, action: 'accept' | 'decline') {
-  return apiJson(`/api/v1/messages/contacts/requests/${userId}/${action}`, { method: 'POST', body: '{}' });
+  return apiJson(`/api/v1/messages/contacts/requests/${userId}/${action}`, { method: 'POST', body: EMPTY_JSON_BODY });
 }
 
 /**
@@ -284,7 +298,7 @@ export function createGroupConversation(groupId: string) {
 export function createFreeGroup(name: string, memberIds: string[]) {
   return apiJson<ConversationView>('/api/v1/messages/conversations', {
     method: 'POST',
-    body: JSON.stringify({ type: 2, name, memberIds }),
+    body: JSON.stringify({ type: CONVERSATION_TYPE_GROUP, name, memberIds }),
   });
 }
 
@@ -295,7 +309,7 @@ export function createFreeGroup(name: string, memberIds: string[]) {
  * @returns Đáp ứng của API.
  */
 export function reportConversation(conversationId: string) {
-  return apiJson(`/api/v1/messages/conversations/${conversationId}/report`, { method: 'POST', body: '{}' });
+  return apiJson(`/api/v1/messages/conversations/${conversationId}/report`, { method: 'POST', body: EMPTY_JSON_BODY });
 }
 
 /**
@@ -342,7 +356,7 @@ export function deleteMessageForMe(messageId: string) {
  * @returns Dòng tin sau khi thu hồi.
  */
 export function recallMessage(messageId: string) {
-  return apiJson<MessageView>(`/api/v1/messages/${messageId}/recall`, { method: 'POST', body: '{}' });
+  return apiJson<MessageView>(`/api/v1/messages/${messageId}/recall`, { method: 'POST', body: EMPTY_JSON_BODY });
 }
 
 /**

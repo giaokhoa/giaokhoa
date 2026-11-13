@@ -15,6 +15,53 @@ interface TenantGate {
   assignmentScope: Set<string> | null;
 }
 
+/**
+ * Chuẩn hoá giá trị cấu hình `siteadmins` thô (jsonb, kiểu `unknown` ở tầng repository) thành danh sách id site admin: mảng
+ * thì ép mọi phần tử sang chuỗi (id lưu dưới dạng số vẫn khớp phép so sánh chuỗi ở nơi gọi), không phải mảng thì coi như vắng
+ * mặt. Đây là điểm duy nhất ép kiểu giá trị này — ba nơi gọi `siteAdminsConfig` trước đây mỗi nơi tự kiểm `Array.isArray` và
+ * tự `map(String)`.
+ */
+function toSiteAdminIds(raw: unknown): string[] | undefined {
+  return Array.isArray(raw) ? raw.map((v) => String(v)) : undefined;
+}
+
+/**
+ * Tính các capability đạt được trên một path từ dữ kiện đã nạp — lõi thuần dùng chung cho `evaluate` (đường lẻ, một capability)
+ * và bước 5 của `resolveCapabilitiesForContexts` (đường lô, mọi capability): với từng capability, duyệt override của từng vai
+ * theo đúng thứ tự path (lá → gốc) rồi tổng hợp bằng `evaluateSingleRole` / `aggregateRoleResults`. Hai bản cài trước đây
+ * giống nhau từng bước nên gộp tại đây để một thay đổi thuật toán không lệch nhau ở hai đường; dữ kiện đầu vào (gán vai đã lọc
+ * theo path/scope, vai mặc định) vẫn do từng đường tự nạp như trước.
+ *
+ * @param pathIds - Id các context trên path theo thứ tự lá → gốc.
+ * @param roleIds - Các vai cần tính (đã gồm vai mặc định nếu có).
+ * @param capabilityNames - Các capability cần kiểm, theo thứ tự trả về.
+ * @param overridePermission - Quyền ghi đè của một vai tại một context cho một capability; `undefined` khi không có ghi đè.
+ * @returns Tên các capability đạt được, theo đúng thứ tự `capabilityNames`.
+ */
+function evaluateCapabilities(
+  pathIds: string[],
+  roleIds: Iterable<string>,
+  capabilityNames: string[],
+  overridePermission: (roleId: string, capability: string, contextId: string) => number | undefined,
+): string[] {
+  const granted: string[] = [];
+  const roles = [...roleIds];
+  if (roles.length === 0) return granted;
+  for (const capability of capabilityNames) {
+    const roleResults: number[] = [];
+    for (const roleId of roles) {
+      const points: RoleOverridePoint[] = [];
+      for (const contextId of pathIds) {
+        const permission = overridePermission(roleId, capability, contextId);
+        if (permission !== undefined) points.push({ contextId, permission });
+      }
+      roleResults.push(evaluateSingleRole(points));
+    }
+    if (aggregateRoleResults(roleResults)) granted.push(capability);
+  }
+  return granted;
+}
+
 /** TTL dùng chung cho mọi mục cache của evaluator (kết quả đánh giá, dữ kiện cổng, cấu hình site admin). */
 const ACCESS_CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -72,8 +119,8 @@ export class PermissionEvaluator {
    * của platform không được phủ lên kho riêng khi ID trùng.
    */
   async isSiteAdmin(userId: string): Promise<boolean> {
-    const raw = await this.siteAdminsConfig();
-    return Array.isArray(raw) && raw.map((v) => String(v)).includes(userId);
+    const ids = await this.siteAdminsConfig();
+    return ids?.includes(userId) ?? false;
   }
 
   /**
@@ -86,16 +133,14 @@ export class PermissionEvaluator {
    * gác còn lại dùng `isSiteAdmin` tại đúng kho hiện hành.
    */
   async isPlatformSiteAdmin(userId: string): Promise<boolean> {
-    const raw = await tenantAls.run({ platform: true }, async () => this.siteAdminsConfig());
-    if (!Array.isArray(raw)) return false;
-    return raw.map((v) => String(v)).includes(userId);
+    const ids = await tenantAls.run({ platform: true }, async () => this.siteAdminsConfig());
+    return ids?.includes(userId) ?? false;
   }
   /**
    * Danh sách id site admin hiện tại.
    */
   async listSiteAdmins(): Promise<string[]> {
-    const raw = await this.siteAdminsConfig();
-    return Array.isArray(raw) ? raw.map((v) => String(v)) : [];
+    return (await this.siteAdminsConfig()) ?? [];
   }
   /**
    * Thay danh sách site admin (lưu vào config) và ghi xuyên vào cache:
@@ -125,14 +170,16 @@ export class PermissionEvaluator {
    * nhiều kho. Không cộng quyền site admin của platform vào danh sách
    * này khi đang phục vụ kho riêng: cả dữ liệu và cache được cô
    * lập theo tên kho, kể cả khi các kho có userId trùng nhau.
+   *
+   * @returns Danh sách id site admin đã chuẩn hoá (mọi phần tử ép sang chuỗi), hoặc `undefined` khi cấu hình vắng mặt hay giá trị lưu không phải mảng — xem `toSiteAdminIds`.
    */
-  private async siteAdminsConfig(): Promise<unknown> {
+  private async siteAdminsConfig(): Promise<string[] | undefined> {
     const cacheKey = this.siteAdminsCacheKey();
     const cached = await this.cache.get<unknown>(cacheKey);
-    if (cached !== undefined) return cached === null ? undefined : cached;
+    if (cached !== undefined) return toSiteAdminIds(cached);
     const raw = await this.repo.getConfigValue('siteadmins');
     await this.cache.set(cacheKey, raw ?? null, ACCESS_CACHE_TTL_MS);
-    return raw;
+    return toSiteAdminIds(raw);
   }
 
   /**
@@ -158,11 +205,36 @@ export class PermissionEvaluator {
    * không xác minh được thì cổng TỪ CHỐI (fail-closed). Mặc định cho
    * qua như trước sẽ vô hiệu cả hai bảo đảm ở trên: lối tắt site admin
    * áp ngay trong cây tenant và gán vai ngoài cây chảy vào.
+   *
+   * Quyết định từng nhánh nằm ở `decideTenantGate`, dùng chung với bước 2 của `resolveCapabilitiesForContexts`.
    */
   private async tenantGate(userId: string, pathContexts: ContextRow[]): Promise<TenantGate> {
     const tenantCtx = pathContexts.find((c) => c.contextLevel === CONTEXT_LEVELS.TENANT);
     if (!tenantCtx?.instanceId) return { allowed: true, assignmentScope: null };
     const info = await this.tenantGateInfo(tenantCtx);
+    return this.decideTenantGate(pathContexts, tenantCtx, info, () => this.membershipStatus(tenantCtx, userId));
+  }
+
+  /**
+   * Quyết định cổng tenant từ dữ kiện cổng đã đọc — logic dùng chung cho `tenantGate` (đường lẻ: dữ kiện tra cache từng tenant)
+   * và bước 2 của `resolveCapabilitiesForContexts` (đường lô: dữ kiện đọc chung hai truy vấn). Hai bản cài trước đây giống nhau
+   * từng nhánh nên gộp tại đây để một thay đổi quy tắc cổng không lệch nhau ở hai đường (Shotgun Surgery); bất biến tương đương
+   * giữa hai đường đã ghi trong TSDoc của `resolveCapabilitiesForContexts` vẫn giữ nguyên.
+   *
+   * Thứ tự quyết định (fail-closed): path không có context tenant, hoặc tenant đã xác minh không thuộc diện gác (kind `platform`),
+   * thì cho qua không thu hẹp; không xác minh được tenant thì chặn tuyệt đối; tenant school/center không active, hoặc membership
+   * của user không active, thì chặn tuyệt đối; còn lại cho qua và thu hẹp gán vai vào cây tenant (mọi context có path bắt đầu
+   * bằng path của context tenant).
+   * `membershipStatus` là hàm lười — chỉ gọi khi tenant đã xác minh là school/center đang active, các nhánh còn lại quyết định
+   * được mà không cần đọc membership (đường lẻ giữ nguyên việc không chạm DB ở các nhánh đó).
+   */
+  private async decideTenantGate(
+    pathContexts: ContextRow[],
+    tenantCtx: ContextRow | undefined,
+    info: { kind: string; status: string } | undefined,
+    membershipStatus: () => Promise<string | undefined>,
+  ): Promise<TenantGate> {
+    if (!tenantCtx?.instanceId) return { allowed: true, assignmentScope: null };
     // Không xác minh được tenant của path → từ chối (fail-closed), kể
     // cả nhánh lối tắt site admin ở hasCapability: assignmentScope chỉ
     // được null (không thu hẹp) khi tenant đã xác minh là không thuộc
@@ -172,8 +244,7 @@ export class PermissionEvaluator {
     // Tenant đã khoá (suspended) hoặc lưu trữ (archived) thì không ai còn
     // quyền trong cây của nó — kể cả thành viên.
     if (info.status !== 'active') return { allowed: false, assignmentScope: null };
-    const status = await this.membershipStatus(tenantCtx, userId);
-    if (status !== 'active') return { allowed: false, assignmentScope: null };
+    if ((await membershipStatus()) !== 'active') return { allowed: false, assignmentScope: null };
     const scope = new Set(
       pathContexts.filter((c) => c.path.startsWith(tenantCtx.path)).map((c) => c.id),
     );
@@ -305,16 +376,14 @@ export class PermissionEvaluator {
     if (roleIds.size === 0) return false;
 
     const overrides = await this.repo.getOverridesForRoles([...roleIds], capability, pathIds);
-    const roleResults: number[] = [];
-    for (const roleId of roleIds) {
-      const points: RoleOverridePoint[] = [];
-      for (const contextId of pathIds) {
-        const o = overrides.find((x) => x.roleId === roleId && x.contextId === contextId);
-        if (o) points.push({ contextId, permission: o.permission });
-      }
-      roleResults.push(evaluateSingleRole(points));
-    }
-    return aggregateRoleResults(roleResults);
+    const overrideByKey = new Map<string, number>(overrides.map((o) => [`${o.roleId}|${o.capability}|${o.contextId}`, o.permission]));
+    const granted = evaluateCapabilities(
+      pathIds,
+      roleIds,
+      [capability],
+      (roleId, cap, contextId) => overrideByKey.get(`${roleId}|${cap}|${contextId}`),
+    );
+    return granted.length > 0;
   }
 
   /**
@@ -387,8 +456,11 @@ export class PermissionEvaluator {
     if (missingIds.size > 0) {
       for (const row of await this.repo.getContextsByIds([...missingIds])) known.set(row.id, row);
     }
+    // Path vật chất hoá có thể trỏ tới context đã bị xoá nên id vắng mặt trong bảng đã nạp bị bỏ qua (không khẳng định non-null rồi mới lọc như trước).
     const pathContextsOf = (targetId: string): ContextRow[] =>
-      (pathIdsByTarget.get(targetId) ?? []).map((id) => known.get(id)!).filter(Boolean);
+      (pathIdsByTarget.get(targetId) ?? [])
+        .map((id) => known.get(id))
+        .filter((row): row is ContextRow => row !== undefined);
 
     // Bước 2: cổng tenant cho mọi đích từ hai truy vấn dùng chung.
     const tenantIds = new Set<string>();
@@ -406,30 +478,29 @@ export class PermissionEvaluator {
     for (const target of targets) {
       const pathContexts = pathContextsOf(target.id);
       const tenantCtx = pathContexts.find((c) => c.contextLevel === CONTEXT_LEVELS.TENANT);
-      if (!tenantCtx?.instanceId) {
-        gateByTarget.set(target.id, { allowed: true, assignmentScope: null });
-        continue;
-      }
-      const info = gateInfoByTenant.get(tenantCtx.instanceId);
-      if (!info) {
-        // Cùng quy tắc fail-closed với `tenantGate`: dữ kiện cổng đã
-        // đọc ở ngữ cảnh platform nên vắng mặt trong map nghĩa là
-        // không xác minh được tenant của đích → chặn tuyệt đối, không
-        // cho qua không thu hẹp như nhánh tenant `platform` ở dưới.
-        gateByTarget.set(target.id, { allowed: false, assignmentScope: null });
-        continue;
-      }
-      if (info.kind !== 'school' && info.kind !== 'center') {
-        gateByTarget.set(target.id, { allowed: true, assignmentScope: null });
-        continue;
-      }
-      if (info.status !== 'active' || membershipByTenant.get(tenantCtx.instanceId) !== 'active') {
-        gateByTarget.set(target.id, { allowed: false, assignmentScope: null });
-        continue;
-      }
-      const scope = new Set(pathContexts.filter((c) => c.path.startsWith(tenantCtx.path)).map((c) => c.id));
-      gateByTarget.set(target.id, { allowed: true, assignmentScope: scope });
+      const tenantId = tenantCtx?.instanceId;
+      // Cùng quy tắc fail-closed với `tenantGate`: dữ kiện cổng đã
+      // đọc ở ngữ cảnh platform nên vắng mặt trong map nghĩa là
+      // không xác minh được tenant của đích → chặn tuyệt đối, không
+      // cho qua không thu hẹp như nhánh tenant `platform` ở dưới.
+      // Quyết định từng nhánh nằm ở `decideTenantGate` dùng chung
+      // với đường lẻ (xem TSDoc của hàm đó).
+      gateByTarget.set(target.id, await this.decideTenantGate(
+        pathContexts,
+        tenantCtx,
+        tenantId ? gateInfoByTenant.get(tenantId) : undefined,
+        async () => (tenantId ? membershipByTenant.get(tenantId) : undefined),
+      ));
     }
+
+    // Mọi đích đều được gán một cổng ở bước 2 nên tra cứu tại đây không
+    // bao giờ vắng mặt — kiểm tra tường minh thay cho `!` để lỗi (nếu
+    // có) nêu rõ đích thiếu cổng thay vì lỗi truy cập thuộc tính của `undefined`.
+    const gateOf = (targetId: string): TenantGate => {
+      const gate = gateByTarget.get(targetId);
+      if (!gate) throw new Error(`Missing tenant gate for target ${targetId}`);
+      return gate;
+    };
 
     // Bước 3: phân loại các đích — cổng chặn (không capability nào),
     // lối tắt site admin (trọn bộ capability đã đăng ký), còn lại phải
@@ -438,7 +509,7 @@ export class PermissionEvaluator {
     const toEvaluate: ContextRow[] = [];
     let needsAdminCheck = false;
     for (const target of targets) {
-      const gate = gateByTarget.get(target.id)!;
+      const gate = gateOf(target.id);
       if (!gate.allowed) {
         resolved.set(target.id, []);
       } else {
@@ -449,7 +520,7 @@ export class PermissionEvaluator {
     const isAdmin = needsAdminCheck ? await this.isSiteAdmin(userId) : false;
     const evaluated: ContextRow[] = [];
     for (const target of toEvaluate) {
-      const gate = gateByTarget.get(target.id)!;
+      const gate = gateOf(target.id);
       if (gate.assignmentScope === null && isAdmin) {
         resolved.set(target.id, CAPABILITY_DEFINITIONS.map((def) => def.name));
       } else {
@@ -474,7 +545,7 @@ export class PermissionEvaluator {
     // cổng tenant thu hẹp), cộng vai mặc định, rồi với từng capability
     // duyệt override theo thứ tự lá → gốc cho từng vai và tổng hợp.
     for (const target of evaluated) {
-      const gate = gateByTarget.get(target.id)!;
+      const gate = gateOf(target.id);
       const pathIds = pathIdsByTarget.get(target.id) ?? [];
       const pathIdSet = new Set(pathIds);
       const targetRoleIds = new Set<string>();
@@ -484,36 +555,26 @@ export class PermissionEvaluator {
         targetRoleIds.add(a.roleId);
       }
       if (defaultRole) targetRoleIds.add(defaultRole.id);
-      const capabilities: string[] = [];
-      if (targetRoleIds.size > 0) {
-        for (const def of CAPABILITY_DEFINITIONS) {
-          const roleResults: number[] = [];
-          for (const roleId of targetRoleIds) {
-            const points: RoleOverridePoint[] = [];
-            for (const contextId of pathIds) {
-              const permission = overrideByKey.get(`${roleId}|${def.name}|${contextId}`);
-              if (permission !== undefined) points.push({ contextId, permission });
-            }
-            roleResults.push(evaluateSingleRole(points));
-          }
-          if (aggregateRoleResults(roleResults)) capabilities.push(def.name);
-        }
-      }
-      resolved.set(target.id, capabilities);
+      resolved.set(
+        target.id,
+        evaluateCapabilities(pathIds, targetRoleIds, CAPABILITY_DEFINITIONS.map((def) => def.name), (roleId, capability, contextId) =>
+          overrideByKey.get(`${roleId}|${capability}|${contextId}`),
+        ),
+      );
     }
     return resolved;
   }
 
   /**
+   * Như hasCapability nhưng chỉ tính gán role thật (không cộng vai mặc định ảo user/guest); lối tắt site admin vẫn áp ngoài cây
+   * tenant như hasCapability — dùng cho các luồng cần phân biệt (vd login-as).
+   *
    * Kiểm tra capability chỉ trên gán role THẬT (không có role mặc định ảo
    * user/guest), tuỳ chọn bỏ qua gán của các archetype cho trước.
    * Enrol dùng cách này cho ngoại lệ của cổng enrol (report §2#5):
    * một ghi danh bị đình chỉ vẫn chặn user mà đường duy nhất tới
    * `course:view` là role student do chính ghi danh đó cấp,
    * trong khi gán staff thật (teacher/manager/…) vẫn cho họ vào.
-   */
-  /**
-   * Như hasCapability nhưng chỉ tính gán role thật, bỏ qua lối tắt site admin — dùng cho các luồng cần phân biệt (vd login-as).
    */
   async hasCapabilityFromRealAssignment(
     userId: string,

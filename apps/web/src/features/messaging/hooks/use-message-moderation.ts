@@ -37,6 +37,10 @@ export interface UseMessageModerationParams {
  * Cửa sổ thu hồi mặc định (phút) theo site-config `core/messagingrecallwindowminutes`: server là thẩm quyền cuối
  * (ngoài cửa sổ trả 403) — client chỉ dùng mốc này để ẨN nút thu
  * hồi khi tin đã cũ, không tự quyết cho phép thu hồi.
+ *
+ * PHẢI GIỮ ĐỒNG BỘ với giá trị site-config trên server bằng tay: client không đọc site-config này (không có query nào tải nó
+ * ở khung chat), nên quản trị viên đổi giá trị config mà không đổi hằng này thì nút thu hồi ẩn/hiện sai ngưỡng — server vẫn
+ * chặn đúng ở 403, nhưng giao diện lệch. Khi có luồng đọc site-config ở client thì thay hằng này bằng giá trị đó.
  */
 const RECALL_WINDOW_MINUTES = 15;
 
@@ -50,6 +54,13 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
   const hardDeleteMutation = useHardDeleteMessage();
   const bulkRemoveMutation = useBulkRemoveMessages();
 
+  /** Vá các trường của một tin trong cache chi tiết (xoá-phía-mình / thu hồi đều chỉ đổi trường của đúng tin đó). */
+  function patchMessageFields(message: MessageView, fields: Partial<MessageView>) {
+    patchMessages(message.conversationId, (prev) =>
+      prev.map((m) => (m.id === message.id ? { ...m, ...fields } : m)),
+    );
+  }
+
   /**
    * Xoá-phía-mình một tin nhắn (vòng đời tin nhắn theo vai, issue #33):
    * chỉ tác giả, mọi lúc — tin chỉ ẩn khỏi tầm nhìn của chính người xoá, phía kia không đổi. Server trả dòng tin kèm dấu vết — áp ngay vào khung; phía học sinh tin biến mất ở bước render.
@@ -58,17 +69,10 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
     setActionMessage(null);
     try {
       const deleted = await deleteMessageMutation.mutateAsync(message.id);
-      patchMessages(message.conversationId, (prev) =>
-        prev.map((m) =>
-          m.id === message.id
-            ? {
-                ...m,
-                deletedAt: deleted.deletedAt ?? new Date().toISOString(),
-                deletedBy: deleted.deletedBy ?? myId ?? null,
-              }
-            : m,
-        ),
-      );
+      patchMessageFields(message, {
+        deletedAt: deleted.deletedAt ?? new Date().toISOString(),
+        deletedBy: deleted.deletedBy ?? myId ?? null,
+      });
     } catch {
       setActionMessage(t('deleteMessageFailed'));
     }
@@ -84,18 +88,11 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
     setActionMessage(null);
     try {
       const recalled = await recallMessageMutation.mutateAsync(message.id);
-      patchMessages(message.conversationId, (prev) =>
-        prev.map((m) =>
-          m.id === message.id
-            ? {
-                ...m,
-                fullMessage: '',
-                recalledAt: recalled.recalledAt ?? new Date().toISOString(),
-                recalledBy: recalled.recalledBy ?? myId ?? null,
-              }
-            : m,
-        ),
-      );
+      patchMessageFields(message, {
+        fullMessage: '',
+        recalledAt: recalled.recalledAt ?? new Date().toISOString(),
+        recalledBy: recalled.recalledBy ?? myId ?? null,
+      });
     } catch {
       setActionMessage(t('recallMessageFailed'));
     }

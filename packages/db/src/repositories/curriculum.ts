@@ -47,10 +47,11 @@
  *   {@link CurriculumRepository.searchOutcomes}, có spec tích hợp
  *   khoá hình dạng).
  */
-import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import { sql, type InsertObject, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type CurriculumTx = CentreTx;
@@ -185,21 +186,6 @@ export interface NewProgramRecord {
   source: unknown;
   createdAt?: Date;
   updatedAt?: Date;
-}
-
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi, vì driver `pg` hiểu mảng ở cấp cao nhất là mảng
- * PostgreSQL và cột jsonb sẽ lỗi `invalid input syntax for type
- * json`.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng subjects (dùng cho cả select lẫn returning). */
@@ -455,12 +441,12 @@ export class CurriculumRepository {
 
   /** Chèn môn học. */
   async insertSubject(v: NewSubject, db: Db = this.db()): Promise<SubjectRow> {
-    const rows = await db
+    const row = await db
       .insertInto('subjects')
       .values(subjectInsertValues(v))
       .returning(SUBJECT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy môn học theo slug (định danh đường dẫn duy nhất toàn hệ). */
@@ -512,12 +498,12 @@ export class CurriculumRepository {
 
   /** Chèn chương trình (môn + khối). */
   async insertCurriculum(v: NewCurriculum, db: Db = this.db()): Promise<CurriculumRow> {
-    const rows = await db
+    const row = await db
       .insertInto('curricula')
       .values(curriculumInsertValues(v))
       .returning(CURRICULUM_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy chương trình theo id. */
@@ -558,12 +544,12 @@ export class CurriculumRepository {
 
   /** Chèn node nội dung. */
   async insertNode(v: NewCurriculumNode, db: Db = this.db()): Promise<CurriculumNodeRow> {
-    const rows = await db
+    const row = await db
       .insertInto('curriculum_nodes')
       .values(curriculumNodeInsertValues(v))
       .returning(CURRICULUM_NODE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy node theo id. */
@@ -605,12 +591,12 @@ export class CurriculumRepository {
 
   /** Chèn yêu cầu cần đạt. */
   async insertOutcome(v: NewLearningOutcome, db: Db = this.db()): Promise<LearningOutcomeRow> {
-    const rows = await db
+    const row = await db
       .insertInto('learning_outcomes')
       .values(learningOutcomeInsertValues(v))
       .returning(LEARNING_OUTCOME_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy yêu cầu cần đạt theo id. */
@@ -989,12 +975,12 @@ export class CurriculumRepository {
 
   /** Ghi một dòng sổ khi nạp mới một bản ghi. */
   async insertProgramRecord(v: NewProgramRecord, db: Db = this.db()): Promise<ProgramRecordRow> {
-    const rows = await db
+    const row = await db
       .insertInto('curriculum_program_records')
       .values(programRecordInsertValues(v))
       .returning(PROGRAM_RECORD_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Cập nhật một dòng sổ khi bản ghi được nạp lại sau đính chính nguồn. */

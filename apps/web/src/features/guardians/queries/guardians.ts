@@ -1,3 +1,9 @@
+/**
+ * Tầng dữ liệu TanStack Query cho bề mặt phụ huynh: mọi lần đọc đi qua queryOptions với khoá từ nhà máy `queryKeys`, bọc các hàm gọi API thuần ở `../api/guardians`.
+ * Gồm các con đang liên kết, tổng quan, kết quả và tuỳ chọn digest của một con; đột biến đặt tần suất digest làm mới đúng khoá tuỳ chọn của con đó.
+ * Đồng thời giữ tầng dữ liệu của bề mặt quản lý liên kết (tạo/thu hồi đều làm mới cả danh sách quản lý lẫn danh sách con của phụ huynh) và clientLoader prefetch cho hai route guardian.
+ */
+
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { GuardianDigestFrequency } from '@giaokhoa/contracts';
 import { queryClient } from '#lib/query-client';
@@ -77,10 +83,11 @@ export function guardianLinksQueryOptions() {
 /**
  * Đột biến tạo liên kết giám hộ (POST /guardian-links): thành công thì làm mới danh sách quản lý (hàng mới xuất hiện ngay) và danh sách con của phụ huynh (bề mặt `/guardian` của phụ huynh đó thấy con vừa liên kết ở lần đọc kế tiếp). Lỗi nghiệp vụ của API (409 cặp đã có liên kết đang hiệu lực, 400 một phía chưa là thành viên tenant, 403 thiếu `guardian:manage`) nổi lên nguyên vẹn dạng ApiError để trang hiển thị cho người dùng — không nuốt lỗi ở tầng dữ liệu.
  */
-export function useCreateGuardianLink() {
+/** Đột biến trên liên kết giám hộ, xong thì làm mới cả danh sách quản lý lẫn danh sách con của phụ huynh (phụ huynh bị thu hồi hết liên kết tới một con thì con đó biến mất khỏi bề mặt `/guardian`). */
+function useGuardianLinkMutation<TVars>(mutationFn: (vars: TVars) => Promise<unknown>) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (draft: CreateGuardianLinkDraft) => createGuardianLink(draft),
+    mutationFn,
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.guardianLinks });
       void client.invalidateQueries({ queryKey: sharedQueryKeys.guardianMyStudents });
@@ -88,19 +95,16 @@ export function useCreateGuardianLink() {
   });
 }
 
+export function useCreateGuardianLink() {
+  return useGuardianLinkMutation((draft: CreateGuardianLinkDraft) => createGuardianLink(draft));
+}
+
 /**
  * Đột biến thu hồi liên kết giám hộ (DELETE /guardian-links/:linkId):
  * thu hồi mềm phía API — hàng vẫn ở lại danh sách với trạng thái revoked, nên thành công chỉ cần làm mới danh sách quản lý và danh sách con của phụ huynh (phụ huynh bị thu hồi hết liên kết tới một con thì con đó biến mất khỏi bề mặt `/guardian`).
  */
 export function useRevokeGuardianLink() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (linkId: string) => revokeGuardianLink(linkId),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: queryKeys.guardianLinks });
-      void client.invalidateQueries({ queryKey: sharedQueryKeys.guardianMyStudents });
-    },
-  });
+  return useGuardianLinkMutation((linkId: string) => revokeGuardianLink(linkId));
 }
 
 /**

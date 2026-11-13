@@ -7,7 +7,7 @@ import { SessionCacheService } from '../../infra/cache/session-cache.service';
 import { UsersService } from '../users/users.service';
 import type { UserRow } from '@giaokhoa/db/repositories/users';
 import { AuthRepository, type UserOauthLinkRow } from '@giaokhoa/db/repositories/auth';
-import { AuthService, type SessionClientInfo } from './auth.service';
+import { AuthService, type SessionClientInfo, type TokenPair } from './auth.service';
 import { SessionService } from './session.service';
 
 /**
@@ -58,6 +58,18 @@ const PROVIDER_DEFINITIONS: Record<OAuthIssuer, ProviderDefinition> = {
   },
 };
 
+/**
+ * Kiểm tra mã unique violation 23505 trên lỗi gốc hoặc trên các lớp `cause` mà adapter có thể bao lại (cùng khuôn `curriculum.service.ts`): chỉ lỗi này mới kết luận được là trùng khoá.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  let e: unknown = err;
+  while (e !== null && typeof e === 'object') {
+    if ((e as { code?: unknown }).code === '23505') return true;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 /** Nội dung state OAuth đã ký: chống CSRF, gắn issuer và đích hoàn tất (đăng nhập thường hoặc liên kết cho user đang đăng nhập). */
 interface OAuthState {
   scope: 'oauth_state';
@@ -102,6 +114,18 @@ export class OAuthService {
     private readonly store: SessionCacheService,
   ) {}
 
+  /**
+   * Client id/secret của issuer — cả hai đã được kiểm ở `isEnabled` trước khi gọi tới đây; thiếu thì lỗi cấu hình, không thể tiếp tục gọi provider.
+   */
+  private clientCredentials(issuer: OAuthIssuer): { clientId: string; clientSecret: string } {
+    const clientId = this.clientId(issuer);
+    const clientSecret = this.clientSecret(issuer);
+    if (!clientId || !clientSecret) {
+      throw new OAuthFlowException('auth.oauth_issuer_not_configured');
+    }
+    return { clientId, clientSecret };
+  }
+
   /** Client id của issuer từ biến môi trường (rỗng = chưa cấu hình). */
   private clientId(issuer: OAuthIssuer): string | undefined {
     return this.config.get<string>(`${PROVIDER_DEFINITIONS[issuer].envPrefix}_CLIENT_ID`);
@@ -129,7 +153,12 @@ export class OAuthService {
     const def = PROVIDER_DEFINITIONS[issuer];
     const override = this.config.get<string>(`${def.envPrefix}_${kind}`);
     if (override) return override;
-    return kind === 'AUTHORIZE_URL' ? def.authorizeUrl : kind === 'TOKEN_URL' ? def.tokenUrl : def.userinfoUrl;
+    const defaults: Record<typeof kind, string> = {
+      AUTHORIZE_URL: def.authorizeUrl,
+      TOKEN_URL: def.tokenUrl,
+      USERINFO_URL: def.userinfoUrl,
+    };
+    return defaults[kind];
   }
 
   /**
@@ -147,9 +176,10 @@ export class OAuthService {
       { scope: 'oauth_state', issuer, redirectUri, linkUserId, nonce: randomUUID() } satisfies OAuthState,
       { expiresIn: ttl },
     );
+    const { clientId } = this.clientCredentials(issuer);
     const url = new URL(this.endpoint(issuer, 'AUTHORIZE_URL'));
     url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', this.clientId(issuer)!);
+    url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('scope', PROVIDER_DEFINITIONS[issuer].scope);
     url.searchParams.set('state', state);
@@ -172,13 +202,13 @@ export class OAuthService {
 
   /** Đổi authorization code lấy access token tại token endpoint của provider (gọi HTTP thật; kiểm thử mock ở chính biên này). */
   private async exchangeCode(issuer: OAuthIssuer, code: string, redirectUri: string): Promise<string> {
+    const { clientId, clientSecret } = this.clientCredentials(issuer);
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri,
-      client_id: this.clientId(issuer)!,
-      client_secret:
-        this.clientSecret(issuer)!,
+      client_id: clientId,
+      client_secret: clientSecret,
     });
     const res = await fetch(this.endpoint(issuer, 'TOKEN_URL'), {
       method: 'POST',
@@ -206,21 +236,17 @@ export class OAuthService {
     const raw = (await res.json()) as Record<string, unknown>;
     const email = typeof raw.email === 'string' ? raw.email.trim().toLowerCase() : '';
     if (!email) throw new OAuthFlowException('auth.oauth_email_missing');
-    if (issuer === 'google') {
-      return {
-        subject: String(raw.sub ?? ''),
-        email,
-        emailVerified: raw.email_verified === true,
-        firstName: typeof raw.given_name === 'string' ? raw.given_name : '',
-        lastName: typeof raw.family_name === 'string' ? raw.family_name : '',
-      };
-    }
+    // Google và Facebook trả cùng một hồ sơ ở hai tên trường khác nhau; Facebook không công bố cờ xác thực email nên email từ Graph API được coi là đã xác thực (xem TSDoc của ProviderProfile).
+    const isGoogle = issuer === 'google';
+    const subjectField = isGoogle ? raw.sub : raw.id;
+    const firstNameField = isGoogle ? raw.given_name : raw.first_name;
+    const lastNameField = isGoogle ? raw.family_name : raw.last_name;
     return {
-      subject: String(raw.id ?? ''),
+      subject: String(subjectField ?? ''),
       email,
-      emailVerified: true,
-      firstName: typeof raw.first_name === 'string' ? raw.first_name : '',
-      lastName: typeof raw.last_name === 'string' ? raw.last_name : '',
+      emailVerified: isGoogle ? raw.email_verified === true : true,
+      firstName: typeof firstNameField === 'string' ? firstNameField : '',
+      lastName: typeof lastNameField === 'string' ? lastNameField : '',
     };
   }
 
@@ -237,7 +263,9 @@ export class OAuthService {
     }
     try {
       return await this.repo.createOauthLink({ userId: user.id, issuer, issuerUserId: profile.subject, email: profile.email });
-    } catch {
+    } catch (err) {
+      // Chỉ lỗi trùng khoá mới là cuộc đua hai callback đồng thời: các lỗi khác (mất kết nối, lỗi kho, ...) phải lộ ra thay vì bị kết luận là xung đột liên kết.
+      if (!isUniqueViolation(err)) throw err;
       const raced = await this.repo.getOauthLinkBySubject(issuer, profile.subject);
       if (raced && raced.userId === user.id) return raced;
       throw new OAuthFlowException('auth.oauth_link_conflict');
@@ -351,7 +379,7 @@ export class OAuthService {
    * khoản đang bật MFA cầm mã như vậy thì bị từ chối tại đây, kể cả
    * khi callback ở thời điểm phát hành chưa bị gác.
    */
-  async exchangeHandoff(code: string, client?: SessionClientInfo): Promise<{ user: UserRow; tokens: Awaited<ReturnType<AuthService['issueTokensFor']>> }> {
+  async exchangeHandoff(code: string, client?: SessionClientInfo): Promise<{ user: UserRow; tokens: TokenPair }> {
     const key = `oauthhandoff:${code}`;
     const stored = await this.store.get<string | OAuthHandoffRecord>(key);
     if (!stored) {

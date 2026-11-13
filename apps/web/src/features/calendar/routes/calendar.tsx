@@ -1,3 +1,10 @@
+/**
+ * Trang lịch: xem sự kiện tháng hiện tại gom theo ngày và lọc theo loại, tạo/xoá sự kiện
+ * (chỉ sự kiện của chính mình mới có nút xoá), đặt nhắc trước 60 phút, quản lý đăng ký
+ * lịch ngoài kèm nhập ngay, và tải ICS cùng tạo/thu hồi đường dẫn xuất lịch. Loader phía
+ * server prefetch cả ba query của trang để hydrate vào cache thay vì fetch lại khi mở.
+ */
+
 import { useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -23,7 +30,7 @@ import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { apiFetch } from '#lib/api';
+import { downloadCalendarIcs } from '../api/calendar';
 import { currentMonthRangeIso } from '../utils/calendar';
 import { useCalendarEvents, useCalendarExportToken, useCalendarSubscriptions, useCreateCalendarEvent, useCreateCalendarExportToken, useCreateCalendarSubscription, useDeleteCalendarEvent, useImportCalendarSubscription, useRemindCalendarEvent, useRevokeCalendarExportToken } from '../queries/calendar';
 import type { CalendarEventView as EventView, CalendarExportTokenView, CalendarSubscriptionView } from '../types/calendar';
@@ -76,7 +83,7 @@ export async function loader({ request }: { request: Request }): Promise<SsrLoad
  * loại `user`, tức sự kiện của chính người đang xem; nhắc thì API cho phép
  * với mọi sự kiện người dùng nhìn thấy được.
  *
- * Dữ liệu qua TanStack Query (lib/calendar.ts, F-01): sự kiện tháng dùng
+ * Dữ liệu qua TanStack Query (features/calendar/queries/calendar, F-01): sự kiện tháng dùng
  * đúng khoá factory `calendarEvents(from, to)` đã có sẵn; subscription và
  * token xuất lịch là hai query riêng (lỗi tải giữ dữ liệu cũ như trước);
  * mọi đột biến làm mới các truy vấn lịch qua tiền tố khoá thay vì nạp lại
@@ -101,11 +108,10 @@ export function CalendarPage() {
   const [evCategoryId, setEvCategoryId] = useState('');
   const [subName, setSubName] = useState('');
   const [subUrl, setSubUrl] = useState('');
-  const [now] = useState(() => new Date());
   // Khoảng tháng cho query sự kiện: tính theo múi giờ ứng dụng qua
   // helper dùng chung với loader SL-1 (trước đây tính theo giờ máy
   // của trình duyệt — hai phía lệch múi giờ là key không bao giờ
-  // khớp để hydrate; xem `currentMonthRangeIso` ở lib/calendar.ts).
+  // khớp để hydrate; xem `currentMonthRangeIso` ở features/calendar/utils/calendar.ts).
   const range = useMemo(() => currentMonthRangeIso(), []);
 
   const eventsQuery = useCalendarEvents(range.from, range.to);
@@ -202,19 +208,11 @@ export function CalendarPage() {
     });
   }
 
-  /** Tải tệp ICS của chính user qua GET /calendar/exports?format=ics (endpoint đòi đăng nhập nên phải fetch kèm token rồi tải blob, không dùng link trực tiếp). */
+  /** Tải tệp ICS của chính user (GET /calendar/exports?format=ics) qua tầng api/. */
   async function downloadIcs() {
     setMessage(null);
     try {
-      const response = await apiFetch('/api/v1/calendar/exports?format=ics');
-      if (!response.ok) throw new Error('export failed');
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = 'calendar.ics';
-      anchor.click();
-      URL.revokeObjectURL(objectUrl);
+      await downloadCalendarIcs();
     } catch {
       setMessage(t('downloadIcsFailed'));
     }
@@ -238,6 +236,18 @@ export function CalendarPage() {
     });
   }
 
+  // Nhãn đã dịch cho từng loại sự kiện — bảng tĩnh thay cho key i18n dựng
+  // động `eventType${...}` (key sai hoặc loại mới sẽ lặng lẽ fallback về
+  // chính key). Loại lạ từ server giữ nguyên chuỗi thô khi hiển thị.
+  const eventTypeLabels: Record<string, string> = {
+    user: t('eventTypeUser'),
+    site: t('eventTypeSite'),
+    category: t('eventTypeCategory'),
+    course: t('eventTypeCourse'),
+    group: t('eventTypeGroup'),
+  };
+  const typeFilterLabels: Record<string, string> = { all: t('eventTypeAll'), ...eventTypeLabels };
+
   const visible = events.filter((e) => typeFilter === 'all' || e.eventType === typeFilter);
   // Gom sự kiện theo ngày địa phương; tiêu đề ngày và giờ sự kiện luôn
   // định dạng theo ngôn ngữ giao diện (i18n.language) thay vì mặc định
@@ -254,7 +264,7 @@ export function CalendarPage() {
   return (
     <PageShell width="full">
       <PageHeader
-        title={t('calendarTitle', { month: formatWithOptions(now, i18n.language, { month: 'long', year: 'numeric' }) })}
+        title={t('calendarTitle', { month: formatWithOptions(new Date(), i18n.language, { month: 'long', year: 'numeric' }) })}
         actions={
           <Sheet open={eventSheetOpen} onOpenChange={setEventSheetOpen}>
             <SheetTrigger render={<Button type="button" />}>{t('newEvent')}</SheetTrigger>
@@ -281,11 +291,9 @@ export function CalendarPage() {
                   <Field>
                     <FieldLabel id="ev-type-label">{t('eventType')}</FieldLabel>
                     <Select
-                      items={Object.fromEntries(
-                        EVENT_TYPES.map((type) => [type, t(`eventType${type[0]!.toUpperCase()}${type.slice(1)}`)]),
-                      )}
+                      items={eventTypeLabels}
                       value={evType}
-                      onValueChange={(v) => setEvType((v ?? 'user') as (typeof EVENT_TYPES)[number])}
+                      onValueChange={(v) => setEvType(EVENT_TYPES.find((type) => type === v) ?? 'user')}
                     >
                       <SelectTrigger aria-labelledby="ev-type-label" className="w-full">
                         <SelectValue />
@@ -293,7 +301,7 @@ export function CalendarPage() {
                       <SelectContent>
                         {EVENT_TYPES.map((type) => (
                           <SelectItem key={type} value={type}>
-                            {t(`eventType${type[0]!.toUpperCase()}${type.slice(1)}`)}
+                            {eventTypeLabels[type]}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -383,11 +391,9 @@ export function CalendarPage() {
             <Field>
               <FieldLabel id="type-filter-label">{t('eventType')}</FieldLabel>
               <Select
-                items={Object.fromEntries(
-                  TYPES.map((type) => [type, t(`eventType${type[0]!.toUpperCase()}${type.slice(1)}`)]),
-                )}
+                items={typeFilterLabels}
                 value={typeFilter}
-                onValueChange={(v) => setTypeFilter((v ?? 'all') as (typeof TYPES)[number])}
+                onValueChange={(v) => setTypeFilter(TYPES.find((type) => type === v) ?? 'all')}
               >
                 <SelectTrigger aria-labelledby="type-filter-label" className="w-48">
                   <SelectValue />
@@ -395,7 +401,7 @@ export function CalendarPage() {
                 <SelectContent>
                   {TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
-                      {t(`eventType${type[0]!.toUpperCase()}${type.slice(1)}`)}
+                      {typeFilterLabels[type]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -415,7 +421,7 @@ export function CalendarPage() {
                         <span className="font-medium">{e.name}</span>
                         <span className="text-muted-foreground">
                           {' '}
-                          · {e.eventType} · {formatTime(e.timeStart, i18n.language)}
+                          · {eventTypeLabels[e.eventType] ?? e.eventType} · {formatTime(e.timeStart, i18n.language)}
                         </span>
                         {e.isException ? <span> {t('adjustedOccurrence')}</span> : null}
                         <Button type="button" variant="outline" onClick={() => remind(e.id)}>

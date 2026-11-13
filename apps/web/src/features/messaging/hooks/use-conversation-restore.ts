@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { conversationDetailQueryOptions } from '../queries/messaging';
+import { openConversationById } from './open-conversation-by-id';
 import { readStoredConversationId } from '../utils/page-helpers';
 import type { ConversationView } from '../types/types';
 
@@ -60,25 +60,7 @@ export function useConversationRestore({
       void open(found);
       return;
     }
-    void (async () => {
-      try {
-        const detail = await queryClient.fetchQuery(conversationDetailQueryOptions(deepLinkId));
-        const summary: ConversationView = {
-          id: detail.id,
-          type: detail.type,
-          name: detail.name,
-          members: detail.members,
-          unread: detail.unread,
-          lastReadSeq: detail.lastReadSeq,
-          lastMessageSeq: detail.lastMessageSeq,
-          lastMessage: detail.lastMessage,
-        };
-        setConversations((prev) => (prev.some((c) => c.id === summary.id) ? prev : [summary, ...prev]));
-        await open(summary);
-      } catch {
-        // Không phải thành viên hoặc conversation không tồn tại: bỏ qua deep-link.
-      }
-    })();
+    void openConversationById(queryClient, [conversations], setConversations, open, deepLinkId);
     // Mảng phụ thuộc liệt kê đủ mọi giá trị hiệu ứng đọc; mốc chạy một lần do deepLinkHandledRef gác nên các lần chạy thêm (khi `open`/danh sách đổi danh tính) thoát ngay ở đầu hiệu ứng, hành vi không đổi.
   }, [deepLinkId, listLoaded, conversations, open, queryClient, setConversations]);
 
@@ -98,16 +80,7 @@ export function useConversationRestore({
       void open(found);
       return;
     }
-    void (async () => {
-      try {
-        const detail = await queryClient.fetchQuery(conversationDetailQueryOptions(savedId));
-        const { messages: _detailMessages, hasMoreBefore: _hasMore, memberReadMarkers: _markers, ...summary } = detail;
-        setConversations((prev) => (prev.some((c) => c.id === summary.id) ? prev : [summary, ...prev]));
-        await open(summary);
-      } catch {
-        // Không còn mở được hội thoại đã lưu: bỏ qua êm.
-      }
-    })();
+    void openConversationById(queryClient, [conversations], setConversations, open, savedId);
     // Mảng phụ thuộc liệt kê đủ mọi giá trị hiệu ứng đọc; mốc chạy một lần do contextRestoredRef gác (cùng kỷ luật với deep-link ở trên) nên các lần chạy thêm thoát ngay ở đầu hiệu ứng, hành vi không đổi.
   }, [deepLinkId, listLoaded, conversations, open, queryClient, setConversations, sidebarTab]);
 }

@@ -51,6 +51,8 @@ export class SeedService implements OnApplicationBootstrap {
     const school = await this.tenants.ensureDefaultSchoolTenant(fullname);
     const admins = (await this.currentSiteAdmins());
     let admin: UserRow | undefined;
+    // Role manager tra MỘT lần rồi dùng lại cho cả hai nhánh dưới (tạo admin mới + gắn vai cho admin đã có).
+    const manager = await this.roles.getRoleByShortname('manager');
     if (admins.length === 0) {
       const username = this.config.get<string>('ADMIN_USERNAME') ?? 'admin';
       admin = await this.users.getByUsername(username);
@@ -63,18 +65,18 @@ export class SeedService implements OnApplicationBootstrap {
         });
       }
       const system = await this.contexts.ensureSystemContext();
-      const manager = await this.roles.getRoleByShortname('manager');
       if (manager) await this.roles.assignRole(admin.id, manager.id, system.id);
       await this.evaluator.setSiteAdmins([admin.id]);
       this.logger.log(`Seeded initial site administrator "${username}" (id ${admin.id})`);
     } else {
-      admin = await this.users.getByIdOrUndefined(admins[0]!);
+      // Nhánh else chỉ chạy khi admins không rỗng, nhưng vẫn kiểm tra tường minh thay vì `!`.
+      const firstAdminId = admins[0];
+      admin = firstAdminId ? await this.users.getByIdOrUndefined(firstAdminId) : undefined;
     }
     if (admin) {
       // Admin khởi tạo là thành viên của cả tenant-zero lẫn tenant trường mặc định, và là tenant admin (manager tại context tenant) của cả hai — câu chuyện demo của review-seed.
       await this.tenants.ensureActiveMembership(zero.id, admin.id);
       await this.tenants.ensureActiveMembership(school.id, admin.id);
-      const manager = await this.roles.getRoleByShortname('manager');
       if (manager) {
         await this.assignRoleIfMissing(admin.id, manager.id, (await this.contexts.ensureTenantContext(zero.id)).id);
         await this.assignRoleIfMissing(admin.id, manager.id, (await this.contexts.ensureTenantContext(school.id)).id);

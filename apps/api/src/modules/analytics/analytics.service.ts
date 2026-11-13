@@ -16,6 +16,9 @@ export interface AnalyticsModelProvider {
   indicators: string[];
 }
 
+/** Cửa sổ "truy cập gần đây": lần đăng nhập cuối cũ hơn 14 ngày thì tính là không truy cập gần đây. */
+const RECENT_ACCESS_WINDOW_MS = 14 * 24 * 3600 * 1000;
+
 /**
  * Facade của AnalyticsModule (Moodle core_analytics, §2#23). Model/indicator là provider đăng ký trong code. Insight là SUY LUẬN — chỉ hiển thị cho user có capability ở context liên quan, và dự đoán KHÔNG BAO GIỜ tự thay đổi điểm/ghi danh. Model thật tối giản: "students at risk" = không truy cập gần đây + điểm thấp.
  */
@@ -52,7 +55,7 @@ export class AnalyticsService {
           .where('id', '=', userId)
           .executeTakeFirst();
         if (!u || !u.lastLogin) return 1;
-        return Date.now() - u.lastLogin.getTime() > 14 * 24 * 3600 * 1000 ? 1 : 0;
+        return Date.now() - u.lastLogin.getTime() > RECENT_ACCESS_WINDOW_MS ? 1 : 0;
       },
     });
     // Indicator: điểm thấp — tỉ lệ (1 - trung bình phần trăm điểm) của user trong khoá.
@@ -65,15 +68,22 @@ export class AnalyticsService {
           .where('course_id', '=', courseId)
           .execute();
         if (!items.length) return 0;
+        // Lọc xuống SQL theo user và theo đúng các item của khoá (tương đương
+        // phép lọc trong bộ nhớ trước đây) thay vì tải toàn bộ bảng điểm về.
+        const itemIds = items.map((i) => i.id);
         const grades = await db
           .selectFrom('grade_grades')
           .select(['user_id as userId', 'item_id as itemId', 'final_grade as finalGrade'])
+          .where('user_id', '=', userId)
+          .where('item_id', 'in', itemIds)
+          .where('final_grade', 'is not', null)
           .execute();
-        const mine = grades.filter((g) => g.userId === userId && items.some((i) => i.id === g.itemId) && g.finalGrade !== null);
+        const mine = grades;
         if (!mine.length) return 0.5; // chưa có điểm: tín hiệu trung bình
+        const itemsById = new Map(items.map((i) => [i.id, i]));
         const pct = mine.reduce((sum, g) => {
-          const item = items.find((i) => i.id === g.itemId)!;
-          return sum + (item.gradeMax > 0 ? (g.finalGrade ?? 0) / item.gradeMax : 0);
+          const item = itemsById.get(g.itemId);
+          return sum + (item && item.gradeMax > 0 ? (g.finalGrade ?? 0) / item.gradeMax : 0);
         }, 0) / mine.length;
         return pct < 0.5 ? 1 - pct : 0;
       },

@@ -11,8 +11,10 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { errorText } from '../utils/shared';
 import { ApiError } from '#lib/api';
 import { accessContextsQueryOptions, useAccessContexts, type ContextRow } from '#lib/access';
+import { findSystemContext } from '#lib/permissions';
 import { queryClient } from '#lib/query-client';
 import { queryKeys } from '#lib/query-keys';
+import { appKeyMeta } from '#lib/route-meta';
 import { curriculaBySubjectQueryOptions } from '#features/matrices/queries/matrix';
 import {
   bookDatasetStatusQueryOptions, booksQueryOptions, curriculumSubjectsScopedQueryOptions,
@@ -234,7 +236,7 @@ export function AdminCurriculumPage() {
 
   const programStatusQuery = useProgramDatasetStatus();
   const contextsQuery = useAccessContexts();
-  const systemContextId = contextsQuery.data?.find((c) => c.contextLevel === 10)?.id;
+  const systemContextId = findSystemContext(contextsQuery.data)?.id;
   const subjectsQuery = useCurriculumSubjectsScoped(systemContextId ?? null);
   const bookStatusQuery = useBookDatasetStatus();
   const booksQuery = useBooks();
@@ -531,7 +533,7 @@ export async function adminCurriculumPageClientLoader() {
     queryClient.ensureQueryData(booksQueryOptions()),
   ]);
   const contexts = queryClient.getQueryData<ContextRow[]>(queryKeys.accessContexts);
-  const systemContextId = contexts?.find((c) => c.contextLevel === 10)?.id;
+  const systemContextId = findSystemContext(contexts)?.id;
   if (systemContextId) {
     await queryClient.ensureQueryData(curriculumSubjectsScopedQueryOptions(systemContextId)).catch(() => undefined);
   }
@@ -550,7 +552,6 @@ export { AdminCurriculumTreePage } from '../components/tree-page';
 // trước đây nằm ở wrapper mỏng của route, gộp vào route module này khi
 // tổ chức lại theo mô hình features/ (issue #500).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navCurriculum');
 }

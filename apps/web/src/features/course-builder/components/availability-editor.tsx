@@ -13,7 +13,7 @@ import '#config/i18n';
  * Cây giữ đúng hình dạng JSON phía API (khớp `availability-tree` ở tầng availability của backend, gốc Moodle core_availability): nút là `{ op: '&' | '|' | '!&' | '!|', c: [...], show?, showc? }`, lá là `{ type, ...tham số }` với sáu loại lá mà backend có evaluator:
  * - `date`: `{ d: '>=' | '<', t: epoch giây }`
  * - `grade`: `{ id: gradeItemId, min?, max? }` (min/max là phần trăm)
- * - `completion`: `{ id: cmId, state }` (1 hoàn thành, 2 đạt, 3 không đạt)
+ * - `completion`: `{ id: cmId, state }` (xem COMPLETION_STATE: 1 hoàn thành, 2 đạt, 3 không đạt)
  * - `group`: `{ id: groupId }`, `grouping`: `{ id: groupingId }`
  * - `profile`: `{ field, operator: eq|contains|notempty|isempty, value? }`
  *
@@ -47,6 +47,11 @@ export interface AvailabilityOption {
 
 const OPS: AvailabilityOp[] = ['&', '|', '!&', '!|'];
 const LEAF_TYPES = ['date', 'grade', 'completion', 'group', 'grouping', 'profile'] as const;
+
+/**
+ * Trạng thái yêu cầu của lá completion trong cây availability (gốc Moodle core_availability): 1 hoàn thành, 2 đạt, 3 không đạt. Backend đọc số trần — chưa có enum ở contracts.
+ */
+export const COMPLETION_STATE = { complete: 1, pass: 2, fail: 3 } as const;
 const STANDARD_PROFILE_FIELDS = ['username', 'firstName', 'lastName', 'email'] as const;
 
 /** Phân biệt nút cây (có op + mảng c) với điều kiện lá. */
@@ -72,7 +77,7 @@ function normalizeLeaf(raw: Record<string, unknown>): AvailabilityLeafModel {
       return leaf;
     }
     case 'completion':
-      return { type: 'completion', id: String(raw.id ?? raw.cmid ?? raw.cm ?? ''), state: Number(raw.state ?? 1) };
+      return { type: 'completion', id: String(raw.id ?? raw.cmid ?? raw.cm ?? ''), state: Number(raw.state ?? COMPLETION_STATE.complete) };
     case 'group':
       return { type: 'group', id: String(raw.id ?? raw.groupId ?? '') };
     case 'grouping':
@@ -310,20 +315,20 @@ function LeafEditor({ leaf, idPrefix, ctx, onChange }: LeafEditorProps) {
             </span>
             <Select
               items={{
-                '1': t('availabilityCompletionComplete'),
-                '2': t('availabilityCompletionPass'),
-                '3': t('availabilityCompletionFail'),
+                [COMPLETION_STATE.complete]: t('availabilityCompletionComplete'),
+                [COMPLETION_STATE.pass]: t('availabilityCompletionPass'),
+                [COMPLETION_STATE.fail]: t('availabilityCompletionFail'),
               }}
-              value={String(leaf.state ?? 1)}
+              value={String(leaf.state ?? COMPLETION_STATE.complete)}
               onValueChange={(v) => v && onChange({ ...leaf, state: Number(v) })}
             >
               <SelectTrigger aria-labelledby={`${idPrefix}-completion-state-label`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">{t('availabilityCompletionComplete')}</SelectItem>
-                <SelectItem value="2">{t('availabilityCompletionPass')}</SelectItem>
-                <SelectItem value="3">{t('availabilityCompletionFail')}</SelectItem>
+                <SelectItem value={String(COMPLETION_STATE.complete)}>{t('availabilityCompletionComplete')}</SelectItem>
+                <SelectItem value={String(COMPLETION_STATE.pass)}>{t('availabilityCompletionPass')}</SelectItem>
+                <SelectItem value={String(COMPLETION_STATE.fail)}>{t('availabilityCompletionFail')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -477,7 +482,7 @@ function NodeEditor({ node, path, isRoot, ctx, onUpdate, onRemoveSelf }: NodeEdi
       case 'grade':
         return { type, id: ctx.gradeItems[0]?.id ?? '' };
       case 'completion':
-        return { type, id: ctx.modules[0]?.id ?? '', state: 1 };
+        return { type, id: ctx.modules[0]?.id ?? '', state: COMPLETION_STATE.complete };
       case 'group':
         return { type, id: ctx.groups[0]?.id ?? '' };
       case 'grouping':

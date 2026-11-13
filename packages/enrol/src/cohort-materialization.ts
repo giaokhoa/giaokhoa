@@ -1,4 +1,5 @@
 import { getCourseContextId } from './contexts';
+import { ENROL_ACTIVE, ENROL_SUSPENDED, ENROL_WITHDRAWN } from './enrol-status';
 import { isRoleContextConflictError, SharedDomainError } from './errors';
 import { PlanLimitsCore } from './plan-limits';
 import { hasRelatedCourseData } from './related-data';
@@ -15,13 +16,6 @@ import {
   type SharedSurfaceDeps,
   type UserEnrolmentRow,
 } from './types';
-
-/** Trạng thái ghi danh đang hiệu lực. */
-export const ENROL_ACTIVE = 0;
-/** Trạng thái ghi danh bị đình chỉ (không truy cập được khoá, gán vai vẫn còn). */
-export const ENROL_SUSPENDED = 1;
-/** Trạng thái ghi danh đã rút nhưng dòng được giữ vì user còn dữ liệu liên quan trong khoá. */
-export const ENROL_WITHDRAWN = 2;
 
 /**
  * Loại sự kiện outbox yêu cầu tái tổng hợp hoàn thành khoá học cho một người dùng sau khi gỡ ghi danh. Sự kiện được phát trong CÙNG transaction với thao tác gỡ ghi danh (xem `unenrolInternal`), phía API tiêu thụ qua consumer có watermark `seq` riêng — nó KHÔNG nằm trong bảng định tuyến relay của worker.
@@ -175,7 +169,7 @@ export class CohortMaterializationSurface {
     modifierId?: string,
     opts?: { timeStart?: Date; timeEnd?: Date },
   ): Promise<{ userEnrolment: UserEnrolmentRow; isNewEnrolment: boolean }> {
-    if (instance.status !== 0) {
+    if (instance.status !== ENROL_ACTIVE) {
       throw new SharedDomainError('enrol.instance_disabled', 'Enrol instance is disabled');
     }
     // Chốt TÁCH VAI — funnel 1 (RoleSeparationCore giữ định nghĩa dùng chung): mọi đường ghi danh đều hội tụ về hàm này (ghi danh tay, tự ghi danh, kích hoạt sau thanh toán, đồng bộ cohort), nên chốt tại đây phủ toàn bộ các đường đó. Chỉ áp khi instance cấp vai HỌC VIÊN.
@@ -367,12 +361,15 @@ export class CohortMaterializationSurface {
    * @param cohortId - cohort đích.
    */
   async listCohortInstances(cohortId: string): Promise<EnrolInstanceRow[]> {
-    const rows = await this.db
+    // Lọc theo cohort ngay trong truy vấn thay vì tải toàn bộ instance rồi lọc bằng JS: điều kiện `custom_int1 = cohortId` tương đương với phép lọc cũ (dòng có `custom_int1` null không bao giờ bằng một cohortId dạng chuỗi, cả trong SQL lẫn trong phép `===` của JS), và vẫn trả đúng tập instance cohort của cohort này.
+    return this.db
       .selectFrom('enrol')
       .select(ENROL_COLUMNS)
-      .where('enrol.enrol', '=', 'cohort')
+      .where((eb) => eb.and([
+        eb('enrol.enrol', '=', 'cohort'),
+        eb('enrol.custom_int1', '=', cohortId),
+      ]))
       .execute();
-    return rows.filter((r) => r.customInt1 === cohortId);
   }
 
   /**
@@ -391,7 +388,7 @@ export class CohortMaterializationSurface {
     if (!(await this.isCohortMember(payload.cohortId, payload.userId))) return;
     const instances = await this.listCohortInstances(payload.cohortId);
     for (const instance of instances) {
-      if (instance.status !== 0) continue;
+      if (instance.status !== ENROL_ACTIVE) continue;
       await this.enrolFromCohortSync(instance, payload.userId);
     }
   }

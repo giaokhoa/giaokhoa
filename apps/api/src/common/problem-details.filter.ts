@@ -1,3 +1,24 @@
+/**
+ * Filter lỗi toàn cục — mọi exception ra ngoài đều theo khuôn Problem
+ * Details (RFC 7807, `application/problem+json`).
+ *
+ * Flow (`catch`): exception vào → xác định `status`/`title`/`detail`/
+ * `code` ổn định → tra text hiển thị theo `code` trong catalog i18n
+ * (`errors.<code>`) theo ngôn ngữ của request → trả problem JSON.
+ *
+ * - `HttpException`: lấy status và body của nó; body dạng mảng `message`
+ *   là lỗi validation (mã `http.validation_failed`, kèm từng message
+ *   trong `errors`); mã `code` do exception nội bộ mang được giữ nguyên.
+ * - Extension member của exception nội bộ được mang sang problem CHỈ
+ *   khi đúng hình dạng đã khai trong contracts: `blocked` (lớp VN bị
+ *   chặn) → `blockedStudents`, `matrixImportIssues` (lỗi nhập ma trận
+ *   có định vị sheet/dòng/cột) → `matrixImportIssues`; dữ liệu lạ hình
+ *   bị bỏ thay vì lộ nguyên ra ngoài.
+ * - Mọi exception khác: log stack, trả 500 `http.internal_error` với
+ *   detail chung, không lộ chi tiết nội bộ.
+ *
+ * Filter được đăng ký toàn cục ở `main.ts` (`app.useGlobalFilters`).
+ */
 import {
   ArgumentsHost,
   Catch,
@@ -26,6 +47,11 @@ const STATUS_TITLES: Record<number, string> = {
   502: 'Bad Gateway',
   503: 'Service Unavailable',
 };
+
+/** Type-guard dùng chung cho hai bộ lọc extension member: một giá trị không rõ hình có phải object để đọc trường hay không — thay cho chuỗi cast `as {…}` lặp lại ở từng predicate. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
@@ -74,10 +100,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         if (Array.isArray(record.blocked)) {
           const shaped = record.blocked.filter(
             (b): b is { userId: string; reason: 'awaiting_makeup' | 'incomplete'; roles: string[] } =>
-              !!b && typeof b === 'object'
-              && typeof (b as { userId?: unknown }).userId === 'string'
-              && ((b as { reason?: unknown }).reason === 'awaiting_makeup' || (b as { reason?: unknown }).reason === 'incomplete')
-              && Array.isArray((b as { roles?: unknown }).roles),
+              isRecord(b)
+              && typeof b.userId === 'string'
+              && (b.reason === 'awaiting_makeup' || b.reason === 'incomplete')
+              && Array.isArray(b.roles),
           );
           if (shaped.length > 0) {
             blockedStudents = shaped.map((b) => ({
@@ -98,12 +124,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         if (Array.isArray(record.matrixImportIssues)) {
           const shaped = record.matrixImportIssues.filter(
             (i): i is { sheet: string | null; row: number | null; column: string | null; code: string; message: string } =>
-              !!i && typeof i === 'object'
-              && ((i as { sheet?: unknown }).sheet === null || typeof (i as { sheet?: unknown }).sheet === 'string')
-              && ((i as { row?: unknown }).row === null || typeof (i as { row?: unknown }).row === 'number')
-              && ((i as { column?: unknown }).column === null || typeof (i as { column?: unknown }).column === 'string')
-              && typeof (i as { code?: unknown }).code === 'string'
-              && typeof (i as { message?: unknown }).message === 'string',
+              isRecord(i)
+              && (i.sheet === null || typeof i.sheet === 'string')
+              && (i.row === null || typeof i.row === 'number')
+              && (i.column === null || typeof i.column === 'string')
+              && typeof i.code === 'string'
+              && typeof i.message === 'string',
           );
           if (shaped.length > 0) matrixImportIssues = shaped;
         }
@@ -125,6 +151,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
      */
     try {
       const key = `errors.${code}`;
+      // `key` là khoá động `errors.<code>` — không nằm trong union khoá tĩnh của catalog nên ép qua `never`; thiếu khoá thì `t()` trả chính khoá và phép so sánh dưới đây giữ detail gốc.
       const translated = t(key as never);
       if (typeof translated === 'string' && translated !== key) detail = translated;
     } catch {

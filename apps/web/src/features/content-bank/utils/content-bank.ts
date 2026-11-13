@@ -1,3 +1,4 @@
+import { ApiError } from '#lib/api';
 import type { CurriculumTreeNode } from '#lib/curriculum';
 import type { FlatNode } from '../types/content-bank';
 
@@ -31,4 +32,11 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('read failed'));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Thông báo lỗi từ API: ưu tiên lý do thật (ProblemDetails.detail/title), chỉ dùng câu chung khi API không kèm lý do. Khác `withApiReason` ở questions/utils/shared — hàm đó giữ câu chung rồi nối thêm lý do, còn trang Kho chỉ hiện đúng lý do để dòng lỗi ngắn gọn.
+ */
+export function errorText(err: unknown, fallback: string): string {
+  return err instanceof ApiError ? (err.problem.detail ?? err.problem.title ?? fallback) : fallback;
 }

@@ -153,15 +153,12 @@ export class GroupsService implements OnModuleInit {
   }
 
   /**
-   * Các nhóm một actor thấy được trong một khoá học theo luật nhóm tách biệt.
+   * Các nhóm user được phép thấy theo chế độ nhóm của khoá học.
    * Chế độ hiệu lực: groupMode riêng của cm khi có cm và chế độ của nó
    * không phải "inherit" (0), ngược lại là groupMode của khoá học — trừ khi khoá học
    * ép chế độ của nó (groupModeForce), cái này ghi đè cm hoàn toàn.
    * VISIBLEGROUPS và NOGROUPS trả mọi nhóm; chỉ SEPARATEGROUPS
    * mới hạn chế actor không có đặc quyền vào nhóm của chính họ.
-   */
-  /**
-   * Các nhóm user được phép thấy theo chế độ nhóm của khoá học.
    */
   async visibleGroupsFor(actorId: string, courseId: string, cmGroupMode?: number): Promise<GroupRow[]> {
     const courseRow = await this.courses.getCourse(courseId);
@@ -177,10 +174,16 @@ export class GroupsService implements OnModuleInit {
    * capability quản lý nhóm; học viên thường nhận `enrolmentKey: null`.
    */
   async listGroups(actorId: string, courseId: string): Promise<GroupRow[]> {
-    await this.courses.assertCourseAccess(actorId, courseId).catch(async () => {
-      // User có managegroups được liệt kê ngay cả khi chưa ghi danh (giáo viên).
+    try {
+      await this.courses.assertCourseAccess(actorId, courseId);
+    } catch (err) {
+      // Chỉ lỗi "không có quyền" mới thử cổng quản trị (user có managegroups
+      // được liệt kê ngay cả khi chưa ghi danh — giáo viên). Lỗi khác
+      // (khoá không tồn tại, lỗi hạ tầng) nổi lên như cũ, không bị biến
+      // thành "thử cổng quản trị".
+      if (!(err instanceof ForbiddenException)) throw err;
       await this.requireManageGroups(actorId, courseId);
-    });
+    }
     const groups = await this.visibleGroupsFor(actorId, courseId);
     if (await this.canManageGroups(actorId, courseId)) return groups;
     return groups.map((g) => this.hideGroupKey(g));
@@ -223,12 +226,9 @@ export class GroupsService implements OnModuleInit {
   }
 
   /**
-   * Thành viên của một nhóm, theo luật nhóm tách biệt: ở chế độ SEPARATEGROUPS
+   * Thành viên của nhóm, theo luật nhóm tách biệt: ở chế độ SEPARATEGROUPS
    * một actor không có đặc quyền hỏi về một nhóm họ không thuộc về sẽ nhận 403
    * — dữ liệu của nhóm không phải của họ để thấy, tại SERVER.
-   */
-  /**
-   * Thành viên của nhóm.
    */
   async listMembers(actorId: string, groupId: string): Promise<{ userId: string; timeAdded: Date }[]> {
     const group = await this.getGroup(groupId);
@@ -240,9 +240,9 @@ export class GroupsService implements OnModuleInit {
     return rows.map((r) => ({ userId: r.userId, timeAdded: r.timeAdded }));
   }
 
-  /** Mọi thành viên người xem được thấy trên toàn khoá học (dùng cho các view thành viên/dữ liệu nhóm của khoá học). */
   /**
-   * Thành viên mà người xem được phép thấy.
+   * Thành viên mà người xem được phép thấy: mọi thành viên người xem được thấy
+   * trên toàn khoá học (dùng cho các view thành viên/dữ liệu nhóm của khoá học).
    */
   async listVisibleMembers(actorId: string, courseId: string): Promise<{ groupId: string; userId: string }[]> {
     const visible = await this.visibleGroupsFor(actorId, courseId);
@@ -258,9 +258,9 @@ export class GroupsService implements OnModuleInit {
    * Kiểm tra thành viên nhóm.
    */
   async isMember(groupId: string, userId: string): Promise<boolean> { return this.repo.isMember(groupId, userId); }
-  /** Thêm nội bộ dùng bởi đồng bộ enrol/cohort (hành động hệ thống, không kiểm tra capability của actor). */
   /**
    * Thêm thành viên không kiểm capability — dành cho đồng bộ nội bộ (cohort sync).
+   * Thêm nội bộ dùng bởi đồng bộ enrol/cohort (hành động hệ thống, không kiểm tra capability của actor).
    */
   async addMemberInternal(groupId: string, userId: string, component = '', itemId: string | null = null): Promise<void> {
     await this.repo.addMember(groupId, userId, component, itemId);
@@ -477,12 +477,10 @@ export class GroupsService implements OnModuleInit {
   async isCohortMember(cohortId: string, userId: string): Promise<boolean> { return this.repo.isCohortMember(cohortId, userId); }
 
   /**
-   * Thêm một user vào cohort. Phát cohort_member_added (outbox + trong tiến trình)
+   * Thêm thành viên cohort và phát sự kiện đồng bộ ghi danh (cohort sync).
+   * Phát cohort_member_added (outbox + trong tiến trình)
    * để handler đồng bộ cohort của EnrolModule ghi danh họ vào mọi khoá học có
    * instance enrol cohort liên kết.
-   */
-  /**
-   * Thêm thành viên cohort và phát sự kiện đồng bộ ghi danh (cohort sync).
    */
   async addCohortMember(actorId: string, cohortId: string, userId: string): Promise<void> {
     const cohortRow = await this.getCohort(cohortId);

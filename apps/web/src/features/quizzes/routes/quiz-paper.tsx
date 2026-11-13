@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Route } from './+types/quiz-paper';
+import { appKeyMeta } from '#lib/route-meta';
 import { Link, useParams } from 'react-router';
-import type { PaperBatch, PaperScan } from '@giaokhoa/contracts';
+import { TRUE_FALSE_STATEMENT_COUNT, type PaperBatch, type PaperScan } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
@@ -21,6 +23,18 @@ import { paperPageClientLoader, useAssignScanBatch, useAssignScanIdentity, useCr
 
 const TEMPLATE_WIDTH = 1240;
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+
+/** Chiều cao dải xem trước dòng câu đã cắt (RowCrop), px. */
+const ROW_CROP_HEIGHT = 120;
+/** Chiều cao tối thiểu của vùng cắt theo template (RegionCrop), px. */
+const REGION_CROP_MIN_HEIGHT = 48;
+/** Số chữ số của mã đề lớp (mặc định của ô chọn số chữ số mã; mã SBD dài 8). */
+const EXAM_CODE_DIGIT_COUNT = 4;
+const SBD_DIGIT_COUNT = 8;
+/** Số bản in mặc định khi tạo lô in. */
+const DEFAULT_COPIES = 30;
+/** Độ dài tối đa của mã biến thể lô in. */
+const VARIANT_CODE_MAX_LENGTH = 8;
 
 interface UploadOutcome {
   fileName: string;
@@ -81,7 +95,7 @@ function RowCrop({ scanId, centers }: { scanId: string; centers: { x: number; y:
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const height = 120;
+  const height = ROW_CROP_HEIGHT;
   const cy = centers.reduce((sum, c) => sum + c.y, 0) / Math.max(1, centers.length);
   const scale = width / TEMPLATE_WIDTH;
   return (
@@ -110,7 +124,7 @@ function RegionCrop({ scanId, region, label }: { scanId: string; region: { x: nu
     return () => ro.disconnect();
   }, []);
   const scale = width / TEMPLATE_WIDTH;
-  const height = Math.max(48, region.h * scale);
+  const height = Math.max(REGION_CROP_MIN_HEIGHT, region.h * scale);
   return (
     <figure className="flex flex-col gap-1">
       <div ref={ref} className="relative w-full overflow-hidden rounded border bg-white" style={{ height }}>
@@ -155,8 +169,8 @@ export default function QuizPaperPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [variant, setVariant] = useState('');
   const [examCode, setExamCode] = useState('');
-  const [codeDigits, setCodeDigits] = useState('4');
-  const [copies, setCopies] = useState(30);
+  const [codeDigits, setCodeDigits] = useState(String(EXAM_CODE_DIGIT_COUNT));
+  const [copies, setCopies] = useState(DEFAULT_COPIES);
   const [files, setFiles] = useState<File[]>([]);
   const [outcomes, setOutcomes] = useState<UploadOutcome[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -200,7 +214,7 @@ export default function QuizPaperPage() {
     await runAction(async () => {
       const body: Record<string, unknown> = { codeDigits: Number(codeDigits) };
       if (variant.trim()) body.variantCode = variant.trim();
-      if (/^\d{4}$/.test(examCode.trim())) body.examCode = examCode.trim();
+      if (new RegExp(`^\\d{${EXAM_CODE_DIGIT_COUNT}}$`).test(examCode.trim())) body.examCode = examCode.trim();
       const created = await createBatchMutation.mutateAsync(body);
       setVariant('');
       setExamCode('');
@@ -291,7 +305,7 @@ export default function QuizPaperPage() {
     const ambiguous = scan.readings.filter((r) => r.state === 'ambiguous');
     const incomplete = ambiguous.some((r) =>
       isTrueFalseSlot(scan, r.slot)
-        ? (pairPicks[r.slot] ?? []).length !== 4 || (pairPicks[r.slot] ?? []).some((v) => v === undefined)
+        ? (pairPicks[r.slot] ?? []).length !== TRUE_FALSE_STATEMENT_COUNT || (pairPicks[r.slot] ?? []).some((v) => v === undefined)
         : !(r.slot in picks),
     );
     if (incomplete) return;
@@ -390,7 +404,7 @@ export default function QuizPaperPage() {
                     value={variant}
                     onChange={(e) => setVariant(e.target.value)}
                     className="w-32"
-                    maxLength={8}
+                    maxLength={VARIANT_CODE_MAX_LENGTH}
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -398,7 +412,7 @@ export default function QuizPaperPage() {
                   <Input
                     id="paper-exam-code"
                     value={examCode}
-                    onChange={(e) => setExamCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    onChange={(e) => setExamCode(e.target.value.replace(/\D/g, '').slice(0, EXAM_CODE_DIGIT_COUNT))}
                     className="w-28"
                     inputMode="numeric"
                     placeholder="1001"
@@ -412,8 +426,8 @@ export default function QuizPaperPage() {
                     value={codeDigits}
                     onChange={(e) => setCodeDigits(e.target.value)}
                   >
-                    <option value="4">{t('paperCodeDigitsClass')}</option>
-                    <option value="8">{t('paperCodeDigitsSbd')}</option>
+                    <option value={String(EXAM_CODE_DIGIT_COUNT)}>{t('paperCodeDigitsClass')}</option>
+                    <option value={String(SBD_DIGIT_COUNT)}>{t('paperCodeDigitsSbd')}</option>
                   </select>
                 </div>
                 <Button type="button" disabled={busy} onClick={() => void createBatch()}>
@@ -594,13 +608,13 @@ export default function QuizPaperPage() {
                           // làm giá trị khởi đầu, ý mơ hồ chờ GV chốt.
                           const current: (0 | 1 | null | undefined)[] =
                             pairPicks[reading.slot] ??
-                            (reading.pairChoices ?? [null, null, null, null]).map(
+                            (reading.pairChoices ?? Array<0 | 1 | null>(TRUE_FALSE_STATEMENT_COUNT).fill(null)).map(
                               (v) => v as 0 | 1 | null,
                             );
                           const setPair = (statementIndex: number, value: 0 | 1 | null) =>
                             setPairResolutions((prev) => {
                               const base = [...(prev[scan.id]?.[reading.slot] ?? current)];
-                              while (base.length < 4) base.push(null);
+                              while (base.length < TRUE_FALSE_STATEMENT_COUNT) base.push(null);
                               base[statementIndex] = value;
                               return {
                                 ...prev,
@@ -611,7 +625,7 @@ export default function QuizPaperPage() {
                             <div key={reading.slot} className="flex flex-col gap-2">
                               <p className="text-sm">{t('paperQuestionLine', { slot: reading.slot })}</p>
                               {row ? <RowCrop scanId={scan.id} centers={row.centers} /> : null}
-                              {[0, 1, 2, 3].map((statementIndex) => (
+                              {Array.from({ length: TRUE_FALSE_STATEMENT_COUNT }, (_, statementIndex) => statementIndex).map((statementIndex) => (
                                 <div key={statementIndex} className="flex flex-wrap items-center gap-2">
                                   <span className="text-sm font-medium">
                                     {t('paperTfStatementLine', { index: statementIndex + 1 })}
@@ -767,7 +781,7 @@ export default function QuizPaperPage() {
  * nước mount-rồi-fetch. prefetchQuery không ném lỗi: tải hỏng thì
  * component tự xử lý qua useQuery như trước.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.pinId) {
     await paperPageClientLoader(params.pinId);
   }
@@ -776,7 +790,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('paperTitle');
 }

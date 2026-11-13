@@ -9,7 +9,7 @@ import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { useDeleteAssignment, useSaveAssignmentRubric, useUpdateAssignment } from '../queries/assignment';
-import { selectClass } from '../utils/shared';
+import { selectClass } from '#lib/form-classes';
 
 /** Chuyển ISO sang giá trị của input datetime-local. */
 function toLocalInput(iso: string | null): string {

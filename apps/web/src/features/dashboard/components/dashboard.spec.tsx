@@ -1,7 +1,9 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UserProfile } from '@giaokhoa/contracts';
 import { TestProviders } from '#test/providers';
+import { stubFetch, userProfile, type StubFetchHandler } from '#test/stub-fetch';
 import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { DashboardPage } from './dashboard';
@@ -27,27 +29,32 @@ const COURSE = {
   enableCompletion: true,
 };
 
-function profile(id: string, username: string, firstName: string, lastName: string) {
-  return {
-    id,
-    username,
-    firstName,
-    lastName,
-    email: `${username}@example.com`,
-    suspended: false,
-    deleted: false,
-    isGuest: false,
-    forcePasswordChange: false,
-    lastLogin: null,
+/** Hồ sơ mẫu theo từng vai (S24): dùng `userProfile` dùng chung, chỉ ghi đè id/username/tên/email/mốc tạo để khớp vai đang stub. */
+const PROFILES: Record<string, UserProfile> = {
+  admin: userProfile({
+    id: ADMIN_ID,
+    username: 'admin',
+    firstName: 'Quản',
+    lastName: 'Trị',
+    email: 'admin@example.com',
     createdAt: '2026-10-01T00:00:00.000Z',
-    customFields: [],
-  };
-}
-
-const PROFILES: Record<string, ReturnType<typeof profile>> = {
-  admin: profile(ADMIN_ID, 'admin', 'Quản', 'Trị'),
-  teacher1: profile(TEACHER_ID, 'teacher1', 'Lan Anh', 'Nguyễn'),
-  student1: profile(STUDENT_ID, 'student1', 'Minh Quân', 'Trần'),
+  }),
+  teacher1: userProfile({
+    id: TEACHER_ID,
+    username: 'teacher1',
+    firstName: 'Lan Anh',
+    lastName: 'Nguyễn',
+    email: 'teacher1@example.com',
+    createdAt: '2026-10-01T00:00:00.000Z',
+  }),
+  student1: userProfile({
+    id: STUDENT_ID,
+    username: 'student1',
+    firstName: 'Minh Quân',
+    lastName: 'Trần',
+    email: 'student1@example.com',
+    createdAt: '2026-10-01T00:00:00.000Z',
+  }),
 };
 
 const GRADEBOOK = {
@@ -125,35 +132,15 @@ function accessView(role: 'admin' | 'teacher' | 'student') {
   };
 }
 
-type Handler = (url: string) => { status: number; body: unknown } | undefined;
-
-function ok(body: unknown) {
-  return { status: 200, body };
-}
-function forbidden() {
-  return { status: 403, body: FORBIDDEN };
-}
-
 /**
  * Stub fetch theo đúng bề mặt API thật: quyền của từng vai trò được khai
  * qua GET /users/me/capabilities (đúng nguồn PermissionsProvider đọc),
  * còn các endpoint dữ liệu bị khoá quyền vẫn trả 403 như PermissionEvaluator
  * của API để test kiểm chứng cả dữ liệu hiển thị theo vai trò.
+ * Dùng `stubFetch` dùng chung ở `#test/stub-fetch` (S24): handler trả
+ * thân JSON (đáp 200), cặp `{ status, body }` (đáp đúng trạng thái đó),
+ * hoặc `undefined` (đáp 404).
  */
-function stubFetch(handler: Handler) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      const result = handler(url);
-      if (!result) return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
-      return new Response(JSON.stringify(result.body), {
-        status: result.status,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }),
-  );
-}
-
 function renderApp() {
   const router = createMemoryRouter([
     {
@@ -170,22 +157,22 @@ function renderApp() {
   );
 }
 
-function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
+function baseHandler(role: 'admin' | 'teacher' | 'student'): StubFetchHandler {
   const me = role === 'admin' ? PROFILES.admin : role === 'teacher' ? PROFILES.teacher1 : PROFILES.student1;
   return (url) => {
     // Phiên cookie Better Auth: id phiên khớp hồ sơ của vai đang stub.
-    if (isGetSessionUrl(url)) return ok(baSessionBody({ id: me.id, username: me.username, email: me.email }));
-    if (url === '/api/v1/users/me') return ok(me);
-    if (url === '/api/v1/users/me/capabilities') return ok(accessView(role));
+    if (isGetSessionUrl(url)) return baSessionBody({ id: me.id, username: me.username, email: me.email });
+    if (url === '/api/v1/users/me') return me;
+    if (url === '/api/v1/users/me/capabilities') return accessView(role);
     if (url.startsWith('/api/v1/users?')) {
-      if (role !== 'admin') return forbidden();
+      if (role !== 'admin') return { status: 403, body: FORBIDDEN };
       return url.includes('pageSize=100')
-        ? ok({ users: [PROFILES.admin, PROFILES.teacher1, PROFILES.student1], total: 3, page: 1, pageSize: 100 })
-        : ok({ users: [PROFILES.admin], total: 3, page: 1, pageSize: 1 });
+        ? { users: [PROFILES.admin, PROFILES.teacher1, PROFILES.student1], total: 3, page: 1, pageSize: 100 }
+        : { users: [PROFILES.admin], total: 3, page: 1, pageSize: 1 };
     }
     if (url === '/api/v1/access/roles') {
       return role === 'admin'
-        ? ok([
+        ? [
             {
               id: '01900000-0000-7000-8000-0000000000b1',
               name: 'Quản lý',
@@ -200,13 +187,13 @@ function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
               description: '',
               archetype: 'student',
             },
-          ])
-        : forbidden();
+          ]
+        : { status: 403, body: FORBIDDEN };
     }
-    if (url === '/api/v1/questions/categories') return role === 'student' ? forbidden() : ok([]);
-    if (url === '/api/v1/courses') return ok([COURSE]);
+    if (url === '/api/v1/questions/categories') return role === 'student' ? { status: 403, body: FORBIDDEN } : [];
+    if (url === '/api/v1/courses') return [COURSE];
     if (url === '/api/v1/courses/categories/tree') {
-      return ok([
+      return [
         {
           ...COURSE,
           id: CATEGORY_ID,
@@ -220,25 +207,25 @@ function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
           visible: true,
           children: [],
         },
-      ]);
+      ];
     }
     if (url === `/api/v1/courses/${COURSE_ID}/enrolments/me`) {
       return role === 'admin'
-        ? ok({ courseId: COURSE_ID, userId: me.id, enrolled: false, active: false })
-        : ok({ courseId: COURSE_ID, userId: me.id, enrolled: true, active: true });
+        ? { courseId: COURSE_ID, userId: me.id, enrolled: false, active: false }
+        : { courseId: COURSE_ID, userId: me.id, enrolled: true, active: true };
     }
     if (url === `/api/v1/courses/${COURSE_ID}/gradebook/report`) {
-      return role === 'student' ? forbidden() : ok(REPORT);
+      return role === 'student' ? { status: 403, body: FORBIDDEN } : REPORT;
     }
     if (url === `/api/v1/courses/${COURSE_ID}/gradebook`) {
-      return role === 'admin' ? forbidden() : ok(GRADEBOOK);
+      return role === 'admin' ? { status: 403, body: FORBIDDEN } : GRADEBOOK;
     }
-    if (url === '/api/v1/badges/mine') return ok([{ id: 'x' }, { id: 'y' }]);
+    if (url === '/api/v1/badges/mine') return [{ id: 'x' }, { id: 'y' }];
     // DASH1 (issue #121): endpoint tổng hợp dashboard + thẻ khoá.
     if (url.startsWith('/api/v1/dashboard/overview')) {
       const soon = new Date(Date.now() + 2 * 86_400_000).toISOString();
       const past = new Date(Date.now() - 3_600_000).toISOString();
-      return ok({
+      return {
         generatedAt: new Date().toISOString(),
         previousSeenAt: null,
         dueWindowDays: 7,
@@ -259,16 +246,16 @@ function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
           role === 'teacher'
             ? [{ courseId: COURSE_ID, courseName: 'Khoá học mẫu', pendingCount: 5, assignmentPending: 2, quizPending: 1, paperPending: 2, paperPinId: 'quiz-paper-1', oldestPendingAt: past }]
             : [],
-      });
+      };
     }
-    if (url === '/api/v1/dashboard/course-cards') return ok({ prefs: [] });
+    if (url === '/api/v1/dashboard/course-cards') return { prefs: [] };
     // Dashboard chỉ còn hỏi SỐ chưa đọc (trung tâm v2, issue #51).
     if (url === '/api/v1/notifications/unread-count') {
-      return ok({ unread: 1 });
+      return { unread: 1 };
     }
     if (url.startsWith('/api/v1/calendar/events')) {
       const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
-      return ok([{ id: 'e1', name: 'Sự kiện mẫu', timeStart: tomorrow }]);
+      return [{ id: 'e1', name: 'Sự kiện mẫu', timeStart: tomorrow }];
     }
     return undefined;
   };

@@ -1,4 +1,11 @@
+/**
+ * Màn sửa lớp: ngoài tên, mã, năm học và mô tả, màn này giữ các cài đặt vòng đời của
+ * lớp — luật khi học sinh rời lớp, tự báo danh kèm mã tham gia và xoay mã, tự duyệt
+ * yêu cầu — cùng khối học phí gói lớp. Mọi thay đổi đi qua PATCH /classes/:id.
+ */
+
 import { useState, type FormEvent } from 'react';
+import { SELECT_CLASS } from '#utils/form-classes';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Checkbox } from '@giaokhoa/ui/components/checkbox';
@@ -7,16 +14,12 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { ErrorAlert } from '#components/error-alert';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { fetchClass, updateClass } from '../api/classes';
-import { queryKeys } from '#lib/query-keys';
-import { queryKeys as classesQueryKeys } from '../queries/keys';
+import { useClassDetail, useUpdateClass } from '../queries/classes';
 
-const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
 
 /**
  * Màn sửa lớp riêng (CLASS-1, issue #184) — ngoài thông tin cơ bản, màn này giữ các cài đặt vòng đời của lớp: luật rời lớp (đình chỉ giữ điểm là mặc định / rút hẳn), tự báo danh + mã tham gia + xoay mã, tự duyệt yêu cầu. CLASS-3 bổ sung khối HỌC PHÍ gói lớp (số tiền + đơn vị tiền + tài khoản nhận chỉ định riêng). Mọi thay đổi đi qua PATCH /classes/:id; API gác quyền tại context lớp nên web không tự giấu theo vai (AGENTS.md web: giấu UI không phải là gác).
@@ -25,8 +28,7 @@ export function ClassEditPage() {
   const { t } = useTranslation('app');
   const { id } = useParams<{ id: string }>();
   const classId = id ?? '';
-  const queryClient = useQueryClient();
-  const classQuery = useQuery({ queryKey: classesQueryKeys.classDetail(classId), queryFn: () => fetchClass(classId), enabled: Boolean(classId) });
+  const classQuery = useClassDetail(classId);
 
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -59,46 +61,43 @@ export function ClassEditPage() {
     }
   }
 
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: classesQueryKeys.classRoot(classId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.classes });
-  };
+  const saveMutation = useUpdateClass();
+  const rotateMutation = useUpdateClass();
 
-  const saveMutation = useMutation({
-    mutationFn: () =>
-      updateClass(classId, {
-        name: name.trim(),
-        code: code.trim() ? code.trim() : null,
-        schoolYear: schoolYear.trim() ? schoolYear.trim() : null,
-        description: description.trim(),
-        onLeave,
-        allowSelfReport,
-        joinAutoApprove,
-        // CLASS-3: chuỗi rỗng ở ô học phí = tắt thu qua hệ (gửi null); tài khoản nhận để trống = tài khoản mặc định của tenant.
-        feeCost: feeCost.trim() === '' ? null : Number(feeCost.trim()),
-        feeCurrency: feeCurrency.trim().toUpperCase() || 'VND',
-        feePaymentAccountId: feePaymentAccountId.trim() ? feePaymentAccountId.trim() : null,
-      }),
-    onSuccess: () => {
-      setMessage(null);
-      refresh();
-    },
-    onError: () => setMessage(t('classSaveFailed')),
-  });
-
-  const rotateMutation = useMutation({
-    mutationFn: () => updateClass(classId, { rotateJoinCode: true }),
-    onSuccess: () => {
-      setMessage(t('classJoinCodeRotated'));
-      refresh();
-    },
-    onError: () => setMessage(t('classSaveFailed')),
-  });
-
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
-    saveMutation.mutate();
+    try {
+      await saveMutation.mutateAsync({
+        classId,
+        input: {
+          name: name.trim(),
+          code: code.trim() ? code.trim() : null,
+          schoolYear: schoolYear.trim() ? schoolYear.trim() : null,
+          description: description.trim(),
+          onLeave,
+          allowSelfReport,
+          joinAutoApprove,
+          // CLASS-3: chuỗi rỗng ở ô học phí = tắt thu qua hệ (gửi null); tài khoản nhận để trống = tài khoản mặc định của tenant.
+          feeCost: feeCost.trim() === '' ? null : Number(feeCost.trim()),
+          feeCurrency: feeCurrency.trim().toUpperCase() || 'VND',
+          feePaymentAccountId: feePaymentAccountId.trim() ? feePaymentAccountId.trim() : null,
+        },
+      });
+      setMessage(null);
+    } catch {
+      setMessage(t('classSaveFailed'));
+    }
+  }
+
+  async function onRotateJoinCode() {
+    setMessage(null);
+    try {
+      await rotateMutation.mutateAsync({ classId, input: { rotateJoinCode: true } });
+      setMessage(t('classJoinCodeRotated'));
+    } catch {
+      setMessage(t('classSaveFailed'));
+    }
   }
 
   const cls = classQuery.data;
@@ -142,7 +141,7 @@ export function ClassEditPage() {
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="class-onleave">{t('classOnLeave')}</FieldLabel>
-                    <select id="class-onleave" className={SELECT_CLASS} value={onLeave} onChange={(e) => setOnLeave(e.target.value as 'suspend' | 'unenrol')}>
+                    <select id="class-onleave" className={SELECT_CLASS} value={onLeave} onChange={(e) => setOnLeave(e.target.value === 'unenrol' ? 'unenrol' : 'suspend')}>
                       <option value="suspend">{t('classOnLeaveSuspend')}</option>
                       <option value="unenrol">{t('classOnLeaveUnenrol')}</option>
                     </select>
@@ -183,7 +182,7 @@ export function ClassEditPage() {
                     </p>
                   ) : null}
                   <div>
-                    <Button type="button" variant="outline" size="sm" disabled={rotateMutation.isPending} onClick={() => rotateMutation.mutate()}>
+                    <Button type="button" variant="outline" size="sm" disabled={rotateMutation.isPending} onClick={() => void onRotateJoinCode()}>
                       {t('classRotateJoinCode')}
                     </Button>
                   </div>

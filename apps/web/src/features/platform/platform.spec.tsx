@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
+import { stubFetch } from '#test/stub-fetch';
 import { queryClient } from '#lib/query-client';
 import { queryKeys } from './queries/keys';
 import { insightsPageClientLoader } from './queries/platform';
@@ -17,18 +18,6 @@ import { TokensPage } from './routes/platform-tokens';
 /**
  * Platform web tests (Testing Library): global search hiển thị đúng kết quả đã lọc quyền mà server trả về, và user tự gửi được privacy request.
  */
-function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
-      const body = handler(url, init);
-      if (body === undefined)
-        return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }),
-  );
-}
-
 describe('Trang tìm kiếm (platform)', () => {
   afterEach(() => {
     cleanup();

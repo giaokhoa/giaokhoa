@@ -10,6 +10,7 @@ import type {
   MemberPanelContext,
   MessagingCourse,
 } from '../types/types';
+import { CONVERSATION_TYPE_GROUP } from '../types/types';
 
 /** Khoá localStorage của tab khung trái Tin nhắn gần nhất (lát MSG-T3). */
 const MESSAGES_TAB_STORAGE_KEY = 'giaokhoa.messages.tab';
@@ -167,7 +168,7 @@ export function memberPanelContextOf(
   tree: ConversationGroupTreeView | null,
   courses: MessagingCourse[],
 ): MemberPanelContext | null {
-  if (conv.type !== 2) return null;
+  if (conv.type !== CONVERSATION_TYPE_GROUP) return null;
   if (conv.itemType === 'class' && conv.itemId) {
     const node = tree?.classes.find((c) => c.classId === conv.itemId);
     return { kind: 'class', id: conv.itemId, name: node?.name ?? conv.name ?? '' };

@@ -26,7 +26,7 @@ import {
 } from '../client';
 import { applyStoreMigrations } from './apply';
 import { isMigrationStoreKey, MIGRATION_STORES, type MigrationStoreKey } from './stores';
-import { verifyStore } from './verify';
+import { verifyStore, type VerifyResult } from './verify';
 
 /** Gốc package `@giaokhoa/db`: phân giải qua chính package (không qua cwd). */
 function packageRoot(): string {
@@ -91,6 +91,22 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
+/**
+ * In kết quả hậu kiểm số đếm của một kho; trả 0 khi khớp, 1 khi lệch (kèm
+ * chi tiết lệch). Dùng chung cho nhánh `--verify-only` và nhánh áp
+ * migration — sửa định dạng log một chỗ là đủ cả hai.
+ */
+function reportVerify(store: MigrationStoreKey, result: VerifyResult): number {
+  console.log(
+    `verify ${store}: bảng=${result.tables} policy=${result.policies ?? '-'} index=${result.indexes ?? '-'} kysely_migration=${result.journalRows}`,
+  );
+  if (!result.ok) {
+    console.error(`verify ${store} LỆCH: ${result.mismatches.join('; ')}`);
+    return 1;
+  }
+  return 0;
+}
+
 /** Chạy migration trên handle có schema riêng mà không làm mất kiểu DB. */
 async function runWithStoreDb<DB>(
   db: Kysely<DB>,
@@ -101,14 +117,7 @@ async function runWithStoreDb<DB>(
   try {
     if (verifyOnly) {
       const result = await verifyStore(db, store);
-      console.log(
-        `verify ${store}: bảng=${result.tables} policy=${result.policies ?? '-'} index=${result.indexes ?? '-'} kysely_migration=${result.journalRows}`,
-      );
-      if (!result.ok) {
-        console.error(`verify ${store} LỆCH: ${result.mismatches.join('; ')}`);
-        return 1;
-      }
-      return 0;
+      return reportVerify(store, result);
     }
     // Trình tự áp dùng chung của cả ba đường ghi migration (xem
     // `apply.ts`): shim tiền-migration + `migrateToLatest()` + tự
@@ -120,14 +129,7 @@ async function runWithStoreDb<DB>(
       console.log(`migration ${result.migrationName}: ${result.status}`);
     }
     const verified = await verifyStore(db, store);
-    console.log(
-      `verify ${store}: bảng=${verified.tables} policy=${verified.policies ?? '-'} index=${verified.indexes ?? '-'} kysely_migration=${verified.journalRows}`,
-    );
-    if (!verified.ok) {
-      console.error(`verify ${store} LỆCH: ${verified.mismatches.join('; ')}`);
-      return 1;
-    }
-    return 0;
+    return reportVerify(store, verified);
   } finally {
     // `destroy()` của Kysely đóng luôn pool đã truyền vào (hành vi
     // của PostgresDialect) nên chỉ cần huỷ instance, không đóng

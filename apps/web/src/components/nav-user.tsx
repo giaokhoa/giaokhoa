@@ -1,6 +1,13 @@
+/**
+ * Khối người dùng ở chân sidebar: hiển thị người đang đăng nhập thật từ AuthContext
+ * với avatar chữ viết tắt từ họ tên, mở menu gồm Hồ sơ (/profile), Cài đặt (/settings)
+ * và Đăng xuất. Lỗi đăng xuất hiện bên ngoài menu để người dùng thấy và thử lại được.
+ */
+
 import { IconDotsVertical, IconLogout, IconSettings, IconUserCircle } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { initialsOf } from '#utils/name-format';
 import { useNavigate } from 'react-router';
 
 import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
@@ -18,15 +25,6 @@ import { useAuth } from '#lib/auth';
 import '#config/i18n';
 
 /** Chữ viết tắt từ họ tên để làm avatar khi người dùng chưa có ảnh đại diện. */
-function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]!.toUpperCase())
-    .join('');
-}
-
 /**
  * Khối người dùng ở chân sidebar (khung từ block dashboard-01): hiển thị người đang đăng nhập thật từ AuthContext, menu gồm hồ sơ, cài đặt và đăng xuất — chỉ những thao tác người dùng nào cũng thực hiện được với chính mình. Từ issue #288 "Hồ sơ" và "Cài đặt" là HAI lối vào tách bạch như các site lớn: Hồ sơ (`/profile`) chỉ còn thông tin user, Cài đặt (`/settings`) là khu riêng có menu trái (bảo mật, liên kết, thông báo).
  */

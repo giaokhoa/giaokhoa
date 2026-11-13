@@ -1,14 +1,19 @@
+/**
+ * Danh sách nhóm của tab Nhóm ở khung trái trang Tin nhắn: cây nhóm do server dựng
+ * (GET /messages/group-tree) được duỗi thành danh sách phẳng Lớp → Khoá → Nhóm con,
+ * kèm khoá ngoài lớp và nhóm tự do. Mỗi dòng hiện tên, nhãn vai của người xem và số
+ * chưa đọc; bấm dòng mở hội thoại qua `openConversationById` của trang chứa.
+ */
+
 import { useState, type ReactNode } from 'react';
-import { BellOff, ChevronDown, Plus } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Plus } from 'lucide-react';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button } from '@giaokhoa/ui/components/button';
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from '@giaokhoa/ui/components/collapsible';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { cn } from '@giaokhoa/ui/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { ConversationRow } from './conversation-row';
+import { ConversationSection } from './conversation-section';
 import type {
   ConversationGroupTreeView,
   ConversationTreeClassView,
@@ -16,7 +21,7 @@ import type {
   ConversationTreeRoleView,
   ConversationView,
 } from '../types/types';
-import { initialsOf, relativeTime } from '../utils/utils';
+import { relativeTime } from '../utils/utils';
 
 /**
  * DANH SÁCH NHÓM của tab Nhóm — khung trái màn Tin nhắn (dữ kiện cây do server dựng từ lát MSG-T1, issue #33; trình bày danh sách phẳng từ issue #606).
@@ -144,6 +149,13 @@ interface GroupListEntry {
  * @param props - Cây server + từ khoá lọc + các sự kiện mở chat do trang chứa xử lý.
  * @returns Danh sách phẳng: lớp → khoá → nhóm con, khoá ngoài lớp, nút Tạo nhóm (nếu có quyền) và nhóm tự do.
  */
+/** Khoá i18n cho nhãn vai trong cây nhóm, theo `ConversationTreeRoleView`. */
+const ROLE_LABEL_KEYS: Record<ConversationTreeRoleView, string> = {
+  teaching: 'treeRoleTeaching',
+  learning: 'treeRoleLearning',
+  staff: 'treeRoleStaff',
+};
+
 export function GroupListNav({
   tree, filter, activeConversationId, onOpenConversationById, onOpenClassChat,
   onOpenCourseChat, onOpenGroupConversation, canCreateFreeGroup, onCreateFreeGroup,
@@ -254,11 +266,7 @@ export function GroupListNav({
   const nothingVisible = classEntries.length === 0 && outsideEntries.length === 0 && freeEntries.length === 0;
 
   /** Nhãn vai của chính người xem tại một nút (server tính theo quan hệ dạy/học/staff). */
-  const roleLabel = (role: ConversationTreeRoleView) => (role === 'teaching'
-    ? t('treeRoleTeaching')
-    : role === 'learning'
-      ? t('treeRoleLearning')
-      : t('treeRoleStaff'));
+  const roleLabel = (role: ConversationTreeRoleView) => t(ROLE_LABEL_KEYS[role]);
 
   /**
    * Một hàng của danh sách nhóm: avatar chữ + tên + dòng phụ +
@@ -292,49 +300,34 @@ export function GroupListNav({
     const lastMessage = conversation?.lastMessage ?? null;
     const isActive = entry.conversationId !== null && entry.conversationId === activeConversationId;
     return (
-      <button
+      <ConversationRow
         key={entry.key}
-        type="button"
-        aria-current={isActive || undefined}
-        className={cn(
-          'flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-lg py-2.5 pr-2.5 text-left ring-inset transition-colors',
-          isActive ? 'bg-muted ring-1 ring-border' : 'hover:bg-muted/75',
+        label={entry.label}
+        avatarLabel={entry.label}
+        titleClassName="font-semibold"
+        isActive={isActive}
+        onOpen={entry.onOpen}
+        time={lastMessage ? (
+          <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">
+            {relativeTime(lastMessage.createdAt, t)}
+          </span>
+        ) : null}
+        preview={lastMessage ? (
+          <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">
+            {lastMessage.userIdFrom === myId
+              ? `${t('lastMessageOwnPrefix')} `
+              : `${nameOf?.(lastMessage.userIdFrom) ?? lastMessage.userIdFrom}: `}
+            {lastMessage.fullMessage}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{roleLabel(entry.role)}</span>
         )}
-        style={{ paddingLeft: `${0.625 + entry.depth * 1.25}rem` }}
-        onClick={entry.onOpen}
-      >
-        <Avatar size="lg">
-          <AvatarFallback className={cn(isActive && 'bg-background/50')}>{initialsOf(entry.label)}</AvatarFallback>
-        </Avatar>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{entry.label}</span>
-            {lastMessage ? (
-              <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums">
-                {relativeTime(lastMessage.createdAt, t)}
-              </span>
-            ) : null}
-          </span>
-          <span className="mt-0.5 flex items-center gap-1.5">
-            {lastMessage ? (
-              <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">
-                {lastMessage.userIdFrom === myId
-                  ? `${t('lastMessageOwnPrefix')} `
-                  : `${nameOf?.(lastMessage.userIdFrom) ?? lastMessage.userIdFrom}: `}
-                {lastMessage.fullMessage}
-              </span>
-            ) : (
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{roleLabel(entry.role)}</span>
-            )}
-            {conversation?.muted ? (
-              <span className="grid size-5 shrink-0 place-items-center">
-                <BellOff data-testid={`conversation-muted-${conversation.id}`} className="size-3 text-muted-foreground" aria-hidden />
-              </span>
-            ) : null}
-          </span>
-        </span>
-        <GroupUnreadBadge count={entry.unread} />
-      </button>
+        conversationId={conversation?.id}
+        muted={conversation?.muted}
+        depth={entry.depth}
+        unread={<GroupUnreadBadge count={entry.unread} />}
+        unreadPosition="end"
+      />
     );
   };
 
@@ -370,30 +363,6 @@ export function GroupListNav({
     </div>
   ) : null);
 
-  /**
-   * Một mục thu gọn của danh sách nhóm (mục Ghim / mục Nhóm
-   * khi tách mục): tiêu đề phẳng + chevron 12px, không số
-   * đếm, đúng khuôn nhãn mục của bản demo (điểm B16), dựng
-   * trên primitive Collapsible của @giaokhoa/ui với đúng kiểu
-   * trình bày của các mục trong tab Tất cả ở khung trái —
-   * không tự chế kiểu thu/mở riêng. Nội dung chỉ render khi
-   * mục mở, như các mục của tab Tất cả.
-   */
-  const renderGroupSection = (
-    title: string,
-    open: boolean,
-    onOpenChange: (next: boolean) => void,
-    children: ReactNode,
-  ) => (
-    <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 pb-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground">
-        <span>{title}</span>
-        <ChevronDown aria-hidden className={cn('ml-auto size-3 shrink-0 transition-transform', open && 'rotate-180')} />
-      </CollapsibleTrigger>
-      <CollapsibleContent>{open ? children : null}</CollapsibleContent>
-    </Collapsible>
-  );
-
   const emptyNotice = nothingVisible ? (
     <p className="px-2 text-sm text-muted-foreground">
       {needle ? t('groupTreeNoResults') : t('groupTreeEmpty')}
@@ -419,22 +388,26 @@ export function GroupListNav({
   // vẫn ngay trước các hàng nhóm tự do trong mục này).
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      {renderGroupSection(
-        t('messagesPinnedSection'),
-        pinnedSectionOpen,
-        setPinnedSectionOpen,
-        <div className="flex flex-col gap-1">{pinnedEntries.map(renderEntry)}</div>,
-      )}
-      {restCount > 0 || canCreateFreeGroup ? renderGroupSection(
-        t('messagesTabGroups'),
-        groupsSectionOpen,
-        setGroupsSectionOpen,
-        <div className="flex flex-col gap-1">
-          {restClassEntries.map(renderEntry)}
-          {restOutsideEntries.map(renderEntry)}
-          {renderCreateGroupButton()}
-          {restFreeEntries.map(renderEntry)}
-        </div>,
+      <ConversationSection
+        title={t('messagesPinnedSection')}
+        open={pinnedSectionOpen}
+        onOpenChange={setPinnedSectionOpen}
+      >
+        <div className="flex flex-col gap-1">{pinnedEntries.map(renderEntry)}</div>
+      </ConversationSection>
+      {restCount > 0 || canCreateFreeGroup ? (
+        <ConversationSection
+          title={t('messagesTabGroups')}
+          open={groupsSectionOpen}
+          onOpenChange={setGroupsSectionOpen}
+        >
+          <div className="flex flex-col gap-1">
+            {restClassEntries.map(renderEntry)}
+            {restOutsideEntries.map(renderEntry)}
+            {renderCreateGroupButton()}
+            {restFreeEntries.map(renderEntry)}
+          </div>
+        </ConversationSection>
       ) : null}
       {emptyNotice}
     </div>

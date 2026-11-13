@@ -17,7 +17,7 @@ import { EnrolService } from '../enrol/enrol.service';
 import { FilesService } from '../files/files.service';
 import { GradesService } from '../grades/grades.service';
 import { GroupsService } from '../groups/groups.service';
-import { QuestionsService } from '../questions/questions.service';
+import { QuestionsService, type AttemptView, type QuestionView } from '../questions/questions.service';
 import { PasswordService } from '../users/password.service';
 import { UsersService } from '../users/users.service';
 import { ipMatchesSubnetList } from './domain/subnet';
@@ -54,6 +54,18 @@ export const REVIEW_WINDOW = {
 
 /** Khoảng cửa sổ "ngay sau nộp" tính bằng mili-giây. */
 export const REVIEW_IMMEDIATELY_AFTER_MS = 2 * 60 * 1000;
+
+/** Độ dài tối đa của đoạn trích nội dung câu hỏi trong view lượt làm (`questionExcerpt`) — dài hơn thì cắt kèm dấu …. */
+export const QUESTION_EXCERPT_MAX_LENGTH = 120;
+
+/** Step gần nhất thoả điều kiện — quét ngược từ cuối mảng step (repo trả step đã xếp theo số thứ tự), không sao chép/sắp xếp lại mảng. */
+function lastStepWhere<T>(steps: readonly T[], predicate: (step: T) => boolean): T | undefined {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const step = steps[i];
+    if (step !== undefined && predicate(step)) return step;
+  }
+  return undefined;
+}
 
 /**
  * Cụm lượt làm, chấm và kết quả của QuizService (cụm 4 của issue #295): thiết lập hiệu lực, bắt đầu lượt, nộp bài, chấm tay, hàng đợi chấm theo câu, kết quả/thống kê, và sự kiện lượt làm. Cụm này gọi xuống tầng thấp dùng chung (`QuizSharedService`); hai method vốn `private` nhưng cụm khác gọi (`pushGrade` cho chấm lại của cụm ghim, `finalizeAttempt` cho lượt giấy của cụm sinh đề) nay để public trong nội bộ module, không phải bề mặt API của module.
@@ -195,9 +207,12 @@ export class QuizAttemptsService {
       if (v !== null) values.push(v);
     }
     if (!values.length) return null;
+    // Tập phương thức xem QUIZ_GRADE_METHODS (quiz-shared) — nhánh
+    // default là hành vi 'highest' (giá trị không hợp lệ cũng rơi về
+    // highest như validation ở quizView).
     switch (quiz.gradeMethod) {
-      case 'first': return values[0]!;
-      case 'last': return values[values.length - 1]!;
+      case 'first': return values[0]!; // Bất biến: đã return null khi values rỗng ở trên.
+      case 'last': return values[values.length - 1]!; // Bất biến: values không rỗng (xem trên).
       case 'average': return values.reduce((s, v) => s + v, 0) / values.length;
       default: return Math.max(...values);
     }
@@ -216,13 +231,31 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Mặt nạ `reviewMarks` có đang mở cho CHỦ LƯỢT tại cửa sổ xem lại hiện tại của lượt này không — cùng phép tính với điểm từng câu trong `buildAttemptView`: cổng `reviewAttempt` phải mở tại cửa sổ hiện tại trước, rồi bit `reviewMarks` tại đúng cửa sổ đó mới có hiệu lực. Lượt đang làm dở thì chưa có điểm tổng nào được phép hiện.
+   * Cửa sổ xem lại hiện tại của một lượt + cổng `reviewAttempt` có mở
+   * tại cửa sổ đó không — phép tính DÙNG CHUNG cho mọi cổng xem lại:
+   * `reviewAttempt` phải mở trước, rồi bit khía cạnh tại đúng cửa sổ
+   * đó mới có hiệu lực. Lượt đang làm dở thì chưa có cửa sổ xem lại
+   * nào — bit 0, cổng đóng.
+   */
+  private async reviewWindow(quiz: PinRow, row: ExamAttemptRow, now: Date): Promise<{ windowBit: number; attemptOpen: boolean }> {
+    if (row.state === 'inprogress') return { windowBit: 0, attemptOpen: false };
+    const windowBit = await this.reviewWindowBit(quiz, row, now);
+    return { windowBit, attemptOpen: (quiz.reviewAttempt & windowBit) !== 0 };
+  }
+
+  /**
+   * Một khía cạnh xem lại (bit mặt nạ) có mở cho CHỦ LƯỢT tại cửa sổ xem lại hiện tại của lượt này không — cùng phép tính với điểm từng câu trong `buildAttemptView`: cổng `reviewAttempt` phải mở tại cửa sổ hiện tại trước, rồi bit khía cạnh tại đúng cửa sổ đó mới có hiệu lực. Lượt đang làm dở thì chưa có điểm nào được phép hiện.
+   */
+  private async reviewAspectOpen(quiz: PinRow, row: ExamAttemptRow, now: Date, aspectMask: number): Promise<boolean> {
+    const { windowBit, attemptOpen } = await this.reviewWindow(quiz, row, now);
+    return attemptOpen && (aspectMask & windowBit) !== 0;
+  }
+
+  /**
+   * Mặt nạ `reviewMarks` có đang mở cho CHỦ LƯỢT tại cửa sổ xem lại hiện tại của lượt này không — cùng phép tính với điểm từng câu trong `buildAttemptView` (xem `reviewAspectOpen`).
    */
   private async ownerMarksVisible(quiz: PinRow, row: ExamAttemptRow, now: Date): Promise<boolean> {
-    if (row.state === 'inprogress') return false;
-    const windowBit = await this.reviewWindowBit(quiz, row, now);
-    if ((quiz.reviewAttempt & windowBit) === 0) return false;
-    return (quiz.reviewMarks & windowBit) !== 0;
+    return this.reviewAspectOpen(quiz, row, now, quiz.reviewMarks);
   }
 
   /**
@@ -299,7 +332,7 @@ export class QuizAttemptsService {
     const rawSummaries = await this.shared.attemptSummaries(quiz, mine);
     const summaries: QuizAttemptSummary[] = [];
     for (const [index, a] of mine.entries()) {
-      const summary = rawSummaries[index]!;
+      const summary = rawSummaries[index]!; // Bất biến: attemptSummaries trả đúng một tóm tắt cho mỗi lượt (map 1:1).
       // Điểm tổng phía học viên phải qua cổng che hai điều kiện (mặt
       // nạ reviewMarks tại cửa sổ hiện tại + hạng mục điểm đã công
       // bố) — xem maskOwnerTotals. Nhân sự và lượt preview của giáo
@@ -475,8 +508,11 @@ export class QuizAttemptsService {
       // lượt không thành hình vì bất kỳ bước nào sau đó — xoá usage để
       // không để lại question_usages mồ côi (hàng quiz_attempts, nếu đã
       // chèn, cascade theo usage). Kiến trúc engine không nhận giao dịch
-      // ngoài nên không bọc transaction chung được.
-      await this.questions.deleteUsage(usage.usage.id).catch(() => undefined);
+      // ngoài nên không bọc transaction chung được. Dọn lỗi thì phải thấy
+      // trong log (lỗi gốc vẫn được ném lại).
+      await this.questions.deleteUsage(usage.usage.id).catch((cleanupErr) => {
+        this.logger.warn(`startAttempt cleanup failed for usage ${usage.usage.id}: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+      });
       throw err;
     }
   }
@@ -533,6 +569,128 @@ export class QuizAttemptsService {
   }
 
   /**
+   * Solution HIỂN THỊ của một câu suy từ phía đáp án của version (tách từ `buildAttemptView`): đáp án đúng của multichoice/shortanswer nằm ở cờ isCorrect của các dòng answers; truefalse TF-A đáp án từng mệnh đề và essay lời giải mẫu đều nằm ở bản ghi phía đáp án (truefalse đổi hình dạng lưu trữ {answers} sang hình dạng hiển thị {statements}). Chỉ gọi khi cổng reviewRightAnswer đã mở — cổng đóng thì solution là null, dữ liệu đáp án đúng không rời server.
+   */
+  private resolveQuestionSolution(qtype: string, pinnedAnswers: QuestionView['answers'], answerKey: QuestionView['answerKey']): QuestionSolution | null {
+    if (qtype === 'essay') {
+      return (answerKey.solution as QuestionSolution | null) ?? null;
+    }
+    if (qtype === 'truefalse') {
+      const stored = answerKey.solution as { answers?: { statementId: string; value: boolean }[] } | null;
+      return stored?.answers?.length
+        ? { statements: stored.answers.map((a) => ({ statementId: a.statementId, value: a.value === true })) }
+        : null;
+    }
+    if (qtype === 'shortanswer') {
+      const accepted = pinnedAnswers.filter((x) => x.isCorrect)
+        .map((x) => extractRichTextPlainText(x.answer as RichTextDocument).trim())
+        .filter((x) => x !== '');
+      return accepted.length ? { acceptedAnswers: accepted } : null;
+    }
+    const correctRow = pinnedAnswers.find((x) => x.isCorrect);
+    return correctRow ? { correctAnswerId: correctRow.id } : null;
+  }
+
+  /**
+   * View của MỘT câu trong lượt làm (tách từ `buildAttemptView`): lấy nội dung của version ĐÃ PIN trong engine (mặc định version mới nhất), áp cổng che theo người xem rồi dựng một `QuizAttemptQuestionView`. Cổng `aspectOn` đã tính sẵn ở `buildAttemptView` (cửa sổ xem lại + đặc quyền).
+   */
+  private async buildAttemptQuestionView(
+    quiz: PinRow,
+    a: AttemptView,
+    page: number,
+    view: { privileged: boolean; submitted: boolean; aspectOn: (mask: number) => boolean },
+  ): Promise<QuizAttemptQuestionView> {
+    const { privileged, submitted, aspectOn } = view;
+    const qv = await this.questions.getQuestion(a.questionId);
+    let questionText = qv.latestVersion.questionText as RichTextDocument;
+    let answers: { id: string; text: RichTextDocument }[] = qv.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
+    let options = qv.options;
+    let stimulus: QuizAttemptQuestionView['stimulus'] = qv.stimulus ? { id: qv.stimulus.id, content: qv.stimulus.content as RichTextDocument } : null;
+    let feedbackByAnswerId = new Map(qv.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
+    let generalFeedback = (qv.latestVersion.generalFeedback ?? null) as RichTextDocument | null;
+    // Phía đáp án của version đang dùng cho câu này (guidance +
+    // solution lưu trữ): mặc định lấy của version mới nhất, có
+    // version đã pin thì lấy đúng của version đã pin.
+    let pinnedAnswers = qv.answers;
+    let answerKey = qv.answerKey;
+    if (a.questionVersionId) {
+      const pinned = await this.questions.getVersionContent(a.questionId, a.questionVersionId);
+      questionText = pinned.version.questionText as RichTextDocument;
+      answers = pinned.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
+      pinnedAnswers = pinned.answers;
+      answerKey = pinned.answerKey;
+      options = pinned.options;
+      feedbackByAnswerId = new Map(pinned.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
+      generalFeedback = (pinned.version.generalFeedback ?? null) as RichTextDocument | null;
+      if (pinned.version.stimulusId) {
+        const st = await this.questions.getStimulus(pinned.version.stimulusId).catch(() => undefined);
+        stimulus = st ? { id: st.id, content: st.content as RichTextDocument } : null;
+      } else {
+        stimulus = null;
+      }
+    }
+    // Chốt bảo mật cho câu shortanswer: các dòng đáp án của dạng câu
+    // này CHÍNH LÀ tập đáp án được chấp nhận (chấm khớp chính xác
+    // theo cờ đúng), nên trường `answers` — vốn dựng vô điều kiện ở
+    // cả hai đường trên cho mọi dạng câu — là đáp án đúng trá hình.
+    // Khi người xem là chủ lượt không đặc quyền và cổng đáp án đúng
+    // chưa mở cho người xem này (đúng điều kiện đang làm `solution`
+    // thành null ở dưới: đang làm bài, hoặc sau nộp mà
+    // reviewRightAnswer đóng tại cửa sổ hiện tại), trả `answers`
+    // rỗng để đáp án được chấp nhận không rời server ở bất kỳ bề
+    // mặt nào của lượt. Client không tiêu thụ trường này cho
+    // shortanswer (lúc làm chỉ render ô nhập; lúc xem lại đọc đáp
+    // án từ `solution` đã qua cổng) nên việc làm rỗng không phá
+    // tính năng. Các dạng câu khác giữ nguyên: dòng đáp án của
+    // multichoice là lựa chọn phải hiển thị, truefalse/essay không
+    // mang đáp án trong trường này. Người có đặc quyền không qua
+    // chốt này — vẫn thấy đủ như trước.
+    if (!privileged && qv.question.qtype === 'shortanswer' && !aspectOn(quiz.reviewRightAnswer)) {
+      answers = [];
+    }
+    const lastResponse = lastStepWhere(a.steps, (s) => s.data.answer !== undefined)?.data.answer ?? null;
+    // Step chấm tay gần nhất có nhận xét: engine ghi data.gradedBy +
+    // data.comment khi giáo viên chấm tay (manualGradeAttempt); các
+    // step khác (trả lời/chấm tự động) không mang gradedBy.
+    const manualCommentStep = lastStepWhere(a.steps, (s) => s.data.gradedBy != null && typeof s.data.comment === 'string' && s.data.comment !== '');
+    // Solution HIỂN THỊ suy từ phía đáp án của version — chỉ tính
+    // khi cổng reviewRightAnswer mở (xem `resolveQuestionSolution`).
+    const solution = aspectOn(quiz.reviewRightAnswer)
+      ? this.resolveQuestionSolution(qv.question.qtype, pinnedAnswers, answerKey)
+      : null;
+    const excerptText = extractRichTextPlainText(questionText).trim();
+    return {
+      slot: a.slot,
+      page,
+      questionAttemptId: a.id,
+      questionId: a.questionId,
+      qtype: qv.question.qtype,
+      questionExcerpt: excerptText.length > QUESTION_EXCERPT_MAX_LENGTH ? `${excerptText.slice(0, QUESTION_EXCERPT_MAX_LENGTH)}…` : excerptText,
+      questionText,
+      guidance: (answerKey.guidance ?? null) as RichTextDocument | null,
+      solution,
+      stimulus,
+      answers,
+      options,
+      maxMark: a.maxMark,
+      state: a.state,
+      response: lastResponse,
+      fraction: submitted && aspectOn(quiz.reviewCorrectness) ? a.fraction : null,
+      // Điểm của câu luôn là fraction × maxMark của chính câu (câu
+      // TF-A đã mang fraction tra thang của lần ghim từ engine).
+      mark: (submitted && aspectOn(quiz.reviewMarks) && a.fraction !== null) ? a.fraction * a.maxMark : null,
+      rightAnswer: aspectOn(quiz.reviewRightAnswer) ? a.rightAnswer : null,
+      feedback: aspectOn(quiz.reviewSpecificFeedback) && lastResponse !== null
+        ? (feedbackByAnswerId.get(lastResponse) ?? null)
+        : null,
+      generalFeedback: aspectOn(quiz.reviewGeneralFeedback) ? generalFeedback : null,
+      manualComment: aspectOn(quiz.reviewSpecificFeedback)
+        ? (manualCommentStep?.data.comment ?? null)
+        : null,
+    };
+  }
+
+  /**
    * Dựng view đầy đủ của một lượt: từng câu lấy nội dung của version ĐÃ
    * PIN trong engine. Với CHỦ LƯỢT (không có quyền chấm/báo cáo), các
    * khía cạnh sau nộp (đúng/sai, điểm câu, đáp án đúng, nhận xét) chỉ lộ
@@ -564,126 +722,18 @@ export class QuizAttemptsService {
     let windowBit = 0;
     let hideContent = false;
     if (submitted && !privileged) {
-      windowBit = await this.reviewWindowBit(quiz, row, new Date());
-      hideContent = (quiz.reviewAttempt & windowBit) === 0;
+      const window = await this.reviewWindow(quiz, row, new Date());
+      windowBit = window.windowBit;
+      hideContent = !window.attemptOpen;
     }
     const showAspects = submitted && (privileged || !hideContent);
     const aspectOn = (mask: number): boolean => privileged ? submitted : (showAspects && (mask & windowBit) !== 0);
-    const questions: QuizAttemptQuestionView[] = [];
-    for (const a of usage.attempts) {
-      if (hideContent && !privileged) break;
-      const qv = await this.questions.getQuestion(a.questionId);
-      let questionText = qv.latestVersion.questionText as RichTextDocument;
-      let answers: { id: string; text: RichTextDocument }[] = qv.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
-      let options = qv.options;
-      let stimulus: QuizAttemptQuestionView['stimulus'] = qv.stimulus ? { id: qv.stimulus.id, content: qv.stimulus.content as RichTextDocument } : null;
-      let feedbackByAnswerId = new Map(qv.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
-      let generalFeedback = (qv.latestVersion.generalFeedback ?? null) as RichTextDocument | null;
-      // Phía đáp án của version đang dùng cho câu này (guidance +
-      // solution lưu trữ): mặc định lấy của version mới nhất, có
-      // version đã pin thì lấy đúng của version đã pin.
-      let pinnedAnswers = qv.answers;
-      let answerKey = qv.answerKey;
-      if (a.questionVersionId) {
-        const pinned = await this.questions.getVersionContent(a.questionId, a.questionVersionId);
-        questionText = pinned.version.questionText as RichTextDocument;
-        answers = pinned.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
-        pinnedAnswers = pinned.answers;
-        answerKey = pinned.answerKey;
-        options = pinned.options;
-        feedbackByAnswerId = new Map(pinned.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
-        generalFeedback = (pinned.version.generalFeedback ?? null) as RichTextDocument | null;
-        if (pinned.version.stimulusId) {
-          const st = await this.questions.getStimulus(pinned.version.stimulusId).catch(() => undefined);
-          stimulus = st ? { id: st.id, content: st.content as RichTextDocument } : null;
-        } else {
-          stimulus = null;
-        }
-      }
-      // Chốt bảo mật cho câu shortanswer: các dòng đáp án của dạng câu
-      // này CHÍNH LÀ tập đáp án được chấp nhận (chấm khớp chính xác
-      // theo cờ đúng), nên trường `answers` — vốn dựng vô điều kiện ở
-      // cả hai đường trên cho mọi dạng câu — là đáp án đúng trá hình.
-      // Khi người xem là chủ lượt không đặc quyền và cổng đáp án đúng
-      // chưa mở cho người xem này (đúng điều kiện đang làm `solution`
-      // thành null ở dưới: đang làm bài, hoặc sau nộp mà
-      // reviewRightAnswer đóng tại cửa sổ hiện tại), trả `answers`
-      // rỗng để đáp án được chấp nhận không rời server ở bất kỳ bề
-      // mặt nào của lượt. Client không tiêu thụ trường này cho
-      // shortanswer (lúc làm chỉ render ô nhập; lúc xem lại đọc đáp
-      // án từ `solution` đã qua cổng) nên việc làm rỗng không phá
-      // tính năng. Các dạng câu khác giữ nguyên: dòng đáp án của
-      // multichoice là lựa chọn phải hiển thị, truefalse/essay không
-      // mang đáp án trong trường này. Người có đặc quyền không qua
-      // chốt này — vẫn thấy đủ như trước.
-      if (!privileged && qv.question.qtype === 'shortanswer' && !aspectOn(quiz.reviewRightAnswer)) {
-        answers = [];
-      }
-      const lastResponse = [...a.steps].reverse().find((s) => s.data.answer !== undefined)?.data.answer ?? null;
-      // Step chấm tay gần nhất có nhận xét: engine ghi data.gradedBy +
-      // data.comment khi giáo viên chấm tay (manualGradeAttempt); các
-      // step khác (trả lời/chấm tự động) không mang gradedBy.
-      const manualCommentStep = [...a.steps]
-        .sort((x, y) => x.sequenceNumber - y.sequenceNumber)
-        .reverse()
-        .find((s) => s.data.gradedBy != null && typeof s.data.comment === 'string' && s.data.comment !== '');
-      // Solution HIỂN THỊ suy từ phía đáp án của version: đáp án đúng
-      // của multichoice/shortanswer nằm ở cờ isCorrect của các dòng
-      // answers; truefalse TF-A đáp án từng mệnh đề và essay lời giải
-      // mẫu đều nằm ở bản ghi phía đáp án (truefalse đổi hình dạng lưu
-      // trữ {answers} sang hình dạng hiển thị {statements}). Chỉ tính
-      // khi cổng reviewRightAnswer mở — cổng đóng thì trường này null,
-      // dữ liệu đáp án đúng không rời server.
-      let solution: QuestionSolution | null = null;
-      if (aspectOn(quiz.reviewRightAnswer)) {
-        if (qv.question.qtype === 'essay') {
-          solution = (answerKey.solution as QuestionSolution | null) ?? null;
-        } else if (qv.question.qtype === 'truefalse') {
-          const stored = answerKey.solution as { answers?: { statementId: string; value: boolean }[] } | null;
-          solution = stored?.answers?.length
-            ? { statements: stored.answers.map((a) => ({ statementId: a.statementId, value: a.value === true })) }
-            : null;
-        } else if (qv.question.qtype === 'shortanswer') {
-          const accepted = pinnedAnswers.filter((x) => x.isCorrect)
-            .map((x) => extractRichTextPlainText(x.answer as RichTextDocument).trim())
-            .filter((x) => x !== '');
-          solution = accepted.length ? { acceptedAnswers: accepted } : null;
-        } else {
-          const correctRow = pinnedAnswers.find((x) => x.isCorrect);
-          solution = correctRow ? { correctAnswerId: correctRow.id } : null;
-        }
-      }
-      const excerptText = extractRichTextPlainText(questionText).trim();
-      questions.push({
-        slot: a.slot,
-        page: pageBySlot.get(a.slot) ?? 1,
-        questionAttemptId: a.id,
-        questionId: a.questionId,
-        qtype: qv.question.qtype,
-        questionExcerpt: excerptText.length > 120 ? `${excerptText.slice(0, 120)}…` : excerptText,
-        questionText,
-        guidance: (answerKey.guidance ?? null) as RichTextDocument | null,
-        solution,
-        stimulus,
-        answers,
-        options,
-        maxMark: a.maxMark,
-        state: a.state,
-        response: lastResponse,
-        fraction: submitted && aspectOn(quiz.reviewCorrectness) ? a.fraction : null,
-        // Điểm của câu luôn là fraction × maxMark của chính câu (câu
-        // TF-A đã mang fraction tra thang của lần ghim từ engine).
-        mark: (submitted && aspectOn(quiz.reviewMarks) && a.fraction !== null) ? a.fraction * a.maxMark : null,
-        rightAnswer: aspectOn(quiz.reviewRightAnswer) ? a.rightAnswer : null,
-        feedback: aspectOn(quiz.reviewSpecificFeedback) && lastResponse !== null
-          ? (feedbackByAnswerId.get(lastResponse) ?? null)
-          : null,
-        generalFeedback: aspectOn(quiz.reviewGeneralFeedback) ? generalFeedback : null,
-        manualComment: aspectOn(quiz.reviewSpecificFeedback)
-          ? (manualCommentStep?.data.comment ?? null)
-          : null,
-      });
-    }
+    // Từng câu dựng song song (mỗi câu nạp nội dung version đã pin của
+    // nó — một lần đọc mỗi câu thay vì nối tiếp); cổng review đã đóng
+    // thì không dựng câu nào, như `break` ở vòng lặp cũ.
+    const questions: QuizAttemptQuestionView[] = hideContent && !privileged
+      ? []
+      : await Promise.all(usage.attempts.map((a) => this.buildAttemptQuestionView(quiz, a, pageBySlot.get(a.slot) ?? 1, { privileged, submitted, aspectOn })));
     // Ảnh nhúng trong nội dung câu: phát URL ký cho đúng người đang xem bài
     // làm này (cổng của attempt — chủ attempt / người có quyền xem lại — đã
     // gác ở các hàm gọi buildAttemptView). Học sinh không có quyền tại
@@ -900,7 +950,7 @@ export class QuizAttemptsService {
       if (!usage) continue;
       for (const a of usage.attempts) {
         if (a.state !== 'needsgrading') continue;
-        const lastResponse = [...a.steps].reverse().find((s) => s.data.answer !== undefined)?.data.answer ?? null;
+        const lastResponse = lastStepWhere(a.steps, (s) => s.data.answer !== undefined)?.data.answer ?? null;
         needsGrading.push({
           quizAttemptId: r.id, userId: r.userId, attemptNumber: r.attemptNumber,
           questionAttemptId: a.id, slot: a.slot, questionId: a.questionId,
@@ -940,7 +990,7 @@ export class QuizAttemptsService {
     for (const g of graded) {
       const pct = quiz.grade > 0 ? (g / quiz.grade) * 100 : 0;
       const idx = Math.min(9, Math.max(0, Math.floor(pct / 10)));
-      distribution[idx]!.count += 1;
+      distribution[idx]!.count += 1; // Bất biến: idx đã kẹp trong 0..9, distribution có đúng 10 ô.
     }
     return {
       enrolledCount: enrolledIds.length,
@@ -1019,7 +1069,7 @@ export class QuizAttemptsService {
     const questionNameById = new Map<string, string>();
     const stats: QuizQuestionStat[] = [];
     for (const [slot, acc] of bySlot) {
-      const questionId = acc.questionIds.size === 1 ? [...acc.questionIds][0]! : null;
+      const questionId = acc.questionIds.size === 1 ? [...acc.questionIds][0]! : null; // Bất biến: size === 1 nên mảng trải ra có đúng một phần tử.
       let questionName: string | null = null;
       if (questionId) {
         if (!questionNameById.has(questionId)) {
@@ -1212,7 +1262,7 @@ export class QuizAttemptsService {
     const rawSummaries = await this.shared.attemptSummaries(quiz, rows);
     const out: QuizAttemptSummary[] = [];
     for (const [index, r] of rows.entries()) {
-      const summary = rawSummaries[index]!;
+      const summary = rawSummaries[index]!; // Bất biến: attemptSummaries trả đúng một tóm tắt cho mỗi lượt (map 1:1).
       out.push(!isStaffViewer && !r.preview
         ? await this.maskOwnerTotals(quiz, summary, await this.ownerMarksVisible(quiz, r, new Date()))
         : summary);

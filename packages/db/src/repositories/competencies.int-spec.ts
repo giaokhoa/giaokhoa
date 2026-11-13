@@ -1,15 +1,13 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
 import { CompetenciesRepository } from './competencies';
 
 /**
  * Spec tích hợp của CompetenciesRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật; mọi ca chạy qua repository production. Các ca khoá: ghi jsonb (object và MẢNG ở cấp cao nhất — ca lỗi mảng PostgreSQL của driver), upsert onConflict có cập nhật của liên kết khoá/module, doNothing của liên kết mẫu/kế hoạch, và ngữ nghĩa NULL tường minh của `findUsercomp`.
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g646_competencies';
 const CONTEXT_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a2001';
@@ -33,7 +31,7 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB).catch(() => undefined);
 });
 
-describe('CompetenciesRepository (Kysely)', () => {
+describe('CompetenciesRepository trên Kysely — khung năng lực, liên kết và tiến độ user', () => {
   it('ghi khung năng lực với scaleConfiguration jsonb dạng object rồi đọc lại nguyên vẹn', async () => {
     const scale = { values: ['Chưa đạt', 'Đạt', 'Tốt'], proficient: [1, 2] };
     const framework = await repo.insertFramework({

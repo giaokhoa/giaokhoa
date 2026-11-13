@@ -126,6 +126,43 @@ describe('Tầng phân phối realtime — cổng chặn 1–1 fail-closed khi p
     expect(events).toContain(MESSAGING_SOCKET_EVENTS.conversationInvalidate);
   });
 
+  it('xoá mềm tin cuối cùng còn lại (không còn tin hiển thị) thì vẫn phát conversation.invalidate kèm message.deleted, không phát conversation.updated', async () => {
+    const { service, emits } = build({ blockedLookup: async () => [] });
+    const deletedRow = { ...messageRow, deletedAt: new Date('2026-10-28T00:02:00.000Z'), deletedBy: USER_A } as unknown as MessageRow;
+
+    await service.distributeMessageDeleted(deletedRow, [USER_A, USER_B]);
+
+    const events = emits.map((e) => e.event);
+    expect(events).toContain(MESSAGING_SOCKET_EVENTS.messageDeleted);
+    expect(events).toContain(MESSAGING_SOCKET_EVENTS.conversationInvalidate);
+    expect(events).not.toContain(MESSAGING_SOCKET_EVENTS.conversationUpdated);
+  });
+
+  it('xoá mềm khi còn tin hiển thị thì phát message.deleted, conversation.updated cho từng thành viên và conversation.invalidate', async () => {
+    const { service, store, emits } = build({ blockedLookup: async () => [] });
+    const deletedRow = { ...messageRow, deletedAt: new Date('2026-10-28T00:02:00.000Z'), deletedBy: USER_A } as unknown as MessageRow;
+    const lastVisibleRow = { ...messageRow, id: 'msg-0', seq: 0 } as unknown as MessageRow;
+    (store.listMessages as ReturnType<typeof vi.fn>).mockResolvedValue([lastVisibleRow]);
+
+    await service.distributeMessageDeleted(deletedRow, [USER_A, USER_B]);
+
+    const events = emits.map((e) => e.event);
+    expect(events).toContain(MESSAGING_SOCKET_EVENTS.messageDeleted);
+    expect(events.filter((e) => e === MESSAGING_SOCKET_EVENTS.conversationUpdated)).toHaveLength(2);
+    expect(events.filter((e) => e === MESSAGING_SOCKET_EVENTS.conversationInvalidate)).toHaveLength(2);
+    expect(emits.filter((e) => e.event === MESSAGING_SOCKET_EVENTS.conversationInvalidate).map((e) => e.room).sort())
+      .toEqual([userRoom(TENANT_ID, USER_A), userRoom(TENANT_ID, USER_B)].sort());
+  });
+
+  it('cặp đang chặn thì distributeMessageDeleted không phát sự kiện nào, kể cả conversation.invalidate', async () => {
+    const { service, emits } = build({ blockedLookup: async () => [USER_B] });
+    const deletedRow = { ...messageRow, deletedAt: new Date('2026-10-28T00:02:00.000Z'), deletedBy: USER_A } as unknown as MessageRow;
+
+    await service.distributeMessageDeleted(deletedRow, [USER_A, USER_B]);
+
+    expect(emits).toEqual([]);
+  });
+
   it('sự kiện message_deleted_for_me chỉ phát vào room riêng của chính người xoá, không phát vào room hội thoại và không phát cho phía kia', async () => {
     const { service, emits } = build({ blockedLookup: async () => [] });
 

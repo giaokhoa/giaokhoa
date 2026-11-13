@@ -19,6 +19,10 @@ const WEEKLY_ITEMS_LIMIT = 100;
 const ANNOUNCEMENTS_LIMIT = 20;
 /** Số thông báo gần nhất quét để lọc theo khoá (trước khi cắt ANNOUNCEMENTS_LIMIT). */
 const ANNOUNCEMENTS_SCAN = 100;
+/** Số ngày trong một tuần. */
+const DAYS_IN_WEEK = 7;
+/** Số mili-giây trong một ngày (tuần tính theo UTC nên không có giờ tiết kiệm ánh sáng). */
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Bề mặt phụ huynh chỉ-xem (PH-1, issue #130): bốn khối rút gọn của research mục 4.3 + kết quả học tập đã công bố theo môn. Nguyên tắc cứng
@@ -45,8 +49,10 @@ export class GuardianViewService {
   private weekBounds(now: Date): { start: Date; end: Date } {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const dow = start.getUTCDay(); // 0 = Chủ nhật
-    start.setUTCDate(start.getUTCDate() - ((dow + 6) % 7));
-    const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    // Đổi "thứ trong tuần" sang số ngày đã qua kể từ thứ Hai: thứ Hai → 0, …, Chủ nhật → 6.
+    start.setUTCDate(start.getUTCDate() - ((dow + 6) % DAYS_IN_WEEK));
+    // Cuối tuần là mili-giây cuối cùng của Chủ nhật.
+    const end = new Date(start.getTime() + DAYS_IN_WEEK * MS_PER_DAY - 1);
     return { start, end };
   }
 
@@ -60,13 +66,16 @@ export class GuardianViewService {
     const previousSeenAt = state?.lastSeenAt ?? null;
     const { courseIds, names } = await this.dashboard.enrolledCoursesFor(studentId);
 
-    const weekly = await this.buildWeekly(studentId, courseIds, names, now);
-    // Lần xem đầu chưa có mốc: không dội toàn bộ kết quả cũ thành "mới".
-    const newResults = previousSeenAt
-      ? await this.dashboard.publishedNewResultsFor(studentId, previousSeenAt)
-      : [];
-    const announcements = await this.buildAnnouncements(studentId, courseIds, names);
-    const courseProgress = await this.buildProgress(studentId, courseIds, names);
+    // Bốn khối độc lập với nhau (đều chỉ cần courseIds + mốc xem trước) nên chạy song song; thứ tự kết quả giữ nguyên nhờ Promise.all.
+    const [weekly, newResults, announcements, courseProgress] = await Promise.all([
+      this.buildWeekly(studentId, courseIds, names, now),
+      // Lần xem đầu chưa có mốc: không dội toàn bộ kết quả cũ thành "mới".
+      previousSeenAt
+        ? this.dashboard.publishedNewResultsFor(studentId, previousSeenAt)
+        : Promise.resolve([]),
+      this.buildAnnouncements(studentId, courseIds, names),
+      this.buildProgress(studentId, courseIds, names),
+    ]);
 
     // Mốc chỉ cập nhật SAU khi đã tính xong danh sách mới của lần xem này.
     await this.repo.touchViewState(guardianId, studentId, now);
@@ -81,6 +90,25 @@ export class GuardianViewService {
       announcements,
       courseProgress,
     };
+  }
+
+  /** Dựng một mục tóm tắt tuần (quiz và assignment cùng hình dạng mục): trạng thái nộp/quá hạn suy từ hạn nộp so với `now`, cờ trong-tuần suy từ hạn nộp so với đầu tuần. */
+  private pushWeeklyItem(
+    items: (GuardianWeeklyItemView & { inWeek: boolean })[],
+    input: { courseId: string; courseName: string; cmId: string; kind: 'quiz' | 'assignment'; name: string; dueAt: Date; submitted: boolean },
+    start: Date,
+    now: Date,
+  ): void {
+    items.push({
+      courseId: input.courseId,
+      courseName: input.courseName,
+      cmId: input.cmId,
+      kind: input.kind,
+      name: input.name,
+      dueAt: input.dueAt.toISOString(),
+      status: input.submitted ? 'submitted' : input.dueAt < now ? 'overdue' : 'not_submitted',
+      inWeek: input.dueAt >= start,
+    });
   }
 
   /** Khối (a): tóm tắt tuần — đã nộp / chưa nộp / quá hạn, cắt theo việc của con. */
@@ -102,32 +130,28 @@ export class GuardianViewService {
       quizByCm.set(row.cmId, entry);
     }
     for (const [cmId, entry] of quizByCm) {
-      const submitted = entry.states.some((s) => s === 'finished' || s === 'needsgrading');
-      items.push({
+      this.pushWeeklyItem(items, {
         courseId: entry.courseId,
         courseName: names.get(entry.courseId) ?? '',
         cmId,
         kind: 'quiz',
         name: entry.name,
-        dueAt: entry.dueAt.toISOString(),
-        status: submitted ? 'submitted' : entry.dueAt < now ? 'overdue' : 'not_submitted',
-        inWeek: entry.dueAt >= start,
-      });
+        dueAt: entry.dueAt,
+        submitted: entry.states.some((s) => s === 'finished' || s === 'needsgrading'),
+      }, start, now);
     }
 
     const assignRows = await this.repo.assignmentDueRows(courseIds, studentId, end);
     for (const row of assignRows) {
-      const submitted = row.submissionStatus === 'submitted';
-      items.push({
+      this.pushWeeklyItem(items, {
         courseId: row.courseId,
         courseName: names.get(row.courseId) ?? '',
         cmId: row.cmId,
         kind: 'assignment',
         name: row.name,
-        dueAt: row.dueAt!.toISOString(),
-        status: submitted ? 'submitted' : row.dueAt! < now ? 'overdue' : 'not_submitted',
-        inWeek: row.dueAt! >= start,
-      });
+        dueAt: row.dueAt!,
+        submitted: row.submissionStatus === 'submitted',
+      }, start, now);
     }
 
     const dueThisWeek = items.filter((i) => i.inWeek);
@@ -210,10 +234,10 @@ export class GuardianViewService {
     const student = await this.users.getUser(studentId);
     const { courseIds, names } = await this.dashboard.enrolledCoursesFor(studentId);
 
-    const courses: GuardianCourseResultsView[] = [];
-    for (const courseId of courseIds) {
-      // Điểm theo từng bài ĐÃ CÔNG BỐ (cổng PH-0 như học sinh tự xem) — mô hình điểm theo bài (issue #224): không còn kết quả kỳ/năm của Sổ điểm VN và không còn điểm tổng khoá.
+    // Điểm theo từng bài ĐÃ CÔNG BỐ của từng khoá (cổng PH-0 như học sinh tự xem) — mô hình điểm theo bài (issue #224): không còn kết quả kỳ/năm của Sổ điểm VN và không còn điểm tổng khoá. Các khoá độc lập nên nạp song song; Promise.all giữ đúng thứ tự khoá.
+    const courses: GuardianCourseResultsView[] = await Promise.all(courseIds.map(async (courseId) => {
       const views = await this.grades.listPublishedActivityGrades(courseId, studentId);
+      // TypeScript không thu hẹp `v.grade` qua `.filter` nên giữ `!` ở dưới — mọi phần tử còn lại đã có grade.
       const activities = views
         .filter((v) => v.grade !== null)
         .map((v) => ({
@@ -223,12 +247,12 @@ export class GuardianViewService {
           gradeMax: v.item.gradeMax,
           feedback: v.grade!.feedback,
         }));
-      courses.push({
+      return {
         courseId,
         courseName: names.get(courseId) ?? '',
         activities,
-      });
-    }
+      };
+    }));
 
     await this.guardians.recordView(guardianId, studentId, 'ph1_results');
     return {

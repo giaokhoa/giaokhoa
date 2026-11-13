@@ -13,9 +13,10 @@
  *
  * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Cột jsonb (`columns`, `filters`, `last_result`) khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`) vì một MẢNG ở cấp cao nhất bị driver `pg` hiểu là mảng PostgreSQL.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import {sql, type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type ReportsDb = CentreDb | CentreTx;
@@ -87,19 +88,6 @@ export interface NewSchedule {
   createdAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng report_builder_report. */
 const REPORT_COLUMNS = [
   'id',
@@ -148,8 +136,8 @@ function reportInsertValues(values: NewReport): InsertObject<CentreDB, 'report_b
 }
 
 /** Ánh xạ dữ kiện ghi audience từ camelCase sang snake_case, loại `undefined` từng trường. */
-function audienceInsertValues(values: NewAudience): Insertable<CentreDB['report_builder_audience']> {
-  const row: Insertable<CentreDB['report_builder_audience']> = {
+function audienceInsertValues(values: NewAudience): InsertObject<CentreDB, 'report_builder_audience'> {
+  const row: InsertObject<CentreDB, 'report_builder_audience'> = {
     report_id: values.reportId,
   };
   if (values.id !== undefined) row.id = values.id;
@@ -191,23 +179,27 @@ function scheduleUpdateSet(patch: Partial<NewSchedule>): UpdateObject<CentreDB, 
 export class ReportsRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): ReportsDb {
+    return this.handle;
+  }
+
   /** Handle Kysely của kho trung tâm mà repository đang giữ (tầng service dùng cho các truy vấn đọc phụ trợ của module). */
   get dbHandle(): CentreDb {
     return this.handle;
   }
 
   /** Ghi một định nghĩa báo cáo mới, trả dòng vừa ghi. */
-  async insertReport(v: NewReport, db: ReportsDb = this.handle): Promise<ReportRow> {
-    const rows = await db
+  async insertReport(v: NewReport, db: ReportsDb = this.db()): Promise<ReportRow> {
+    return db
       .insertInto('report_builder_report')
       .values(reportInsertValues(v))
       .returning(REPORT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy định nghĩa báo cáo theo id. */
-  async getReport(id: string, db: ReportsDb = this.handle): Promise<ReportRow | undefined> {
+  async getReport(id: string, db: ReportsDb = this.db()): Promise<ReportRow | undefined> {
     return db
       .selectFrom('report_builder_report')
       .select(REPORT_COLUMNS)
@@ -216,22 +208,21 @@ export class ReportsRepository {
   }
 
   /** Liệt kê mọi định nghĩa báo cáo. */
-  async listReports(db: ReportsDb = this.handle): Promise<ReportRow[]> {
+  async listReports(db: ReportsDb = this.db()): Promise<ReportRow[]> {
     return db.selectFrom('report_builder_report').select(REPORT_COLUMNS).execute();
   }
 
   /** Ghi một dòng audience mới, trả dòng vừa ghi. */
-  async insertAudience(v: NewAudience, db: ReportsDb = this.handle): Promise<AudienceRow> {
-    const rows = await db
+  async insertAudience(v: NewAudience, db: ReportsDb = this.db()): Promise<AudienceRow> {
+    return db
       .insertInto('report_builder_audience')
       .values(audienceInsertValues(v))
       .returning(AUDIENCE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Liệt kê audience của một báo cáo. */
-  async listAudience(reportId: string, db: ReportsDb = this.handle): Promise<AudienceRow[]> {
+  async listAudience(reportId: string, db: ReportsDb = this.db()): Promise<AudienceRow[]> {
     return db
       .selectFrom('report_builder_audience')
       .select(AUDIENCE_COLUMNS)
@@ -240,17 +231,16 @@ export class ReportsRepository {
   }
 
   /** Ghi một lịch chạy mới, trả dòng vừa ghi. */
-  async insertSchedule(v: NewSchedule, db: ReportsDb = this.handle): Promise<ScheduleRow> {
-    const rows = await db
+  async insertSchedule(v: NewSchedule, db: ReportsDb = this.db()): Promise<ScheduleRow> {
+    return db
       .insertInto('report_builder_schedule')
       .values(scheduleInsertValues(v))
       .returning(SCHEDULE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy lịch chạy theo id. */
-  async getSchedule(id: string, db: ReportsDb = this.handle): Promise<ScheduleRow | undefined> {
+  async getSchedule(id: string, db: ReportsDb = this.db()): Promise<ScheduleRow | undefined> {
     return db
       .selectFrom('report_builder_schedule')
       .select(SCHEDULE_COLUMNS)
@@ -259,12 +249,12 @@ export class ReportsRepository {
   }
 
   /** Liệt kê mọi lịch chạy. */
-  async listSchedules(db: ReportsDb = this.handle): Promise<ScheduleRow[]> {
+  async listSchedules(db: ReportsDb = this.db()): Promise<ScheduleRow[]> {
     return db.selectFrom('report_builder_schedule').select(SCHEDULE_COLUMNS).execute();
   }
 
   /** Cập nhật một lịch chạy theo bản vá từng phần. */
-  async updateSchedule(id: string, v: Partial<NewSchedule>, db: ReportsDb = this.handle): Promise<void> {
+  async updateSchedule(id: string, v: Partial<NewSchedule>, db: ReportsDb = this.db()): Promise<void> {
     await db
       .updateTable('report_builder_schedule')
       .set(scheduleUpdateSet(v))
@@ -278,7 +268,7 @@ export class ReportsRepository {
    * nóng T-11, khuôn ghép mảnh xem ở phần đầu file. Danh sách rỗng
    * trả `false` ngay, không phát truy vấn.
    */
-  async userHasAnyRole(userId: string, roleNames: string[], db: ReportsDb = this.handle): Promise<boolean> {
+  async userHasAnyRole(userId: string, roleNames: string[], db: ReportsDb = this.db()): Promise<boolean> {
     if (!roleNames.length) return false;
     const fragments = roleNames.map((name) => sql`${name}`);
     const result = await sql<{ ok: number }>`

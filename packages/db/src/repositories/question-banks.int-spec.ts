@@ -3,8 +3,11 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
 import type { ExamVariant, LearningOutcomeDoc } from '../jsonb-types';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { QuestionBanksRepository, type QuestionBankRow } from './question-banks';
+import { CONTEXT_LEVEL_COURSE, CONTEXT_LEVEL_SYSTEM } from './dashboard';
 
 /**
  * Spec tích hợp của repository ngân hàng câu hỏi trên Kysely
@@ -28,12 +31,9 @@ import { QuestionBanksRepository, type QuestionBankRow } from './question-banks'
  *   sạch dòng bank đã ghi trong giao dịch.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g644_question_banks';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Ngữ cảnh cố định — các cột `context_id` không có khoá ngoại nên chỉ cần uuid hợp lệ. */
 const CONTEXT_ID = '019276a1-4444-7000-8000-0000000000c1';
@@ -80,7 +80,7 @@ let seed: Seed;
 /** Gieo đồ thị dữ kiện mẫu: tenant/người/vai, bank qua repository, phần còn lại qua Kysely thô. */
 async function seedData(): Promise<Seed> {
   const tenant = await db.insertInto('tenants')
-    .values({ slug: 'g644-tenant', name: 'Tenant G644', kind: 'centre' })
+    .values({ slug: 'g644-tenant', name: 'Tenant G644', kind: TEST_TENANT_KIND })
     .returning('id').executeTakeFirstOrThrow();
   const u1 = await db.insertInto('users')
     .values({ email: 'gv1@g644.test', username: 'gv1', first_name: 'Giang', last_name: 'Pham' })
@@ -97,9 +97,9 @@ async function seedData(): Promise<Seed> {
   // role_assignments.context_id có khoá ngoại thật tới bảng context:
   // gieo hai context tối thiểu mang đúng các id hằng số dùng bên dưới.
   await db.insertInto('context')
-    .values({ id: CONTEXT_ID, context_level: 10, depth: 1, path: '/1', instance_id: null }).execute();
+    .values({ id: CONTEXT_ID, context_level: CONTEXT_LEVEL_SYSTEM, depth: 1, path: '/1', instance_id: null }).execute();
   await db.insertInto('context')
-    .values({ id: COURSE_ID, context_level: 50, depth: 2, path: '/1/2', instance_id: COURSE_ID }).execute();
+    .values({ id: COURSE_ID, context_level: CONTEXT_LEVEL_COURSE, depth: 2, path: '/1/2', instance_id: COURSE_ID }).execute();
   await db.insertInto('role_assignments')
     .values({ user_id: u1.id, role_id: rTeacher.id, context_id: CONTEXT_ID }).execute();
   await db.insertInto('role_assignments')
@@ -273,7 +273,7 @@ const CATEGORY_ROW_COLUMNS = [
 
 describe('QuestionBanksRepository trên Kysely (issue #644)', () => {
   it('insertBank không truyền id nhận id UUIDv7 do database sinh và đọc lại nguyên vẹn', async () => {
-    expect(seed.schoolBank.id).toMatch(UUIDV7_PATTERN);
+    expect(seed.schoolBank.id).toMatch(UUIDV7_RE);
     const back = await repo.getBank(seed.schoolBank.id);
     expect(back).toEqual(seed.schoolBank);
   });

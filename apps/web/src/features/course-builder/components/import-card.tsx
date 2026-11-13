@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/component
 import { CardDescription } from '@giaokhoa/ui/components/card';
 import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
+import { selectClass } from '#lib/form-classes';
 
 interface ImportCardProps {
   otherCourses: Course[];
@@ -16,13 +17,12 @@ interface ImportCardProps {
   importModules: string[];
   setImportModules: Dispatch<SetStateAction<string[]>>;
   onSubmitImport: (event: FormEvent) => void;
-  selectClass: string;
 }
 
 /** Thẻ "Dùng lại từ khoá khác" của trang Xây dựng khoá. */
 export function ImportCard({
   otherCourses, importSourceId, setImportSourceId, importContent, importSections,
-  setImportSections, importModules, setImportModules, onSubmitImport, selectClass,
+  setImportSections, importModules, setImportModules, onSubmitImport,
 }: ImportCardProps) {
   const { t } = useTranslation('app');
   const submitImport = onSubmitImport;

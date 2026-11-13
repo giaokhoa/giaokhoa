@@ -2,7 +2,8 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
 import { createSystemBankKysely, type SystemBankDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { SystemBankRepository } from './system-bank';
 
 /**
@@ -20,12 +21,9 @@ import { SystemBankRepository } from './system-bank';
  * - Gói YCCĐ: tạo gói kèm items trong một transaction, đọc lại
  *   khớp từng trường — gồm nội dung YCCĐ là MẢNG jsonb ở cấp cao nhất (đường ghi phải qua serialize + `::jsonb`, driver `pg` hiểu mảng trần là mảng PostgreSQL).
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const BANK_DB = 'giaokhoa_db_g650_bank';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ADMIN_ID = '01965000-0000-7000-8000-000000000001';
 const EXPLICIT_QUESTION_ID = '01965000-0000-7000-8000-0000000000aa';
 
@@ -73,7 +71,7 @@ describe('Repository kho ngân hàng hệ thống (issue #650)', () => {
       package: pkg,
       checksum: 'checksum-v1',
     });
-    expect(question.id).toMatch(UUIDV7_PATTERN);
+    expect(question.id).toMatch(UUIDV7_RE);
     expect(question.status).toBe('published');
     expect(version.version).toBe(1);
     expect(version.checksum).toBe('checksum-v1');

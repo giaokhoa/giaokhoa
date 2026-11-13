@@ -1,3 +1,10 @@
+/**
+ * Route gốc của toàn app: dựng khung tài liệu HTML và bọc mọi route con trong
+ * QueryClientProvider, HydrationBoundary, AuthProvider và PermissionsProvider.
+ * Loader phía server chỉ lấy danh tính tối thiểu qua GET /users/me từ cookie phiên
+ * cùng trạng thái thu/mở sidebar, để SSR và lần hydrate đầu dùng chung một phiên.
+ */
+
 import { useState, type ReactNode } from 'react';
 import {
   Links,
@@ -18,6 +25,7 @@ import { PermissionsProvider } from '#lib/permissions';
 import { createQueryClient, queryClient } from '#lib/query-client';
 import { SidebarDefaultOpenContext } from '#lib/sidebar-default-open';
 import { fetchApiJson } from '#lib/server-api';
+import { hasSessionCookie } from '#lib/ssr-data';
 import { AppShellSkeleton } from '#components/app-shell-skeleton';
 import '#config/i18n';
 import '@giaokhoa/ui/globals.css';
@@ -53,7 +61,7 @@ export async function loader({
 }): Promise<{ initialUser: UserProfile | null; sidebarDefaultOpen: boolean }> {
   const cookie = request.headers.get('Cookie') ?? '';
   const sidebarDefaultOpen = parseSidebarState(cookie);
-  if (!/(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/.test(cookie)) return { initialUser: null, sidebarDefaultOpen };
+  if (!hasSessionCookie(request)) return { initialUser: null, sidebarDefaultOpen };
   const body = await fetchApiJson('/api/v1/users/me', { Cookie: cookie });
   const parsed = userProfileSchema.safeParse(body);
   return { initialUser: parsed.success ? parsed.data : null, sidebarDefaultOpen };

@@ -2,7 +2,8 @@ import { sql as kyselySql } from 'kysely';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
 import { DashboardRepository, type ContextLevels } from './dashboard';
 
 /**
@@ -14,9 +15,7 @@ import { DashboardRepository, type ContextLevels } from './dashboard';
  *
  * Cổng registry ngữ cảnh: repository chỉ đọc khoá `COURSE` qua cổng. Dữ kiện mẫu của spec tự chọn số mức cho context khoá là `COURSE_LEVEL` (một giá trị riêng của spec, khác mọi giá trị registry thật) và implementation cổng của spec cấp đúng giá trị đó — nếu repository dùng bất kỳ hằng số mức nào khác ngoài cổng, ca gán vai sẽ lệch kết quả ngay. Các khoá còn lại của cổng không được repository tiêu thụ nên spec cấp 0.
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_dash_652';
 
@@ -334,7 +333,7 @@ beforeAll(async () => {
   db = createCentreKysely(pool);
   repo = new DashboardRepository(db, TEST_CONTEXT_LEVELS);
 
-  await db.insertInto('tenants').values({ id: TENANT_ID, slug: 'dash-652', name: 'Trung tâm mẫu 652', kind: 'centre' }).execute();
+  await db.insertInto('tenants').values({ id: TENANT_ID, slug: 'dash-652', name: 'Trung tâm mẫu 652', kind: TEST_TENANT_KIND }).execute();
   for (const [id, username] of [[STUDENT_ID, 'dash-student'], [TEACHER_ID, 'dash-teacher'], [OTHER_ID, 'dash-other']] as const) {
     await db.insertInto('users').values({ id, email: `${username}@example.test`, username }).execute();
   }

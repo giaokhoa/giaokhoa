@@ -1,3 +1,10 @@
+/**
+ * Trang trạng thái hệ thống: loader phía server lấy GET /api/v1/health qua API nội bộ
+ * để HTML đầu đã có kết quả, còn khi loader không với tới API thì trang rơi về fetch
+ * phía client và chỉ fetch lại khi người dùng bấm kiểm tra lại. Hiển thị trạng thái,
+ * kiểm tra database/Redis và mốc thời gian, với trạng thái đang tải và lỗi riêng.
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLoaderData } from 'react-router';
@@ -35,8 +42,12 @@ export function HealthPage({ initialHealth }: { initialHealth?: HealthStatus | n
     try {
       const res = await fetch('/api/v1/health');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const health = (await res.json()) as HealthStatus;
-      return { kind: 'ready', health };
+      // Cùng luật với loader phía server: thân đáp ứng phải khớp schema
+      // hợp đồng, không ép kiểu trực tiếp — dữ kiện lạ thì rơi về
+      // trạng thái lỗi thay vì render dữ kiện sai hình.
+      const parsed = healthStatusSchema.safeParse(await res.json());
+      if (!parsed.success) throw new Error(t('unknownError'));
+      return { kind: 'ready', health: parsed.data };
     } catch (error: unknown) {
       return {
         kind: 'error',

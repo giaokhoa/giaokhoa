@@ -22,17 +22,28 @@ export type ControlPlaneTarget = {
 };
 
 /**
+ * Đọc tên database + role kết nối từ một URL kết nối Postgres: tên
+ * database = path của URL, role = username, mật khẩu = password.
+ * @throws Error khi URL thiếu tên database hoặc thiếu username — cấu
+ * hình sai phải lộ ngay ở bước cấp phát, không chạy tiếp nửa vời.
+ */
+function parseDatabaseTarget(url: string, label: string): { database: string; role: string; rolePassword: string } {
+  const parsed = new URL(url);
+  const database = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+  const role = decodeURIComponent(parsed.username);
+  if (!database) throw new Error(`${label} must name a database in its path`);
+  if (!role) throw new Error(`${label} must carry the connection role as username`);
+  return { database, role, rolePassword: decodeURIComponent(parsed.password) };
+}
+
+/**
  * Đọc đích cấp phát từ URL của control plane.
  * @throws Error khi URL thiếu tên database hoặc thiếu username — cấu
  * hình sai phải lộ ngay ở bước cấp phát, không chạy tiếp nửa vời.
  */
 export function parseControlPlaneTarget(controlPlaneUrl: string): ControlPlaneTarget {
-  const parsed = new URL(controlPlaneUrl);
-  const database = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-  const role = decodeURIComponent(parsed.username);
-  if (!database) throw new Error('CONTROL_PLANE_DATABASE_URL must name a database in its path');
-  if (!role) throw new Error('CONTROL_PLANE_DATABASE_URL must carry the connection role as username');
-  return { database, role, rolePassword: decodeURIComponent(parsed.password) };
+  const { database, role, rolePassword } = parseDatabaseTarget(controlPlaneUrl, 'CONTROL_PLANE_DATABASE_URL');
+  return { database, role, rolePassword };
 }
 
 /** Bọc một định danh Postgres trong dấu nháy kép, thoát nháy kép bên trong theo đúng cú pháp SQL. */
@@ -68,18 +79,27 @@ export function buildEnsureDatabaseStatements(target: ControlPlaneTarget, databa
 }
 
 /**
+ * Các câu lệnh khoá quyền kết nối của một database: thu hồi quyền kết
+ * nối mặc định của PUBLIC rồi chỉ cấp lại cho các role cho trước.
+ * Chạy lặp an toàn.
+ */
+function buildRestrictConnectStatementsFor(database: string, roles: string[]): string[] {
+  const quoted = quoteIdentifier(database);
+  const statements = [`REVOKE CONNECT ON DATABASE ${quoted} FROM PUBLIC`];
+  for (const role of roles) {
+    statements.push(`GRANT CONNECT ON DATABASE ${quoted} TO ${quoteIdentifier(role)}`);
+  }
+  return statements;
+}
+
+/**
  * Các câu lệnh khoá quyền kết nối của database control plane: thu
  * hồi quyền kết nối mặc định của PUBLIC rồi chỉ cấp cho role của
  * control plane — mọi role khác (gồm các role của kho nghiệp vụ)
  * không kết nối được vào database này. Chạy lặp an toàn.
  */
 export function buildRestrictConnectStatements(target: ControlPlaneTarget): string[] {
-  const database = quoteIdentifier(target.database);
-  const role = quoteIdentifier(target.role);
-  return [
-    `REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC`,
-    `GRANT CONNECT ON DATABASE ${database} TO ${role}`,
-  ];
+  return buildRestrictConnectStatementsFor(target.database, [target.role]);
 }
 
 /** Đích khoá kết nối của kho nghiệp vụ, suy ra từ URL kết nối nghiệp vụ. */
@@ -98,11 +118,7 @@ export type BusinessDatabaseTarget = {
  * hình sai phải lộ ngay ở bước cấp phát, không chạy tiếp nửa vời.
  */
 export function parseBusinessTarget(businessUrl: string): BusinessDatabaseTarget {
-  const parsed = new URL(businessUrl);
-  const database = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-  const role = decodeURIComponent(parsed.username);
-  if (!database) throw new Error('DATABASE_URL must name a database in its path');
-  if (!role) throw new Error('DATABASE_URL must carry the business connection role as username');
+  const { database, role } = parseDatabaseTarget(businessUrl, 'DATABASE_URL');
   return { database, roles: [role] };
 }
 
@@ -115,10 +131,5 @@ export function parseBusinessTarget(businessUrl: string): BusinessDatabaseTarget
  * Chạy lặp an toàn.
  */
 export function buildRestrictBusinessConnectStatements(target: BusinessDatabaseTarget): string[] {
-  const database = quoteIdentifier(target.database);
-  const statements = [`REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC`];
-  for (const role of target.roles) {
-    statements.push(`GRANT CONNECT ON DATABASE ${database} TO ${quoteIdentifier(role)}`);
-  }
-  return statements;
+  return buildRestrictConnectStatementsFor(target.database, target.roles);
 }

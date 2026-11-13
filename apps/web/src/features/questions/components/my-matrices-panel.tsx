@@ -13,7 +13,7 @@ import { Label } from '@giaokhoa/ui/components/label';
 import type { SubjectLite } from '#lib/curriculum';
 import { useBankMatrices, useBankMatrixContributions, useCopyMatrixToMyBank, useDeleteMatrix, useProposeMatrixContribution, useReviewMatrixContribution } from '../queries/questions';
 import type { BankLite, MatrixLite } from '../types/questions';
-import { matrixStatusKey } from '../utils/shared';
+import { bankScopeKey, matrixStatusKey } from '../utils/shared';
 
 /** Props của panel "Ma trận của tôi". */
 export interface MyMatricesPanelProps {
@@ -253,7 +253,7 @@ export function SystemMatricesPanel({
             <option value="">—</option>
             {sharedMatrixBanks.map((bank) => (
               <option key={bank.id} value={bank.id}>
-                {bank.name} ({t(`bankScope${bank.scope[0]!.toUpperCase()}${bank.scope.slice(1)}`)})
+                {bank.name} ({t(bankScopeKey(bank.scope))})
               </option>
             ))}
           </select>

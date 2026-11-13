@@ -20,6 +20,9 @@ const OWNER = "00000000-0000-7000-8000-0000000000c1";
 const STAFF = "00000000-0000-7000-8000-0000000000d1";
 const OTHER = "00000000-0000-7000-8000-0000000000e1";
 
+/** Hạn 31 ngày — dài hơn giới hạn 30 ngày của grant (MAX_DURATION_MS) nên phải bị từ chối. */
+const EXPIRES_BEYOND_MAX_MS = 31 * 24 * 3600_000;
+
 /** Mô phỏng giao dịch trên handle đã định tuyến, không đưa SQL vào unit. */
 function harness() {
   let currentTenant = A;
@@ -167,7 +170,7 @@ describe("Cấp quyền hỗ trợ theo tenant, người nhận, thao tác và t
       h.service.create(OWNER, {
         ...input,
         scopes: [...input.scopes],
-        expiresAt: new Date(Date.now() + 31 * 24 * 3600_000).toISOString(),
+        expiresAt: new Date(Date.now() + EXPIRES_BEYOND_MAX_MS).toISOString(),
       }),
     ).rejects.toMatchObject({ response: { code: "support.invalid_expiry" } });
     expect(h.grants).toHaveLength(0);

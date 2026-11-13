@@ -9,6 +9,16 @@
 /** Tên ràng buộc duy nhất theo cặp (bank đích, chữ ký nội dung) trên `exam_matrices` — khai trong schema của package db. */
 export const MATRIX_CONTENT_SIGNATURE_UNIQUE_CONSTRAINT = 'exam_matrices_bank_content_signature_unique';
 
+/**
+ * Mã + thông điệp 409 khi ghi ma trận chạm ràng buộc trùng nội dung —
+ * MỘT định nghĩa duy nhất cho mọi đường ghi (tạo/sửa/copy): helper
+ * `rethrowAsDuplicateContentConflict` của QuizMatricesService và nhánh
+ * catch của MatrixBanksService đều dựng ConflictException từ đây để
+ * thông điệp không lệch nhau.
+ */
+export const MATRIX_DUPLICATE_CONTENT_CODE = 'quiz.matrix_duplicate_content';
+export const MATRIX_DUPLICATE_CONTENT_MESSAGE = 'A matrix with identical content already exists in the target bank';
+
 /** Một ô ma trận ở dạng tối thiểu tham gia chữ ký nội dung (khớp hình dạng ô của đường nhập và của bản ghi đã lưu). */
 export interface MatrixContentSignatureCell {
   curriculumNodeId: string;

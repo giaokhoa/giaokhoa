@@ -3,7 +3,8 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { QuestionsRepository, type EntryRow } from './questions';
 
 /**
@@ -26,12 +27,9 @@ import { QuestionsRepository, type EntryRow } from './questions';
  *   trong spec này là chính các truy vấn của repository cũ (trước #642) dựng lại bằng Kysely thô trên CÙNG dữ kiện mẫu (gồm YCCĐ đã rút, YCCĐ phái sinh từ gốc đã rút, và điều kiện khớp cùng dòng nối outcomeId + cognitiveLevel) — hai phía phải cho cùng tập id.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g642_questions';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Ngữ cảnh/actor cố định — các cột `context_id`/`created_by` không có khoá ngoại nên chỉ cần uuid hợp lệ. */
 const CONTEXT_ID = '019276a1-1111-7000-8000-0000000000c1';
@@ -220,7 +218,7 @@ async function oracleFilterIds(filter: OracleFilter): Promise<string[]> {
 describe('QuestionsRepository trên Kysely (issue #642)', () => {
   it('insert không truyền id nhận id UUIDv7 do database sinh và đọc lại nguyên vẹn', async () => {
     const cat = await repo.insertCategory({ name: 'Danh mục uuidv7', contextId: CONTEXT_ID, bankId: seed.bankId, info: '', parent: null, stamp: 'uuidv7' });
-    expect(cat.id).toMatch(UUIDV7_PATTERN);
+    expect(cat.id).toMatch(UUIDV7_RE);
     const back = await repo.getCategory(cat.id);
     expect(back).toMatchObject({ id: cat.id, name: 'Danh mục uuidv7', bankId: seed.bankId, stamp: 'uuidv7' });
   });

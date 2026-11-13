@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { useApplyBookFrame, useApplyCurriculumFrame, useUpdateCourseFrameInfo } from '../queries/course-builder';
 import { FrameUnitPicker } from '#features/courses/components/frame-picker';
+import { selectClass } from '#lib/form-classes';
 import {
   useBookFrameChapters, useCurriculumFrameUnits, useCurriculumSubjectsScoped,
 } from '#lib/curriculum';
@@ -102,7 +103,6 @@ export function CurriculumFramePanel({
     }
   }
 
-  const selectClass = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
   return (
     <Card>
       <CardHeader>
@@ -245,7 +245,6 @@ export function BookFramePanel({
     }
   }
 
-  const selectClass = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
   return (
     <Card>
       <CardHeader>

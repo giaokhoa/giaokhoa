@@ -5,9 +5,10 @@
  *
  * Khuôn theo pilot kho control plane: tên cột snake_case của schema codegen ở bên trong, hình dạng dòng camelCase ở biên qua danh sách cột có bí danh tường minh; cột jsonb `response_json` khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`) để một khuôn duy nhất cho mọi giá trị jsonb.
  */
-import { sql, type RawBuilder } from 'kysely';
+
 import type { CentreDb, CentreTx } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type McpIdempotencyDb = CentreDb | CentreTx;
@@ -26,19 +27,6 @@ export interface McpIdempotencyKeyRow {
 }
 
 const TTL_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng mcp_idempotency_keys. */
 const MCP_IDEMPOTENCY_KEY_COLUMNS = [
@@ -60,8 +48,13 @@ const MCP_IDEMPOTENCY_KEY_COLUMNS = [
 export class McpIdempotencyRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): McpIdempotencyDb {
+    return this.handle;
+  }
+
   /** Tra khoá của một user: hết hạn thì xoá dòng và trả null như chưa từng có. */
-  async find(userId: string, key: string, db: McpIdempotencyDb = this.handle): Promise<McpIdempotencyKeyRow | null> {
+  async find(userId: string, key: string, db: McpIdempotencyDb = this.db()): Promise<McpIdempotencyKeyRow | null> {
     const row = await db
       .selectFrom('mcp_idempotency_keys')
       .select(MCP_IDEMPOTENCY_KEY_COLUMNS)
@@ -86,7 +79,7 @@ export class McpIdempotencyRepository {
     tool: string;
     requestHash: string;
     response: Record<string, unknown>;
-  }, db: McpIdempotencyDb = this.handle): Promise<void> {
+  }, db: McpIdempotencyDb = this.db()): Promise<void> {
     const now = new Date();
     await db
       .insertInto('mcp_idempotency_keys')
@@ -103,7 +96,7 @@ export class McpIdempotencyRepository {
   }
 
   /** Xoá mọi dòng đã hết hạn (gọi cơ hội khi tra cứu; job dọn định kỳ để lát sau). */
-  async purgeExpired(db: McpIdempotencyDb = this.handle): Promise<void> {
+  async purgeExpired(db: McpIdempotencyDb = this.db()): Promise<void> {
     await db
       .deleteFrom('mcp_idempotency_keys')
       .where('expires_at', '<=', new Date())

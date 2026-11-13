@@ -5,7 +5,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import {
-  BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException,
+  BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnprocessableEntityException,
 } from '@nestjs/common';
 import {
   PAPER_SCAN_STATUSES, type CreatePaperBatch, type PaperBatch, type PaperReading,
@@ -21,7 +21,7 @@ import { encodeTrueFalseResponse } from '../questions/domain/question-engine';
 import { QuizService, type PinRow } from '../quiz/quiz.service';
 import { SiteConfigService } from '../site-config/site-config.service';
 import { UsersService } from '../users/users.service';
-import { DEFAULT_OMR_THRESHOLDS, encodePng, processSheetImage, type OmrThresholds, type ProcessedSheet } from './domain/omr';
+import { DEFAULT_OMR_THRESHOLDS, encodePng, processSheetImage, SheetImageError, type OmrThresholds, type ProcessedSheet } from './domain/omr';
 import {
   NAME_REGION, STUDENT_CODE_REGION, VARIANT_CODE_REGION,
   codeForIndex, computeSheetGeometry,
@@ -36,13 +36,15 @@ const GRADE_PAPER_CAP = 'quiz:gradepaper';
 export interface ScanUploadOutcome {
   fileName: string;
   stored: boolean;
-  /** Lý do cổng chất lượng từ chối (chỉ khi stored = false): missing_fiducials | blurry | glare | too_dark | unreadable_image. */
+  /** Lý do cổng chất lượng từ chối (chỉ khi stored = false): missing_fiducials | blurry | glare | too_dark | unreadable_image | invalid_sheet. */
   reasons?: string[];
   scan?: PaperScan;
 }
 
 @Injectable()
 export class PaperGradingService {
+  private readonly logger = new Logger(PaperGradingService.name);
+
   constructor(
     private readonly repo: PaperGradingRepository,
     private readonly quiz: QuizService,
@@ -136,7 +138,7 @@ export class PaperGradingService {
       identityCode: row.identityCode,
       variantCodeRead: row.variantCodeRead,
       fileId: row.fileId, warpedFileId: row.warpedFileId,
-      rows: geometry ? geometry.rows.map((g, i) => ({ slot: layout[i]!.slot, centers: g.centers })) : [],
+      rows: geometry ? geometry.rows.map((g, i) => ({ slot: layout[i]!.slot, centers: g.centers })) : [], // Bất biến: geometry dựng từ chính layout này nên số hàng bằng nhau.
       identityCandidates: candidates,
       regions: { name: NAME_REGION, studentCode: STUDENT_CODE_REGION, variantCode: VARIANT_CODE_REGION },
       quality: row.quality, readings: row.readings, attemptId: row.attemptId,
@@ -342,7 +344,7 @@ export class PaperGradingService {
   private mapReadings(processed: ProcessedSheet, batch: PaperBatchRow): PaperReading[] {
     const layout = this.sortedLayout(batch);
     return processed.readings.map((r) => ({
-      slot: layout[r.slot - 1]!.slot,
+      slot: layout[r.slot - 1]!.slot, // Bất biến: slot của engine chạy 1..số hàng, layout đã sắp theo slot có cùng độ dài.
       densities: r.densities, chosen: r.chosen, state: r.state, margin: r.margin,
       resolvedBy: r.resolvedBy,
       ...(r.pairChoices ? { pairChoices: r.pairChoices } : {}),
@@ -388,12 +390,13 @@ export class PaperGradingService {
     },
   ): Promise<ScanUploadOutcome> {
     const fileName = (opts.file.originalname || 'scan').split(/[\\/]/).pop()!;
-    const routingBatch = opts.anchor ?? opts.batches[0]!;
+    const routingBatch = opts.anchor ?? opts.batches[0]!; // Bất biến: ingestUpload đã từ chối khi batches rỗng (paper.no_batches).
     let processed: ProcessedSheet;
     try {
       processed = processSheetImage(opts.file.buffer, this.geometryOf(routingBatch), opts.thresholds, this.pairSlotsOf(routingBatch));
-    } catch {
-      return { fileName, stored: false, reasons: ['unreadable_image'] };
+    } catch (err) {
+      // Giữ mã lý do của lỗi giải mã (tệp không phải ảnh vs ảnh hỏng) thay vì gộp mọi lỗi thành unreadable_image.
+      return { fileName, stored: false, reasons: [err instanceof SheetImageError ? err.reason : 'unreadable_image'] };
     }
     if (!processed.qualityOk) {
       return { fileName, stored: false, reasons: processed.qualityReasons };
@@ -416,8 +419,8 @@ export class PaperGradingService {
       try {
         processed = processSheetImage(opts.file.buffer, this.geometryOf(target), opts.thresholds, this.pairSlotsOf(target));
         variantCodeRead = processed.variantCode?.code ?? variantCodeRead;
-      } catch {
-        return { fileName, stored: false, reasons: ['unreadable_image'] };
+      } catch (err) {
+        return { fileName, stored: false, reasons: [err instanceof SheetImageError ? err.reason : 'unreadable_image'] };
       }
     }
 
@@ -771,7 +774,10 @@ export class PaperGradingService {
         continue;
       }
       if (reading.chosen === null) continue;
-      responses[entry.slot - 1] = entry.answerIds[reading.chosen]!;
+      // Phiếu tô ô ngoài số đáp án hiện tại của câu (câu đã sửa sau khi in): bỏ qua đáp án này thay vì ghi undefined vào responses.
+      const answerId = entry.answerIds[reading.chosen];
+      if (!answerId) continue;
+      responses[entry.slot - 1] = answerId;
     }
     const result = await this.quiz.recordPaperAttempt(actorId, scan.examPinId, {
       studentId: scan.studentId, layout: batch.layout, responses,
@@ -788,7 +794,12 @@ export class PaperGradingService {
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     await this.repo.deleteScan(scan.id);
-    await this.files.deleteFile(scan.fileId).catch(() => undefined);
-    if (scan.warpedFileId) await this.files.deleteFile(scan.warpedFileId).catch(() => undefined);
+    // Xoá bản ghi file của phiếu lỗi thì phiếu vẫn xoá tiếp — nhưng tệp mồ côi phải thấy trong log để dọn sau.
+    await this.files.deleteFile(scan.fileId).catch((err) => {
+      this.logger.warn(`deleteScan: failed to delete file ${scan.fileId} of scan ${scan.id}: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    if (scan.warpedFileId) await this.files.deleteFile(scan.warpedFileId).catch((err) => {
+      this.logger.warn(`deleteScan: failed to delete warped file ${scan.warpedFileId} of scan ${scan.id}: ${err instanceof Error ? err.message : String(err)}`);
+    });
   }
 }

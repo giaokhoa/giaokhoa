@@ -1,3 +1,9 @@
+/**
+ * Trang quản lý liên kết giám hộ phụ huynh–học viên (route `admin/guardian-links`): bề mặt quản lý duy nhất của miền giám hộ, chỉ dành cho người giữ capability `guardian:manage`.
+ * Danh sách từ GET /guardian-links (gồm cả liên kết đã thu hồi), họ tên hai phía tra qua GET /users/:id; tạo liên kết bằng POST /guardian-links với phụ huynh và học viên là tài khoản có sẵn, thu hồi bằng DELETE (thu hồi mềm).
+ * Trang không hiển thị dữ liệu học tập của học viên; API tự gác `guardian:manage` ở mọi endpoint quản lý.
+ */
+
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import type { UserProfile } from '@giaokhoa/contracts';
@@ -12,7 +18,7 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { adminUserDetailQueryOptions, adminUsersQueryOptions } from '#features/admin/queries/admin-users';
 import { ApiError } from '#lib/api';
-import { personName } from '#features/classes/api/classes';
+import { personName } from '#utils/name-format';
 import { formatDate } from '#utils/date-format';
 import { guardianLinksQueryOptions, useCreateGuardianLink, useRevokeGuardianLink } from '../queries/guardians';
 import type { GuardianLinkView } from '../types/guardians';
@@ -46,11 +52,6 @@ interface UserPickerProps {
   onChange: (user: UserProfile | null) => void;
 }
 
-/** Họ tên hiển thị của một hồ sơ người dùng — dùng chung helper `personName` của miền lớp/giám hộ (họ trước, tên sau; trống thì rơi về tên đăng nhập). */
-function personLabel(user: UserProfile): string {
-  return personName(user);
-}
-
 /**
  * Ô chọn một người dùng bằng tìm kiếm: gõ từ khoá (tên, tên đăng nhập hoặc email) → GET /users?search= qua tuỳ chọn truy vấn dùng chung của khu quản trị người dùng → danh sách kết quả để bấm chọn. Đã chọn thì ô thu về một dòng xác nhận kèm nút bỏ chọn. Truy vấn chỉ bật khi có từ khoá và chưa có lựa chọn, để không gọi API thừa.
  */
@@ -69,7 +70,7 @@ function UserPicker({ label, value, onChange }: UserPickerProps) {
         <FieldLabel>{label}</FieldLabel>
         <div className="flex items-center gap-2">
           <span className="text-sm">
-            {t('guardianLinksSelectedUser', { name: personLabel(value), username: value.username })}
+            {t('guardianLinksSelectedUser', { name: personName(value), username: value.username })}
           </span>
           <Button type="button" variant="outline" size="sm" onClick={() => onChange(null)}>
             {t('guardianLinksPickAnother')}
@@ -106,7 +107,7 @@ function UserPicker({ label, value, onChange }: UserPickerProps) {
                   setSearch('');
                 }}
               >
-                {personLabel(user)} ({user.username})
+                {personName(user)} ({user.username})
                 {user.email ? ` — ${user.email}` : ''}
               </Button>
             ))
@@ -139,13 +140,14 @@ export function AdminGuardianLinksPage() {
   const usersById = useMemo(() => {
     const map = new Map<string, UserProfile>();
     userQueries.forEach((query, index) => {
-      if (query.data) map.set(userIds[index]!, query.data);
+      const userId = userIds[index];
+      if (query.data && userId) map.set(userId, query.data);
     });
     return map;
   }, [userQueries, userIds]);
   const userLabel = (userId: string): string => {
     const user = usersById.get(userId);
-    return user ? `${personLabel(user)} (${user.username})` : userId;
+    return user ? `${personName(user)} (${user.username})` : userId;
   };
 
   const [guardian, setGuardian] = useState<UserProfile | null>(null);

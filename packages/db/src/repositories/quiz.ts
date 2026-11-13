@@ -17,10 +17,11 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
+import {sql, type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { ExamVariant } from '../jsonb-types';
 import { EXAM_COLUMNS, EXAM_SLOT_COLUMNS, EXAM_VERSION_COLUMNS, type ExamRow, type ExamSlotRow, type ExamVersionRow } from './exams';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type QuizTx = CentreTx;
@@ -32,20 +33,6 @@ export type QuizDb = CentreDb | CentreTx;
  * các đường đọc kết quả cần toàn bộ lượt để tính điểm/thống kê nên đây không phải cỡ trang — chỉ là mốc chặn truy vấn vô hạn khi dữ kiện bất thường. Mọi nơi gọi `listAttempts` đều truyền tường minh.
  */
 export const QUIZ_PIN_ATTEMPTS_LIMIT = 10_000;
-
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi (object lẫn mảng) để một khuôn duy nhất, không phụ
- * thuộc nhánh xử lý riêng của driver theo hình dạng giá trị.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
 
 /** Một dòng của bảng `exam_pins` (hình dạng camelCase phía tiêu thụ dùng). */
 export interface ExamPinRow {
@@ -165,42 +152,41 @@ const EXAM_PIN_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_pins'> {
-  const row: InsertObject<CentreDB, 'exam_pins'> = {
+  return {
     course_id: values.courseId,
     created_by: values.createdBy,
     exam_id: values.examId,
     exam_version_id: values.examVersionId,
     variants: jsonbValue(values.variants),
+    ...(values.attemptsAllowed !== undefined ? { attempts_allowed: values.attemptsAllowed } : {}),
+    ...(values.cmId !== undefined ? { cm_id: values.cmId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.gradeMethod !== undefined ? { grade_method: values.gradeMethod } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.intro !== undefined ? { intro: values.intro } : {}),
+    ...(values.lateEntryMinutes !== undefined ? { late_entry_minutes: values.lateEntryMinutes } : {}),
+    ...(values.monitorEvents !== undefined ? { monitor_events: values.monitorEvents } : {}),
+    ...(values.name !== undefined ? { name: values.name } : {}),
+    ...(values.passwordHash !== undefined ? { password_hash: values.passwordHash } : {}),
+    ...(values.preset !== undefined ? { preset: values.preset } : {}),
+    ...(values.resultsPublishedAt !== undefined ? { results_published_at: values.resultsPublishedAt } : {}),
+    ...(values.reviewAttempt !== undefined ? { review_attempt: values.reviewAttempt } : {}),
+    ...(values.reviewCorrectness !== undefined ? { review_correctness: values.reviewCorrectness } : {}),
+    ...(values.reviewGeneralFeedback !== undefined ? { review_general_feedback: values.reviewGeneralFeedback } : {}),
+    ...(values.reviewMarks !== undefined ? { review_marks: values.reviewMarks } : {}),
+    ...(values.reviewOverallFeedback !== undefined ? { review_overall_feedback: values.reviewOverallFeedback } : {}),
+    ...(values.reviewRightAnswer !== undefined ? { review_right_answer: values.reviewRightAnswer } : {}),
+    ...(values.reviewSpecificFeedback !== undefined ? { review_specific_feedback: values.reviewSpecificFeedback } : {}),
+    ...(values.shuffleAnswers !== undefined ? { shuffle_answers: values.shuffleAnswers } : {}),
+    ...(values.subnet !== undefined ? { subnet: values.subnet } : {}),
+    ...(values.targetGroupId !== undefined ? { target_group_id: values.targetGroupId } : {}),
+    ...(values.timeClose !== undefined ? { time_close: values.timeClose } : {}),
+    ...(values.timeLimit !== undefined ? { time_limit: values.timeLimit } : {}),
+    ...(values.timeOpen !== undefined ? { time_open: values.timeOpen } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
+    ...(values.variantCount !== undefined ? { variant_count: values.variantCount } : {}),
+    ...(values.versionMode !== undefined ? { version_mode: values.versionMode } : {}),
   };
-  if (values.attemptsAllowed !== undefined) row.attempts_allowed = values.attemptsAllowed;
-  if (values.cmId !== undefined) row.cm_id = values.cmId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.gradeMethod !== undefined) row.grade_method = values.gradeMethod;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.intro !== undefined) row.intro = values.intro;
-  if (values.lateEntryMinutes !== undefined) row.late_entry_minutes = values.lateEntryMinutes;
-  if (values.monitorEvents !== undefined) row.monitor_events = values.monitorEvents;
-  if (values.name !== undefined) row.name = values.name;
-  if (values.passwordHash !== undefined) row.password_hash = values.passwordHash;
-  if (values.preset !== undefined) row.preset = values.preset;
-  if (values.resultsPublishedAt !== undefined) row.results_published_at = values.resultsPublishedAt;
-  if (values.reviewAttempt !== undefined) row.review_attempt = values.reviewAttempt;
-  if (values.reviewCorrectness !== undefined) row.review_correctness = values.reviewCorrectness;
-  if (values.reviewGeneralFeedback !== undefined) row.review_general_feedback = values.reviewGeneralFeedback;
-  if (values.reviewMarks !== undefined) row.review_marks = values.reviewMarks;
-  if (values.reviewOverallFeedback !== undefined) row.review_overall_feedback = values.reviewOverallFeedback;
-  if (values.reviewRightAnswer !== undefined) row.review_right_answer = values.reviewRightAnswer;
-  if (values.reviewSpecificFeedback !== undefined) row.review_specific_feedback = values.reviewSpecificFeedback;
-  if (values.shuffleAnswers !== undefined) row.shuffle_answers = values.shuffleAnswers;
-  if (values.subnet !== undefined) row.subnet = values.subnet;
-  if (values.targetGroupId !== undefined) row.target_group_id = values.targetGroupId;
-  if (values.timeClose !== undefined) row.time_close = values.timeClose;
-  if (values.timeLimit !== undefined) row.time_limit = values.timeLimit;
-  if (values.timeOpen !== undefined) row.time_open = values.timeOpen;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  if (values.variantCount !== undefined) row.variant_count = values.variantCount;
-  if (values.versionMode !== undefined) row.version_mode = values.versionMode;
-  return row;
 }
 
 /**
@@ -211,41 +197,41 @@ function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_p
  * gắn sau cùng.
  */
 function examPinUpdateSet(patch: Partial<ExamPinRow>): UpdateObject<CentreDB, 'exam_pins'> {
-  const set: UpdateObject<CentreDB, 'exam_pins'> = {};
-  if (patch.attemptsAllowed !== undefined) set.attempts_allowed = patch.attemptsAllowed;
-  if (patch.cmId !== undefined) set.cm_id = patch.cmId;
-  if (patch.courseId !== undefined) set.course_id = patch.courseId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.createdBy !== undefined) set.created_by = patch.createdBy;
-  if (patch.examId !== undefined) set.exam_id = patch.examId;
-  if (patch.examVersionId !== undefined) set.exam_version_id = patch.examVersionId;
-  if (patch.gradeMethod !== undefined) set.grade_method = patch.gradeMethod;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.intro !== undefined) set.intro = patch.intro;
-  if (patch.lateEntryMinutes !== undefined) set.late_entry_minutes = patch.lateEntryMinutes;
-  if (patch.monitorEvents !== undefined) set.monitor_events = patch.monitorEvents;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.passwordHash !== undefined) set.password_hash = patch.passwordHash;
-  if (patch.preset !== undefined) set.preset = patch.preset;
-  if (patch.resultsPublishedAt !== undefined) set.results_published_at = patch.resultsPublishedAt;
-  if (patch.reviewAttempt !== undefined) set.review_attempt = patch.reviewAttempt;
-  if (patch.reviewCorrectness !== undefined) set.review_correctness = patch.reviewCorrectness;
-  if (patch.reviewGeneralFeedback !== undefined) set.review_general_feedback = patch.reviewGeneralFeedback;
-  if (patch.reviewMarks !== undefined) set.review_marks = patch.reviewMarks;
-  if (patch.reviewOverallFeedback !== undefined) set.review_overall_feedback = patch.reviewOverallFeedback;
-  if (patch.reviewRightAnswer !== undefined) set.review_right_answer = patch.reviewRightAnswer;
-  if (patch.reviewSpecificFeedback !== undefined) set.review_specific_feedback = patch.reviewSpecificFeedback;
-  if (patch.shuffleAnswers !== undefined) set.shuffle_answers = patch.shuffleAnswers;
-  if (patch.subnet !== undefined) set.subnet = patch.subnet;
-  if (patch.targetGroupId !== undefined) set.target_group_id = patch.targetGroupId;
-  if (patch.timeClose !== undefined) set.time_close = patch.timeClose;
-  if (patch.timeLimit !== undefined) set.time_limit = patch.timeLimit;
-  if (patch.timeOpen !== undefined) set.time_open = patch.timeOpen;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  if (patch.variantCount !== undefined) set.variant_count = patch.variantCount;
-  if (patch.variants !== undefined) set.variants = jsonbValue(patch.variants);
-  if (patch.versionMode !== undefined) set.version_mode = patch.versionMode;
-  return set;
+  return {
+    ...(patch.attemptsAllowed !== undefined ? { attempts_allowed: patch.attemptsAllowed } : {}),
+    ...(patch.cmId !== undefined ? { cm_id: patch.cmId } : {}),
+    ...(patch.courseId !== undefined ? { course_id: patch.courseId } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.createdBy !== undefined ? { created_by: patch.createdBy } : {}),
+    ...(patch.examId !== undefined ? { exam_id: patch.examId } : {}),
+    ...(patch.examVersionId !== undefined ? { exam_version_id: patch.examVersionId } : {}),
+    ...(patch.gradeMethod !== undefined ? { grade_method: patch.gradeMethod } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.intro !== undefined ? { intro: patch.intro } : {}),
+    ...(patch.lateEntryMinutes !== undefined ? { late_entry_minutes: patch.lateEntryMinutes } : {}),
+    ...(patch.monitorEvents !== undefined ? { monitor_events: patch.monitorEvents } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.passwordHash !== undefined ? { password_hash: patch.passwordHash } : {}),
+    ...(patch.preset !== undefined ? { preset: patch.preset } : {}),
+    ...(patch.resultsPublishedAt !== undefined ? { results_published_at: patch.resultsPublishedAt } : {}),
+    ...(patch.reviewAttempt !== undefined ? { review_attempt: patch.reviewAttempt } : {}),
+    ...(patch.reviewCorrectness !== undefined ? { review_correctness: patch.reviewCorrectness } : {}),
+    ...(patch.reviewGeneralFeedback !== undefined ? { review_general_feedback: patch.reviewGeneralFeedback } : {}),
+    ...(patch.reviewMarks !== undefined ? { review_marks: patch.reviewMarks } : {}),
+    ...(patch.reviewOverallFeedback !== undefined ? { review_overall_feedback: patch.reviewOverallFeedback } : {}),
+    ...(patch.reviewRightAnswer !== undefined ? { review_right_answer: patch.reviewRightAnswer } : {}),
+    ...(patch.reviewSpecificFeedback !== undefined ? { review_specific_feedback: patch.reviewSpecificFeedback } : {}),
+    ...(patch.shuffleAnswers !== undefined ? { shuffle_answers: patch.shuffleAnswers } : {}),
+    ...(patch.subnet !== undefined ? { subnet: patch.subnet } : {}),
+    ...(patch.targetGroupId !== undefined ? { target_group_id: patch.targetGroupId } : {}),
+    ...(patch.timeClose !== undefined ? { time_close: patch.timeClose } : {}),
+    ...(patch.timeLimit !== undefined ? { time_limit: patch.timeLimit } : {}),
+    ...(patch.timeOpen !== undefined ? { time_open: patch.timeOpen } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+    ...(patch.variantCount !== undefined ? { variant_count: patch.variantCount } : {}),
+    ...(patch.variants !== undefined ? { variants: jsonbValue(patch.variants) } : {}),
+    ...(patch.versionMode !== undefined ? { version_mode: patch.versionMode } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_attempts` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -309,23 +295,22 @@ const EXAM_ATTEMPT_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examAttemptInsertValues(values: NewExamAttempt): InsertObject<CentreDB, 'exam_attempts'> {
-  const row: InsertObject<CentreDB, 'exam_attempts'> = {
+  return {
     attempt_number: values.attemptNumber,
     pin_id: values.pinId,
     usage_id: values.usageId,
     user_id: values.userId,
+    ...(values.appliedSettings !== undefined ? { applied_settings: jsonbField(values.appliedSettings) } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.makeup !== undefined ? { makeup: values.makeup } : {}),
+    ...(values.preview !== undefined ? { preview: values.preview } : {}),
+    ...(values.state !== undefined ? { state: values.state } : {}),
+    ...(values.sumGrades !== undefined ? { sum_grades: values.sumGrades } : {}),
+    ...(values.timeFinish !== undefined ? { time_finish: values.timeFinish } : {}),
+    ...(values.timeStart !== undefined ? { time_start: values.timeStart } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.appliedSettings !== undefined) row.applied_settings = values.appliedSettings === null ? null : jsonbValue(values.appliedSettings);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.makeup !== undefined) row.makeup = values.makeup;
-  if (values.preview !== undefined) row.preview = values.preview;
-  if (values.state !== undefined) row.state = values.state;
-  if (values.sumGrades !== undefined) row.sum_grades = values.sumGrades;
-  if (values.timeFinish !== undefined) row.time_finish = values.timeFinish;
-  if (values.timeStart !== undefined) row.time_start = values.timeStart;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -336,22 +321,22 @@ function examAttemptInsertValues(values: NewExamAttempt): InsertObject<CentreDB,
  * gắn sau cùng.
  */
 function examAttemptUpdateSet(patch: Partial<ExamAttemptRow>): UpdateObject<CentreDB, 'exam_attempts'> {
-  const set: UpdateObject<CentreDB, 'exam_attempts'> = {};
-  if (patch.appliedSettings !== undefined) set.applied_settings = patch.appliedSettings === null ? null : jsonbValue(patch.appliedSettings);
-  if (patch.attemptNumber !== undefined) set.attempt_number = patch.attemptNumber;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.makeup !== undefined) set.makeup = patch.makeup;
-  if (patch.pinId !== undefined) set.pin_id = patch.pinId;
-  if (patch.preview !== undefined) set.preview = patch.preview;
-  if (patch.state !== undefined) set.state = patch.state;
-  if (patch.sumGrades !== undefined) set.sum_grades = patch.sumGrades;
-  if (patch.timeFinish !== undefined) set.time_finish = patch.timeFinish;
-  if (patch.timeStart !== undefined) set.time_start = patch.timeStart;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  if (patch.usageId !== undefined) set.usage_id = patch.usageId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  return set;
+  return {
+    ...(patch.appliedSettings !== undefined ? { applied_settings: jsonbField(patch.appliedSettings) } : {}),
+    ...(patch.attemptNumber !== undefined ? { attempt_number: patch.attemptNumber } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.makeup !== undefined ? { makeup: patch.makeup } : {}),
+    ...(patch.pinId !== undefined ? { pin_id: patch.pinId } : {}),
+    ...(patch.preview !== undefined ? { preview: patch.preview } : {}),
+    ...(patch.state !== undefined ? { state: patch.state } : {}),
+    ...(patch.sumGrades !== undefined ? { sum_grades: patch.sumGrades } : {}),
+    ...(patch.timeFinish !== undefined ? { time_finish: patch.timeFinish } : {}),
+    ...(patch.timeStart !== undefined ? { time_start: patch.timeStart } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+    ...(patch.usageId !== undefined ? { usage_id: patch.usageId } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_pin_overrides` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -408,22 +393,21 @@ const EXAM_PIN_OVERRIDE_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examPinOverrideInsertValues(values: NewExamPinOverride): Insertable<CentreDB['exam_pin_overrides']> {
-  const row: Insertable<CentreDB['exam_pin_overrides']> = {
+function examPinOverrideInsertValues(values: NewExamPinOverride): InsertObject<CentreDB, 'exam_pin_overrides'> {
+  return {
     pin_id: values.pinId,
+    ...(values.attempts !== undefined ? { attempts: values.attempts } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.groupId !== undefined ? { group_id: values.groupId } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.passwordHash !== undefined ? { password_hash: values.passwordHash } : {}),
+    ...(values.reason !== undefined ? { reason: values.reason } : {}),
+    ...(values.timeClose !== undefined ? { time_close: values.timeClose } : {}),
+    ...(values.timeLimit !== undefined ? { time_limit: values.timeLimit } : {}),
+    ...(values.timeOpen !== undefined ? { time_open: values.timeOpen } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
+    ...(values.userId !== undefined ? { user_id: values.userId } : {}),
   };
-  if (values.attempts !== undefined) row.attempts = values.attempts;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.groupId !== undefined) row.group_id = values.groupId;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.passwordHash !== undefined) row.password_hash = values.passwordHash;
-  if (values.reason !== undefined) row.reason = values.reason;
-  if (values.timeClose !== undefined) row.time_close = values.timeClose;
-  if (values.timeLimit !== undefined) row.time_limit = values.timeLimit;
-  if (values.timeOpen !== undefined) row.time_open = values.timeOpen;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  return row;
 }
 
 /**
@@ -433,21 +417,21 @@ function examPinOverrideInsertValues(values: NewExamPinOverride): Insertable<Cen
  * jsonb đi qua `jsonbValue`. Mốc `updated_at` do repository
  * gắn sau cùng.
  */
-function examPinOverrideUpdateSet(patch: Partial<ExamPinOverrideRow>): Updateable<CentreDB['exam_pin_overrides']> {
-  const set: Updateable<CentreDB['exam_pin_overrides']> = {};
-  if (patch.attempts !== undefined) set.attempts = patch.attempts;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.groupId !== undefined) set.group_id = patch.groupId;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.passwordHash !== undefined) set.password_hash = patch.passwordHash;
-  if (patch.pinId !== undefined) set.pin_id = patch.pinId;
-  if (patch.reason !== undefined) set.reason = patch.reason;
-  if (patch.timeClose !== undefined) set.time_close = patch.timeClose;
-  if (patch.timeLimit !== undefined) set.time_limit = patch.timeLimit;
-  if (patch.timeOpen !== undefined) set.time_open = patch.timeOpen;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  return set;
+function examPinOverrideUpdateSet(patch: Partial<ExamPinOverrideRow>): UpdateObject<CentreDB, 'exam_pin_overrides'> {
+  return {
+    ...(patch.attempts !== undefined ? { attempts: patch.attempts } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.groupId !== undefined ? { group_id: patch.groupId } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.passwordHash !== undefined ? { password_hash: patch.passwordHash } : {}),
+    ...(patch.pinId !== undefined ? { pin_id: patch.pinId } : {}),
+    ...(patch.reason !== undefined ? { reason: patch.reason } : {}),
+    ...(patch.timeClose !== undefined ? { time_close: patch.timeClose } : {}),
+    ...(patch.timeLimit !== undefined ? { time_limit: patch.timeLimit } : {}),
+    ...(patch.timeOpen !== undefined ? { time_open: patch.timeOpen } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_matrices` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -553,37 +537,36 @@ const EXAM_MATRIX_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examMatrixInsertValues(values: NewExamMatrix): InsertObject<CentreDB, 'exam_matrices'> {
-  const row: InsertObject<CentreDB, 'exam_matrices'> = {
+  return {
     context_id: values.contextId,
     curriculum_id: values.curriculumId,
     name: values.name,
     subject_id: values.subjectId,
+    ...(values.bankId !== undefined ? { bank_id: values.bankId } : {}),
+    ...(values.contentSignature !== undefined ? { content_signature: values.contentSignature } : {}),
+    ...(values.copyCount !== undefined ? { copy_count: values.copyCount } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.createdBy !== undefined ? { created_by: values.createdBy } : {}),
+    ...(values.derivedFromBankId !== undefined ? { derived_from_bank_id: values.derivedFromBankId } : {}),
+    ...(values.derivedFromMatrixId !== undefined ? { derived_from_matrix_id: values.derivedFromMatrixId } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.isTemplate !== undefined ? { is_template: values.isTemplate } : {}),
+    ...(values.levelSet !== undefined ? { level_set: values.levelSet } : {}),
+    ...(values.originalAuthorId !== undefined ? { original_author_id: values.originalAuthorId } : {}),
+    ...(values.presetKind !== undefined ? { preset_kind: values.presetKind } : {}),
+    ...(values.scopeNodeIds !== undefined ? { scope_node_ids: jsonbField(values.scopeNodeIds) } : {}),
+    ...(values.scopeNote !== undefined ? { scope_note: values.scopeNote } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.targetFormPercents !== undefined ? { target_form_percents: jsonbField(values.targetFormPercents) } : {}),
+    ...(values.targetLevelPercents !== undefined ? { target_level_percents: jsonbField(values.targetLevelPercents) } : {}),
+    ...(values.tenantId !== undefined ? { tenant_id: values.tenantId } : {}),
+    ...(values.totalScore !== undefined ? { total_score: values.totalScore } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
+    ...(values.version !== undefined ? { version: values.version } : {}),
+    ...(values.withdrawnAt !== undefined ? { withdrawn_at: values.withdrawnAt } : {}),
+    ...(values.withdrawnBy !== undefined ? { withdrawn_by: values.withdrawnBy } : {}),
+    ...(values.withdrawnReason !== undefined ? { withdrawn_reason: values.withdrawnReason } : {}),
   };
-  if (values.bankId !== undefined) row.bank_id = values.bankId;
-  if (values.contentSignature !== undefined) row.content_signature = values.contentSignature;
-  if (values.copyCount !== undefined) row.copy_count = values.copyCount;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.createdBy !== undefined) row.created_by = values.createdBy;
-  if (values.derivedFromBankId !== undefined) row.derived_from_bank_id = values.derivedFromBankId;
-  if (values.derivedFromMatrixId !== undefined) row.derived_from_matrix_id = values.derivedFromMatrixId;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.isTemplate !== undefined) row.is_template = values.isTemplate;
-  if (values.levelSet !== undefined) row.level_set = values.levelSet;
-  if (values.originalAuthorId !== undefined) row.original_author_id = values.originalAuthorId;
-  if (values.presetKind !== undefined) row.preset_kind = values.presetKind;
-  if (values.scopeNodeIds !== undefined) row.scope_node_ids = values.scopeNodeIds === null ? null : jsonbValue(values.scopeNodeIds);
-  if (values.scopeNote !== undefined) row.scope_note = values.scopeNote;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.targetFormPercents !== undefined) row.target_form_percents = values.targetFormPercents === null ? null : jsonbValue(values.targetFormPercents);
-  if (values.targetLevelPercents !== undefined) row.target_level_percents = values.targetLevelPercents === null ? null : jsonbValue(values.targetLevelPercents);
-  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
-  if (values.totalScore !== undefined) row.total_score = values.totalScore;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  if (values.version !== undefined) row.version = values.version;
-  if (values.withdrawnAt !== undefined) row.withdrawn_at = values.withdrawnAt;
-  if (values.withdrawnBy !== undefined) row.withdrawn_by = values.withdrawnBy;
-  if (values.withdrawnReason !== undefined) row.withdrawn_reason = values.withdrawnReason;
-  return row;
 }
 
 /**
@@ -594,36 +577,36 @@ function examMatrixInsertValues(values: NewExamMatrix): InsertObject<CentreDB, '
  * gắn sau cùng.
  */
 function examMatrixUpdateSet(patch: Partial<ExamMatrixRow>): UpdateObject<CentreDB, 'exam_matrices'> {
-  const set: UpdateObject<CentreDB, 'exam_matrices'> = {};
-  if (patch.bankId !== undefined) set.bank_id = patch.bankId;
-  if (patch.contentSignature !== undefined) set.content_signature = patch.contentSignature;
-  if (patch.contextId !== undefined) set.context_id = patch.contextId;
-  if (patch.copyCount !== undefined) set.copy_count = patch.copyCount;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.createdBy !== undefined) set.created_by = patch.createdBy;
-  if (patch.curriculumId !== undefined) set.curriculum_id = patch.curriculumId;
-  if (patch.derivedFromBankId !== undefined) set.derived_from_bank_id = patch.derivedFromBankId;
-  if (patch.derivedFromMatrixId !== undefined) set.derived_from_matrix_id = patch.derivedFromMatrixId;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.isTemplate !== undefined) set.is_template = patch.isTemplate;
-  if (patch.levelSet !== undefined) set.level_set = patch.levelSet;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.originalAuthorId !== undefined) set.original_author_id = patch.originalAuthorId;
-  if (patch.presetKind !== undefined) set.preset_kind = patch.presetKind;
-  if (patch.scopeNodeIds !== undefined) set.scope_node_ids = patch.scopeNodeIds === null ? null : jsonbValue(patch.scopeNodeIds);
-  if (patch.scopeNote !== undefined) set.scope_note = patch.scopeNote;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.subjectId !== undefined) set.subject_id = patch.subjectId;
-  if (patch.targetFormPercents !== undefined) set.target_form_percents = patch.targetFormPercents === null ? null : jsonbValue(patch.targetFormPercents);
-  if (patch.targetLevelPercents !== undefined) set.target_level_percents = patch.targetLevelPercents === null ? null : jsonbValue(patch.targetLevelPercents);
-  if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
-  if (patch.totalScore !== undefined) set.total_score = patch.totalScore;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  if (patch.version !== undefined) set.version = patch.version;
-  if (patch.withdrawnAt !== undefined) set.withdrawn_at = patch.withdrawnAt;
-  if (patch.withdrawnBy !== undefined) set.withdrawn_by = patch.withdrawnBy;
-  if (patch.withdrawnReason !== undefined) set.withdrawn_reason = patch.withdrawnReason;
-  return set;
+  return {
+    ...(patch.bankId !== undefined ? { bank_id: patch.bankId } : {}),
+    ...(patch.contentSignature !== undefined ? { content_signature: patch.contentSignature } : {}),
+    ...(patch.contextId !== undefined ? { context_id: patch.contextId } : {}),
+    ...(patch.copyCount !== undefined ? { copy_count: patch.copyCount } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.createdBy !== undefined ? { created_by: patch.createdBy } : {}),
+    ...(patch.curriculumId !== undefined ? { curriculum_id: patch.curriculumId } : {}),
+    ...(patch.derivedFromBankId !== undefined ? { derived_from_bank_id: patch.derivedFromBankId } : {}),
+    ...(patch.derivedFromMatrixId !== undefined ? { derived_from_matrix_id: patch.derivedFromMatrixId } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.isTemplate !== undefined ? { is_template: patch.isTemplate } : {}),
+    ...(patch.levelSet !== undefined ? { level_set: patch.levelSet } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.originalAuthorId !== undefined ? { original_author_id: patch.originalAuthorId } : {}),
+    ...(patch.presetKind !== undefined ? { preset_kind: patch.presetKind } : {}),
+    ...(patch.scopeNodeIds !== undefined ? { scope_node_ids: jsonbField(patch.scopeNodeIds) } : {}),
+    ...(patch.scopeNote !== undefined ? { scope_note: patch.scopeNote } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.subjectId !== undefined ? { subject_id: patch.subjectId } : {}),
+    ...(patch.targetFormPercents !== undefined ? { target_form_percents: jsonbField(patch.targetFormPercents) } : {}),
+    ...(patch.targetLevelPercents !== undefined ? { target_level_percents: jsonbField(patch.targetLevelPercents) } : {}),
+    ...(patch.tenantId !== undefined ? { tenant_id: patch.tenantId } : {}),
+    ...(patch.totalScore !== undefined ? { total_score: patch.totalScore } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+    ...(patch.version !== undefined ? { version: patch.version } : {}),
+    ...(patch.withdrawnAt !== undefined ? { withdrawn_at: patch.withdrawnAt } : {}),
+    ...(patch.withdrawnBy !== undefined ? { withdrawn_by: patch.withdrawnBy } : {}),
+    ...(patch.withdrawnReason !== undefined ? { withdrawn_reason: patch.withdrawnReason } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_matrix_versions` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -681,21 +664,20 @@ const EXAM_MATRIX_VERSION_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examMatrixVersionInsertValues(values: NewExamMatrixVersion): InsertObject<CentreDB, 'exam_matrix_versions'> {
-  const row: InsertObject<CentreDB, 'exam_matrix_versions'> = {
+  return {
     created_by: values.createdBy,
     matrix_id: values.matrixId,
     version: values.version,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.levelSet !== undefined ? { level_set: values.levelSet } : {}),
+    ...(values.presetKind !== undefined ? { preset_kind: values.presetKind } : {}),
+    ...(values.scopeNodeIds !== undefined ? { scope_node_ids: jsonbField(values.scopeNodeIds) } : {}),
+    ...(values.scopeNote !== undefined ? { scope_note: values.scopeNote } : {}),
+    ...(values.targetFormPercents !== undefined ? { target_form_percents: jsonbField(values.targetFormPercents) } : {}),
+    ...(values.targetLevelPercents !== undefined ? { target_level_percents: jsonbField(values.targetLevelPercents) } : {}),
+    ...(values.totalScore !== undefined ? { total_score: values.totalScore } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.levelSet !== undefined) row.level_set = values.levelSet;
-  if (values.presetKind !== undefined) row.preset_kind = values.presetKind;
-  if (values.scopeNodeIds !== undefined) row.scope_node_ids = values.scopeNodeIds === null ? null : jsonbValue(values.scopeNodeIds);
-  if (values.scopeNote !== undefined) row.scope_note = values.scopeNote;
-  if (values.targetFormPercents !== undefined) row.target_form_percents = values.targetFormPercents === null ? null : jsonbValue(values.targetFormPercents);
-  if (values.targetLevelPercents !== undefined) row.target_level_percents = values.targetLevelPercents === null ? null : jsonbValue(values.targetLevelPercents);
-  if (values.totalScore !== undefined) row.total_score = values.totalScore;
-  return row;
 }
 
 /** Một dòng của bảng `exam_matrix_cells` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -756,7 +738,7 @@ const EXAM_MATRIX_CELL_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examMatrixCellInsertValues(values: NewExamMatrixCell): InsertObject<CentreDB, 'exam_matrix_cells'> {
-  const row: InsertObject<CentreDB, 'exam_matrix_cells'> = {
+  return {
     cell_score: values.cellScore,
     cognitive_level: values.cognitiveLevel,
     curriculum_node_id: values.curriculumNodeId,
@@ -764,14 +746,13 @@ function examMatrixCellInsertValues(values: NewExamMatrixCell): InsertObject<Cen
     matrix_version_id: values.matrixVersionId,
     qtype: values.qtype,
     question_count: values.questionCount,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.minutes !== undefined ? { minutes: values.minutes } : {}),
+    ...(values.position !== undefined ? { position: values.position } : {}),
+    ...(values.tfScale !== undefined ? { tf_scale: jsonbField(values.tfScale) } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.minutes !== undefined) row.minutes = values.minutes;
-  if (values.position !== undefined) row.position = values.position;
-  if (values.tfScale !== undefined) row.tf_scale = values.tfScale === null ? null : jsonbValue(values.tfScale);
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -782,21 +763,21 @@ function examMatrixCellInsertValues(values: NewExamMatrixCell): InsertObject<Cen
  * gắn sau cùng.
  */
 function examMatrixCellUpdateSet(patch: Partial<ExamMatrixCellRow>): UpdateObject<CentreDB, 'exam_matrix_cells'> {
-  const set: UpdateObject<CentreDB, 'exam_matrix_cells'> = {};
-  if (patch.cellScore !== undefined) set.cell_score = patch.cellScore;
-  if (patch.cognitiveLevel !== undefined) set.cognitive_level = patch.cognitiveLevel;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.curriculumNodeId !== undefined) set.curriculum_node_id = patch.curriculumNodeId;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.matrixId !== undefined) set.matrix_id = patch.matrixId;
-  if (patch.matrixVersionId !== undefined) set.matrix_version_id = patch.matrixVersionId;
-  if (patch.minutes !== undefined) set.minutes = patch.minutes;
-  if (patch.position !== undefined) set.position = patch.position;
-  if (patch.qtype !== undefined) set.qtype = patch.qtype;
-  if (patch.questionCount !== undefined) set.question_count = patch.questionCount;
-  if (patch.tfScale !== undefined) set.tf_scale = patch.tfScale === null ? null : jsonbValue(patch.tfScale);
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  return set;
+  return {
+    ...(patch.cellScore !== undefined ? { cell_score: patch.cellScore } : {}),
+    ...(patch.cognitiveLevel !== undefined ? { cognitive_level: patch.cognitiveLevel } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.curriculumNodeId !== undefined ? { curriculum_node_id: patch.curriculumNodeId } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.matrixId !== undefined ? { matrix_id: patch.matrixId } : {}),
+    ...(patch.matrixVersionId !== undefined ? { matrix_version_id: patch.matrixVersionId } : {}),
+    ...(patch.minutes !== undefined ? { minutes: patch.minutes } : {}),
+    ...(patch.position !== undefined ? { position: patch.position } : {}),
+    ...(patch.qtype !== undefined ? { qtype: patch.qtype } : {}),
+    ...(patch.questionCount !== undefined ? { question_count: patch.questionCount } : {}),
+    ...(patch.tfScale !== undefined ? { tf_scale: jsonbField(patch.tfScale) } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_matrix_contributions` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -856,23 +837,22 @@ const EXAM_MATRIX_CONTRIBUTION_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examMatrixContributionInsertValues(values: NewExamMatrixContribution): Insertable<CentreDB['exam_matrix_contributions']> {
-  const row: Insertable<CentreDB['exam_matrix_contributions']> = {
+function examMatrixContributionInsertValues(values: NewExamMatrixContribution): InsertObject<CentreDB, 'exam_matrix_contributions'> {
+  return {
     matrix_id: values.matrixId,
     proposer_id: values.proposerId,
     target_bank_id: values.targetBankId,
+    ...(values.contentHash !== undefined ? { content_hash: values.contentHash } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.nearDuplicateOf !== undefined ? { near_duplicate_of: values.nearDuplicateOf } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.rejectReason !== undefined ? { reject_reason: values.rejectReason } : {}),
+    ...(values.resultMatrixId !== undefined ? { result_matrix_id: values.resultMatrixId } : {}),
+    ...(values.reviewerId !== undefined ? { reviewer_id: values.reviewerId } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.contentHash !== undefined) row.content_hash = values.contentHash;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.nearDuplicateOf !== undefined) row.near_duplicate_of = values.nearDuplicateOf;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.rejectReason !== undefined) row.reject_reason = values.rejectReason;
-  if (values.resultMatrixId !== undefined) row.result_matrix_id = values.resultMatrixId;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -882,22 +862,22 @@ function examMatrixContributionInsertValues(values: NewExamMatrixContribution): 
  * jsonb đi qua `jsonbValue`. Mốc `updated_at` do repository
  * gắn sau cùng.
  */
-function examMatrixContributionUpdateSet(patch: Partial<ExamMatrixContributionRow>): Updateable<CentreDB['exam_matrix_contributions']> {
-  const set: Updateable<CentreDB['exam_matrix_contributions']> = {};
-  if (patch.contentHash !== undefined) set.content_hash = patch.contentHash;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.matrixId !== undefined) set.matrix_id = patch.matrixId;
-  if (patch.nearDuplicateOf !== undefined) set.near_duplicate_of = patch.nearDuplicateOf;
-  if (patch.note !== undefined) set.note = patch.note;
-  if (patch.proposerId !== undefined) set.proposer_id = patch.proposerId;
-  if (patch.rejectReason !== undefined) set.reject_reason = patch.rejectReason;
-  if (patch.resultMatrixId !== undefined) set.result_matrix_id = patch.resultMatrixId;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.targetBankId !== undefined) set.target_bank_id = patch.targetBankId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  return set;
+function examMatrixContributionUpdateSet(patch: Partial<ExamMatrixContributionRow>): UpdateObject<CentreDB, 'exam_matrix_contributions'> {
+  return {
+    ...(patch.contentHash !== undefined ? { content_hash: patch.contentHash } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.matrixId !== undefined ? { matrix_id: patch.matrixId } : {}),
+    ...(patch.nearDuplicateOf !== undefined ? { near_duplicate_of: patch.nearDuplicateOf } : {}),
+    ...(patch.note !== undefined ? { note: patch.note } : {}),
+    ...(patch.proposerId !== undefined ? { proposer_id: patch.proposerId } : {}),
+    ...(patch.rejectReason !== undefined ? { reject_reason: patch.rejectReason } : {}),
+    ...(patch.resultMatrixId !== undefined ? { result_matrix_id: patch.resultMatrixId } : {}),
+    ...(patch.reviewerId !== undefined ? { reviewer_id: patch.reviewerId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.targetBankId !== undefined ? { target_bank_id: patch.targetBankId } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_pin_feedbacks` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -939,17 +919,16 @@ const EXAM_PIN_FEEDBACK_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examPinFeedbackInsertValues(values: NewExamPinFeedback): Insertable<CentreDB['exam_pin_feedbacks']> {
-  const row: Insertable<CentreDB['exam_pin_feedbacks']> = {
+function examPinFeedbackInsertValues(values: NewExamPinFeedback): InsertObject<CentreDB, 'exam_pin_feedbacks'> {
+  return {
     feedback: values.feedback,
     max_percent: values.maxPercent,
     min_percent: values.minPercent,
     pin_id: values.pinId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Một dòng của bảng `exam_attempt_events` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -986,14 +965,13 @@ const EXAM_ATTEMPT_EVENT_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examAttemptEventInsertValues(values: NewExamAttemptEvent): InsertObject<CentreDB, 'exam_attempt_events'> {
-  const row: InsertObject<CentreDB, 'exam_attempt_events'> = {
+  return {
     attempt_id: values.attemptId,
     type: values.type,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.data !== undefined ? { data: jsonbField(values.data) } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.data !== undefined) row.data = values.data === null ? null : jsonbValue(values.data);
-  if (values.id !== undefined) row.id = values.id;
-  return row;
 }
 
 /** Một dòng của bảng `exam_pin_version_updates` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -1032,16 +1010,15 @@ const EXAM_PIN_VERSION_UPDATE_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examPinVersionUpdateInsertValues(values: NewExamPinVersionUpdate): Insertable<CentreDB['exam_pin_version_updates']> {
-  const row: Insertable<CentreDB['exam_pin_version_updates']> = {
+function examPinVersionUpdateInsertValues(values: NewExamPinVersionUpdate): InsertObject<CentreDB, 'exam_pin_version_updates'> {
+  return {
     actor_id: values.actorId,
     from_exam_version_id: values.fromExamVersionId,
     pin_id: values.pinId,
     to_exam_version_id: values.toExamVersionId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  return row;
 }
 
 /** Một dòng của bảng `exam_attempt_regrades` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -1083,17 +1060,16 @@ const EXAM_ATTEMPT_REGRADE_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examAttemptRegradeInsertValues(values: NewExamAttemptRegrade): Insertable<CentreDB['exam_attempt_regrades']> {
-  const row: Insertable<CentreDB['exam_attempt_regrades']> = {
+function examAttemptRegradeInsertValues(values: NewExamAttemptRegrade): InsertObject<CentreDB, 'exam_attempt_regrades'> {
+  return {
     actor_id: values.actorId,
     from_version_id: values.fromVersionId,
     pin_id: values.pinId,
     question_id: values.questionId,
     to_version_id: values.toVersionId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  return row;
 }
 
 /** Một dòng của bảng `exam_attempt_regrade_items` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -1144,20 +1120,19 @@ const EXAM_ATTEMPT_REGRADE_ITEM_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examAttemptRegradeItemInsertValues(values: NewExamAttemptRegradeItem): Insertable<CentreDB['exam_attempt_regrade_items']> {
-  const row: Insertable<CentreDB['exam_attempt_regrade_items']> = {
+function examAttemptRegradeItemInsertValues(values: NewExamAttemptRegradeItem): InsertObject<CentreDB, 'exam_attempt_regrade_items'> {
+  return {
     exam_attempt_id: values.examAttemptId,
     question_attempt_id: values.questionAttemptId,
     regrade_id: values.regradeId,
     user_id: values.userId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.newFraction !== undefined ? { new_fraction: values.newFraction } : {}),
+    ...(values.newSumGrades !== undefined ? { new_sum_grades: values.newSumGrades } : {}),
+    ...(values.oldFraction !== undefined ? { old_fraction: values.oldFraction } : {}),
+    ...(values.oldSumGrades !== undefined ? { old_sum_grades: values.oldSumGrades } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.newFraction !== undefined) row.new_fraction = values.newFraction;
-  if (values.newSumGrades !== undefined) row.new_sum_grades = values.newSumGrades;
-  if (values.oldFraction !== undefined) row.old_fraction = values.oldFraction;
-  if (values.oldSumGrades !== undefined) row.old_sum_grades = values.oldSumGrades;
-  return row;
 }
 /**
  * Kho dữ liệu của lần ghim đề (exam_pins) và các lượt làm: bản ghi pin
@@ -1185,8 +1160,8 @@ export class QuizRepository {
    * Chèn bản ghi lần ghim.
    */
   async insertPin(v: NewExamPin, db: QuizDb = this.db()): Promise<ExamPinRow> {
-    const rows = await db.insertInto('exam_pins').values(examPinInsertValues(v)).returning(EXAM_PIN_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_pins').values(examPinInsertValues(v)).returning(EXAM_PIN_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Lấy lần ghim theo id.
@@ -1257,8 +1232,8 @@ export class QuizRepository {
   }
 
   async insertAttempt(v: NewExamAttempt, db: QuizDb = this.db()): Promise<ExamAttemptRow> {
-    const rows = await db.insertInto('exam_attempts').values(examAttemptInsertValues(v)).returning(EXAM_ATTEMPT_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_attempts').values(examAttemptInsertValues(v)).returning(EXAM_ATTEMPT_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Lấy một lượt làm.
@@ -1316,8 +1291,8 @@ export class QuizRepository {
    * Chèn một ghi đè cài đặt thi.
    */
   async insertOverride(v: NewExamPinOverride, db: QuizDb = this.db()): Promise<ExamPinOverrideRow> {
-    const rows = await db.insertInto('exam_pin_overrides').values(examPinOverrideInsertValues(v)).returning(EXAM_PIN_OVERRIDE_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_pin_overrides').values(examPinOverrideInsertValues(v)).returning(EXAM_PIN_OVERRIDE_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Lấy một ghi đè.
@@ -1387,8 +1362,8 @@ export class QuizRepository {
    * Chèn một ma trận.
    */
   async insertMatrix(v: NewExamMatrix, db: QuizDb = this.db()): Promise<ExamMatrixRow> {
-    const rows = await db.insertInto('exam_matrices').values(examMatrixInsertValues(v)).returning(EXAM_MATRIX_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_matrices').values(examMatrixInsertValues(v)).returning(EXAM_MATRIX_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Lấy một ma trận.
@@ -1476,8 +1451,8 @@ export class QuizRepository {
    * đúng một số version; ô của version gắn qua matrix_version_id).
    */
   async insertMatrixVersion(v: NewExamMatrixVersion, db: QuizDb = this.db()): Promise<ExamMatrixVersionRow> {
-    const rows = await db.insertInto('exam_matrix_versions').values(examMatrixVersionInsertValues(v)).returning(EXAM_MATRIX_VERSION_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_matrix_versions').values(examMatrixVersionInsertValues(v)).returning(EXAM_MATRIX_VERSION_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Hàng version bất biến theo (ma trận, số version) — căn cứ đọc lại
@@ -1502,8 +1477,8 @@ export class QuizRepository {
    * Chèn một ô ma trận.
    */
   async insertMatrixCell(v: NewExamMatrixCell, db: QuizDb = this.db()): Promise<ExamMatrixCellRow> {
-    const rows = await db.insertInto('exam_matrix_cells').values(examMatrixCellInsertValues(v)).returning(EXAM_MATRIX_CELL_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_matrix_cells').values(examMatrixCellInsertValues(v)).returning(EXAM_MATRIX_CELL_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Lấy một ô ma trận.
@@ -1577,8 +1552,8 @@ export class QuizRepository {
    * Chèn một đề xuất đóng góp ma trận (hàng chờ duyệt).
    */
   async insertMatrixContribution(v: NewExamMatrixContribution, db: QuizDb = this.db()): Promise<ExamMatrixContributionRow> {
-    const rows = await db.insertInto('exam_matrix_contributions').values(examMatrixContributionInsertValues(v)).returning(EXAM_MATRIX_CONTRIBUTION_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_matrix_contributions').values(examMatrixContributionInsertValues(v)).returning(EXAM_MATRIX_CONTRIBUTION_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
   /**
    * Lấy một đề xuất đóng góp ma trận.
@@ -1650,8 +1625,8 @@ export class QuizRepository {
 
   /** Chèn một dải nhận xét tổng quát. */
   async insertFeedback(v: NewExamPinFeedback, db: QuizDb = this.db()): Promise<ExamPinFeedbackRow> {
-    const rows = await db.insertInto('exam_pin_feedbacks').values(examPinFeedbackInsertValues(v)).returning(EXAM_PIN_FEEDBACK_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_pin_feedbacks').values(examPinFeedbackInsertValues(v)).returning(EXAM_PIN_FEEDBACK_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Xoá một dải nhận xét tổng quát. */
@@ -1670,8 +1645,8 @@ export class QuizRepository {
   }
 
   async insertAttemptEvent(v: NewExamAttemptEvent, db: QuizDb = this.db()): Promise<ExamAttemptEventRow> {
-    const rows = await db.insertInto('exam_attempt_events').values(examAttemptEventInsertValues(v)).returning(EXAM_ATTEMPT_EVENT_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_attempt_events').values(examAttemptEventInsertValues(v)).returning(EXAM_ATTEMPT_EVENT_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Nhật ký sự kiện của một lượt làm theo thời gian ghi. */
@@ -1689,8 +1664,8 @@ export class QuizRepository {
 
   /** Ghi vết một lần áp cập nhật exam version đã ghim (ai, khi nào, từ version nào lên version nào). */
   async insertPinVersionUpdate(v: NewExamPinVersionUpdate, db: QuizDb = this.db()): Promise<ExamPinVersionUpdateRow> {
-    const rows = await db.insertInto('exam_pin_version_updates').values(examPinVersionUpdateInsertValues(v)).returning(EXAM_PIN_VERSION_UPDATE_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_pin_version_updates').values(examPinVersionUpdateInsertValues(v)).returning(EXAM_PIN_VERSION_UPDATE_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Các lần cập nhật exam version của một pin theo thời gian (vết truy vết cho giáo viên/quản trị). */
@@ -1706,14 +1681,14 @@ export class QuizRepository {
 
   /** Ghi một lần chấm lại theo đáp án đã áp thật (dry-run không ghi). */
   async insertRegrade(v: NewExamAttemptRegrade, db: QuizDb = this.db()): Promise<ExamAttemptRegradeRow> {
-    const rows = await db.insertInto('exam_attempt_regrades').values(examAttemptRegradeInsertValues(v)).returning(EXAM_ATTEMPT_REGRADE_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_attempt_regrades').values(examAttemptRegradeInsertValues(v)).returning(EXAM_ATTEMPT_REGRADE_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Ghi điểm đổi của một lượt trong một lần chấm lại. */
   async insertRegradeItem(v: NewExamAttemptRegradeItem, db: QuizDb = this.db()): Promise<ExamAttemptRegradeItemRow> {
-    const rows = await db.insertInto('exam_attempt_regrade_items').values(examAttemptRegradeItemInsertValues(v)).returning(EXAM_ATTEMPT_REGRADE_ITEM_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_attempt_regrade_items').values(examAttemptRegradeItemInsertValues(v)).returning(EXAM_ATTEMPT_REGRADE_ITEM_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Nhật ký chấm lại theo đáp án của một pin theo thời gian (cũ nhất trước). */

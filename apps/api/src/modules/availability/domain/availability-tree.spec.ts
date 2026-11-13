@@ -115,7 +115,25 @@ describe('AvailabilityTree chuẩn (tree_test.php::test_check_available)', () =>
     expect(hidden.visible).toBe(false);
   });
 
-  it('parse từ chối cây sai định dạng (lỗi dựng chi tiết PHP thành validation mức 400)', () => {
+  it('cây con bị ẩn thông tin và gây không đạt thì lan cờ ẩn lên cha (trừ khi cha hiển thị tường minh con đó)', async () => {
+    // Cây con AND với showc[0]=false: lá a sai gây không đạt nên cây con tự ẩn.
+    const inner: AvailabilityNode = { op: '&', showc: [false, true], c: [{ type: 'mock', id: 'a' }, { type: 'mock', id: 'b' }] };
+    // Cha không nêu showc: cờ ẩn của con lan lên cha.
+    const parentNoShowc: AvailabilityNode = { op: '&', c: [inner, { type: 'mock', id: 'c1' }] };
+    const hidden = await ev(parentNoShowc, { a: false, b: true, c1: true });
+    expect(hidden.available).toBe(false);
+    expect(hidden.informationHidden).toBe(true);
+    expect(hidden.visible).toBe(false);
+    expect(hidden.failedDescriptions).toEqual([]);
+    // Cha hiển thị tường minh con đó (showc[0]=true): cờ ẩn không lan lên.
+    const parentShown: AvailabilityNode = { op: '&', showc: [true, true], c: [inner, { type: 'mock', id: 'c1' }] };
+    const shown = await ev(parentShown, { a: false, b: true, c1: true });
+    expect(shown.available).toBe(false);
+    expect(shown.informationHidden).toBe(false);
+    expect(shown.visible).toBe(true);
+  });
+
+  it('parse từ chối cây sai định dạng (ném lỗi)', () => {
     expect(() => parseAvailabilityTree({ op: 'xor', c: [] })).toThrow();
     expect(() => parseAvailabilityTree({ op: '&' })).toThrow();
     expect(parseAvailabilityTree(null)).toBeNull();

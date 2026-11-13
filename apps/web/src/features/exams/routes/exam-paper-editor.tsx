@@ -11,13 +11,10 @@ import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { apiFetch } from '#lib/api';
-import { courseContentQueryOptions } from '#lib/course-content';
-import { coursesListQueryOptions } from '#features/course-builder/queries/course-builder';
 import { formatDateTime } from '#utils/date-format';
-import { courseGroupsQueryOptions } from '#features/progress-report/queries/progress-report';
 import { queryKeys } from '#lib/query-keys';
 import { queryKeys as examsQueryKeys } from '../queries/keys';
-import { useDeployExamPin } from '#features/questions/queries/questions';
+import { DeployPinForm } from '#features/questions/components/deploy-pin-form';
 import { examQuestionDiscoveryQueryOptions, useCreateExamPaper, useExamPaper, useExamPaperPins, useReplaceExamPaperSlots, useSwapExamPaperSlot, useUpdateExamPaperMeta } from '../queries/exam-paper';
 import type { DiscoveryItemLite, PaperView } from '../types/exam-paper';
 import { clearQuestionBankListCache } from '#features/questions/queries/questions';
@@ -48,6 +45,12 @@ const EXAM_KIND_LABEL_KEYS: Record<(typeof EXAM_KINDS)[number], string> = {
 
 const selectClass = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
 
+/** Tổng điểm mặc định của đề mới (thang 10); cũng là giá trị dự phòng khi ô tổng điểm trống/không hợp lệ lúc lưu. */
+const DEFAULT_TOTAL_SCORE = 10;
+
+/** Thời gian giữ blob URL của tab in trước khi thu hồi (tab in cần kịp tải xong blob; thu hồi ngay sẽ hỏng bản in). */
+const PRINT_OBJECT_URL_REVOKE_DELAY_MS = 60_000;
+
 /**
  * Màn soạn đề RIÊNG theo chuẩn §9 (EB-1, issue #113): tạo mới /exams/new?bank=<bankId>, sửa /exams/:paperId/edit. Soạn tự do: metadata + chọn câu từ ngân hàng câu hỏi (khám phá theo từ khoá) → thứ tự/phần/điểm từng câu → lưu. Lưu sửa tạo paper version mới phía server (metadata qua PATCH, slots qua PUT — chỉ gọi phần thật sự đổi); server ghim bản ready mới nhất của mỗi câu. Ở chế độ sửa, thẻ các lần ghim còn cho ghim đề vào khoá ngay tại chỗ (đề `ready` + cờ `capabilities.deploy`): cùng thao tác exam-pins, cùng cổng quyền với hộp ghim của panel "Đề của tôi" ở trang ngân hàng — luồng soạn → soát → giao liền một mạch, trạng thái lần ghim hiển thị đọc từ cùng nguồn `GET /exams/:id/pins`.
  */
@@ -62,7 +65,7 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   const [examKind, setExamKind] = useState('');
   const [grade, setGrade] = useState('');
   const [duration, setDuration] = useState('');
-  const [totalScore, setTotalScore] = useState('10');
+  const [totalScore, setTotalScore] = useState(String(DEFAULT_TOTAL_SCORE));
   const [slots, setSlots] = useState<SlotDraft[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [keyword, setKeyword] = useState('');
@@ -89,54 +92,8 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 
   // --- Ghim đề vào khoá ngay tại màn sửa -------------------------------------
   //
-  // Form ghim chỉ mở khi đề đã `ready` và người xem có cờ deploy tại bank của đề — đúng điều kiện hiện nút ghim của panel "Đề của tôi" ở trang ngân hàng. Các query chọn khoá/chương/nhóm và đột biến ghim dùng chung đúng bộ của hộp ghim ở panel đó (không có đường ghim thứ hai): danh sách khoá là query dùng chung toàn app, chương và nhóm nạp theo khoá đã chọn.
-  const deployPin = useDeployExamPin();
+  // Form ghim chỉ mở khi đề đã `ready` và người xem có cờ deploy tại bank của đề — đúng điều kiện hiện nút ghim của panel "Đề của tôi" ở trang ngân hàng. Form ghim dùng chung component `DeployPinForm` với hộp ghim của panel đó (cùng state/query/đột biến ghim, không có đường ghim thứ hai); khác nhau chỉ ở việc sau ghim: màn sửa làm mới danh sách lần ghim + gói dựng của khoá đích, panel đóng hộp + điều hướng.
   const canPin = mode === 'edit' && !!original && original.paper.status === 'ready' && original.capabilities.deploy;
-  const [pinCourseId, setPinCourseId] = useState('');
-  const [pinSectionId, setPinSectionId] = useState('');
-  const [pinGroupId, setPinGroupId] = useState('');
-  const [pinVariantCount, setPinVariantCount] = useState('1');
-  const pinCourses = useQuery({ ...coursesListQueryOptions(), enabled: canPin }).data ?? [];
-  const pinContentQuery = useQuery({
-    ...courseContentQueryOptions(pinCourseId),
-    enabled: canPin && !!pinCourseId,
-  });
-  const pinSections = pinContentQuery.data?.sections ?? [];
-  const pinGroups = useQuery({
-    ...courseGroupsQueryOptions(pinCourseId),
-    enabled: canPin && !!pinCourseId,
-  }).data ?? [];
-
-  // Chọn chương đầu tiên khi nội dung khoá đích tải về (cùng nhịp hộp ghim của panel ngân hàng).
-  const firstPinSectionId = pinContentQuery.data?.sections[0]?.id;
-  if (!pinSectionId && firstPinSectionId) {
-    setPinSectionId(firstPinSectionId);
-  }
-
-  /**
-   * Ghim đề vào khoá đã chọn (toàn khoá hoặc một nhóm đích) — một thao tác exam-pins như ở panel ngân hàng. Thành công: báo kèm số phiên bản đã ghim, nạp lại danh sách lần ghim của đề từ cùng nguồn dữ kiện phía khoá đọc để lần ghim mới hiện ngay tại chỗ, và làm mới gói dựng khoá + nội dung của khoá đích. Thất bại: báo kèm lý do API trả và giữ nguyên lựa chọn trong form.
-   */
-  async function runPin() {
-    if (!paperId || !original || !pinCourseId || !pinSectionId) return;
-    setMessage(null);
-    try {
-      await deployPin.mutateAsync({
-        courseId: pinCourseId,
-        body: {
-          sectionId: pinSectionId,
-          examId: paperId,
-          variantCount: Math.min(50, Math.max(1, Number(pinVariantCount) || 1)),
-          ...(pinGroupId ? { targetGroupId: pinGroupId } : {}),
-        },
-      });
-      setMessage(t('pinOk', { version: original.paper.latestVersion }));
-      void queryClient.invalidateQueries({ queryKey: examsQueryKeys.examPaperPins(paperId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.courseBuilder(pinCourseId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.courseContent(pinCourseId) });
-    } catch (err) {
-      setMessage(withApiReason(t('pinFailed'), err));
-    }
-  }
 
   /** Ánh xạ slots của view đề thành slots nháp của form. */
   function toSlotDrafts(view: PaperView): SlotDraft[] {
@@ -195,6 +152,9 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       window.open(objectUrl, '_blank');
+      // Thu hồi blob URL sau khi tab in kịp tải (không thu hồi ngay như
+      // đường tải file — tab mới mở chưa kịp đọc blob sẽ in trắng).
+      setTimeout(() => URL.revokeObjectURL(objectUrl), PRINT_OBJECT_URL_REVOKE_DELAY_MS);
     } catch (err) {
       setMessage(withApiReason(t('printFailed'), err));
     }
@@ -243,7 +203,7 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
             examKind: examKind || null,
             grade: grade ? Number(grade) : null,
             durationMinutes: duration ? Number(duration) : null,
-            totalScore: Number(totalScore) > 0 ? Number(totalScore) : 10,
+            totalScore: Number(totalScore) > 0 ? Number(totalScore) : DEFAULT_TOTAL_SCORE,
             slots: slotPayload(),
           },
         });
@@ -275,7 +235,7 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
             examKind: examKind || null,
             grade: grade ? Number(grade) : null,
             durationMinutes: duration ? Number(duration) : null,
-            totalScore: Number(totalScore) > 0 ? Number(totalScore) : 10,
+            totalScore: Number(totalScore) > 0 ? Number(totalScore) : DEFAULT_TOTAL_SCORE,
           },
         });
       }
@@ -477,70 +437,20 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
                 ))}
               </ul>
             ) : null}
-            {canPin ? (
-              <div className="flex flex-wrap items-end gap-2">
-                <div>
-                  <Label htmlFor="pin-course">{t('deployPickCourse')}</Label>
-                  <select
-                    id="pin-course"
-                    className={selectClass}
-                    value={pinCourseId}
-                    onChange={(e) => {
-                      setPinCourseId(e.target.value);
-                      setPinSectionId('');
-                      setPinGroupId('');
-                    }}
-                  >
-                    <option value="">—</option>
-                    {pinCourses.map((c) => (
-                      <option key={c.id} value={c.id}>{c.fullName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="pin-section">{t('pinPickSection')}</Label>
-                  <select
-                    id="pin-section"
-                    className={selectClass}
-                    value={pinSectionId}
-                    onChange={(e) => setPinSectionId(e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {pinSections.map((sec) => (
-                      <option key={sec.id} value={sec.id}>{sec.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="pin-group">{t('pinPickGroup')}</Label>
-                  <select
-                    id="pin-group"
-                    className={selectClass}
-                    value={pinGroupId}
-                    onChange={(e) => setPinGroupId(e.target.value)}
-                  >
-                    <option value="">{t('pinExamWholeCourse')}</option>
-                    {pinGroups.map((g) => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="pin-variants">{t('deployVariantCount')}</Label>
-                  <Input
-                    id="pin-variants"
-                    type="number"
-                    min={1}
-                    max={50}
-                    className="w-24"
-                    value={pinVariantCount}
-                    onChange={(e) => setPinVariantCount(e.target.value)}
-                  />
-                </div>
-                <Button type="button" disabled={!pinCourseId || !pinSectionId || deployPin.isPending} onClick={() => void runPin()}>
-                  {t('pinExamAction')}
-                </Button>
-              </div>
+            {canPin && original && paperId ? (
+              <DeployPinForm
+                examId={paperId}
+                examVersion={original.paper.latestVersion}
+                enabled={canPin}
+                idPrefix="pin"
+                setMessage={setMessage}
+                onDeployed={({ courseId }) => {
+                  // Làm mới danh sách lần ghim của đề từ cùng nguồn dữ kiện phía khoá đọc để lần ghim mới hiện ngay tại chỗ, và làm mới gói dựng khoá + nội dung của khoá đích.
+                  void queryClient.invalidateQueries({ queryKey: examsQueryKeys.examPaperPins(paperId) });
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.courseBuilder(courseId) });
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.courseContent(courseId) });
+                }}
+              />
             ) : null}
           </CardContent>
         </Card>

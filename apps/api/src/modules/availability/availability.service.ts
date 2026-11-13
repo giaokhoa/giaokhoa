@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import { UsersService } from '../users/users.service';
 import {
   evaluateTree, parseAvailabilityTree,
   type AvailabilityNode, type AvailabilityLeaf, type LeafResult, type TreeEvaluation,
 } from './domain/availability-tree';
+
+/** Ngưỡng phân biệt epoch giây với epoch mili-giây: thời gian số nhỏ hơn ngưỡng này hiểu là giây (nhân 1000), từ ngưỡng trở lên hiểu là mili-giây. */
+const EPOCH_SECONDS_THRESHOLD = 1e12;
 
 export interface AvailabilityContext {
   userId: string;
@@ -45,9 +48,9 @@ export class AvailabilityService {
    */
   hasEvaluator(type: string): boolean { return this.evaluators.has(type); }
 
-  /** Kiểm chứng + phân tích cây đã lưu; ném BadRequest khi cấu trúc JSON sai định dạng. */
   /**
-   * Phân tích JSON availability thô thành cây điều kiện (ủy quyền cho availability-tree).
+   * Phân tích JSON availability thô thành cây điều kiện (ủy quyền cho availability-tree);
+   * kiểm chứng + phân tích cây đã lưu, ném BadRequest khi cấu trúc JSON sai định dạng.
    */
   parse(raw: unknown): AvailabilityNode | null {
     try {
@@ -72,9 +75,8 @@ export class AvailabilityService {
     });
   }
 
-  /** Boolean rút gọn dùng cho các kiểm tra truy cập. */
   /**
-   * Rút gọn của evaluate: chỉ cần biết khả dụng hay không.
+   * Rút gọn của evaluate: chỉ cần biết khả dụng hay không — boolean rút gọn dùng cho các kiểm tra truy cập.
    */
   async isAvailable(raw: unknown, ctx: AvailabilityContext): Promise<boolean> {
     return (await this.evaluate(raw, ctx)).available;
@@ -82,14 +84,15 @@ export class AvailabilityService {
 
   // --- các lá tích hợp sẵn -----------------------------------------------------
 
-  /** Lá date: {type:'date', direction:'>='|'<' , time: epochSeconds|string}. availability_date của Moodle. */
+  /** Lá date: {type:'date', direction:'>='|'<'|'<=' , time: epochSeconds|string}. availability_date của Moodle. */
   private async evalDate(leaf: AvailabilityLeaf, ctx: AvailabilityContext): Promise<LeafResult> {
     const now = ctx.now ?? new Date();
     const rawTime = (leaf.t ?? leaf.time) as number | string | undefined;
-    const when = typeof rawTime === 'number' ? new Date(rawTime * (rawTime < 1e12 ? 1000 : 1)) : new Date(String(rawTime));
+    const when = typeof rawTime === 'number' ? new Date(rawTime * (rawTime < EPOCH_SECONDS_THRESHOLD ? 1000 : 1)) : new Date(String(rawTime));
     if (Number.isNaN(when.getTime())) return { available: false, description: this.i18n.t('availability.invalidDate') };
     const direction = String(leaf.d ?? leaf.direction ?? '>=');
-    const available = direction === '<' || direction === '<=' ? now < when : now >= when;
+    // '<' và '<=' khác nhau đúng tại thời điểm `when`: '<' không khả dụng tại `when`, '<=' khả dụng tại `when`.
+    const available = direction === '<' ? now < when : direction === '<=' ? now <= when : now >= when;
     return { available, description: this.i18n.t('availability.dateRange', { args: { direction, date: when.toISOString() } }) };
   }
 
@@ -107,7 +110,7 @@ export class AvailabilityService {
     return { available, description: this.i18n.t('availability.gradeMustBe', { args: { id, range } }) };
   }
 
-  /** Lá profile: {type:'profile', field, operator ('eq'|'contains'|'notempty'|'isempty'), value}. Kiểm tra hồ sơ user + các trường tuỳ biến. */
+  /** Lá profile: {type:'profile', field, operator ('eq'|'contains'|'notempty'|'isempty'), value} — khoá rút gọn của Moodle: sf (= field), op (= operator), v (= value). Kiểm tra hồ sơ user + các trường tuỳ biến. Hồ sơ không tìm thấy thì điều kiện chưa đạt; lỗi khác (DB, capability) ném tiếp chứ không biến thành "chưa đạt". */
   private async evalProfile(leaf: AvailabilityLeaf, ctx: AvailabilityContext): Promise<LeafResult> {
     const field = String(leaf.field ?? leaf.sf ?? '');
     const operator = String(leaf.operator ?? leaf.op ?? 'eq');
@@ -120,8 +123,12 @@ export class AvailabilityService {
       else if (field === 'lastName') actual = profile.lastName;
       else if (field === 'email') actual = profile.email;
       else actual = profile.customFields.find((f) => f.shortName === field)?.value ?? undefined;
-    } catch {
-      return { available: false, description: this.i18n.t('availability.profileField', { args: { field } }) };
+    } catch (err) {
+      // Chỉ "không tìm thấy hồ sơ" (user.not_found) mới coi là điều kiện chưa đạt; lỗi khác ném tiếp để lỗi hạ tầng không trông giống như user không đủ điều kiện.
+      if (err instanceof NotFoundException) {
+        return { available: false, description: this.i18n.t('availability.profileField', { args: { field } }) };
+      }
+      throw err;
     }
     let available: boolean;
     switch (operator) {

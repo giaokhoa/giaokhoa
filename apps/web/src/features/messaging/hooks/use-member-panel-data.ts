@@ -26,7 +26,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { rosterPageQueryOptions } from '../queries/messaging';
+import { patchRosterRelationship } from '../queries/patch-roster-relationship';
 import { memberPanelContextOf } from '../utils/page-helpers';
+import { rosterMembersUrl } from '../utils/utils';
 import type { MemberPanelBundle } from '../components/member-panel';
 import type {
   ContactRelationship,
@@ -38,6 +40,7 @@ import type {
   PersonSummary,
   RosterMember,
 } from '../types/types';
+import { CONVERSATION_TYPE_DIRECT, CONVERSATION_TYPE_GROUP } from '../types/types';
 
 export interface UseMemberPanelDataParams {
   /** Conversation đang mở (null khi chưa chọn). */
@@ -125,7 +128,7 @@ export function useMemberPanelData({
   // cache); nhóm tự do không có roster — tiến độ mồi xong ngay,
   // entries dựng tại bước suy ra từ danh bạ/hàng chờ trong cache.
   useEffect(() => {
-    if (!active || active.type !== 2 || !panelContext) {
+    if (!active || active.type !== CONVERSATION_TYPE_GROUP || !panelContext) {
       setPanelPrime(null);
       return;
     }
@@ -139,17 +142,13 @@ export function useMemberPanelData({
     }
     setPanelPrime({ conversationId, contextKey, urls: [], failed: false, priming: true });
     void (async () => {
-      const base =
-        context.kind === 'class'
-          ? `/api/v1/messages/classes/${context.id}/members`
-          : `/api/v1/messages/courses/${context.id}/members`;
       const urls: string[] = [];
       let cursor: string | null = null;
       try {
         // Trần 25 trang × 100 dòng: đủ cho lớp/khoá thực tế; vượt
         // trần thì panel hiện phần đã nạp thay vì vòng lặp vô hạn.
         for (let page = 0; page < 25; page += 1) {
-          const url: string = cursor ? `${base}?limit=100&cursor=${encodeURIComponent(cursor)}` : `${base}?limit=100`;
+          const url = rosterMembersUrl(context.kind, context.id, 100, cursor ?? undefined);
           const res = await queryClient.fetchQuery({ ...rosterPageQueryOptions(url), staleTime: 0 });
           urls.push(url);
           cursor = res.nextCursor;
@@ -250,14 +249,10 @@ export function useMemberPanelData({
     }
   }
 
-  /** Cập nhật trạng thái quan hệ của một dòng trong MỌI trang roster đang có ở cache ngay tại chỗ (lát MSG-T4) — cùng kỷ luật với bộ chọn người; dòng của nhóm tự do tự suy lại từ danh bạ/hàng chờ trong cache. */
+  /** Cập nhật trạng thái quan hệ của một dòng trong MỌI trang roster đang có ở cache ngay tại chỗ (lát MSG-T4) — cùng helper với bộ chọn người; dòng của nhóm tự do tự suy lại từ danh bạ/hàng chờ trong cache. */
   const patchPanelRelationship = useCallback(
     (userId: string, relationship: ContactRelationship) => {
-      queryClient.setQueriesData<{ members: RosterMember[]; nextCursor: string | null }>(
-        { queryKey: ['messages', 'roster'] },
-        (old) =>
-          old ? { ...old, members: old.members.map((m) => (m.userId === userId ? { ...m, relationship } : m)) } : old,
-      );
+      patchRosterRelationship(queryClient, userId, relationship);
     },
     [queryClient],
   );
@@ -269,7 +264,7 @@ export function useMemberPanelData({
    */
   const directPartnerIds = new Set<string>();
   for (const c of conversations) {
-    if (c.type !== 1) continue;
+    if (c.type !== CONVERSATION_TYPE_DIRECT) continue;
     for (const memberId of c.members) {
       if (memberId !== myId) directPartnerIds.add(memberId);
     }

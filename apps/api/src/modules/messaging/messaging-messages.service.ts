@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
+import { CONTEXT_LEVELS } from '../access/domain/capabilities';
+import { MESSAGE_PREVIEW_LENGTH } from './notification-providers';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SiteConfigService } from '../site-config/site-config.service';
 import { UsersService } from '../users/users.service';
@@ -160,8 +162,7 @@ export class MessagingMessagesService {
    * Gửi một message user-tới-user. Luật phân phối (report §2#12): mọi thành viên khác
    * phải liên lạc được — không bị suspended, và không được đã chặn
    * người gửi. Khi đã lưu, message bất biến qua API.
-   */
-  /**
+   *
    * Gửi tin nhắn: kiểm tra thành viên và quan hệ chặn. Nếu client kèm
    * `clientMessageId` (gửi lạc quan/thử lại), lần gửi trùng khoá trả
    * chính tin đã lưu — không tạo tin thứ hai, không phát sự kiện mới.
@@ -171,7 +172,7 @@ export class MessagingMessagesService {
    */
   async sendMessage(actorId: string, conversationId: string, input: { text: string; subject?: string; clientMessageId?: string; replyToMessageId?: string }): Promise<MessageWithQuoteRow> {
     const systemCtx = await this.contexts.ensureSystemContext();
-    const senderCtx = await this.contexts.getByLevelInstance(30, actorId);
+    const senderCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.USER, actorId);
     await this.evaluator.requireCapability(actorId, 'site:sendmessage', senderCtx?.id ?? systemCtx.id);
     const conversation = await this.repo.getConversation(conversationId);
     if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
@@ -255,7 +256,7 @@ export class MessagingMessagesService {
         const seq = await this.repo.allocateNextSeq(conversationId, tx);
         const msg = await this.repo.insertMessage({
           conversationId: conversationId, userIdFrom: actorId,
-          subject: input.subject ?? '', fullMessage: input.text, smallMessage: input.text.slice(0, 200),
+          subject: input.subject ?? '', fullMessage: input.text, smallMessage: input.text.slice(0, MESSAGE_PREVIEW_LENGTH),
           seq, clientMessageId: input.clientMessageId ?? null,
           replyToMessageId: input.replyToMessageId ?? null,
         }, tx);
@@ -287,12 +288,9 @@ export class MessagingMessagesService {
   }
 
   /**
-   * Sửa tin nhắn vẫn bị từ chối (chính sách đã chốt chỉ nới XOÁ, theo
-   * mô hình xoá mềm có truy vết — sửa nội dung tin đã gửi không nằm
-   * trong chính sách).
-   */
-  /**
-   * Sửa tin nhắn của chính mình.
+   * Sửa tin nhắn của chính mình — vẫn bị từ chối (chính sách đã chốt
+   * chỉ nới XOÁ, theo mô hình xoá mềm có truy vết — sửa nội dung tin
+   * đã gửi không nằm trong chính sách).
    */
   async updateMessage(): Promise<never> {
     throw new ForbiddenException({
@@ -375,7 +373,7 @@ export class MessagingMessagesService {
       // Conversation CẤP LỚP: cùng khuôn ở context lớp (lát MSG-T2).
       const classId = await this.conversations.resolveConversationClassId(conversation);
       if (classId) {
-        const classCtx = await this.contexts.getByLevelInstance(45, classId);
+        const classCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.CLASS, classId);
         const allowedClass = classCtx
           ? await this.evaluator.hasCapability(actorId, 'moderation:manage', classCtx.id)
           : await this.evaluator.isSiteAdmin(actorId);
@@ -385,7 +383,7 @@ export class MessagingMessagesService {
       if (!(await this.evaluator.isSiteAdmin(actorId))) throw forbidden();
       return;
     }
-    const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
+    const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
     const allowed = courseCtx
       ? await this.evaluator.hasCapability(actorId, 'moderation:manage', courseCtx.id)
       : await this.evaluator.isSiteAdmin(actorId);
@@ -594,8 +592,13 @@ export class MessagingMessagesService {
       for (const staffId of await this.repo.listCourseStaffUserIds(courseId)) recipients.add(staffId);
     }
     recipients.delete(actorId);
-    for (const recipientId of recipients) {
-      await this.notifications.notify(recipientId, 'conversation_reported', {
+    // Chính sách nuốt lỗi phát (như badges.service.ts): báo cáo đã
+    // tạo xong ở trên, lỗi phát thông báo cho người kiểm duyệt KHÔNG
+    // được làm hỏng việc báo cáo — người kiểm duyệt vẫn thấy báo cáo
+    // trong hàng đợi khi mở danh sách. Mỗi người nhận là một lần phát
+    // độc lập nên phát song song.
+    await Promise.all([...recipients].map((recipientId) =>
+      this.notifications.notify(recipientId, 'conversation_reported', {
         subject: 'A conversation was reported',
         body: 'A conversation was reported and is waiting in the moderation queue. Open the reports list in Messages to review it.',
         fromUserId: actorId,
@@ -603,8 +606,8 @@ export class MessagingMessagesService {
         // (NB-4): người nhận đã tắt tiếng khoá đó thì ghi đè theo
         // khoá áp dụng như mọi thông báo gắn khoá khác.
         courseId: courseId ?? undefined,
-      }).catch(() => undefined);
-    }
+      }).catch(() => undefined),
+    ));
     return report;
   }
 

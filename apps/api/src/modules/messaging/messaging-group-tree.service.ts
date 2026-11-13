@@ -149,15 +149,7 @@ export class MessagingGroupTreeService {
    */
   async getGroupTree(actorId: string, canCreateFreeGroup: boolean): Promise<ConversationGroupTreeView> {
     // Đồng bộ lười membership như listConversations: group/khoá tôi mới gia nhập (hoặc đã rời) phải phản ánh đúng trước khi đếm.
-    for (const c of await this.repo.listGroupConversationsForGroupMember(actorId)) {
-      await this.membershipSync.syncGroupConversationMembers(c);
-    }
-    for (const c of await this.repo.listCourseConversationsForMember(actorId)) {
-      await this.membershipSync.syncCourseConversationMembers(c);
-    }
-    for (const c of await this.repo.listClassConversationsForMember(actorId)) {
-      await this.membershipSync.syncClassConversationMembers(c);
-    }
+    await this.membershipSync.syncLinkedConversations(actorId);
 
     const classRelations = await this.repo.listTreeClassesForUser(actorId);
     const myClassIds = new Set(classRelations.map((r) => r.classId));
@@ -167,14 +159,17 @@ export class MessagingGroupTreeService {
     const myCourseIds = new Set(myCourseNameRows.map((r) => r.courseId));
     const coursesInMyClasses = (await this.repo.listCoursesByClassIds([...myClassIds]))
       .filter((c) => myCourseIds.has(c.courseId));
+    // Tra cứu O(1) thay cho `.some()` lặp trên mảng ở ba chỗ dưới (tập khoá trong lớp tôi thuộc về + tập khoá đã có lớp cha).
+    const coursesInMyClassesIds = new Set(coursesInMyClasses.map((c) => c.courseId));
     // Lớp chứa các khoá tôi thuộc về nhưng tôi không có quan hệ trực tiếp: các khoá đó nằm ở coursesOutsideClasses (giữ nguyên classId của chúng trong dữ liệu nguồn — client MSG-T3 trình bày phẳng phần này, không ngắt quan hệ lớp–khoá ở dữ liệu).
     const parentRows = await this.repo.listClassesOfCourses(
-      [...myCourseIds].filter((id) => !coursesInMyClasses.some((c) => c.courseId === id)),
+      [...myCourseIds].filter((id) => !coursesInMyClassesIds.has(id)),
     );
+    const parentCourseIds = new Set(parentRows.map((r) => r.courseId));
     const outsideCourseIds = parentRows
       .filter((r) => !myClassIds.has(r.classId) && r.classStatus === 'active')
       .map((r) => r.courseId);
-    const detachedCourseIds = [...myCourseIds].filter((id) => !coursesInMyClasses.some((c) => c.courseId === id) && !parentRows.some((r) => r.courseId === id));
+    const detachedCourseIds = [...myCourseIds].filter((id) => !coursesInMyClassesIds.has(id) && !parentCourseIds.has(id));
     const outsideAll = [...outsideCourseIds, ...detachedCourseIds];
 
     const allCourseIds = [...new Set([...coursesInMyClasses.map((c) => c.courseId), ...outsideAll])];
@@ -184,13 +179,11 @@ export class MessagingGroupTreeService {
     // Số chưa đọc theo conversation của chính tôi (một truy vấn tổng hợp như danh sách conversation; conversation đã lưu trữ vẫn tính ở cây — cây là cấu trúc điều hướng, không phải hộp thư).
     const summaries = await this.repo.listConversationSummaries(actorId, {});
     const summariesArchived = await this.repo.listConversationSummaries(actorId, { archivedOnly: true });
+    // Số chưa đọc và mốc ghim CÁ NHÂN của chính tôi theo conversation, dựng từ CẢ HAI tập tóm tắt trong MỘT lần duyệt: ghim và lưu trữ là hai trạng thái độc lập trên dòng thành viên, nên hội thoại vừa ghim vừa lưu trữ chỉ xuất hiện ở tập đã lưu — chỉ nhìn tập chưa lưu là mất trạng thái ghim của nó và client xếp sai mục ở tab Nhóm. Conversation không có dòng tóm tắt (tôi chưa là thành viên) thì không có trạng thái ghim cá nhân — tra bản đồ ra undefined, nút nhận null.
     const unreadByConversation = new Map<string, number>();
-    for (const s of [...summaries, ...summariesArchived]) {
-      unreadByConversation.set(s.conversation.id, s.unreadCount);
-    }
-    // Mốc ghim CÁ NHÂN của chính tôi theo conversation, dựng từ CẢ HAI tập tóm tắt như số chưa đọc ở trên: ghim và lưu trữ là hai trạng thái độc lập trên dòng thành viên, nên hội thoại vừa ghim vừa lưu trữ chỉ xuất hiện ở tập đã lưu — chỉ nhìn tập chưa lưu là mất trạng thái ghim của nó và client xếp sai mục ở tab Nhóm. Conversation không có dòng tóm tắt (tôi chưa là thành viên) thì không có trạng thái ghim cá nhân — tra bản đồ ra undefined, nút nhận null.
     const pinnedAtByConversation = new Map<string, Date | null>();
     for (const s of [...summaries, ...summariesArchived]) {
+      unreadByConversation.set(s.conversation.id, s.unreadCount);
       pinnedAtByConversation.set(s.conversation.id, s.pinnedAt);
     }
     // conversationId của nút cấu trúc tra TRỰC TIẾP theo item (đã ensure hay chưa là sự thật ở bảng conversation, không phụ thuộc việc tôi đã là thành viên conversation hay chưa); số chưa đọc mới là phần theo người xem (không có dòng thành viên thì 0).

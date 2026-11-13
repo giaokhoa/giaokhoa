@@ -1,3 +1,4 @@
+import { MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT } from '@giaokhoa/contracts';
 import {
   MESSAGE_PROVIDERS,
   NOTIFICATION_POLICY_COMPONENT,
@@ -29,14 +30,15 @@ export interface SiteSettingDefinition {
 export const SITE_SETTINGS: readonly SiteSettingDefinition[] = [
   { component: 'core', name: 'fullname', type: 'string', defaultValue: 'Giáo khoa', scope: 'both' },
   { component: 'core', name: 'lang', type: 'enum', options: ['vi', 'en'], defaultValue: 'vi', scope: 'both' },
-  { component: 'core', name: 'timezone', type: 'string', defaultValue: 'Asia/Saigon', scope: 'both' },
+  // Múi giờ mặc định của site — dùng tên IANA canonical, không dùng alias cũ Asia/Saigon (lệnh cấm trong AGENTS.md chỉ ghi "trong SQL" nhưng giá trị này cũng đi vào SQL qua cấu hình nên giữ canonical cho nhất quán).
+  { component: 'core', name: 'timezone', type: 'string', defaultValue: 'Asia/Ho_Chi_Minh', scope: 'both' },
   { component: 'core', name: 'sitepolicy', type: 'string', defaultValue: '', scope: 'platform' },
   // Tương đương `messagingallusers` của Moodle: false = chỉ nhắn tin cho contact hoặc người học cùng khoá; true = mọi người dùng nhắn cho nhau.
   { component: 'core', name: 'messagingallusers', type: 'boolean', defaultValue: false, scope: 'platform' },
   // Cửa sổ THU HỒI tin nhắn (vòng đời tin nhắn theo vai, issue #33), đơn vị PHÚT tính từ lúc gửi: trong cửa sổ, tác giả thu hồi được tin cho mọi người; ngoài cửa sổ chỉ còn xoá phía mình và đường kiểm duyệt. 0 = tắt hẳn thu hồi. Mặc định 15 phút theo chuẩn các app nhắn tin phổ biến.
   { component: 'core', name: 'messagingrecallwindowminutes', type: 'number', defaultValue: 15, scope: 'both' },
-  // Chặn lạm dụng đường gửi tin (lát M2, issue #212; chính sách P2 đã chốt ở issue #33): trần độ dài một tin tính theo KÝ TỰ NGƯỜI DÙNG THẤY (grapheme, không đếm byte) — vượt trần bị từ chối 400 `messaging.message_too_long`; 0 = tắt trần. Giá trị mặc định phải khớp MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT ở @giaokhoa/contracts.
-  { component: 'core', name: 'messagingmaxmessagelength', type: 'number', defaultValue: 10000, scope: 'both' },
+  // Chặn lạm dụng đường gửi tin (lát M2, issue #212; chính sách P2 đã chốt ở issue #33): trần độ dài một tin tính theo KÝ TỰ NGƯỜI DÙNG THẤY (grapheme, không đếm byte) — vượt trần bị từ chối 400 `messaging.message_too_long`; 0 = tắt trần. Giá trị mặc định dùng chung hằng MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT ở @giaokhoa/contracts để registry site-config và bộ soạn tin trên web không lệch nhau ở giá trị gốc.
+  { component: 'core', name: 'messagingmaxmessagelength', type: 'number', defaultValue: MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT, scope: 'both' },
   // Throttle gửi tin theo từng người dùng bằng Redis (cùng lát M2):
   // cửa sổ bùng phát (burst) mặc định 20 tin / 10 giây + trần duy trì 60 tin / phút (tức ~1 tin/giây) — mức theo khuyến nghị của hồ sơ rà soát hoàn thiện nhắn tin, đủ rộng để không vướng sử dụng thật. Vượt một trong hai trần → 429 `messaging.rate_limited`. Đặt trần tương ứng về 0 = tắt cửa sổ đó.
   { component: 'core', name: 'messagingsendburstlimit', type: 'number', defaultValue: 20, scope: 'platform' },
@@ -85,6 +87,9 @@ export const SITE_SETTINGS: readonly SiteSettingDefinition[] = [
   })),
 ];
 
+/** Trần độ dài chuỗi của một giá trị setting (kiểu `string`). */
+const SITE_SETTING_STRING_MAX_LENGTH = 1000;
+
 /**
  * Tìm định nghĩa của một setting theo component + name; undefined nếu setting chưa được đăng ký (API từ chối ghi vào khoá lạ).
  */
@@ -102,7 +107,7 @@ export function validateSiteSettingValue(def: SiteSettingDefinition, value: unkn
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? null : 'expected a finite number';
     case 'string':
-      return typeof value === 'string' && value.length <= 1000 ? null : 'expected a string of at most 1000 characters';
+      return typeof value === 'string' && value.length <= SITE_SETTING_STRING_MAX_LENGTH ? null : `expected a string of at most ${SITE_SETTING_STRING_MAX_LENGTH} characters`;
     case 'enum':
       return typeof value === 'string' && (def.options ?? []).includes(value)
         ? null

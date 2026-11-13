@@ -18,26 +18,27 @@ function spaceKyselyResolver(spaceDb: SpaceDatabaseService): () => Promise<Centr
 }
 
 /**
+ * Provider dùng chung cho OutboxService và EventLogWriter: cả hai đều
+ * nhận handle Kysely kho trung tâm + hàm phân giải handle theo ngữ cảnh
+ * cho các đường ghi không mang transaction của phía gọi — cùng khuôn
+ * useFactory, chỉ khác class.
+ */
+function spaceDbProvider<T>(token: new (db: CentreDb, resolve: () => Promise<CentreDb>) => T) {
+  return {
+    provide: token,
+    useFactory: (spaceDb: SpaceDatabaseService) => new token(spaceDb.routedKysely, spaceKyselyResolver(spaceDb)),
+    inject: [SpaceDatabaseService],
+  };
+}
+
+/**
  * Module hạ tầng sự kiện: outbox giao dịch và writer phản chiếu event log. Sau chuyển đổi Kysely (D1, issue #653) cả hai service nhận handle Kysely kho trung tâm qua factory trên facade định tuyến theo không gian (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository của các module đã chuyển — kèm hàm phân giải handle theo ngữ cảnh cho các đường ghi không mang transaction của phía gọi (xem `spaceKyselyResolver`). Cạnh
  * import SpaceRoutingModule trực tiếp vì adapter kết nối control plane
  * đã được tách khỏi facade quản trị, không còn vòng module này.
  */
 @Module({
   imports: [EventEmitterModule.forRoot(), SpaceRoutingModule],
-  providers: [
-    {
-      provide: OutboxService,
-      useFactory: (spaceDb: SpaceDatabaseService) =>
-        new OutboxService(spaceDb.routedKysely, spaceKyselyResolver(spaceDb)),
-      inject: [SpaceDatabaseService],
-    },
-    {
-      provide: EventLogWriter,
-      useFactory: (spaceDb: SpaceDatabaseService) =>
-        new EventLogWriter(spaceDb.routedKysely, spaceKyselyResolver(spaceDb)),
-      inject: [SpaceDatabaseService],
-    },
-  ],
+  providers: [spaceDbProvider(OutboxService), spaceDbProvider(EventLogWriter)],
   exports: [OutboxService, EventLogWriter],
 })
 export class EventsModule {}

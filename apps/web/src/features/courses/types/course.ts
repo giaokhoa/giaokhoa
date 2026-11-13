@@ -13,6 +13,11 @@ export interface MyEnrolmentView {
 }
 
 /**
+ * Trạng thái BẬT của một phương thức ghi danh (EnrolInstance.status = 0). Gốc ở contracts (`enrolInstanceSchema.status`) là số trần chưa có enum — chỉ giá trị 0 được code dùng tới nên chỉ đặt tên giá trị này (xem B4 báo cáo rà soát 2026-11-13).
+ */
+export const ENROL_INSTANCE_ENABLED = 0;
+
+/**
  * Thanh toán của chính người dùng (GET /payments/me — PaymentRow ở tầng API). Trang chỉ cần các trường để lọc theo `itemId` (chính là enrol instance id của payment phí ghi danh) và hiển thị trạng thái thật.
  */
 export interface MyPaymentView {

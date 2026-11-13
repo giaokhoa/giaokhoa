@@ -93,7 +93,7 @@ export function buildProgramOutcomeRows(tree: CurriculumTree): ProgramOutcomeRow
  * @param props.rows - Các dòng YCCĐ đã làm phẳng từ cây (xem `buildProgramOutcomeRows`).
  * @param props.curriculumId - Id chương trình chứa cây, để dựng liên kết thao tác tại dòng.
  * @param props.onDeleteNode - Xoá một node (trang gọi lo xác nhận + đột biến).
- * @param props.onDeleteOutcome - Xoá một YCCĐ của một node (trang gọi lo xác nhận + đột biến).
+ * @param props.onDeleteOutcome - Xoá một YCCĐ theo id của nó (trang gọi lo xác nhận + đột biến).
  */
 export function ProgramDataTable({
   rows,
@@ -104,7 +104,7 @@ export function ProgramDataTable({
   rows: ProgramOutcomeRow[];
   curriculumId: string;
   onDeleteNode: (node: CurriculumTreeNode) => void;
-  onDeleteOutcome: (node: CurriculumTreeNode, outcomeId: string) => void;
+  onDeleteOutcome: (outcomeId: string) => void;
 }) {
   const { t } = useTranslation('app');
 
@@ -174,7 +174,7 @@ export function ProgramDataTable({
               <Button type="button" variant="outline" size="sm" render={<Link to={`/admin/curriculum/outcomes/${row.outcome.id}/edit`} />}>
                 {t('curriculumEdit')}
               </Button>
-              <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteOutcome(row.node, row.outcome!.id)}>
+              <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteOutcome(row.outcome.id)}>
                 {t('curriculumDelete')}
               </Button>
             </span>

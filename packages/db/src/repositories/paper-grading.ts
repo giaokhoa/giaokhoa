@@ -1,6 +1,11 @@
-import { sql, type RawBuilder } from 'kysely';
+
+import type { InsertObject, UpdateObject } from 'kysely';
 import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@giaokhoa/contracts';
-import type { CentreDb } from '../client';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
+
+/** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
+export type PaperGradingDb = CentreDb | CentreTx;
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /**
  * Kho dữ liệu chấm bài giấy trên Kysely: lưu lô phiếu in cùng bố cục/danh sách học viên đã chụp và từng phiếu quét. Các phép cập nhật trạng thái dùng bảng `exam_batches` và `exam_scans`; quyết định nghiệp vụ thuộc `PaperGradingService`.
@@ -123,53 +128,46 @@ const SCAN_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL NULL, giá trị thì xâu hoá qua `jsonbValue`.
 // ---------------------------------------------------------------------------
 
-/**
- * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh rồi ép `::jsonb` — pg không suy được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
-function batchInsertValues(v: NewPaperBatch) {
+function batchInsertValues(values: NewPaperBatch): InsertObject<CentreDB, 'exam_batches'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    exam_pin_id: v.examPinId,
-    variant_code: v.variantCode,
-    ...(v.examCode !== undefined ? { exam_code: v.examCode } : {}),
-    ...(v.codeDigits !== undefined ? { code_digits: v.codeDigits } : {}),
-    layout: jsonbValue(v.layout),
-    roster: jsonbValue(v.roster),
-    created_by: v.createdBy,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    exam_pin_id: values.examPinId,
+    variant_code: values.variantCode,
+    ...(values.examCode !== undefined ? { exam_code: values.examCode } : {}),
+    ...(values.codeDigits !== undefined ? { code_digits: values.codeDigits } : {}),
+    layout: jsonbValue(values.layout),
+    roster: jsonbValue(values.roster),
+    created_by: values.createdBy,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function scanInsertValues(v: NewPaperScan) {
+function scanInsertValues(values: NewPaperScan): InsertObject<CentreDB, 'exam_scans'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    exam_pin_id: v.examPinId,
-    ...(v.batchId !== undefined ? { batch_id: v.batchId } : {}),
-    ...(v.sessionId !== undefined ? { session_id: v.sessionId } : {}),
-    file_id: v.fileId,
-    ...(v.warpedFileId !== undefined ? { warped_file_id: v.warpedFileId } : {}),
-    uploaded_by: v.uploadedBy,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.identityCode !== undefined ? { identity_code: v.identityCode } : {}),
-    ...(v.identitySource !== undefined ? { identity_source: v.identitySource } : {}),
-    ...(v.studentId !== undefined ? { student_id: v.studentId } : {}),
-    ...(v.attemptId !== undefined ? { attempt_id: v.attemptId } : {}),
-    ...(v.variantCodeRead !== undefined ? { variant_code_read: v.variantCodeRead } : {}),
-    ...(v.quality !== undefined ? { quality: v.quality === null ? null : jsonbValue(v.quality) } : {}),
-    ...(v.readings !== undefined ? { readings: jsonbValue(v.readings) } : {}),
-    ...(v.expiresAt !== undefined ? { expires_at: v.expiresAt } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    exam_pin_id: values.examPinId,
+    ...(values.batchId !== undefined ? { batch_id: values.batchId } : {}),
+    ...(values.sessionId !== undefined ? { session_id: values.sessionId } : {}),
+    file_id: values.fileId,
+    ...(values.warpedFileId !== undefined ? { warped_file_id: values.warpedFileId } : {}),
+    uploaded_by: values.uploadedBy,
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.identityCode !== undefined ? { identity_code: values.identityCode } : {}),
+    ...(values.identitySource !== undefined ? { identity_source: values.identitySource } : {}),
+    ...(values.studentId !== undefined ? { student_id: values.studentId } : {}),
+    ...(values.attemptId !== undefined ? { attempt_id: values.attemptId } : {}),
+    ...(values.variantCodeRead !== undefined ? { variant_code_read: values.variantCodeRead } : {}),
+    ...(values.quality !== undefined ? { quality: jsonbField(values.quality) } : {}),
+    ...(values.readings !== undefined ? { readings: jsonbValue(values.readings) } : {}),
+    ...(values.expiresAt !== undefined ? { expires_at: values.expiresAt } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
 /** Ánh xạ patch của `exam_scans`: trải patch như bản cũ, `updated_at` luôn làm mới ở cuối. */
-function scanUpdateSet(patch: Partial<NewPaperScan>) {
+function scanUpdateSet(patch: Partial<NewPaperScan>): UpdateObject<CentreDB, 'exam_scans'> {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
     ...(patch.examPinId !== undefined ? { exam_pin_id: patch.examPinId } : {}),
@@ -184,7 +182,7 @@ function scanUpdateSet(patch: Partial<NewPaperScan>) {
     ...(patch.studentId !== undefined ? { student_id: patch.studentId } : {}),
     ...(patch.attemptId !== undefined ? { attempt_id: patch.attemptId } : {}),
     ...(patch.variantCodeRead !== undefined ? { variant_code_read: patch.variantCodeRead } : {}),
-    ...(patch.quality !== undefined ? { quality: patch.quality === null ? null : jsonbValue(patch.quality) } : {}),
+    ...(patch.quality !== undefined ? { quality: jsonbField(patch.quality) } : {}),
     ...(patch.readings !== undefined ? { readings: jsonbValue(patch.readings) } : {}),
     ...(patch.expiresAt !== undefined ? { expires_at: patch.expiresAt } : {}),
     ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
@@ -196,9 +194,14 @@ function scanUpdateSet(patch: Partial<NewPaperScan>) {
 export class PaperGradingRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): PaperGradingDb {
+    return this.handle;
+  }
+
   /** Chèn lô phiếu in mới. */
-  async insertBatch(v: NewPaperBatch): Promise<PaperBatchRow> {
-    return this.handle
+  async insertBatch(v: NewPaperBatch, db: PaperGradingDb = this.db()): Promise<PaperBatchRow> {
+    return db
       .insertInto('exam_batches')
       .values(batchInsertValues(v))
       .returning(BATCH_COLUMNS)
@@ -206,8 +209,8 @@ export class PaperGradingRepository {
   }
 
   /** Lô theo id. */
-  async getBatch(id: string): Promise<PaperBatchRow | undefined> {
-    return this.handle
+  async getBatch(id: string, db: PaperGradingDb = this.db()): Promise<PaperBatchRow | undefined> {
+    return db
       .selectFrom('exam_batches')
       .select(BATCH_COLUMNS)
       .where('id', '=', id)
@@ -215,8 +218,8 @@ export class PaperGradingRepository {
   }
 
   /** Mọi lô của một lần ghim, theo thứ tự tạo. */
-  async listBatchesForPin(pinId: string): Promise<PaperBatchRow[]> {
-    return this.handle
+  async listBatchesForPin(pinId: string, db: PaperGradingDb = this.db()): Promise<PaperBatchRow[]> {
+    return db
       .selectFrom('exam_batches')
       .select(BATCH_COLUMNS)
       .where('exam_pin_id', '=', pinId)
@@ -225,8 +228,8 @@ export class PaperGradingRepository {
   }
 
   /** Chèn phiếu đã quét. */
-  async insertScan(v: NewPaperScan): Promise<PaperScanRow> {
-    return this.handle
+  async insertScan(v: NewPaperScan, db: PaperGradingDb = this.db()): Promise<PaperScanRow> {
+    return db
       .insertInto('exam_scans')
       .values(scanInsertValues(v))
       .returning(SCAN_COLUMNS)
@@ -234,8 +237,8 @@ export class PaperGradingRepository {
   }
 
   /** Phiếu theo id. */
-  async getScan(id: string): Promise<PaperScanRow | undefined> {
-    return this.handle
+  async getScan(id: string, db: PaperGradingDb = this.db()): Promise<PaperScanRow | undefined> {
+    return db
       .selectFrom('exam_scans')
       .select(SCAN_COLUMNS)
       .where('id', '=', id)
@@ -243,8 +246,8 @@ export class PaperGradingRepository {
   }
 
   /** Mọi phiếu của một lần ghim, lọc tuỳ chọn theo trạng thái hàng chờ. */
-  async listScansForPin(pinId: string, status?: string): Promise<PaperScanRow[]> {
-    let query = this.handle
+  async listScansForPin(pinId: string, status?: string, db: PaperGradingDb = this.db()): Promise<PaperScanRow[]> {
+    let query = db
       .selectFrom('exam_scans')
       .select(SCAN_COLUMNS)
       .where('exam_pin_id', '=', pinId);
@@ -255,8 +258,8 @@ export class PaperGradingRepository {
   }
 
   /** Cập nhật phiếu (gán lô/định danh, xác nhận ca mơ hồ) — trả dòng sau cập nhật. */
-  async updateScan(id: string, patch: Partial<NewPaperScan>): Promise<PaperScanRow> {
-    return this.handle
+  async updateScan(id: string, patch: Partial<NewPaperScan>, db: PaperGradingDb = this.db()): Promise<PaperScanRow> {
+    return db
       .updateTable('exam_scans')
       .set(scanUpdateSet(patch))
       .where('id', '=', id)
@@ -265,16 +268,16 @@ export class PaperGradingRepository {
   }
 
   /** Xoá phiếu. */
-  async deleteScan(id: string): Promise<void> {
-    await this.handle
+  async deleteScan(id: string, db: PaperGradingDb = this.db()): Promise<void> {
+    await db
       .deleteFrom('exam_scans')
       .where('id', '=', id)
       .execute();
   }
 
   /** Phiếu mới nhất của quiz (dùng cho kiểm tra nhanh ở tầng service khi cần). */
-  async latestScanForQuiz(pinId: string): Promise<PaperScanRow | undefined> {
-    return this.handle
+  async latestScanForQuiz(pinId: string, db: PaperGradingDb = this.db()): Promise<PaperScanRow | undefined> {
+    return db
       .selectFrom('exam_scans')
       .select(SCAN_COLUMNS)
       .where('exam_pin_id', '=', pinId)

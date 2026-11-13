@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { MyAccessView } from '@giaokhoa/contracts';
 import { AuthRepository } from '@giaokhoa/db/repositories/auth';
-import { UsersRepository, type UserListFilter, type UserPatch, type UserRow } from '@giaokhoa/db/repositories/users';
+import { UsersRepository, type NewUser, type UserListFilter, type UserPatch, type UserRow } from '@giaokhoa/db/repositories/users';
 import { OutboxService } from '../../infra/events/outbox.service';
 import type { ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
@@ -16,6 +16,9 @@ import { PasswordService } from './password.service';
 
 export const USER_COMPONENT = 'core_user';
 export const USER_AREA = 'user';
+
+/** Hậu tố xáo trộn danh tính khi xoá mềm: username/email gốc được gắn hậu tố này + id để các giá trị gốc dùng lại được. */
+const DELETED_USER_SUFFIX = '.deleted';
 
 export interface UserProfileView {
   id: string; username: string; firstName: string; lastName: string;
@@ -61,8 +64,38 @@ export class UsersService {
     try {
       await this.credentialBridge.syncCredentialPassword(userId);
     } catch (err) {
-      this.logger.warn(`credential sync failed for user ${userId}: ${String(err)}`);
+      // Chỉ ghi thêm stack vào log hiện có (theo mẫu logger.error kèm stack của public-registration) — hành vi nuốt lỗi giữ nguyên như TSDoc.
+      this.logger.warn(`credential sync failed for user ${userId}`, err instanceof Error ? err.stack : String(err));
     }
+  }
+
+  /** Tạo context user cho một tài khoản mới dưới context hệ thống (dùng chung cho mọi đường tạo tài khoản). */
+  private async createUserContext(userId: string): Promise<void> {
+    await this.contexts.createContext(CONTEXT_LEVELS.USER, userId, (await this.contexts.ensureSystemContext()).id);
+  }
+
+  /**
+   * Chèn user mới + sự kiện outbox `user_created` trong cùng một
+   * transaction — hai ghi cùng thành hoặc cùng huỷ để worker không
+   * nhận sự kiện của user chưa tồn tại.
+   */
+  private async insertNewUser(values: NewUser): Promise<UserRow> {
+    return this.repo.transaction(async (tx) => {
+      const created = await this.repo.insertUser(values, tx);
+      await this.outbox.enqueueKysely(tx, { aggregate: 'user', type: 'user_created', payload: { userId: created.id, username: values.username } });
+      return created;
+    });
+  }
+
+  /**
+   * Luật lộ email duy nhất của module: chính chủ, hoặc có
+   * `site:viewuseridentity` tại context hệ thống hoặc tại context
+   * người dùng của đối tác — dùng chung cho {@link getProfileViews}
+   * (phân giải theo lô) và {@link canViewUserIdentity} (kiểm từng
+   * lần) để một luật chỉ cài một lần.
+   */
+  private canSeeIdentity(viewerId: string, targetId: string, canSeeAtSystem: boolean, canSeeAtUserContext: boolean): boolean {
+    return viewerId === targetId || canSeeAtSystem || canSeeAtUserContext;
   }
 
   /**
@@ -96,9 +129,7 @@ export class UsersService {
    */
   async getMyAccess(userId: string, opts?: { isGuest?: boolean }): Promise<MyAccessView> {
     const isSiteAdmin = await this.evaluator.isSiteAdmin(userId);
-    const assignmentRows = (await this.roles.listAssignments({ userId: userId })) as {
-      id: string; roleId: string; contextId: string;
-    }[];
+    const assignmentRows = await this.roles.listAssignments({ userId: userId });
     const roleById = new Map((await this.roles.listRoles()).map((r) => [r.id, r]));
 
     // Bước 2a: nạp theo lô các context của chính các gán vai (khử trùng
@@ -197,16 +228,12 @@ export class UsersService {
     const policyErrors = this.passwords.validatePolicy(input.password);
     if (policyErrors.length) throw new BadRequestException({ message: policyErrors.join('; '), code: 'user.password_policy' });
     const passwordHash = await this.passwords.hash(input.password);
-    const user = await this.repo.transaction(async (tx) => {
-      const created = await this.repo.insertUser({
-        username, email, passwordHash,
-        firstName: input.firstName ?? '', lastName: input.lastName ?? '',
-        forcePasswordChange: input.forcePasswordChange ?? false,
-      }, tx);
-      await this.outbox.enqueueKysely(tx, { aggregate: 'user', type: 'user_created', payload: { userId: created.id, username } });
-      return created;
+    const user = await this.insertNewUser({
+      username, email, passwordHash,
+      firstName: input.firstName ?? '', lastName: input.lastName ?? '',
+      forcePasswordChange: input.forcePasswordChange ?? false,
     });
-    await this.contexts.createContext(CONTEXT_LEVELS.USER, user.id, (await this.contexts.ensureSystemContext()).id);
+    await this.createUserContext(user.id);
     if (input.customFields) await this.customFields.setValuesForInstance(USER_COMPONENT, USER_AREA, user.id, input.customFields);
     // Chặng 2.6 (issue #7): user tạo ở đây đăng nhập được qua Better
     // Auth ngay — dòng credential sinh cùng hash vừa ghi.
@@ -214,15 +241,15 @@ export class UsersService {
     return user;
   }
 
-  /** Tài khoản guest đặc biệt: không đăng nhập bằng mật khẩu cho mục đích ghi danh, không bao giờ được gán role trực tiếp (luật của Moodle). */
   /**
+   * Tài khoản guest đặc biệt: không đăng nhập bằng mật khẩu cho mục đích ghi danh, không bao giờ được gán role trực tiếp (luật của Moodle).
    * Đảm bảo tài khoản khách (guest) tồn tại cho các luồng truy cập công khai; idempotent.
    */
   async ensureGuestUser(): Promise<UserRow> {
     const existing = await this.repo.getByUsername('guest');
     if (existing) return existing;
     const guest = await this.repo.insertUser({ username: 'guest', email: 'guest@localhost', passwordHash: null, firstName: 'Guest', lastName: 'User', isGuest: true });
-    await this.contexts.createContext(CONTEXT_LEVELS.USER, guest.id, (await this.contexts.ensureSystemContext()).id);
+    await this.createUserContext(guest.id);
     return guest;
   }
 
@@ -247,19 +274,16 @@ export class UsersService {
   async createExternalUser(input: { email: string; firstName?: string; lastName?: string }): Promise<UserRow> {
     const email = normalizeIdentity(input.email);
     if (await this.repo.getByEmail(email)) throw new ConflictException({ message: `Email ${email} is taken`, code: 'user.email_taken' });
-    const base = email.split('@')[0]!.replace(/[^a-z0-9._-]+/g, '.').replace(/^\.+|\.+$/g, '') || 'user';
+    // Email đã chuẩn hoá luôn có phần local: `split` trên chuỗi bất kỳ vẫn trả ít nhất một phần tử nên phần tử đầu không bao giờ undefined.
+    const base = (email.split('@')[0] ?? '').replace(/[^a-z0-9._-]+/g, '.').replace(/^\.+|\.+$/g, '') || 'user';
     let username = base;
     for (let suffix = 2; await this.repo.getByUsername(username); suffix += 1) username = `${base}${suffix}`;
-    const user = await this.repo.transaction(async (tx) => {
-      const created = await this.repo.insertUser({
-        username, email, passwordHash: null,
-        firstName: input.firstName ?? '', lastName: input.lastName ?? '',
-        forcePasswordChange: false,
-      }, tx);
-      await this.outbox.enqueueKysely(tx, { aggregate: 'user', type: 'user_created', payload: { userId: created.id, username } });
-      return created;
+    const user = await this.insertNewUser({
+      username, email, passwordHash: null,
+      firstName: input.firstName ?? '', lastName: input.lastName ?? '',
+      forcePasswordChange: false,
     });
-    await this.contexts.createContext(CONTEXT_LEVELS.USER, user.id, (await this.contexts.ensureSystemContext()).id);
+    await this.createUserContext(user.id);
     return user;
   }
 
@@ -291,6 +315,61 @@ export class UsersService {
   }
 
   /**
+   * Chốt chặn tự đặt mật khẩu qua đường sửa hồ sơ (xem TSDoc của
+   * {@link updateUser}): người sửa là chính chủ thì từ chối — hàm
+   * này không có tham số mật khẩu hiện tại nên không tồn tại bước
+   * tái xác thực.
+   */
+  private assertPasswordChangeAllowed(id: string, input: { password?: string }, actorId?: string): void {
+    // Chốt chặn tự đặt mật khẩu: phải chạy trước mọi bước ghi nào,
+    // kể cả kiểm tra dữ liệu khác, để yêu cầu bị từ chối nguyên vẹn.
+    if (input.password !== undefined && actorId !== undefined && actorId === id) {
+      throw new ForbiddenException({ message: 'Use the change-password flow with your current password to change your own password', code: 'user.password_self_change_forbidden' });
+    }
+  }
+
+  /**
+   * Dựng patch cập nhật hồ sơ từ đầu vào: kiểm trùng email, kiểm
+   * chính sách + băm khi đặt mật khẩu (đặt mật khẩu qua đường này
+   * chỉ quản trị viên được làm — chốt chặn tự đổi nằm ở
+   * {@link assertPasswordChangeAllowed}).
+   */
+  private async buildUpdatePatch(id: string, input: { email?: string; firstName?: string; lastName?: string; password?: string }): Promise<UserPatch> {
+    const patch: UserPatch = {};
+    if (input.email !== undefined) {
+      const email = normalizeIdentity(input.email);
+      const clash = await this.repo.getByEmail(email);
+      if (clash && clash.id !== id) throw new ConflictException({ message: `Email ${email} is taken`, code: 'user.email_taken' });
+      patch.email = email;
+    }
+    if (input.firstName !== undefined) patch.firstName = input.firstName;
+    if (input.lastName !== undefined) patch.lastName = input.lastName;
+    if (input.password !== undefined) {
+      const errors = this.passwords.validatePolicy(input.password);
+      if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'user.password_policy' });
+      patch.passwordHash = await this.passwords.hash(input.password);
+      patch.forcePasswordChange = false;
+    }
+    return patch;
+  }
+
+  /**
+   * Tác dụng phụ sau khi mật khẩu bị đặt lại qua đường sửa hồ sơ
+   * (chặng 2.6, issue #7): mật khẩu vừa đặt lại ở hệ cũ cũng là mật
+   * khẩu của dòng credential — hai hệ không bao giờ lệch mật khẩu.
+   * Kèm theo: mật khẩu vừa bị đặt lại thì mọi family refresh đã cấp
+   * trước đó của tài khoản đích phải chết ngay (cùng cơ chế của
+   * luồng đổi mật khẩu chính thống) — nếu không, phiên cũ vẫn tiếp
+   * tục mint access token mới dù mật khẩu đã đổi.
+   */
+  private async applyPasswordResetSideEffects(id: string): Promise<void> {
+    await this.syncCredential(id);
+    await this.authRepository.revokeAllForUser(id);
+    await this.credentialBridge.revokeSessionsForUser(id);
+    await this.sessions.destroyAllForUser(id);
+  }
+
+  /**
    * Cập nhật hồ sơ (họ tên, email, …) với kiểm tra trùng email.
    *
    * Luồng riêng khi đầu vào có trường `password` (đặt mật khẩu qua
@@ -317,45 +396,16 @@ export class UsersService {
    * (đánh dấu thu hồi hai lần cho cùng kết quả).
    */
   async updateUser(id: string, input: { email?: string; firstName?: string; lastName?: string; password?: string; customFields?: Record<string, string> }, actorId?: string): Promise<UserRow> {
-    // Chốt chặn tự đặt mật khẩu: phải chạy trước mọi bước ghi nào,
-    // kể cả kiểm tra dữ liệu khác, để yêu cầu bị từ chối nguyên vẹn.
-    if (input.password !== undefined && actorId !== undefined && actorId === id) {
-      throw new ForbiddenException({ message: 'Use the change-password flow with your current password to change your own password', code: 'user.password_self_change_forbidden' });
-    }
+    this.assertPasswordChangeAllowed(id, input, actorId);
     const user = await this.getUser(id);
     if (input.customFields) await this.customFields.validateValuesForInstance(USER_COMPONENT, USER_AREA, input.customFields);
     if (user.deleted) throw new BadRequestException({ message: 'Cannot update a deleted user', code: 'user.deleted' });
-    const patch: UserPatch = {};
-    if (input.email !== undefined) {
-      const email = normalizeIdentity(input.email);
-      const clash = await this.repo.getByEmail(email);
-      if (clash && clash.id !== id) throw new ConflictException({ message: `Email ${email} is taken`, code: 'user.email_taken' });
-      patch.email = email;
-    }
-    if (input.firstName !== undefined) patch.firstName = input.firstName;
-    if (input.lastName !== undefined) patch.lastName = input.lastName;
-    if (input.password !== undefined) {
-      const errors = this.passwords.validatePolicy(input.password);
-      if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'user.password_policy' });
-      patch.passwordHash = await this.passwords.hash(input.password);
-      patch.forcePasswordChange = false;
-    }
+    const patch = await this.buildUpdatePatch(id, input);
     await this.repo.transaction(async (tx) => {
       await this.repo.updateUser(id, patch, tx);
       await this.outbox.enqueueKysely(tx, { aggregate: 'user', type: 'user_updated', payload: { userId: id } });
     });
-    // Chặng 2.6 (issue #7): mật khẩu vừa đặt lại ở hệ cũ cũng là mật
-    // khẩu của dòng credential — hai hệ không bao giờ lệch mật khẩu.
-    // Kèm theo: mật khẩu vừa bị đặt lại thì mọi family refresh đã cấp
-    // trước đó của tài khoản đích phải chết ngay (cùng cơ chế của
-    // luồng đổi mật khẩu chính thống) — nếu không, phiên cũ vẫn tiếp
-    // tục mint access token mới dù mật khẩu đã đổi.
-    if (input.password !== undefined) {
-      await this.syncCredential(id);
-      await this.authRepository.revokeAllForUser(id);
-      await this.credentialBridge.revokeSessionsForUser(id);
-      await this.sessions.destroyAllForUser(id);
-    }
+    if (input.password !== undefined) await this.applyPasswordResetSideEffects(id);
     if (input.customFields) await this.customFields.setValuesForInstance(USER_COMPONENT, USER_AREA, id, input.customFields);
     return this.getUser(id);
   }
@@ -383,9 +433,9 @@ export class UsersService {
     return this.getUser(id);
   }
 
-  /** Xoá mềm (ngữ nghĩa Moodle): dòng vẫn ở lại để truy vết log/điểm, được đánh dấu đã xoá và danh tính bị xáo trộn để các giá trị gốc có thể được dùng lại. */
   /**
    * Xoá mềm tài khoản.
+   * Xoá mềm (ngữ nghĩa Moodle): dòng vẫn ở lại để truy vết log/điểm, được đánh dấu đã xoá và danh tính bị xáo trộn để các giá trị gốc có thể được dùng lại.
    */
   async deleteUser(id: string): Promise<UserRow> {
     const user = await this.getUser(id);
@@ -394,7 +444,7 @@ export class UsersService {
     await this.repo.transaction(async (tx) => {
       await this.repo.updateUser(id, {
         deleted: true, suspended: true,
-        username: `${user.username}.deleted${id}`, email: `${user.email}.deleted${id}`,
+        username: `${user.username}${DELETED_USER_SUFFIX}${id}`, email: `${user.email}${DELETED_USER_SUFFIX}${id}`,
       }, tx);
       await this.outbox.enqueueKysely(tx, { aggregate: 'user', type: 'user_deleted', payload: { userId: id } });
     });
@@ -426,17 +476,18 @@ export class UsersService {
   async getPreference(userId: string, name: string): Promise<string | null | undefined> { return this.repo.getPreference(userId, name); }
 
   /**
+   * Dựng dữ liệu hiển thị hồ sơ: email chỉ lộ khi người xem có capability xem định danh.
    * View hồ sơ với luật riêng tư theo capability của Moodle: các trường danh tính
    * (email) chỉ được phơi bày cho chủ sở hữu, admin của site, hoặc người xem nắm giữ
    * `site:viewuseridentity` — được thực thi tại đây, không phải trong UI.
    */
-  /**
-   * Dựng dữ liệu hiển thị hồ sơ: email chỉ lộ khi người xem có capability xem định danh.
-   */
   async getProfileView(targetId: string, viewerId: string): Promise<UserProfileView> {
     const user = await this.getUser(targetId);
     const views = await this.getProfileViews([user], viewerId);
-    return views[0]!;
+    // getProfileViews giữ đúng thứ tự đầu vào và không lọc phần tử nên view đầu tiên luôn ứng với user vừa nạp.
+    const view = views[0];
+    if (!view) throw new NotFoundException({ message: `User ${targetId} not found`, code: 'user.not_found' });
+    return view;
   }
 
   /**
@@ -471,9 +522,12 @@ export class UsersService {
     );
     return targets.map((user) => {
       const userCtx = ctxByUserId.get(user.id);
-      const canSeeIdentity = viewerId === user.id
-        || (userCtx ? (capsByContextId.get(userCtx.id) ?? []).includes('site:viewuseridentity') : false)
-        || canSeeAtSystem;
+      const canSeeIdentity = this.canSeeIdentity(
+        viewerId,
+        user.id,
+        canSeeAtSystem,
+        userCtx ? (capsByContextId.get(userCtx.id) ?? []).includes('site:viewuseridentity') : false,
+      );
       const custom = customByUser.get(user.id) ?? [];
       return {
         id: user.id, username: user.username, firstName: user.firstName, lastName: user.lastName,
@@ -487,7 +541,7 @@ export class UsersService {
 
   /**
    * Người xem có được xem định danh (email) của đối tác hay không,
-   * theo đúng luật lộ email của {@link getProfileViews}: chính chủ,
+   * theo đúng luật lộ email của {@link canSeeIdentity}: chính chủ,
    * hoặc có `site:viewuseridentity` tại context hệ thống hoặc tại
    * context người dùng của đối tác. Cổng hồ sơ chat 1–1 dùng chung
    * luật này (xem MessagingContactsService) thay vì tự định nghĩa
@@ -500,15 +554,18 @@ export class UsersService {
   async canViewUserIdentity(viewerId: string, targetId: string): Promise<boolean> {
     if (viewerId === targetId) return true;
     const systemCtx = await this.contexts.ensureSystemContext();
-    if (await this.evaluator.hasCapability(viewerId, 'site:viewuseridentity', systemCtx.id)) return true;
+    const canSeeAtSystem = await this.evaluator.hasCapability(viewerId, 'site:viewuseridentity', systemCtx.id);
+    if (canSeeAtSystem) return true;
     const [userCtx] = await this.contexts.getByLevelInstances(CONTEXT_LEVELS.USER, [targetId]);
-    if (!userCtx) return false;
-    return this.evaluator.hasCapability(viewerId, 'site:viewuseridentity', userCtx.id);
+    const canSeeAtUserCtx = userCtx
+      ? await this.evaluator.hasCapability(viewerId, 'site:viewuseridentity', userCtx.id)
+      : false;
+    return this.canSeeIdentity(viewerId, targetId, canSeeAtSystem, canSeeAtUserCtx);
   }
 
-  /** Hàm hỗ trợ guard cho việc sửa hồ sơ: tự phục vụ hoặc người nắm giữ user:update. */
   /**
    * Chặn cập nhật hồ sơ người khác khi thiếu capability user:update.
+   * Hàm hỗ trợ guard cho việc sửa hồ sơ: tự phục vụ hoặc người nắm giữ user:update.
    */
   async assertCanUpdateProfile(actorId: string, targetId: string): Promise<void> {
     if (actorId === targetId) return;

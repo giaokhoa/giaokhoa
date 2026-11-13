@@ -6,4 +6,6 @@
   // Runtime Node đọc `exports` trong package.json như thường; import
   // ở đây chỉ là `export type` nên bị xoá hoàn toàn lúc chạy.
   "paths":{"@giaokhoa/db/repositories/*":["../db/dist/repositories/*.d.ts"]}},
- "extends":"@giaokhoa/config/tsconfig/nest.json","include":["src"]}
+ "extends":"@giaokhoa/config/tsconfig/nest.json","include":["src"],
+  // Spec unit và helper giả của chúng không đi vào bản build (theo mẫu của grades): bản build chỉ gồm mã nguồn chạy thật; typecheck của spec chạy qua tsconfig.test.json.
+  "exclude":["src/**/*.spec.ts","src/test-support/**"]}

@@ -23,7 +23,10 @@ import '#config/i18n';
 import { ApiError, apiJson, redirectToExternalUrl } from '#lib/api';
 import { formatDate, formatDateTime } from '#utils/date-format';
 import { describeUserAgent } from '../utils/user-agent';
-import { queryKeys } from '#lib/query-keys';
+import { queryKeys, OAUTH_PROVIDERS_PATH } from '#lib/query-keys';
+
+/** Độ dài mã TOTP 6 số: ô nhập giới hạn đúng 6 ký tự và nút chỉ bật khi đã nhập đủ 6 số. */
+const TOTP_CODE_LENGTH = 6;
 
 /**
  * Ba thẻ CÀI ĐẶT tài khoản tự chứa, tách khỏi trang Hồ sơ (issue #288 — quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn: Hồ sơ chỉ còn thông tin user, mọi cài đặt nằm ở khu Cài đặt riêng):
@@ -36,9 +39,17 @@ import { queryKeys } from '#lib/query-keys';
  * Flow chung: mỗi thẻ tự nạp dữ liệu bằng TanStack Query (khoá ở `#lib/query-keys`), tự giữ trạng thái luồng con (setup/tắt 2FA, lỗi thao tác) và tự vô hiệu hoá đúng khoá truy vấn sau mỗi đột biến — trang chứa chỉ cần đặt thẻ vào khung, không truyền props. Lát #288 chỉ DI CHUYỂN nguyên trạng các thẻ này từ `pages/profile.tsx` sang đây; nghiệp vụ bên trong (endpoint, mã lỗi được dịch, ràng buộc gỡ liên kết cuối cùng, luật huỷ phiên) không đổi một dòng.
  */
 
+/**
+ * Khoá i18n của nhãn hiển thị theo issuer — bảng tra tường minh để TypeScript báo thiếu nhánh khi hợp đồng thêm issuer mới, thay vì rơi về nhãn của một issuer khác.
+ */
+const ISSUER_LABEL_KEYS: Record<OAuthIssuer, string> = {
+  google: 'oauthProviderGoogle',
+  facebook: 'oauthProviderFacebook',
+};
+
 /** Nhãn hiển thị của issuer lấy từ catalog i18n theo khoá riêng từng nhà cung cấp. */
 function issuerLabel(t: (key: string) => string, issuer: OAuthIssuer): string {
-  return issuer === 'google' ? t('oauthProviderGoogle') : t('oauthProviderFacebook');
+  return t(ISSUER_LABEL_KEYS[issuer]);
 }
 
 /**
@@ -55,7 +66,7 @@ export function LinkedAccountsCard() {
   });
   const providersQuery = useQuery({
     queryKey: queryKeys.oauthProviders,
-    queryFn: async () => oauthProvidersResponseSchema.parse(await apiJson('/api/v1/auth/oauth/providers')),
+    queryFn: async () => oauthProvidersResponseSchema.parse(await apiJson(OAUTH_PROVIDERS_PATH)),
   });
 
   const unlinkMutation = useMutation({
@@ -171,6 +182,14 @@ export function TwoFactorCard() {
     queryFn: async () => mfaStatusResponseSchema.parse(await apiJson('/api/v1/auth/mfa/status')),
   });
   const enabled = statusQuery.data?.enabled ?? false;
+
+  /** Huỷ một luồng con (đổi/bật/tắt): dọn mã đã nhập và dữ liệu setup dở, về trạng thái chờ — khác `finishFlow` ở chỗ không báo thành công và không nạp lại trạng thái. */
+  function resetFlow() {
+    setStep('idle');
+    setSetupData(null);
+    setCode('');
+    setActionError(null);
+  }
 
   /** Kết thúc một luồng con (bật hoặc tắt): dọn mã đã nhập và nạp lại trạng thái thật từ API. */
   function finishFlow(successMessage: string) {
@@ -305,15 +324,15 @@ export function TwoFactorCard() {
               id="mfa-replace-current-code"
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={TOTP_CODE_LENGTH}
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
             <div className="flex gap-2">
-              <Button type="button" disabled={code.length !== 6 || setupMutation.isPending} onClick={() => setupMutation.mutate(code)}>
+              <Button type="button" disabled={code.length !== TOTP_CODE_LENGTH || setupMutation.isPending} onClick={() => setupMutation.mutate(code)}>
                 {t('replaceTwoFactorNext')}
               </Button>
-              <Button type="button" variant="outline" onClick={() => { setStep('idle'); setCode(''); setActionError(null); }}>
+              <Button type="button" variant="outline" onClick={() => resetFlow()}>
                 {t('cancelTwoFactorSetup')}
               </Button>
             </div>
@@ -345,7 +364,7 @@ export function TwoFactorCard() {
                 id="mfa-setup-code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                maxLength={6}
+                maxLength={TOTP_CODE_LENGTH}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
@@ -353,7 +372,7 @@ export function TwoFactorCard() {
             <div className="flex gap-2">
               <Button
                 type="button"
-                disabled={code.length !== 6 || confirmMutation.isPending}
+                disabled={code.length !== TOTP_CODE_LENGTH || confirmMutation.isPending}
                 onClick={() => confirmMutation.mutate(code)}
               >
                 {t('confirmEnableTwoFactor')}
@@ -361,12 +380,7 @@ export function TwoFactorCard() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setStep('idle');
-                  setSetupData(null);
-                  setCode('');
-                  setActionError(null);
-                }}
+                onClick={() => resetFlow()}
               >
                 {t('cancelTwoFactorSetup')}
               </Button>
@@ -382,7 +396,7 @@ export function TwoFactorCard() {
                 id="mfa-disable-code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                maxLength={6}
+                maxLength={TOTP_CODE_LENGTH}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
@@ -391,7 +405,7 @@ export function TwoFactorCard() {
               <Button
                 type="button"
                 variant="destructive"
-                disabled={code.length !== 6 || disableMutation.isPending}
+                disabled={code.length !== TOTP_CODE_LENGTH || disableMutation.isPending}
                 onClick={() => disableMutation.mutate(code)}
               >
                 {t('confirmDisableTwoFactor')}
@@ -399,11 +413,7 @@ export function TwoFactorCard() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setStep('idle');
-                  setCode('');
-                  setActionError(null);
-                }}
+                onClick={() => resetFlow()}
               >
                 {t('cancelTwoFactorSetup')}
               </Button>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type { Route } from './+types/course-admin';
 import { Link, useNavigate, useParams } from 'react-router';
 import type {
-  Cohort,
   CourseGroup,
   CourseGrouping,
   UserEnrolment,
@@ -23,7 +23,12 @@ import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { usePermissions } from '#lib/permissions';
-import { courseAdminPageClientLoader, useAddCohortMember, useAddCourseGroupMember, useAddGroupToGrouping, useCohortMembers, useCohorts, useCourseCompletions, useCourseConversation, useCourseDetail, useCourseEnrolInstances, useCourseEnrolments, useCourseGroupingGroups, useCourseGroupings, useCourseGroupMembers, useCourseGroups, useCreateCourseGroup, useCreateCourseGrouping, useDeleteCourseGroup, useDeleteCourseGrouping, useEnrolUserManually, useOpenGroupConversation, useRemoveCohortMember, useRemoveCourseGroupMember, useRenameCourseGroup, useSaveCourseGroupMode, useToggleCourseConversation, useToggleEnrolSuspend } from '../queries/course-admin';
+import { CohortMembersSection } from '../components/cohort-members-section';
+import { titleMeta } from '#lib/route-meta';
+import { GroupMembersSection } from '../components/group-members-section';
+import { GroupingGroupsSection } from '../components/grouping-groups-section';
+import { courseAdminPageClientLoader, useCohorts, useCourseCompletions, useCourseConversation, useCourseDetail, useCourseEnrolInstances, useCourseEnrolments, useCourseGroupings, useCourseGroups, useCreateCourseGroup, useCreateCourseGrouping, useDeleteCourseGroup, useDeleteCourseGrouping, useEnrolUserManually, useOpenGroupConversation, useRenameCourseGroup, useSaveCourseGroupMode, useToggleCourseConversation, useToggleEnrolSuspend } from '../queries/course-admin';
+import { ENROLMENT_STATUS } from '../types/course-admin';
 
 /**
  * Quản trị khoá học: nhóm, cohort, ghi danh thủ công kèm tạm khoá/kích hoạt lại và tiến độ hoàn thành của học viên. Khu XÂY DỰNG khoá học
@@ -34,305 +39,6 @@ import { courseAdminPageClientLoader, useAddCohortMember, useAddCourseGroupMembe
  *
  * Luồng dữ liệu (F-01 của rà soát #133): mọi mảng của trang đọc qua TanStack Query từ lib/course-admin-data — danh sách nền tải lỗi thì rỗng như bản thủ công; thành viên của nhóm/cohort và nhóm của grouping chỉ tải khi dòng được mở (component con gắn truy vấn theo dòng) và lỗi tải báo đúng thông điệp của mảng đó; ghi thao tác đi qua đột biến, làm mới đúng cụm khoá bị ảnh hưởng.
  */
-
-// --- Các mảng lười tải theo dòng mở rộng ---------------------------------------
-
-/** Mảng thành viên của một nhóm khoá đang mở: tải khi mở lần đầu, thêm/gỡ qua đột biến rồi danh sách tự làm mới. */
-function GroupMembersSection({
-  courseId,
-  group,
-  enrolments,
-  canManageGroups,
-  selection,
-  onSelectionChange,
-  onMessage,
-}: {
-  courseId: string;
-  group: CourseGroup;
-  enrolments: UserEnrolment[];
-  canManageGroups: boolean;
-  selection: string;
-  onSelectionChange: (userId: string) => void;
-  onMessage: (text: string) => void;
-}) {
-  const { t } = useTranslation('app');
-  const membersQuery = useCourseGroupMembers(courseId, group.id);
-  const addMember = useAddCourseGroupMember(courseId);
-  const removeMember = useRemoveCourseGroupMember(courseId);
-
-  useEffect(() => {
-    if (membersQuery.isError) onMessage(t('groupMembersLoadFailed'));
-  }, [membersQuery.isError, onMessage, t]);
-
-  const members = membersQuery.data ?? [];
-  const memberIds = new Set(members.map((m) => m.userId));
-  const candidates = enrolments.filter(
-    (e, idx, all) =>
-      e.status === 0 && !memberIds.has(e.userId) && all.findIndex((x) => x.userId === e.userId) === idx,
-  );
-
-  /** Thêm một học sinh đã ghi danh vào nhóm; API chặn người chưa ghi danh hiệu lực (400 group.member_not_enrolled). */
-  async function addGroupMember() {
-    if (!selection) return;
-    try {
-      await addMember.mutateAsync({ groupId: group.id, userId: selection });
-      onSelectionChange('');
-      onMessage(t('groupMemberAdded'));
-    } catch {
-      onMessage(t('groupMemberAddFailed'));
-    }
-  }
-
-  /** Gỡ thành viên khỏi nhóm (chỉ gỡ khỏi nhóm, ghi danh khoá giữ nguyên). */
-  async function removeGroupMember(userId: string) {
-    try {
-      await removeMember.mutateAsync({ groupId: group.id, userId });
-      onMessage(t('groupMemberRemoved'));
-    } catch {
-      onMessage(t('groupMemberRemoveFailed'));
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium">{t('groupMembersTitle', { name: group.name })}</p>
-      <ul className="space-y-1">
-        {members.map((m) => (
-          <li key={m.userId} className="flex items-center gap-2 text-sm">
-            <span>{t('groupMemberLine', { userId: m.userId, time: m.timeAdded })}</span>
-            {canManageGroups && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void removeGroupMember(m.userId)}
-              >
-                {t('groupRemoveMember')}
-              </Button>
-            )}
-          </li>
-        ))}
-        {members.length === 0 && (
-          <li className="text-sm text-muted-foreground">{t('groupNoMembers')}</li>
-        )}
-      </ul>
-      {canManageGroups && candidates.length > 0 && (
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <span id={`group-add-${group.id}-label`} className="text-sm font-medium">
-              {t('groupAddMemberLabel')}
-            </span>
-            <Select
-              items={Object.fromEntries([
-                ['none', '—'],
-                ...candidates.map((e) => [e.userId, e.userId] as [string, string]),
-              ])}
-              value={selection === '' ? 'none' : selection}
-              onValueChange={(v) => onSelectionChange(!v || v === 'none' ? '' : v)}
-            >
-              <SelectTrigger aria-labelledby={`group-add-${group.id}-label`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">—</SelectItem>
-                {candidates.map((e) => (
-                  <SelectItem key={e.userId} value={e.userId}>
-                    {e.userId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => void addGroupMember()}>
-            {t('groupAddMember')}
-          </Button>
-        </div>
-      )}
-      {canManageGroups && candidates.length === 0 && members.length > 0 && (
-        <p className="text-sm text-muted-foreground">{t('groupAllEnrolledInGroup')}</p>
-      )}
-    </div>
-  );
-}
-
-/** Mảng các nhóm trong một grouping đang mở: tải khi mở lần đầu, gắn nhóm qua đột biến rồi danh sách tự làm mới. */
-function GroupingGroupsSection({
-  courseId,
-  grouping,
-  groups,
-  selection,
-  onSelectionChange,
-  onMessage,
-}: {
-  courseId: string;
-  grouping: CourseGrouping;
-  groups: CourseGroup[];
-  selection: string;
-  onSelectionChange: (groupId: string) => void;
-  onMessage: (text: string) => void;
-}) {
-  const { t } = useTranslation('app');
-  const groupsQuery = useCourseGroupingGroups(courseId, grouping.id);
-  const addGroup = useAddGroupToGrouping(courseId);
-
-  useEffect(() => {
-    if (groupsQuery.isError) onMessage(t('groupingGroupsLoadFailed'));
-  }, [groupsQuery.isError, onMessage, t]);
-
-  const inGrouping = groupsQuery.data ?? [];
-  const candidates = groups.filter((gr) => !inGrouping.some((x) => x.id === gr.id));
-
-  /** Gắn một nhóm vào grouping qua POST groupings/:groupingId/groups với `{ groupId }`. */
-  async function addGroupToGrouping() {
-    if (!selection) return;
-    try {
-      await addGroup.mutateAsync({ groupingId: grouping.id, groupId: selection });
-      onMessage(t('groupingGroupAdded'));
-    } catch {
-      onMessage(t('groupingGroupAddFailed'));
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium">{t('groupingGroupsTitle', { name: grouping.name })}</p>
-      <ul className="space-y-1">
-        {inGrouping.map((gr) => (
-          <li key={gr.id} className="text-sm">
-            {gr.name}
-          </li>
-        ))}
-        {inGrouping.length === 0 && (
-          <li className="text-sm text-muted-foreground">{t('groupingNoGroups')}</li>
-        )}
-      </ul>
-      {candidates.length > 0 && (
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <span id={`grouping-add-${grouping.id}-label`} className="text-sm font-medium">
-              {t('groupingAddGroupLabel')}
-            </span>
-            <Select
-              items={Object.fromEntries([
-                ['none', '—'],
-                ...candidates.map((gr) => [gr.id, gr.name] as [string, string]),
-              ])}
-              value={selection === '' ? 'none' : selection}
-              onValueChange={(v) => onSelectionChange(!v || v === 'none' ? '' : v)}
-            >
-              <SelectTrigger aria-labelledby={`grouping-add-${grouping.id}-label`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">—</SelectItem>
-                {candidates.map((gr) => (
-                  <SelectItem key={gr.id} value={gr.id}>
-                    {gr.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => void addGroupToGrouping()}>
-            {t('groupingAddGroup')}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Mảng thành viên của một cohort đang mở: tải khi mở lần đầu, thêm/gỡ qua đột biến rồi danh sách tự làm mới. */
-function CohortMembersSection({
-  cohort,
-  canManageCohorts,
-  input,
-  onInputChange,
-  onMessage,
-}: {
-  cohort: Cohort;
-  canManageCohorts: boolean;
-  input: string;
-  onInputChange: (value: string) => void;
-  onMessage: (text: string) => void;
-}) {
-  const { t } = useTranslation('app');
-  const membersQuery = useCohortMembers(cohort.id);
-  const addMember = useAddCohortMember();
-  const removeMember = useRemoveCohortMember();
-
-  useEffect(() => {
-    if (membersQuery.isError) onMessage(t('cohortMembersLoadFailed'));
-  }, [membersQuery.isError, onMessage, t]);
-
-  const members = membersQuery.data ?? [];
-
-  /** Thêm thành viên vào cohort; backend kích hoạt đồng bộ ghi danh theo cohort. */
-  async function addCohortMember() {
-    const userId = input.trim();
-    if (!userId) return;
-    try {
-      await addMember.mutateAsync({ cohortId: cohort.id, userId });
-      onInputChange('');
-      onMessage(t('cohortMemberAdded'));
-    } catch {
-      onMessage(t('cohortMemberAddFailed'));
-    }
-  }
-
-  /** Gỡ thành viên khỏi cohort qua DELETE /cohorts/:id/members/:userId. */
-  async function removeCohortMember(userId: string) {
-    try {
-      await removeMember.mutateAsync({ cohortId: cohort.id, userId });
-      onMessage(t('cohortMemberRemoved'));
-    } catch {
-      onMessage(t('cohortMemberRemoveFailed'));
-    }
-  }
-
-  return (
-    <div className="space-y-2 rounded border p-3">
-      <p className="text-sm font-medium">{t('cohortMembersTitle', { name: cohort.name })}</p>
-      <ul className="space-y-1">
-        {members.map((m) => (
-          <li key={m.userId} className="flex items-center gap-2 text-sm">
-            <span>{t('cohortMemberLine', { userId: m.userId, time: m.timeAdded })}</span>
-            {canManageCohorts && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void removeCohortMember(m.userId)}
-              >
-                {t('cohortRemoveMember')}
-              </Button>
-            )}
-          </li>
-        ))}
-        {members.length === 0 && (
-          <li className="text-sm text-muted-foreground">{t('cohortNoMembers')}</li>
-        )}
-      </ul>
-      {canManageCohorts && (
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <Label htmlFor={`cohort-member-${cohort.id}`}>{t('cohortMemberUserId')}</Label>
-            <Input
-              id={`cohort-member-${cohort.id}`}
-              value={input}
-              onChange={(e) => onInputChange(e.target.value)}
-            />
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => void addCohortMember()}>
-            {t('cohortAddMember')}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- Trang quản trị --------------------------------------------------------------
 
 export function CourseAdminPage() {
   const { t } = useTranslation('app');
@@ -858,13 +564,13 @@ export function CourseAdminPage() {
                   {t('enrolUserLine', {
                     userId: ue.userId,
                     status:
-                      ue.status === 0 ? t('enrolActive') : ue.status === 1 ? t('enrolSuspended') : t('enrolWithdrawn'),
+                      ue.status === ENROLMENT_STATUS.active ? t('enrolActive') : ue.status === ENROLMENT_STATUS.suspended ? t('enrolSuspended') : t('enrolWithdrawn'),
                     method: ue.enrolMethod ?? '',
                   })}
                 </span>
-                {ue.status !== 2 && (
+                {ue.status !== ENROLMENT_STATUS.withdrawn && (
                   <Button type="button" variant="outline" onClick={() => void toggleSuspend(ue)}>
-                    {ue.status === 1 ? t('reactivate') : t('suspend')}
+                    {ue.status === ENROLMENT_STATUS.suspended ? t('reactivate') : t('suspend')}
                   </Button>
                 )}
               </li>
@@ -908,7 +614,7 @@ export function CourseAdminPage() {
  * trang quản trị khoá vào đúng các khoá trang dùng để vào trang
  * không phải chờ chuỗi tải phía client.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.id) await courseAdminPageClientLoader(params.id);
   return null;
 }
@@ -918,7 +624,6 @@ export default CourseAdminPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Quản trị khoá học');
 }

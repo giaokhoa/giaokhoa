@@ -38,9 +38,19 @@ export function onSpaceRegistryChanged(listener: SpaceRegistryChangedListener): 
  * khi thay đổi trên sổ đã commit thành công (phát trước commit sẽ
  * làm bên nghe đọc lại đúng giá trị cũ và đệm lại giá trị cũ).
  *
+ * Hợp đồng: một listener ném lỗi KHÔNG abort các listener sau (lỗi
+ * được nuốt im — bên nghe là bộ đệm trong tiến trình, không có kênh
+ * báo lỗi ngược cho phía phát); listener nào cần báo lỗi thì tự ghi log.
+ *
  * @param slug - Slug của không gian vừa đổi trạng thái/phiên bản/cấu
  *   hình định tuyến.
  */
 export function emitSpaceRegistryChanged(slug: string): void {
-  for (const listener of listeners) listener(slug);
+  for (const listener of listeners) {
+    try {
+      listener(slug);
+    } catch {
+      // Một listener hỏng không được chặn các listener sau.
+    }
+  }
 }

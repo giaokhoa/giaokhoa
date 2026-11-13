@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { MessagingRepository, type MessagingStorePort } from './messaging';
+import { CONTEXT_LEVEL_COURSE } from './dashboard';
 
 /**
  * Spec tích hợp của repository nhắn tin trên Kysely (issue #658).
@@ -46,13 +49,10 @@ import { MessagingRepository, type MessagingStorePort } from './messaging';
  * gọi cổng sẽ fail rõ ràng thay vì lặng lẽ qua.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g658_messaging';
 
-const UUIDV7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Cổng store giả cho spec này: bề mặt native không được phép chạm cổng (xem ghi chú đầu file). */
 const unusedStore: MessagingStorePort = new Proxy({} as MessagingStorePort, {
@@ -119,13 +119,13 @@ beforeAll(async () => {
 
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g658-messaging', name: 'Trung tâm spec messaging', kind: 'center', status: 'active' })
+    .values({ slug: 'g658-messaging', name: 'Trung tâm spec messaging', kind: TEST_TENANT_KIND, status: 'active' })
     .returning('id')
     .executeTakeFirstOrThrow();
   tenantId = tenant.id;
   const otherTenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g658-messaging-other', name: 'Trung tâm spec messaging khác', kind: 'center', status: 'active' })
+    .values({ slug: 'g658-messaging-other', name: 'Trung tâm spec messaging khác', kind: TEST_TENANT_KIND, status: 'active' })
     .returning('id')
     .executeTakeFirstOrThrow();
   otherTenantId = otherTenant.id;
@@ -153,7 +153,7 @@ describe('conversation, thành viên và cấp seq', () => {
     expect(row.tenantId).toBe(tenantId);
   });
 
-  it('thêm thành viên hai lần không trùng (onConflict doNothing), isMember và removeMember giữ đúng hợp đồng', async () => {
+  it('thành viên hội thoại: thêm hai lần không trùng, kiểm tra đúng trước/sau khi gỡ', async () => {
     const conv = await repo.insertConversation({ type: 2, name: 'Nhóm thành viên' });
     await repo.addMember(conv.id, userA);
     await repo.addMember(conv.id, userA);
@@ -423,7 +423,7 @@ describe('trang roster bằng SQL thô', () => {
     // check khoá-thuộc-lớp; spec chỉ cần khoá làm đích FK).
     const rosterTenant = await db
       .insertInto('tenants')
-      .values({ slug: 'g658-roster', name: 'Tenant roster G11', kind: 'center', status: 'active' })
+      .values({ slug: 'g658-roster', name: 'Tenant roster G11', kind: TEST_TENANT_KIND, status: 'active' })
       .returning('id')
       .executeTakeFirstOrThrow();
     const rosterCategory = await db
@@ -442,7 +442,7 @@ describe('trang roster bằng SQL thô', () => {
     const courseId = courseRow.id;
     const courseCtx = await db
       .insertInto('context')
-      .values({ context_level: 50, instance_id: courseId, path: '', depth: 2 })
+      .values({ context_level: CONTEXT_LEVEL_COURSE, instance_id: courseId, path: '', depth: 2 })
       .returning('id')
       .executeTakeFirstOrThrow();
     await db.updateTable('context').set({ path: `/${courseCtx.id}` }).where('id', '=', courseCtx.id).execute();

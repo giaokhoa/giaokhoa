@@ -13,7 +13,7 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng
  *   dụng, không tự mở pool: handle do tầng ứng dụng dựng bằng factory của package (facade định tuyến theo không gian của kho trung tâm) rồi truyền vào lúc khởi tạo.
  */
-import type { Expression, Insertable, SqlBool, Updateable } from 'kysely';
+import type {Expression, SqlBool, InsertObject, UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
@@ -83,8 +83,8 @@ const GUARDIAN_LINK_COLUMNS = [
  * (snake_case), LOẠI mọi trường mang `undefined` — trường vắng mặt
  * phải để default của database quyết định, không được biên dịch thành tham số `null` (quy tắc T-4 trong sổ tay của package).
  */
-function guardianLinkInsertValues(values: NewGuardianLink): Insertable<CentreDB['guardian_links']> {
-  const row: Insertable<CentreDB['guardian_links']> = {
+function guardianLinkInsertValues(values: NewGuardianLink): InsertObject<CentreDB, 'guardian_links'> {
+  const row: InsertObject<CentreDB, 'guardian_links'> = {
     tenant_id: values.tenantId,
     guardian_user_id: values.guardianUserId,
     student_user_id: values.studentUserId,
@@ -106,8 +106,8 @@ function guardianLinkInsertValues(values: NewGuardianLink): Insertable<CentreDB[
  * (snake_case), LOẠI mọi trường `undefined` — patch chứa trường nào
  * thì chỉ trường đó đổi, đúng ngữ nghĩa bỏ qua `undefined` của đường bộ máy cũ trước đây (quy tắc T-4).
  */
-function guardianLinkUpdateSet(patch: Partial<GuardianLinkRow>): Updateable<CentreDB['guardian_links']> {
-  const set: Updateable<CentreDB['guardian_links']> = {};
+function guardianLinkUpdateSet(patch: Partial<GuardianLinkRow>): UpdateObject<CentreDB, 'guardian_links'> {
+  const set: UpdateObject<CentreDB, 'guardian_links'> = {};
   if (patch.id !== undefined) set.id = patch.id;
   if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
   if (patch.guardianUserId !== undefined) set.guardian_user_id = patch.guardianUserId;
@@ -142,12 +142,12 @@ export class GuardiansRepository {
 
   /** Chèn một liên kết giám hộ mới và trả về dòng vừa chèn. */
   async insertLink(v: NewGuardianLink, db: GuardianDb = this.db()): Promise<GuardianLinkRow> {
-    const rows = await db
+    const row = await db
       .insertInto('guardian_links')
       .values(guardianLinkInsertValues(v))
       .returning(GUARDIAN_LINK_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy liên kết theo id. */

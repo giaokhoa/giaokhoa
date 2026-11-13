@@ -1,7 +1,9 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { GradesRepository, type GradeRow, type ItemRow, type NewGrade } from './grades';
 
 /**
@@ -21,12 +23,9 @@ import { GradesRepository, type GradeRow, type ItemRow, type NewGrade } from './
  *   sạch dòng điểm đã ghi trong giao dịch.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g644_grades';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** User/actor cố định — `grade_grades.user_id` không có khoá ngoại nên chỉ cần uuid hợp lệ. */
 const U1 = '019276a1-4444-7000-8000-0000000000e1';
@@ -52,7 +51,7 @@ let seed: Seed;
 /** Gieo tenant + khoá qua Kysely thô, item qua chính repository. */
 async function seedData(): Promise<Seed> {
   const tenant = await db.insertInto('tenants')
-    .values({ slug: 'g644-grades', name: 'Tenant điểm G644', kind: 'centre' })
+    .values({ slug: 'g644-grades', name: 'Tenant điểm G644', kind: TEST_TENANT_KIND })
     .returning('id').executeTakeFirstOrThrow();
   const category = await db.insertInto('course_categories')
     .values({ name: 'Danh mục khoá điểm G644', tenant_id: tenant.id })
@@ -173,7 +172,7 @@ function comparableGrade(row: GradeRow) {
 
 describe('GradesRepository trên Kysely (issue #644)', () => {
   it('insertItem nhận id UUIDv7 và các mặc định của database; listItems sắp xếp theo sort_order rồi id', async () => {
-    expect(seed.itemA.id).toMatch(UUIDV7_PATTERN);
+    expect(seed.itemA.id).toMatch(UUIDV7_RE);
     expect(seed.itemB.gradeMax).toBe(100);
     expect(seed.itemB.postingPolicy).toBe('auto');
     const items = await repo.listItems(seed.courseId);
@@ -217,7 +216,7 @@ describe('GradesRepository trên Kysely (issue #644)', () => {
       finalGrade: 8, feedback: 'Tốt', hidden: false, locked: false, overridden: false,
       excluded: false, frozen: false, aggregationStatus: 'used', aggregationWeight: null,
     });
-    expect(saved.id).toMatch(UUIDV7_PATTERN);
+    expect(saved.id).toMatch(UUIDV7_RE);
     expect(saved.finalGrade).toBe(8);
     expect(await repo.getGrade(seed.itemA.id, U1)).toEqual(saved);
   });

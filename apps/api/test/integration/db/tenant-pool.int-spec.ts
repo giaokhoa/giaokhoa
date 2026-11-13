@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { tenantAls } from '../modules/tenants/tenant-als';
-import { TenantAwarePool } from './tenant-pool';
+import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+import { TenantAwarePool } from '../../../src/db/tenant-pool';
 
 /**
  * TENANT-1 (issue #196), bước 2 của kế hoạch 6397026244: chứng minh SỐNG đường đi của truy vấn qua `TenantAwarePool` TRƯỚC khi lật RLS fail-closed. Điều kiện tiên quyết của fail-closed là MỌI truy vấn trên pool dùng chung phải mang GUC của ngữ cảnh ALS hiện tại. Mã ứng dụng không checkout tường minh cho truy vấn thường — nó gọi `pool.query(...)`, và pg hiện thực `Pool.query` bằng cách gọi nội bộ `this.connect()`. Spec này khoá chặt cả hai đường:

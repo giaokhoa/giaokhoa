@@ -1,3 +1,8 @@
+/**
+ * Chuông thông báo ở header cùng dropdown xem nhanh: huy hiệu số chưa đọc dùng chung khoá cache với mục Thông báo trên sidebar, dropdown liệt kê tối đa 8 dòng gộp mới nhất từ cùng API danh sách nhóm của trung tâm.
+ * Luồng chính: bấm một dòng thì đánh dấu đã đọc (một mục hoặc cả nhóm) rồi điều hướng tới ngữ cảnh của nó; dòng gộp không có ngữ cảnh thì về trang thông báo, chân dropdown mở trang thông báo đầy đủ.
+ */
+
 import { IconBell } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -14,27 +19,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@giaokhoa/ui/components/dropdown-menu';
-import { formatDateTime } from '#utils/date-format';
+import { formatDateTime, relativeTime } from '#utils/date-format';
 import { flattenNotificationGroups, updateNotificationGroupsCache, useMarkNotificationRead, useNotificationGroups, useNotificationUnreadCount, useReadNotificationGroup } from '../queries/notifications';
-import { notificationGroupKey } from '../utils/notifications';
+import { notificationGroupKey, openNotificationGroupWithUnread } from '../utils/notifications';
 import type { NotificationGroupFilter, NotificationGroupView } from '../types/notifications';
 import '#config/i18n';
 
 /** Số dòng gộp tối đa trong dropdown xem nhanh (audit NB-3, issue #174: 5–10 dòng mới nhất). */
 const QUICK_VIEW_LIMIT = 8;
-
-/** Thời gian tương đối cho dòng mới nhất — cùng khoá i18n và cùng luật với trang thông báo. */
-function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 60_000) return t('justNow');
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 60) return t('minutesAgo', { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('hoursAgo', { count: hours });
-  const days = Math.floor(hours / 24);
-  if (days < 7) return t('daysAgo', { count: days });
-  return formatDateTime(iso);
-}
 
 /**
  * Chuông thông báo ở header + dropdown xem nhanh (lát NB-3, issue #174 — xử khoảng trống G6 của hồ sơ audit thông báo). Số chưa đọc dùng CHUNG khoá `notificationUnreadCount` với huy hiệu ở mục Thông báo trên sidebar: REST cho số ngay khi mở trang, stream SSE (gắn ở app-sidebar) giữ số đó luôn mới trong cache — đọc ở đây hay ở trang thông báo thì số ở mọi bề mặt đều khớp, không cần tải lại trang.
@@ -46,7 +38,7 @@ export function NotificationBell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Cùng truy vấn hệt sidebar (options dùng chung của lib/notifications, cùng khoá nhà máy): TanStack gộp thành một lần gọi và một mục cache cho cả hai bề mặt.
+  // Cùng truy vấn hệt sidebar (options dùng chung của features/notifications/queries/notifications, cùng khoá nhà máy): TanStack gộp thành một lần gọi và một mục cache cho cả hai bề mặt.
   const unreadQuery = useNotificationUnreadCount();
   const unread = unreadQuery.data?.unread ?? 0;
 
@@ -92,14 +84,7 @@ export function NotificationBell() {
       return;
     }
     if (group.unreadCount > 0) {
-      readGroupMutation.mutate(group, {
-        onSettled: () => {
-          updateNotificationGroupsCache(queryClient, (prev) =>
-            prev.map((g) => (notificationGroupKey(g) === key ? { ...g, unreadCount: 0 } : g)),
-          );
-          navigate(group.contextUrl!);
-        },
-      });
+      openNotificationGroupWithUnread(group, queryClient, readGroupMutation, navigate);
       return;
     }
     navigate(group.contextUrl);

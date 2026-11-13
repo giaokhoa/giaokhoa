@@ -56,11 +56,6 @@ function docOrUndefined(doc: Doc | undefined): Doc | undefined {
   return docHasContent(doc) ? doc : undefined;
 }
 
-/** Trạng thái bank của một view như API trả về (contracts chưa khai `status` ở entry). */
-export function entryStatus(view: QuestionView | null | undefined): string | undefined {
-  return (view?.entry as { status?: string } | undefined)?.status;
-}
-
 // ---------------------------------------------------------------------------
 // Mô hình form
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import type {
   PinRegradeLogEntry,
   PinRegradeResult,
@@ -29,7 +29,7 @@ import {
 import { QuizSharedService } from './quiz-shared.service';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import { QUIZ_COMPONENT } from './quiz-shared.service';
-import { QUIZ_CAPABILITIES } from './quiz-shared.service';
+import { DEFAULT_QUIZ_GRADE_METHOD, QUIZ_CAPABILITIES } from './quiz-shared.service';
 import type { PinRow } from './quiz.service';
 
 /**
@@ -39,6 +39,8 @@ import type { PinRow } from './quiz.service';
  */
 
 export class QuizPinsService {
+  private readonly logger = new Logger(QuizPinsService.name);
+
   constructor(
     private readonly repo: QuizRepository,
     private readonly courses: CoursesService,
@@ -150,7 +152,7 @@ export class QuizPinsService {
       name: input.name ?? null, intro: input.intro ?? '',
       timeOpen, timeClose, timeLimit: input.timeLimitSeconds ?? null,
       attemptsAllowed: input.attemptsAllowed ?? preset?.attemptsAllowed ?? 0,
-      gradeMethod: input.gradeMethod ?? 'highest',
+      gradeMethod: input.gradeMethod ?? DEFAULT_QUIZ_GRADE_METHOD,
       shuffleAnswers: input.shuffleAnswers ?? preset?.shuffleAnswers ?? false,
       passwordHash: await this.hashQuizPassword(input.password),
       subnet: input.subnet ?? null,
@@ -181,8 +183,10 @@ export class QuizPinsService {
         itemName: name, itemType: 'mod', cmId: cm.id, gradeMax: version.totalScore,
       });
     } catch (err) {
-      // Dọn dẹp best-effort để không để lại pin mồ côi không có cm.
-      await this.repo.deletePin(pin.id).catch(() => undefined);
+      // Dọn dẹp best-effort để không để lại pin mồ côi không có cm — dọn lỗi thì phải thấy trong log (lỗi gốc vẫn được ném lại).
+      await this.repo.deletePin(pin.id).catch((cleanupErr) => {
+        this.logger.warn(`createPin cleanup failed for pin ${pin.id}: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+      });
       throw err;
     }
     await this.outbox.enqueueStandalone({
@@ -310,8 +314,14 @@ export class QuizPinsService {
     const attempts = await this.repo.listAttempts(pin.id, QUIZ_PIN_ATTEMPTS_LIMIT);
     for (const a of attempts) await this.questions.deleteUsage(a.usageId);
     if (pin.cmId) {
-      const item = await this.grades.getItemForCm(pin.course, pin.cmId).catch(() => undefined);
-      if (item) await this.grades.deleteItem(actorId, item.id).catch(() => undefined);
+      const item = await this.grades.getItemForCm(pin.course, pin.cmId).catch((err) => {
+        // Tra grade item lỗi thì không xoá được grade item — mồ côi phải thấy trong log thay vì im lặng bỏ qua.
+        this.logger.warn(`deletePin: failed to look up grade item for pin ${pin.id}: ${err instanceof Error ? err.message : String(err)}`);
+        return undefined;
+      });
+      if (item) await this.grades.deleteItem(actorId, item.id).catch((err) => {
+        this.logger.warn(`deletePin: failed to delete grade item ${item.id} of pin ${pin.id}: ${err instanceof Error ? err.message : String(err)}`);
+      });
     }
     await this.repo.deletePin(pin.id);
     if (pin.cmId) await this.courses.deleteCm(actorId, pin.cmId);

@@ -181,6 +181,28 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     resolver.dispose();
   });
 
+  it('sự kiện vô hiệu hoá tới dồn dập thì dừng sau số lần đọc giới hạn thay vì lặp vô hạn', async () => {
+    // Mỗi lần đọc sổ đều bị một sự kiện đổi sổ xen vào ngay trong lúc đọc: vòng đọc lại có giới hạn phải dừng và ném lỗi rõ ràng thay vì lặp mãi (livelock).
+    const slug = 'trung-tam-a';
+    let reads = 0;
+    const resolver = new SpaceConnectionResolver({
+      cacheTtlMs: 60_000,
+      readRegistry: async () => {
+        reads += 1;
+        emitSpaceRegistryChanged(slug);
+        return { ...DEDICATED_ENTRY };
+      },
+      resolveSecretRef: (ref) =>
+        ref === 'env:CENTRE_A_URL' ? 'postgres://centre_a_app:pw@db.internal:5432/postgres' : undefined,
+    });
+    await expect(resolver.resolve(slug)).rejects.toMatchObject({
+      name: 'SpaceRoutingError',
+      code: 'space_routing.too_many_invalidations',
+    });
+    expect(reads).toBe(5);
+    resolver.dispose();
+  });
+
   it('sau khi dispose, bộ phân giải không còn nhận sự kiện vô hiệu hoá', async () => {
     const { resolver, reads } = makeResolver({ 'trung-tam-a': DEDICATED_ENTRY });
     await resolver.resolve('trung-tam-a');

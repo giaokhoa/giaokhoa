@@ -14,6 +14,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
 import { tenantAls } from '../tenants/tenant-als';
 import { MessagingGroupTreeService } from './messaging-group-tree.service';
 import {
+  MESSAGE_PREVIEW_LENGTH,
   MESSAGE_PROVIDERS,
   providerByName,
   externalPolicyOf,
@@ -85,8 +86,8 @@ function notificationItemView(row: NotificationRow): NotificationItem {
 
 export interface NotificationChannelPort {
   channel: MessageChannel;
-  /** Phân phối thật hoặc ghi lại dispatch. Trả trạng thái log. */
   /**
+   * Phân phối thật hoặc ghi lại dispatch. Trả trạng thái log.
    * Phân phối một notification tới các kênh đã bật của người nhận và ghi dispatch log.
    */
   deliver(input: { userId: string; provider: string; subject: string; body: string; notificationId: string | null }): Promise<string>;
@@ -343,18 +344,39 @@ export class MessagingNotificationsService {
     return { courseId: course.courseId, courseName: course.fullName, mode: input.mode };
   }
 
-  // --- notification -----------------------------------------------------------
+  // --- thông báo -----------------------------------------------------------
 
   /**
-   * Tạo một notification hệ thống cho một user qua một provider đã đăng ký.
+   * Ghi một dòng dispatch log cho lần phát BỊ BỎ QUA (người nhận
+   * suspended, admin tắt provider, khoá bị tắt tiếng, hoặc tuỳ chọn
+   * tắt kênh): trạng thái + tiền tố dedupeKey là hai thứ phân biệt
+   * các điểm bỏ qua — thân log (người nhận/provider/kênh/subject)
+   * giống nhau ở mọi điểm nên gom về đây thay vì lặp lại object
+   * literal `insertDispatchLog` ở từng nhánh của `notify()`.
+   *
+   * @param input - Trạng thái bỏ qua, kênh, tiền tố dedupeKey và các
+   *   trường chung của log (người nhận, provider, tenant, subject).
+   */
+  private async logSkipped(input: {
+    userId: string; provider: string; channel: MessageChannel;
+    status: 'skipped-suspended' | 'skipped-admin-disabled' | 'skipped-course-mute' | 'skipped-preference';
+    tenantId: string | null; subject: string; dedupePrefix: string;
+  }): Promise<void> {
+    await this.repo.insertDispatchLog({
+      userId: input.userId, provider: input.provider, channel: input.channel,
+      status: input.status, tenantId: input.tenantId, subject: input.subject,
+      dedupeKey: `${input.dedupePrefix}-${input.provider}-${input.userId}-${randomUUID()}`,
+    });
+  }
+
+  /**
+   * Tạo một notification hệ thống cho một user qua một provider đã đăng ký
+   * (điểm vào chuẩn của các module khác).
    * Người nhận được coi là ĐÃ ĐĂNG NHẬP cho quyết định kênh trong-app
    * khi họ có bất kỳ ngữ nghĩa session sống nào trong luồng API; phía hệ thống
    * truyền `loggedIn` tường minh (mặc định true cho lời gọi API trực tiếp).
    * Một tuỳ chọn đặt disabled cho trạng thái liên quan nghĩa là kênh
    * KHÔNG được phân phối — và điều đó được khẳng định bởi dispatch log.
-   */
-  /**
-   * Tạo notification cho user từ một provider (điểm vào chuẩn của các module khác).
    *
    * LUẬT TỐI THIỂU HOÁ KÊNH NGOÀI (chuẩn Canvas, lát N1 issue #49;
    * siết chặt theo quyết định C-5 của issue #219 — CẤM fallback
@@ -425,10 +447,16 @@ export class MessagingNotificationsService {
     const tenantKey = tenantId ?? 'platform';
     if (!recipient || recipient.suspended || recipient.deleted) {
       // User bị suspended không nhận gì (report §2#12). Không gì được lưu.
-      await this.repo.insertDispatchLog({
-        userId: userId, provider: providerName, channel: 'popup', status: 'skipped-suspended', tenantId,
-        subject: input.subject, dedupeKey: `${tenantKey}-skipped-suspended-${providerName}-${userId}-${randomUUID()}`,
-      }).catch(() => undefined);
+      // Ghi dispatch log cho trường hợp suspended chỉ là vết truy vết
+      // best-effort: lỗi ghi log không được chặn việc trả 'suspended'
+      // (bản thân kết quả trả về đã nói rõ lần phát bị bỏ qua vì
+      // suspended) — chỉ ghi cảnh báo để lỗi ghi log kéo dài lộ diện.
+      await this.logSkipped({
+        userId, provider: providerName, channel: 'popup', status: 'skipped-suspended', tenantId,
+        subject: input.subject, dedupePrefix: `${tenantKey}-skipped-suspended`,
+      }).catch(() => {
+        this.logger.warn(`notify(): không ghi được dispatch log 'skipped-suspended' cho provider "${providerName}" (người nhận ${userId}).`);
+      });
       return { provider: providerName, userId, notificationId: null, channels: {}, skipped: 'suspended' };
     }
     // Chính sách ADMIN cấp site (NB-7, issue #174): loại bị admin tắt
@@ -438,9 +466,9 @@ export class MessagingNotificationsService {
     // Hai loại bắt buộc P2 không bao giờ bị chặn ở đây (admin cũng
     // không tắt được chúng — SiteConfigService từ chối đặt false).
     if (!(await this.isProviderEnabledBySitePolicy(provider))) {
-      await this.repo.insertDispatchLog({
-        userId: userId, provider: providerName, channel: 'popup', status: 'skipped-admin-disabled', tenantId,
-        subject: input.subject, dedupeKey: `admin-disabled-${providerName}-${userId}-${randomUUID()}`,
+      await this.logSkipped({
+        userId, provider: providerName, channel: 'popup', status: 'skipped-admin-disabled', tenantId,
+        subject: input.subject, dedupePrefix: 'admin-disabled',
       });
       return { provider: providerName, userId, notificationId: null, channels: {}, skipped: 'admin-disabled' };
     }
@@ -452,9 +480,9 @@ export class MessagingNotificationsService {
     // (isExemptFromCourseMute) — luật toàn cục thắng ghi đè theo khoá.
     if (input.courseId && !isExemptFromCourseMute(provider)
       && (await this.users.getPreference(userId, coursePreferenceName(input.courseId))) === 'mute') {
-      await this.repo.insertDispatchLog({
-        userId: userId, provider: providerName, channel: 'popup', status: 'skipped-course-mute', tenantId,
-        subject: input.subject, dedupeKey: `course-mute-${providerName}-${userId}-${randomUUID()}`,
+      await this.logSkipped({
+        userId, provider: providerName, channel: 'popup', status: 'skipped-course-mute', tenantId,
+        subject: input.subject, dedupePrefix: 'course-mute',
       });
       return { provider: providerName, userId, notificationId: null, channels: {}, skipped: 'course-mute' };
     }
@@ -471,7 +499,7 @@ export class MessagingNotificationsService {
       if (resolved.popupEnabled) {
         const notification = await this.repo.insertNotification({
           userIdFrom: input.fromUserId ?? null, userIdTo: userId, tenantId,
-          subject: input.subject, fullMessage: input.body, smallMessage: input.body.slice(0, 200),
+          subject: input.subject, fullMessage: input.body, smallMessage: input.body.slice(0, MESSAGE_PREVIEW_LENGTH),
           component: provider.component, eventType: providerName,
           contextUrl: input.contextUrl ?? null,
         });
@@ -484,9 +512,9 @@ export class MessagingNotificationsService {
         });
       } else {
         channels.popup = 'skipped-preference';
-        await this.repo.insertDispatchLog({
-          userId: userId, provider: providerName, channel: 'popup', status: 'skipped-preference', tenantId,
-          subject: input.subject, dedupeKey: `${tenantKey}-popup-off-${providerName}-${userId}-${randomUUID()}`,
+        await this.logSkipped({
+          userId, provider: providerName, channel: 'popup', status: 'skipped-preference', tenantId,
+          subject: input.subject, dedupePrefix: `${tenantKey}-popup-off`,
         });
       }
     }
@@ -535,9 +563,9 @@ export class MessagingNotificationsService {
         channels[channel] = 'queued';
       } else {
         channels[channel] = 'skipped-preference';
-        await this.repo.insertDispatchLog({
-          userId: userId, provider: providerName, channel, status: 'skipped-preference', tenantId,
-          subject: input.subject, dedupeKey: `${tenantKey}-${channel}-off-${providerName}-${userId}-${randomUUID()}`,
+        await this.logSkipped({
+          userId, provider: providerName, channel, status: 'skipped-preference', tenantId,
+          subject: input.subject, dedupePrefix: `${tenantKey}-${channel}-off`,
         });
       }
     }
@@ -612,9 +640,9 @@ export class MessagingNotificationsService {
     };
   }
 
-  /** Endpoint /notifications/send là kích hoạt hệ thống: chỉ site admin. */
   /**
    * Gửi notification hệ thống (vd hoàn tất báo cáo) kèm nội dung đã dịch.
+   * Endpoint /notifications/send là kích hoạt hệ thống: chỉ site admin.
    *
    * Luật C-5 (issue #219): nội dung của đường này là VĂN BẢN TỰ DO
    * do quản trị viên soạn và provider do DTO quyết định — bề mặt

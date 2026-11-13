@@ -1,10 +1,8 @@
-import { useEffect, useId, useState, useMemo } from 'react';
-import { createEditorControlStore } from './editor-control-store.js';
-import { Decoration, Extension, type WidgetDecoration } from '@tiptap/core';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { useId } from 'react';
 import type { RichTextDocument } from '@giaokhoa/contracts';
 import { RichTextEditor } from './rich-text-editor.js';
 import type { RichTextImagePick } from './rich-text-editor.js';
+import { createAnswerDecoration, useAnswerEditorExtensions } from './item-list.js';
 import {
   STATEMENT_LIST_NODE_TYPE,
   STATEMENT_NODE_TYPE,
@@ -44,114 +42,64 @@ interface StatementAnswerControl {
 }
 
 /**
- * Các id mệnh đề theo thứ tự trong tài liệu hiện tại của editor.
+ * Dựng cặp radio Đúng/Sai cho một mệnh đề: đáp án hiện tại được đọc
+ * từ điều khiển tại lúc tạo widget nên không cần dựng lại decoration
+ * khi đáp án đổi — bản thân các radio trong cùng một nhóm (mỗi mệnh đề
+ * một nhóm riêng) tự loại trừ nhau theo hành vi gốc của trình duyệt
+ * khi người soạn bấm chọn.
  *
- * @param doc - Tài liệu ProseMirror hiện tại.
- * @returns Mảng id của các node statement thuộc `statementList` chốt đuôi.
+ * @param statementId - Id của mệnh đề mà widget gắn vào.
+ * @param getControl - Hàm đọc điều khiển radio mới nhất.
+ * @returns Mảng phần tử con của widget (hai lựa chọn Đúng/Sai).
  */
-function getStatementIds(doc: ProseMirrorNode): string[] {
-  const statementList = doc.lastChild;
-  if (statementList?.type.name !== STATEMENT_LIST_NODE_TYPE) {
-    return [];
-  }
-  const ids: string[] = [];
-  statementList.forEach((statement) => {
-    if (statement.type.name === STATEMENT_NODE_TYPE && typeof statement.attrs.id === 'string') {
-      ids.push(statement.attrs.id);
-    }
-  });
-  return ids;
-}
+function buildStatementAnswerWidget(
+  statementId: string,
+  getControl: () => StatementAnswerControl,
+): HTMLElement[] {
+  const buildOption = (value: boolean, label: string, ariaLabel: string) => {
+    const option = document.createElement('label');
+    option.className = 'giaokhoa-statement__answer-option';
 
-/** Hai danh sách id có giống hệt nhau (cả phần tử lẫn thứ tự) không. */
-function sameIds(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((id, index) => id === right[index]);
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = `${getControl().groupPrefix}:${statementId}`;
+    input.className = 'giaokhoa-statement__answer-input';
+    input.setAttribute('aria-label', ariaLabel);
+    input.checked = getControl().answers[statementId] === value;
+    input.addEventListener('change', () => {
+      if (input.checked) {
+        getControl().onAnswerChange(statementId, value);
+      }
+    });
+
+    const text = document.createElement('span');
+    text.textContent = label;
+
+    option.append(input, text);
+    return option;
+  };
+
+  return [
+    buildOption(true, 'Đúng', 'Đánh dấu mệnh đề là Đúng'),
+    buildOption(false, 'Sai', 'Đánh dấu mệnh đề là Sai'),
+  ];
 }
 
 /**
- * Decoration vẽ cặp radio Đúng/Sai cho từng mệnh đề mà không ghi đáp án vào cấu trúc tài liệu.
- *
- * Decoration chỉ dựng lại khi TẬP id mệnh đề thay đổi (mệnh đề mới
- * sinh id, mệnh đề bị xoá, thứ tự đổi) — đáp án hiện tại được đọc từ
- * `controlRef` tại lúc tạo widget nên không cần dựng lại khi đáp án
- * đổi: bản thân các radio trong cùng một nhóm (mỗi mệnh đề một nhóm
- * riêng) tự loại trừ nhau theo hành vi gốc của trình duyệt khi người
- * soạn bấm chọn.
- *
- * @param controlRef - Ref giữ điều khiển radio mới nhất.
- * @returns Extension Tiptap mang decoration radio Đ/S.
+ * Decoration vẽ cặp radio Đúng/Sai cho từng mệnh đề mà không ghi đáp án
+ * vào cấu trúc tài liệu — dùng chung factory `createAnswerDecoration`
+ * của `item-list.ts` với node type `statement` (decoration chỉ dựng
+ * lại khi tập id mệnh đề thay đổi).
  */
-function createStatementAnswerDecoration(getControl: () => StatementAnswerControl) {
-  return Extension.create({
+const createStatementAnswerDecoration =
+  createAnswerDecoration<StatementAnswerControl>({
     name: 'statementAnswerDecoration',
-
-    addDecorations() {
-      return {
-        shouldUpdate: ({ oldState, newState }) =>
-          !sameIds(getStatementIds(oldState.doc), getStatementIds(newState.doc)),
-        create: ({ state }) => {
-          const widgets: WidgetDecoration[] = [];
-
-          state.doc.descendants((node, pos) => {
-            if (node.type.name !== STATEMENT_NODE_TYPE) {
-              return;
-            }
-            const statementId = node.attrs.id;
-            if (typeof statementId !== 'string') {
-              return;
-            }
-            widgets.push(
-              Decoration.Widget(
-                pos + 1,
-                () => {
-                  const wrapper = document.createElement('span');
-                  wrapper.className = 'giaokhoa-statement__answer';
-
-                  const buildOption = (value: boolean, label: string, ariaLabel: string) => {
-                    const option = document.createElement('label');
-                    option.className = 'giaokhoa-statement__answer-option';
-
-                    const input = document.createElement('input');
-                    input.type = 'radio';
-                    input.name = `${getControl().groupPrefix}:${statementId}`;
-                    input.className = 'giaokhoa-statement__answer-input';
-                    input.setAttribute('aria-label', ariaLabel);
-                    input.checked = getControl().answers[statementId] === value;
-                    input.addEventListener('change', () => {
-                      if (input.checked) {
-                        getControl().onAnswerChange(statementId, value);
-                      }
-                    });
-
-                    const text = document.createElement('span');
-                    text.textContent = label;
-
-                    option.append(input, text);
-                    return option;
-                  };
-
-                  wrapper.append(
-                    buildOption(true, 'Đúng', 'Đánh dấu mệnh đề là Đúng'),
-                    buildOption(false, 'Sai', 'Đánh dấu mệnh đề là Sai'),
-                  );
-                  return wrapper;
-                },
-                {
-                  key: `statement-answer-${statementId}`,
-                  side: -1,
-                  ignoreSelection: true,
-                  stopEvent: () => true,
-                },
-              ),
-            );
-          });
-
-          return widgets;
-        },
-      };
-    },
+    listNodeType: STATEMENT_LIST_NODE_TYPE,
+    itemNodeType: STATEMENT_NODE_TYPE,
+    widgetKeyPrefix: 'statement-answer',
+    wrapperClassName: 'giaokhoa-statement__answer',
+    buildWidget: buildStatementAnswerWidget,
   });
-}
 
 /**
  * Thuộc tính của {@link TrueFalseEditor}.
@@ -192,15 +140,11 @@ export function TrueFalseEditor({
   onRequestImage,
 }: TrueFalseEditorProps) {
   const groupPrefix = useId();
-  const [control] = useState(() => createEditorControlStore({ groupPrefix, answers, onAnswerChange }));
-  useEffect(() => {
-    control.update({ groupPrefix, answers, onAnswerChange });
-  }, [control, groupPrefix, answers, onAnswerChange]);
-
-  const extensions = useMemo(
-    () => [...trueFalseExtensions, createStatementAnswerDecoration(control.get)],
-    [control.get],
-  );
+  const extensions = useAnswerEditorExtensions({
+    baseExtensions: trueFalseExtensions,
+    createDecoration: createStatementAnswerDecoration,
+    controlValue: { groupPrefix, answers, onAnswerChange },
+  });
 
   return (
     <RichTextEditor

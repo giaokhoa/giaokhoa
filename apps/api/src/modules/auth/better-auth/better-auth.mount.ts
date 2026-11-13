@@ -11,13 +11,17 @@ import { BETTER_AUTH_BASE_PATH, type BetterAuthInstance } from './better-auth.in
  * Các segment đầu của route auth TỰ VIẾT hiện tại dưới cùng tiền tố `/api/v1/auth` (AuthController + OAuthController). Trong thời gian hai hệ cùng tồn tại (Giai đoạn 1–2 của issue #7), request nào thuộc các segment này phải đi tiếp xuống Nest như chưa từng có Better Auth — "đường cũ xử lý như hiện tại" là cổng đạt của giai đoạn. Danh sách này là của chính hệ thống (không phải của Better Auth) nên ổn định; nó bị xoá cùng lúc với các route cũ tại cutover ở cuối Giai đoạn 2.
  *
  * Lưu ý điểm giao nhau thật: `change-password` tồn tại ở CẢ hai hệ — trong giai đoạn cùng tồn tại, bản của hệ hiện tại thắng (hành vi live không đổi); bản của Better Auth tiếp quản khi route cũ bị gỡ.
+ *
+ * Test hồi quy `better-auth.mount.spec.ts` khẳng định mọi segment đầu của các controller dưới `/auth` đều có mặt ở đây — thêm route con mới dưới `/auth` mà quên thêm segment thì test đó đỏ trước khi lỗi lặp lại.
  */
-const LEGACY_AUTH_SEGMENTS = new Set([
+export const LEGACY_AUTH_SEGMENTS = new Set([
   'login',
   // Đăng ký công cộng do Nest gác kho và gán vai, không dùng BA sign-up.
   'public',
   // Đường token riêng của nhân sự vận hành là Nest, không phải BA.
   'platform',
+  // Đăng nhập nhân sự hỗ trợ (support/login, support/mfa/verify) của AuthController.
+  'support',
   'token',
   'mfa',
   'refresh',
@@ -35,6 +39,11 @@ const LEGACY_AUTH_SEGMENTS = new Set([
 ]);
 
 /**
+ * Khung định tuyến tối thiểu mà đường ghi Better Auth cần: chỉ phân giải đích và chuẩn bị kho — mount không tự mở pool hay đọc sổ đăng ký trực tiếp.
+ */
+export type BetterAuthSpaceRouting = Pick<SpaceDatabaseService, 'resolveTarget' | 'getKyselyForSpace'>;
+
+/**
  * Mount handler của Better Auth lên express instance của Nest tại `/api/v1/auth/*` (issue #7). Không có tích hợp NestJS chính chủ của Better Auth — đây là điểm nối tay đã chốt trong thiết kế.
  *
  * Bắt buộc gọi SAU `NestFactory.create` và TRƯỚC `app.init()`/`listen()`:
@@ -43,14 +52,6 @@ const LEGACY_AUTH_SEGMENTS = new Set([
  * lẫn spec e2e đều đi qua hàm này để không lệch nhau.
  *
  * Cầu discovery của AS (Refs #7, vá proxy discovery MCP AS): metadata AS (RFC 8414) của plugin oauth-provider chỉ khớp hai dạng `/.well-known/oauth-authorization-server{issuerPath}` và `{issuerPath}/.well-known/oauth-authorization-server` với `issuerPath = /api/v1/auth` — dạng gốc `/.well-known/oauth-authorization-server` không nằm trong tập khớp nên phải neo về dạng hậu tố, còn dạng chèn-đường-dẫn chuyển nguyên trạng. Hai route cầu này KHÔNG qua cổng LEGACY_AUTH_SEGMENTS (chúng không thuộc không gian `/api/v1/auth`). Nếu AS tắt (không compose plugin mcp) thì handler trả 404 — hành vi ròng như trước khi vá.
- */
-/**
- * Khung định tuyến tối thiểu mà đường ghi Better Auth cần: chỉ phân giải đích và chuẩn bị kho — mount không tự mở pool hay đọc sổ đăng ký trực tiếp.
- */
-export type BetterAuthSpaceRouting = Pick<SpaceDatabaseService, 'resolveTarget' | 'getKyselyForSpace'>;
-
-/**
- * Mount handler của Better Auth (xem chú thích ở đầu file về thứ tự mount).
  *
  * Đường GHI theo địa chỉ (Phần A, issue #587 — B1): handler này chạy thẳng trên Express, ngoài chuỗi guard của Nest, nên không có guard nào ghim trung tâm cho nó như đường đọc cookie
  * (`BetterAuthSessionGuard`). Không định tuyến ở đây thì mọi lần

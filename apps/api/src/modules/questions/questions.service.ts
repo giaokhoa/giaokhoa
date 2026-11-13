@@ -208,8 +208,25 @@ export class QuestionsService {
    */
   async getCategory(id: string): Promise<QCategoryRow> {
     const row = await this.repo.getCategory(id);
-    if (!row) throw new NotFoundException({ message: `Question category ${id} not found`, code: 'question.category_not_found' });
+    if (!row) throw this.categoryNotFound(id);
     return row;
+  }
+
+  /**
+   * Category theo lô id — MỘT truy vấn cho nhiều category (đường list
+   * lọc theo quyền từng category, vd ứng viên của một ô ma trận).
+   * Giữ hợp đồng của `getCategory`: id nào vắng thì ném
+   * `question.category_not_found` như gọi lẻ — bên gọi được dùng
+   * `Map.get` với bất biến "mọi id yêu cầu đều có mặt".
+   */
+  async getCategoriesByIds(ids: string[]): Promise<Map<string, QCategoryRow>> {
+    const unique = [...new Set(ids)];
+    const rows = await this.repo.getCategoriesByIds(unique);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const id of unique) {
+      if (!byId.has(id)) throw this.categoryNotFound(id);
+    }
+    return byId;
   }
 
   /**
@@ -255,7 +272,7 @@ export class QuestionsService {
     await this.assertCategoryNotForeignPersonal(actorId, category, () => this.categoryNotFound(input.categoryId));
     await this.requireCap(actorId, 'question:add', category.contextId);
     const row = await this.repo.insertStimulus({
-      categoryId: category.id, createdBy: actorId, content: toRichTextDocument(input.content) as never,
+      categoryId: category.id, createdBy: actorId, content: toRichTextDocument(input.content),
     });
     await this.outbox.enqueueStandalone({ aggregate: 'stimulus', type: 'stimulus_created', payload: { stimulusId: row.id, categoryId: category.id } });
     return row;
@@ -307,7 +324,7 @@ export class QuestionsService {
     await this.assertCategoryNotForeignPersonal(actorId, category, () => this.stimulusNotFound(id));
     await this.requireCap(actorId, 'question:editall', category.contextId);
     await this.requireStimulusMutable(stimulus);
-    await this.repo.updateStimulus(id, { content: toRichTextDocument(input.content) as never });
+    await this.repo.updateStimulus(id, { content: toRichTextDocument(input.content) });
     await this.outbox.enqueueStandalone({ aggregate: 'stimulus', type: 'stimulus_updated', payload: { stimulusId: id } });
     return this.getStimulus(id);
   }
@@ -337,12 +354,12 @@ export class QuestionsService {
     const inserted: AnswerRow[] = [];
     for (const [index, a] of content.answers.entries()) {
       inserted.push(await this.repo.insertAnswer({
-        questionVersionId: versionId, answer: a.answer as never, isCorrect: a.isCorrect,
-        feedback: a.feedback as never, sortOrder: index,
+        questionVersionId: versionId, answer: a.answer, isCorrect: a.isCorrect,
+        feedback: a.feedback, sortOrder: index,
       }, tx));
     }
     if (content.multichoice) {
-      await this.repo.insertMultichoiceOptions({ questionVersionId: versionId, ...content.multichoice } as never, tx);
+      await this.repo.insertMultichoiceOptions({ questionVersionId: versionId, ...content.multichoice }, tx);
     }
     if (content.shortanswer) {
       await this.repo.insertShortanswerOptions({
@@ -352,13 +369,13 @@ export class QuestionsService {
       }, tx);
     }
     if (content.essay) {
-      await this.repo.insertEssayOptions({ questionVersionId: versionId, ...content.essay } as never, tx);
+      await this.repo.insertEssayOptions({ questionVersionId: versionId, ...content.essay }, tx);
     }
     if (content.answerKey.guidance !== null || content.answerKey.solution !== null) {
       await this.repo.insertAnswerKey({
         questionVersionId: versionId,
-        guidance: content.answerKey.guidance as never,
-        solution: content.answerKey.solution as never,
+        guidance: content.answerKey.guidance,
+        solution: content.answerKey.solution,
       }, tx);
     }
   }
@@ -375,8 +392,8 @@ export class QuestionsService {
     const idMap = new Map<string, string>();
     for (const a of answers) {
       const row = await this.repo.insertAnswer({
-        questionVersionId: toVersionId, answer: a.answer as never, isCorrect: a.isCorrect,
-        feedback: a.feedback as never, sortOrder: a.sortOrder,
+        questionVersionId: toVersionId, answer: a.answer, isCorrect: a.isCorrect,
+        feedback: a.feedback, sortOrder: a.sortOrder,
       }, tx);
       idMap.set(a.id, row.id);
     }
@@ -384,8 +401,8 @@ export class QuestionsService {
       const o = await this.repo.getMultichoiceOptions(fromVersionId);
       if (o) await this.repo.insertMultichoiceOptions({
         questionVersionId: toVersionId, shuffleAnswers: o.shuffleAnswers,
-        answerNumbering: o.answerNumbering, correctFeedback: o.correctFeedback as never,
-        incorrectFeedback: o.incorrectFeedback as never,
+        answerNumbering: o.answerNumbering, correctFeedback: o.correctFeedback,
+        incorrectFeedback: o.incorrectFeedback,
         showStandardInstruction: o.showStandardInstruction,
       }, tx);
     } else if (qtype === 'shortanswer') {
@@ -400,14 +417,14 @@ export class QuestionsService {
       if (o) await this.repo.insertEssayOptions({
         questionVersionId: toVersionId, responseFormat: o.responseFormat, responseRequired: o.responseRequired,
         responseFieldLines: o.responseFieldLines, minWordLimit: o.minWordLimit, maxWordLimit: o.maxWordLimit,
-        graderInfo: o.graderInfo as never, responseTemplate: o.responseTemplate as never,
+        graderInfo: o.graderInfo, responseTemplate: o.responseTemplate,
       }, tx);
     }
     if (!skipAnswerKey) {
       const key = await this.repo.getAnswerKey(fromVersionId);
       if (key) {
         await this.repo.insertAnswerKey({
-          questionVersionId: toVersionId, guidance: key.guidance as never, solution: key.solution as never,
+          questionVersionId: toVersionId, guidance: key.guidance, solution: key.solution,
         }, tx);
       }
     }
@@ -594,8 +611,8 @@ export class QuestionsService {
     const entry = await this.repo.insertEntry({ questionCategoryId: category.id, questionId: q.id, latestVersion: 1 }, tx);
     const version = await this.repo.insertVersion({
       questionBankEntryId: entry.id, questionId: q.id, version: 1,
-      questionText: toRichTextDocument(input.questionText ?? '') as never,
-      generalFeedback: docOrNull(input.generalFeedback) as never,
+      questionText: toRichTextDocument(input.questionText ?? ''),
+      generalFeedback: docOrNull(input.generalFeedback),
       defaultMark: input.defaultMark ?? 1, penalty: input.penalty ?? 0,
       stimulusId,
     }, tx);
@@ -661,7 +678,7 @@ export class QuestionsService {
     const created: { q: QuestionRow; entry: EntryRow; version: VersionRow }[] = [];
     await this.repo.transaction(async (tx) => {
       stimulus = await this.repo.insertStimulus({
-        categoryId: category.id, createdBy: actorId, content: toRichTextDocument(input.content) as never,
+        categoryId: category.id, createdBy: actorId, content: toRichTextDocument(input.content),
       }, tx);
       for (const { question, content } of prepared) {
         created.push(await this.insertQuestionGraph(tx, actorId, category, question, content, stimulus.id));
@@ -734,11 +751,11 @@ export class QuestionsService {
     // hiện cho học sinh lúc làm bài qua attempt view, cổng của nó nằm ở
     // bề mặt quiz; ở đây mới chỉ là đường đọc ngân hàng có cổng
     // question:useall).
-    const guidance = await this.files.resolveQuestionImageUrls(view.answerKey.guidance as never);
+    const guidance = await this.files.resolveQuestionImageUrls(view.answerKey.guidance);
     let solution: unknown = view.answerKey.solution;
     const solutionAnswer = (solution as { answer?: unknown } | null)?.answer;
     if (solutionAnswer !== undefined) {
-      solution = { ...(solution as Record<string, unknown>), answer: await this.files.resolveQuestionImageUrls(solutionAnswer as never) };
+      solution = { ...(solution as Record<string, unknown>), answer: await this.files.resolveQuestionImageUrls(solutionAnswer) };
     }
     return {
       ...view,
@@ -853,8 +870,8 @@ export class QuestionsService {
     await this.repo.transaction(async (tx) => {
       version = await this.repo.insertVersion({
         questionBankEntryId: entry.id, questionId: q.id, version: nextVersion,
-        questionText: (input.questionText !== undefined ? toRichTextDocument(input.questionText) : latestVersion.questionText) as never,
-        generalFeedback: (input.generalFeedback !== undefined ? toRichTextDocument(input.generalFeedback) : latestVersion.generalFeedback) as never,
+        questionText: (input.questionText !== undefined ? toRichTextDocument(input.questionText) : latestVersion.questionText),
+        generalFeedback: (input.generalFeedback !== undefined ? toRichTextDocument(input.generalFeedback) : latestVersion.generalFeedback),
         defaultMark: input.defaultMark ?? latestVersion.defaultMark,
         penalty: input.penalty ?? latestVersion.penalty,
         stimulusId: stimulusId,
@@ -875,7 +892,7 @@ export class QuestionsService {
               : null)
           : (prevKey!.solution as StoredSolution | null);
         if (guidance !== null || solution !== null) {
-          await this.repo.insertAnswerKey({ questionVersionId: version.id, guidance: guidance as never, solution: solution as never }, tx);
+          await this.repo.insertAnswerKey({ questionVersionId: version.id, guidance: guidance, solution: solution }, tx);
         }
       } else {
         await this.cloneVersionContent(tx, q.qtype as SupportedQtype, latestVersion.id, version.id);
@@ -1130,15 +1147,10 @@ export class QuestionsService {
    */
   async listUsableQuestionIdsInCategory(categoryId: string): Promise<string[]> {
     const rows = await this.repo.listQuestionsInCategory(categoryId);
-    const out: string[] = [];
-    for (const r of rows) {
-      const entry = await this.repo.getEntryByQuestion(r.id);
-      // Chỉ câu `ready` mới được rút ngẫu nhiên vào đề: draft (câu nạp
-      // qua MCP chờ duyệt — MCP-0, issue #110) và hidden (đã rút) đều
-      // bị loại; trước đây điều kiện chỉ loại hidden nên draft lọt.
-      if (entry && entry.status === 'ready') out.push(r.id);
-    }
-    return out;
+    // Entry của mọi câu trong MỘT truy vấn thay vì một lần đọc mỗi câu (N+1): câu không có entry hoặc entry chưa ready đều bị loại như trước.
+    const entries = await this.repo.getEntriesByQuestionIds(rows.map((r) => r.id));
+    const byQuestionId = new Map(entries.map((e) => [e.questionId, e]));
+    return rows.filter((r) => byQuestionId.get(r.id)?.status === 'ready').map((r) => r.id);
   }
   /**
    * Xoá một usage cùng mọi attempt/step của nó (hoạt động sở hữu usage
@@ -1430,7 +1442,7 @@ export class QuestionsService {
       const { entry } = await this.getQuestion(attempt.questionId);
       const versions = await this.repo.listVersions(entry.id);
       const ready = versions.filter((v) => v.status === 'ready');
-      const chosen = ready.length ? ready[ready.length - 1]! : (entry.status === 'draft' ? undefined : versions[versions.length - 1]);
+      const chosen = ready.length ? ready[ready.length - 1]! : (entry.status === 'draft' ? undefined : versions[versions.length - 1]); // Bất biến: ready.length > 0 ở nhánh này.
       if (!chosen) throw new NotFoundException({ message: `Question ${attempt.questionId} latest version missing`, code: 'question.version_missing' });
       pinnedVersionId = chosen.id;
     }

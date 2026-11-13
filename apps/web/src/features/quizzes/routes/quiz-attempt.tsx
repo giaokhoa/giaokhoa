@@ -13,6 +13,8 @@
  * Bất biến hiển thị: câu hỏi không có trường tên — nhãn của câu là TRÍCH ĐOẠN nội dung (`questionExcerpt`); multichoice luôn là radio chọn một (mô hình giaokhoa khoá đúng một đáp án đúng — quyết 12:04 ngày 26/10/2026), không còn nhánh checkbox chọn-nhiều.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Route } from './+types/quiz-attempt';
+import { titleMeta } from '#lib/route-meta';
 import { Link, useParams } from 'react-router';
 import {
   extractRichTextPlainText,
@@ -28,6 +30,7 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { Spinner } from '@giaokhoa/ui/components/spinner';
 import { ErrorAlert } from '#components/error-alert';
+import { quizAttemptStateKey } from '../utils/utils';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
@@ -132,13 +135,29 @@ function parseTrueFalseResponse(value: string): Record<string, boolean> {
   }
 }
 
+/**
+ * Hằng xáo trộn ổn định trong phiên (LCG kiểu glibc, modulo 2^32 qua `>>> 0`): băm seed khởi đầu nhân 31 theo từng ký tự, mỗi bước nhân 1103515245 rồi cộng 12345.
+ */
+const SHUFFLE_SEED_HASH_MULTIPLIER = 31;
+const SHUFFLE_LCG_MULTIPLIER = 1103515245;
+const SHUFFLE_LCG_INCREMENT = 12345;
+
+/** Nhãn chữ cái cho từng mệnh đề TF-A (a/b/c/d — hết chữ thì dùng số thứ tự). */
+const TF_STATEMENT_LETTER_LABELS = 'abcd';
+
+/** Số node danh sách mệnh đề ở đuôi tài liệu TF-A (đúng một node statementList). */
+const TF_A_TRAILING_STATEMENT_LIST_NODES = 1;
+
+/** Số dòng mặc định của ô nhập tự luận khi đề không khai `responseFieldLines`. */
+const ESSAY_RESPONSE_DEFAULT_ROWS = 10;
+
 /** Xáo trộn ổn định trong phiên (seeded theo id) để thứ tự đáp án không nhảy mỗi lần render. */
 function shuffled<T>(items: T[], seedText: string): T[] {
   let seed = 0;
-  for (const ch of seedText) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  for (const ch of seedText) seed = (seed * SHUFFLE_SEED_HASH_MULTIPLIER + ch.charCodeAt(0)) >>> 0;
   const out = [...items];
   for (let i = out.length - 1; i > 0; i -= 1) {
-    seed = (seed * 1103515245 + 12345) >>> 0;
+    seed = (seed * SHUFFLE_LCG_MULTIPLIER + SHUFFLE_LCG_INCREMENT) >>> 0;
     const j = seed % (i + 1);
     [out[i], out[j]] = [out[j]!, out[i]!];
   }
@@ -263,7 +282,7 @@ export function QuizAttemptPage() {
         title={quiz.name}
         description={
           <>
-            {t('quizAttemptHeaderLine', { number: attempt.attemptNumber, state: t(`quizAttemptState_${attempt.state}`) })}
+            {t('quizAttemptHeaderLine', { number: attempt.attemptNumber, state: t(quizAttemptStateKey(attempt.state)) })}
             {attempt.preview ? ` (${t('quizPreviewBadge')})` : ''}
           </>
         }
@@ -329,13 +348,14 @@ export function QuizAttemptPage() {
               </div>
             ) : null}
             {q.qtype === 'truefalse' ? (
-              // TF-A: chỉ hiện THÂN CHUNG ở đây; từng mệnh đề hiện
-              // trong bộ nhập kèm cặp Đ/S của chính nó.
+              // TF-A: chỉ hiện THÂN CHUNG ở đây — tài liệu chốt đuôi bằng đúng một node danh sách mệnh đề
+              // (statementList, xem contracts) nên bỏ node cuối; từng mệnh đề hiện trong bộ nhập kèm cặp
+              // Đ/S của chính nó.
               <RichTextView
                 value={
                   {
                     type: 'doc',
-                    content: (q.questionText.content ?? []).slice(0, -1),
+                    content: (q.questionText.content ?? []).slice(0, -TF_A_TRAILING_STATEMENT_LIST_NODES),
                   } as RichTextDocument
                 }
               />
@@ -512,7 +532,7 @@ function QuestionAnswerInput(props: {
               data-verdict={verdict}
             >
               <div className="flex items-start gap-2 text-sm">
-                <span className="font-medium">{`${'abcd'[index] ?? index + 1})`}</span>
+                <span className="font-medium">{`${TF_STATEMENT_LETTER_LABELS[index] ?? index + 1})`}</span>
                 <span className="min-w-0 flex-1 whitespace-pre-wrap">{statement.text}</span>
               </div>
               <div className="flex gap-4">
@@ -556,7 +576,7 @@ function QuestionAnswerInput(props: {
         <textarea
           id={`answer-${q.questionAttemptId}`}
           className="w-full rounded-md border p-2 text-sm"
-          rows={Number(q.options?.responseFieldLines ?? 10)}
+          rows={Number(q.options?.responseFieldLines ?? ESSAY_RESPONSE_DEFAULT_ROWS)}
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
@@ -589,7 +609,7 @@ export default function QuizAttemptRoute() {
  * mount-rồi-fetch. prefetchQuery không ném lỗi: tải hỏng thì
  * component tự xử lý qua useQuery như trước.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.attemptId) {
     await quizAttemptPageClientLoader(params.attemptId);
   }
@@ -598,7 +618,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Làm bài kiểm tra');
 }

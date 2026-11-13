@@ -4,6 +4,7 @@ import type { Queue } from 'bullmq';
 import { createHash, randomBytes } from 'node:crypto';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
+import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';
@@ -11,6 +12,12 @@ import { GroupsService } from '../groups/groups.service';
 import { CalendarRepository, type CalendarEventRow, type CalendarExportTokenRow, type CalendarSubscriptionRow } from '@giaokhoa/db/repositories/calendar';
 import { serializeCalendar } from './domain/ics';
 import { formatRrule, occurrenceStarts, parseRrule } from './domain/rrule';
+
+/** Một ngày tính bằng mili-giây. */
+const DAY_MS = 86400_000;
+/** Khoảng mặc định khi liệt kê sự kiện mà không truyền from/to: lùi 31 ngày, tới 62 ngày. */
+const DEFAULT_LIST_LOOKBACK_MS = 31 * DAY_MS;
+const DEFAULT_LIST_LOOKAHEAD_MS = 62 * DAY_MS;
 
 /** Băm token xuất lịch để lưu trữ — token thô chỉ trả về đúng một lần khi tạo/đổi (đúng mẫu webservice tokens). */
 function hashExportToken(raw: string): string { return createHash('sha256').update(raw).digest('hex'); }
@@ -68,15 +75,36 @@ export class CalendarService {
   private async manageContextId(input: { eventType: string; courseId?: string; categoryId?: string; userId?: string }): Promise<string> {
     switch (input.eventType) {
       case 'course':
-      case 'group':
-        return this.courses.courseContextId(input.courseId!);
-      case 'category':
-        return this.courses.categoryContextId(input.categoryId!);
-      case 'user':
-        return (await this.contexts.getByLevelInstance(30, input.userId!))?.id ?? this.systemCtx();
+      case 'group': {
+        // Lỗi thiếu id phải ném 400 rõ ràng tại biên thay vì lọt sâu vào courseContextId(undefined).
+        if (!input.courseId) throw new BadRequestException({ message: 'Course events require courseId', code: 'calendar.course_required' });
+        return this.courses.courseContextId(input.courseId);
+      }
+      case 'category': {
+        if (!input.categoryId) throw new BadRequestException({ message: 'Category events require categoryId', code: 'calendar.category_required' });
+        return this.courses.categoryContextId(input.categoryId);
+      }
+      case 'user': {
+        if (!input.userId) throw new BadRequestException({ message: 'User events require userId', code: 'calendar.user_required' });
+        return (await this.contexts.getByLevelInstance(CONTEXT_LEVELS.USER, input.userId))?.id ?? this.systemCtx();
+      }
       default:
         return this.systemCtx();
     }
+  }
+
+  /**
+   * Phạm vi quản lý của một sự kiện — đúng một object scope cho mọi điểm
+   * gọi `requireManage`/`manageContextId` (tránh lặp lại bộ 4 trường
+   * eventType/courseId/categoryId/userId và phép `|| undefined` ở từng chỗ).
+   */
+  private manageScopeOf(event: { eventType: string; courseId?: string | null; categoryId?: string | null; userId?: string | null }): { eventType: string; courseId?: string; categoryId?: string; userId?: string } {
+    return {
+      eventType: event.eventType,
+      courseId: event.courseId || undefined,
+      categoryId: event.categoryId || undefined,
+      userId: event.userId || undefined,
+    };
   }
 
   private async requireManage(actorId: string, input: { eventType: string; courseId?: string; categoryId?: string; userId?: string }): Promise<void> {
@@ -109,8 +137,9 @@ export class CalendarService {
       if (group.courseId !== input.courseId) throw new BadRequestException({ message: 'Group belongs to another course', code: 'calendar.group_course_mismatch' });
     }
     const owner = input.eventType === 'user' ? actorId : undefined;
-    await this.requireManage(actorId, { eventType: input.eventType, courseId: input.courseId, categoryId: input.categoryId, userId: owner });
-    const contextId = await this.manageContextId({ eventType: input.eventType, courseId: input.courseId, categoryId: input.categoryId, userId: owner });
+    const scope = this.manageScopeOf({ eventType: input.eventType, courseId: input.courseId, categoryId: input.categoryId, userId: owner });
+    await this.requireManage(actorId, scope);
+    const contextId = await this.manageContextId(scope);
     const start = new Date(input.timeStart);
     if (Number.isNaN(start.getTime())) throw new BadRequestException({ message: 'Invalid timeStart', code: 'calendar.bad_time' });
 
@@ -151,14 +180,14 @@ export class CalendarService {
     return row;
   }
 
-  /** Tạo exception: một occurrence thay thế cho một instance của series. */
   /**
-   * Tạo exception cho một occurrence của chuỗi lặp (đổi giờ/nội dung riêng lần đó).
+   * Tạo exception cho một occurrence của chuỗi lặp (đổi giờ/nội dung riêng lần đó):
+   * một occurrence thay thế cho một instance của series.
    */
   async createException(actorId: string, occurrenceId: string, input: { name?: string; timeStart: string; description?: string }): Promise<CalendarEventRow> {
     const occurrence = await this.getEvent(occurrenceId);
     if (!occurrence.repeatId) throw new BadRequestException({ message: 'Only a series occurrence can have an exception', code: 'calendar.not_series' });
-    await this.requireManage(actorId, { eventType: occurrence.eventType, courseId: occurrence.courseId || undefined, categoryId: occurrence.categoryId || undefined, userId: occurrence.userId || undefined });
+    await this.requireManage(actorId, this.manageScopeOf(occurrence));
     const exception = await this.repo.insertEvent({
       name: input.name ?? occurrence.name, description: input.description ?? occurrence.description,
       eventType: occurrence.eventType, courseId: occurrence.courseId, groupId: occurrence.groupId,
@@ -174,7 +203,7 @@ export class CalendarService {
    */
   async deleteEvent(actorId: string, id: string): Promise<{ deleted: boolean; seriesDeleted: number }> {
     const event = await this.getEvent(id);
-    await this.requireManage(actorId, { eventType: event.eventType, courseId: event.courseId || undefined, categoryId: event.categoryId || undefined, userId: event.userId || undefined });
+    await this.requireManage(actorId, this.manageScopeOf(event));
     let count = 1;
     if (event.repeatId && event.id === event.repeatId) {
       // Xoá gốc thì xoá toàn bộ series (ngữ nghĩa Moodle).
@@ -202,7 +231,7 @@ export class CalendarService {
   async isVisibleTo(event: CalendarEventRow, viewerId: string): Promise<boolean> {
     if (!event.visible) {
       // Sự kiện ẩn chỉ hiển thị với người quản lý chúng.
-      return this.requireManage(viewerId, { eventType: event.eventType, courseId: event.courseId || undefined, categoryId: event.categoryId || undefined, userId: event.userId || undefined }).then(() => true).catch(() => false);
+      return this.requireManage(viewerId, this.manageScopeOf(event)).then(() => true).catch(() => false);
     }
     switch (event.eventType) {
       case 'site':
@@ -231,13 +260,13 @@ export class CalendarService {
     }
   }
 
-  /** Các sự kiện người xem thấy được trong [from, to]; dòng exception thay thế occurrence của chúng. */
   /**
    * Sự kiện hiển thị cho user trong khoảng thời gian, đã mở rộng chuỗi lặp và áp exception.
+   * Các sự kiện người xem thấy được trong [from, to]; dòng exception thay thế occurrence của chúng.
    */
   async listEventsForUser(viewerId: string, filter: { from?: string; to?: string; eventType?: string }): Promise<CalendarEventRow[]> {
-    const from = filter.from ? new Date(filter.from) : new Date(Date.now() - 31 * 86400_000);
-    const to = filter.to ? new Date(filter.to) : new Date(Date.now() + 62 * 86400_000);
+    const from = filter.from ? new Date(filter.from) : new Date(Date.now() - DEFAULT_LIST_LOOKBACK_MS);
+    const to = filter.to ? new Date(filter.to) : new Date(Date.now() + DEFAULT_LIST_LOOKAHEAD_MS);
     const rows = await this.repo.listEventsInRange(from, to);
     const exceptedIds = new Set(rows.filter((r) => r.isException).map((r) => r.exceptionOf));
     const visible: CalendarEventRow[] = [];
@@ -308,11 +337,11 @@ export class CalendarService {
     return this.exportIcsForUser(row.userId, filter);
   }
 
-  // --- reminder -----------------------------------------------------------------
+  // --- nhắc lịch -----------------------------------------------------------------
 
-  /** Lên lịch reminder: một job delayed của BullMQ; worker gửi thông báo khi tới giờ phát. */
   /**
-   * Lên lịch nhắc trước sự kiện (worker calendar-reminder sẽ gửi notification đã dịch).
+   * Lên lịch nhắc trước sự kiện (worker calendar-reminder sẽ gửi notification đã dịch):
+   * một job delayed của BullMQ; worker gửi thông báo khi tới giờ phát.
    */
   async scheduleReminder(actorId: string, eventId: string, minutesBefore: number): Promise<{ eventId: string; userId: string; remindAt: string; delayMs: number }> {
     const event = await this.getEvent(eventId);
@@ -328,7 +357,7 @@ export class CalendarService {
     return { eventId, userId: actorId, remindAt: remindAt.toISOString(), delayMs };
   }
 
-  // --- subscription ----------------------------------------------------------------
+  // --- đăng ký lịch ----------------------------------------------------------------
 
   /**
    * Đăng ký lịch ngoài theo URL .ics.

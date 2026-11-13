@@ -7,12 +7,11 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
 import { createSystemBankKysely, type SystemBankDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
 import { SystemBankRepository } from './system-bank';
 import { SystemBankSubmissionsRepository } from './system-bank-submissions';
 
-const adminUrl = process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 const DATABASE = 'giaokhoa_db_g13_bank';
 const ACTOR = '01961300-0000-7000-8000-000000000001';
 const REVIEWER = '01961300-0000-7000-8000-000000000002';

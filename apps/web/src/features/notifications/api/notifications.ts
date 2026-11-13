@@ -1,4 +1,11 @@
-import { apiJson } from '#lib/api';
+/**
+ * Tầng gọi API thuần của trung tâm thông báo: chỉ chứa các hàm gọi HTTP, không phụ
+ * thuộc React hay React Query. Gồm số chưa đọc, danh sách nhóm theo ngày, đánh dấu
+ * đã đọc (một nhóm/tất cả), xoá thông báo và tuỳ chọn nhận tin theo provider/khoá;
+ * tầng queries/ bọc các hàm này thành hook.
+ */
+
+import { EMPTY_JSON_BODY, apiJson } from '#lib/api';
 import type {
   NotificationCourseOverrideView,
   NotificationGroupsPage,
@@ -57,7 +64,7 @@ export async function fetchNotificationGroupItems(eventType: string, contextUrl:
  * @returns Đáp ứng của API hoặc undefined khi lỗi.
  */
 export function markNotificationRead(id: string) {
-  return apiJson(`/api/v1/notifications/${id}/read`, { method: 'POST', body: '{}' }).catch(() => undefined);
+  return apiJson(`/api/v1/notifications/${id}/read`, { method: 'POST', body: EMPTY_JSON_BODY }).catch(() => undefined);
 }
 
 /**
@@ -98,7 +105,7 @@ export function markAllNotificationsRead() {
  * @returns Đáp ứng của API.
  */
 export function clearReadNotifications() {
-  return apiJson('/api/v1/notifications/clear-read', { method: 'POST', body: '{}' });
+  return apiJson('/api/v1/notifications/clear-read', { method: 'POST', body: EMPTY_JSON_BODY });
 }
 
 /**

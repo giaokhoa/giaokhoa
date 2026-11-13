@@ -8,8 +8,11 @@
  *
  * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem `control-plane.ts` và playbook trong `AGENTS.md` của package): truy vấn viết trên interface schema sinh bằng codegen (tên bảng/cột snake_case), cột được chọn bằng danh sách tường minh có bí danh camelCase, giá trị `undefined` bị loại tường minh khỏi patch ghi trước khi gọi builder (quy tắc T-4), và mọi giá trị where đều là tham số bắt buộc. Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
-import type { Insertable, Updateable } from 'kysely';
-import type { CentreDb, CentreDB } from '../client';
+import type {InsertObject, UpdateObject} from 'kysely';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
+
+/** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
+export type CentreIdentityDb = CentreDb | CentreTx;
 
 /** Một dòng nhận diện của trung tâm (tên hiển thị, logo, màu thương hiệu). */
 export interface CentreIdentityRow {
@@ -63,9 +66,14 @@ const CENTRE_INVITE_COLUMNS = [
 export class CentreIdentityRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): CentreIdentityDb {
+    return this.handle;
+  }
+
   /** Nhận diện hiện tại của tenant trong kho đang được định tuyến. */
-  async getIdentity(tenantId: string): Promise<CentreIdentityRow | undefined> {
-    return this.handle
+  async getIdentity(tenantId: string, db: CentreIdentityDb = this.db()): Promise<CentreIdentityRow | undefined> {
+    return db
       .selectFrom('centre_identity')
       .select(CENTRE_IDENTITY_COLUMNS)
       .where('tenant_id', '=', tenantId)
@@ -77,28 +85,28 @@ export class CentreIdentityRepository {
   async upsertIdentity(
     tenantId: string,
     patch: { displayName?: string; logoPath?: string | null; brandColor?: string | null },
+    db: CentreIdentityDb = this.db(),
   ): Promise<CentreIdentityRow> {
-    const existing = await this.getIdentity(tenantId);
+    const existing = await this.getIdentity(tenantId, db);
     if (!existing) {
-      const values: Insertable<CentreDB['centre_identity']> = {
+      const values: InsertObject<CentreDB, 'centre_identity'> = {
         tenant_id: tenantId,
         display_name: patch.displayName ?? '',
         logo_path: patch.logoPath ?? null,
         brand_color: patch.brandColor ?? null,
       };
-      const rows = await this.handle
+      return db
         .insertInto('centre_identity')
         .values(values)
         .returning(CENTRE_IDENTITY_COLUMNS)
-        .execute();
-      return rows[0]!;
+        .executeTakeFirstOrThrow();
     }
     // Patch cập nhật dựng tường minh theo từng trường có mặt: trường vắng mặt (`undefined`) KHÔNG được chạm tới — cùng ngữ nghĩa rải-có-điều-kiện của đường cũ trước đây, và là quy tắc T-4 (không để `undefined` lọt vào set).
-    const set: Updateable<CentreDB['centre_identity']> = { updated_at: new Date() };
+    const set: UpdateObject<CentreDB, 'centre_identity'> = { updated_at: new Date() };
     if (patch.displayName !== undefined) set.display_name = patch.displayName;
     if (patch.logoPath !== undefined) set.logo_path = patch.logoPath;
     if (patch.brandColor !== undefined) set.brand_color = patch.brandColor;
-    const rows = await this.handle
+    const rows = await db
       .updateTable('centre_identity')
       .set(set)
       .where('id', '=', existing.id)
@@ -108,8 +116,8 @@ export class CentreIdentityRepository {
   }
 
   /** Lời mời theo hàm băm token (token gốc không bao giờ lưu). */
-  async findInviteByTokenHash(tokenHash: string): Promise<CentreInviteRow | undefined> {
-    return this.handle
+  async findInviteByTokenHash(tokenHash: string, db: CentreIdentityDb = this.db()): Promise<CentreInviteRow | undefined> {
+    return db
       .selectFrom('centre_invites')
       .select(CENTRE_INVITE_COLUMNS)
       .where('token_hash', '=', tokenHash)
@@ -120,21 +128,20 @@ export class CentreIdentityRepository {
   /**
    * Đánh dấu lời mời đã dùng — nguyên tử: chỉ thành công khi lời mời vẫn chưa dùng và chưa thu hồi tại thời điểm ghi. Trả về dòng đã đánh dấu, hoặc undefined khi có lượt khác đốt trước (đua).
    */
-  async markInviteUsed(id: string): Promise<CentreInviteRow | undefined> {
-    const rows = await this.handle
+  async markInviteUsed(id: string, db: CentreIdentityDb = this.db()): Promise<CentreInviteRow | undefined> {
+    return db
       .updateTable('centre_invites')
       .set({ used_at: new Date() })
       .where('id', '=', id)
       .where('used_at', 'is', null)
       .where('revoked_at', 'is', null)
       .returning(CENTRE_INVITE_COLUMNS)
-      .execute();
-    return rows[0];
+      .executeTakeFirst();
   }
 
   /** Thu hồi mọi lời mời đang chờ của một tài khoản (phát hành lại). */
-  async revokePendingInvites(userId: string): Promise<void> {
-    await this.handle
+  async revokePendingInvites(userId: string, db: CentreIdentityDb = this.db()): Promise<void> {
+    await db
       .updateTable('centre_invites')
       .set({ revoked_at: new Date() })
       .where('user_id', '=', userId)
@@ -146,8 +153,8 @@ export class CentreIdentityRepository {
   /**
    * Danh sách quản trị của kho đang được định tuyến, đọc thẳng từ bảng `config` của kho đó. KHÔNG dùng `PermissionEvaluator` ở đây: bộ đánh giá của app được xây với khoá cache gắn theo tên database lúc khởi động (kho chung), nên đọc qua nó cho một kho trung tâm sẽ trả nhầm danh sách cache của kho chung. Đường PATCH nhận diện chỉ quản trị trung tâm mới được gọi, tần suất thấp — đọc thẳng nguồn sự thật là đúng.
    */
-  async listSiteAdmins(): Promise<string[]> {
-    const row = await this.handle
+  async listSiteAdmins(db: CentreIdentityDb = this.db()): Promise<string[]> {
+    const row = await db
       .selectFrom('config')
       .select(['value'])
       .where('key', '=', 'siteadmins')

@@ -1,7 +1,14 @@
+/**
+ * Tầng phân quyền hiển thị phía client: `PermissionsProvider` nạp ảnh chụp quyền của
+ * người đang đăng nhập (GET /users/me/capabilities) và suy các cờ mở bề mặt quản trị
+ * theo capability hệ thống/tenant/khoá (`CONTEXT_LEVEL` chung cho mọi nơi cần). Đây
+ * chỉ là lớp trình bày — API vẫn là nơi thực thi quyền thật ở từng endpoint.
+ */
+
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Course, MyAccessView } from '@giaokhoa/contracts';
-import { apiJson } from '#lib/api';
+import { apiJson, probe } from '#lib/api';
 import { useAuth } from '#lib/auth';
 import { queryKeys } from '#lib/query-keys';
 
@@ -16,8 +23,25 @@ export interface CourseAccess {
   capabilities: string[];
 }
 
-/** Cấp context theo quy ước của hệ thống quyền (khớp CONTEXT_LEVELS phía API). */
-const CONTEXT_LEVEL = { SYSTEM: 10, TENANT: 20, COURSECAT: 40, COURSE: 50 } as const;
+/** Cấp context theo quy ước của hệ thống quyền (khớp CONTEXT_LEVELS phía API) — export để các tầng khác (vd tầng curriculum) dùng chung thay vì hard-code số. */
+export const CONTEXT_LEVEL = { SYSTEM: 10, TENANT: 20, COURSECAT: 40, COURSE: 50 } as const;
+
+/**
+ * Tìm context hệ thống trong một danh sách context (S15, rà soát #50).
+ * Chỉ tìm, không quyết định fallback khi thiếu: mỗi bề mặt giữ
+ * fallback của nó (`?? ''`, `?? null`, `?.id`, lùi về context đầu)
+ * vì chưa xác minh được trường hợp thiếu context hệ thống là không
+ * thể xảy ra hay không ảnh hưởng ở từng chỗ — thống nhất fallback
+ * khi chưa xác minh sẽ đổi hành vi lặng lẽ.
+ *
+ * @param contexts - Danh sách context (undefined khi query chưa về).
+ * @returns Context hệ thống, hoặc undefined khi chưa có/không tìm thấy.
+ */
+export function findSystemContext<T extends { contextLevel: number }>(
+  contexts: readonly T[] | undefined,
+): T | undefined {
+  return contexts?.find((context) => context.contextLevel === CONTEXT_LEVEL.SYSTEM);
+}
 
 /** Các capability mở quyền dùng ngân hàng câu hỏi ở ít nhất một context. */
 const QUESTION_CAPABILITIES = [
@@ -78,15 +102,6 @@ export interface PermissionsState {
 }
 
 const PermissionsContext = createContext<PermissionsState | null>(null);
-
-/** Tải một tài nguyên đọc: trả dữ liệu khi gọi được, null khi bị từ chối/lỗi. */
-async function probe<T>(path: string): Promise<T | null> {
-  try {
-    return await apiJson<T>(path);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Capability đã phân giải tại context hệ thống (luôn có trong ảnh chụp quyền). Export để loader SSR của dashboard (lát SL-1, `routes/home-index.tsx`) phân loại khối quản trị bằng ĐÚNG cùng định nghĩa này thay vì chép lại.
@@ -232,13 +247,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const canViewPlatformTenants =
       (access?.isSiteAdmin ?? false) || sysCaps.includes('tenant:viewall') || sysCaps.includes('tenant:manage');
     const canManagePlatformTenants = (access?.isSiteAdmin ?? false) || sysCaps.includes('tenant:manage');
-    const canViewTenantAdmin =
-      canViewPlatformTenants ||
-      (access
-        ? hasTenantCapabilitySomewhere(access, 'tenant:viewall') || hasTenantCapabilitySomewhere(access, 'tenant:manage')
-        : false);
-    const canManageTenantAdmin =
-      canManagePlatformTenants || (access ? hasTenantCapabilitySomewhere(access, 'tenant:manage') : false);
+    // `hasTenantCapabilitySomewhere` dựng lại Map mỗi lần gọi nên tính
+    // một lần cho mỗi capability rồi tái dùng ở cả hai cờ dưới.
+    const hasTenantViewAll = access ? hasTenantCapabilitySomewhere(access, 'tenant:viewall') : false;
+    const hasTenantManage = access ? hasTenantCapabilitySomewhere(access, 'tenant:manage') : false;
+    const canViewTenantAdmin = canViewPlatformTenants || hasTenantViewAll || hasTenantManage;
+    const canManageTenantAdmin = canManagePlatformTenants || hasTenantManage;
     const teaching = courses.filter(
       (c) => hasCourseAssignment(access, c.course) && isCourseStaff(access, c),
     );

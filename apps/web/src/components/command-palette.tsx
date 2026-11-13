@@ -1,3 +1,11 @@
+/**
+ * Bảng lệnh tìm kiếm hợp nhất trong header, mở bằng Cmd+K / Ctrl+K: một ô gõ cho ra
+ * nhóm "Đi tới" (màn hình theo quyền và khoá học của tôi, lọc không dấu tại client)
+ * và nhóm "Nội dung" (gọi GET /api/v1/search sau debounce 250 ms, mở đích theo
+ * ánh xạ dùng chung ở lib/search-target). Điều hướng bằng mũi tên + Enter trên
+ * một danh sách phẳng theo đúng thứ tự hiển thị.
+ */
+
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -51,6 +59,47 @@ const CONTENT_AREA_LABEL_KEYS: Record<string, string> = {
  *
  * Điều hướng bàn phím (mũi tên + Enter) chạy trên MỘT danh sách phẳng theo đúng thứ tự hiển thị: nhóm Đi tới trước, nhóm Nội dung sau. Component mount một lần duy nhất trong SiteHeader (không render gì khi đang đóng) nên phím tắt sống trên mọi trang.
  */
+
+/**
+ * Một mục chọn được trong bảng lệnh — dùng chung cho nhóm "Đi tới" và nhóm "Nội dung" (trước đây hai khối `<li>` chép lại nhau,
+ * chỉ khác cách tính chỉ số phẳng cho điều hướng bàn phím).
+ */
+function PaletteOption({
+  item,
+  index,
+  activeIndex,
+  onHover,
+  onSelect,
+}: {
+  /** Mục cần hiện. */
+  item: PaletteItem;
+  /** Chỉ số phẳng trong danh sách điều hướng (nhóm Đi tới trước, nhóm Nội dung sau). */
+  index: number;
+  /** Chỉ số mục đang chọn bằng bàn phím. */
+  activeIndex: number;
+  /** Di chuột vào mục (đặt làm mục đang chọn). */
+  onHover: (index: number) => void;
+  /** Chọn mục (điều hướng). */
+  onSelect: (item: PaletteItem) => void;
+}) {
+  return (
+    <li
+      role="option"
+      aria-selected={index === activeIndex}
+      data-index={index}
+      data-testid={`palette-item-${item.id}`}
+      className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+        index === activeIndex ? 'bg-accent text-accent-foreground' : ''
+      }`}
+      onMouseEnter={() => onHover(index)}
+      onClick={() => onSelect(item)}
+    >
+      <span className="truncate">{item.title}</span>
+      {item.hint ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.hint}</span> : null}
+    </li>
+  );
+}
+
 export function CommandPalette() {
   const { t } = useTranslation(['app', 'dashboard', 'platform']);
   const perms = usePermissions();
@@ -73,26 +122,26 @@ export function CommandPalette() {
       { id: 'screen-settings', title: t('app:navSettings'), url: '/settings', group: 'goto' },
       ...(perms.hasLearnerFootprint
         ? ([
-            { id: 'screen-badges', title: t('app:navBadges'), url: '/badges', group: 'goto' },
-            { id: 'screen-learning-plan', title: t('app:navLearningPlan'), url: '/learning-plan', group: 'goto' },
-          ] as PaletteItem[])
+            { id: 'screen-badges', title: t('app:navBadges'), url: '/badges', group: 'goto' as const },
+            { id: 'screen-learning-plan', title: t('app:navLearningPlan'), url: '/learning-plan', group: 'goto' as const },
+          ])
         : []),
       ...(perms.canUseQuestionBank
-        ? [{ id: 'screen-questions', title: t('app:navQuestions'), url: '/questions', group: 'goto' } as PaletteItem]
+        ? [{ id: 'screen-questions', title: t('app:navQuestions'), url: '/questions', group: 'goto' as const }]
         : []),
       ...(perms.canAdminister
         ? ([
-            { id: 'screen-admin-users', title: t('app:navUsers'), url: '/admin/users', group: 'goto' },
-            { id: 'screen-admin-roles', title: t('app:navRoles'), url: '/admin/roles', group: 'goto' },
-            { id: 'screen-tokens', title: t('app:navTokens'), url: '/tokens', group: 'goto' },
-            { id: 'screen-site-config', title: t('app:navSiteConfig'), url: '/admin/site-config', group: 'goto' },
-            { id: 'screen-reports', title: t('app:navReports'), url: '/reports', group: 'goto' },
-            { id: 'screen-insights', title: t('app:navInsights'), url: '/insights', group: 'goto' },
-            { id: 'screen-contentbank', title: t('app:navContentBank'), url: '/content-bank', group: 'goto' },
-            { id: 'screen-backup', title: t('app:navBackup'), url: '/backup', group: 'goto' },
-            { id: 'screen-privacy', title: t('app:navPrivacy'), url: '/privacy', group: 'goto' },
-            { id: 'screen-health', title: t('app:navHealth'), url: '/health', group: 'goto' },
-          ] as PaletteItem[])
+            { id: 'screen-admin-users', title: t('app:navUsers'), url: '/admin/users', group: 'goto' as const },
+            { id: 'screen-admin-roles', title: t('app:navRoles'), url: '/admin/roles', group: 'goto' as const },
+            { id: 'screen-tokens', title: t('app:navTokens'), url: '/tokens', group: 'goto' as const },
+            { id: 'screen-site-config', title: t('app:navSiteConfig'), url: '/admin/site-config', group: 'goto' as const },
+            { id: 'screen-reports', title: t('app:navReports'), url: '/reports', group: 'goto' as const },
+            { id: 'screen-insights', title: t('app:navInsights'), url: '/insights', group: 'goto' as const },
+            { id: 'screen-contentbank', title: t('app:navContentBank'), url: '/content-bank', group: 'goto' as const },
+            { id: 'screen-backup', title: t('app:navBackup'), url: '/backup', group: 'goto' as const },
+            { id: 'screen-privacy', title: t('app:navPrivacy'), url: '/privacy', group: 'goto' as const },
+            { id: 'screen-health', title: t('app:navHealth'), url: '/health', group: 'goto' as const },
+          ])
         : []),
     ];
     const courses: PaletteItem[] = perms.courses.map((c) => ({
@@ -247,21 +296,14 @@ export function CommandPalette() {
                 {t('app:paletteGoGroup')}
               </li>
               {filteredGoto.map((item, index) => (
-                <li
+                <PaletteOption
                   key={item.id}
-                  role="option"
-                  aria-selected={index === activeIndex}
-                  data-index={index}
-                  data-testid={`palette-item-${item.id}`}
-                  className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
-                    index === activeIndex ? 'bg-accent text-accent-foreground' : ''
-                  }`}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => go(item)}
-                >
-                  <span className="truncate">{item.title}</span>
-                  {item.hint ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.hint}</span> : null}
-                </li>
+                  item={item}
+                  index={index}
+                  activeIndex={activeIndex}
+                  onHover={setActiveIndex}
+                  onSelect={go}
+                />
               ))}
             </Fragment>
           ) : null}
@@ -276,26 +318,16 @@ export function CommandPalette() {
               {contentFailed ? (
                 <li className="px-2 py-1.5 text-sm text-muted-foreground">{t('app:paletteContentFailed')}</li>
               ) : null}
-              {contentItems.map((item, offset) => {
-                const index = filteredGoto.length + offset;
-                return (
-                  <li
-                    key={item.id}
-                    role="option"
-                    aria-selected={index === activeIndex}
-                    data-index={index}
-                    data-testid={`palette-item-${item.id}`}
-                    className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
-                      index === activeIndex ? 'bg-accent text-accent-foreground' : ''
-                    }`}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onClick={() => go(item)}
-                  >
-                    <span className="truncate">{item.title}</span>
-                    {item.hint ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.hint}</span> : null}
-                  </li>
-                );
-              })}
+              {contentItems.map((item, offset) => (
+                <PaletteOption
+                  key={item.id}
+                  item={item}
+                  index={filteredGoto.length + offset}
+                  activeIndex={activeIndex}
+                  onHover={setActiveIndex}
+                  onSelect={go}
+                />
+              ))}
             </Fragment>
           ) : null}
           {navigable.length === 0 && !contentPending && !contentFailed ? (

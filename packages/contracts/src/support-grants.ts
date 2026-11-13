@@ -24,7 +24,7 @@ export const createSupportGrantSchema = z.strictObject({
     .max(SUPPORT_SCOPES.length)
     .refine(
       (scopes) => new Set(scopes).size === scopes.length,
-      "Support scopes must be distinct",
+      "Các scope hỗ trợ phải khác nhau",
     ),
   expiresAt: z.iso.datetime({ offset: true }),
   reason: z.string().trim().min(1).max(500),

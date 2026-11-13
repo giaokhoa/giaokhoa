@@ -16,9 +16,13 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm lắp ráp là facade định tuyến theo không gian `routedKysely`) rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của handle đó.
  */
-import { sql, type Insertable, type RawBuilder, type Updateable } from 'kysely';
-import type { CentreDb, CentreDB } from '../client';
+import {type InsertObject, type UpdateObject} from 'kysely';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
+
+/** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
+export type TenantsDb = CentreDb | CentreTx;
 import type { Json } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Một dòng tenant (hình dạng camelCase phía tiêu thụ dùng). */
 export interface TenantRow {
@@ -78,15 +82,6 @@ export const PLATFORM_TENANT_SLUG = 'trang-chinh';
 /** Slug của tenant trường mặc định do review-seed dựng cho câu chuyện demo. */
 export const DEFAULT_SCHOOL_TENANT_SLUG = 'truong-mac-dinh';
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — cùng mẫu `jsonbValue` của pilot kho control plane: serialize tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi
- * (object lẫn mảng) để một khuôn duy nhất, không phụ thuộc nhánh
- * xử lý riêng của driver theo hình dạng giá trị. Kiểu trả về gắn theo kiểu `Json` của cột đích để builder chấp nhận biểu thức ở vị trí giá trị của cột jsonb.
- */
-function jsonbValue(value: unknown): RawBuilder<Json> {
-  return sql<Json>`${JSON.stringify(value as Json)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng tenant (dùng cho cả select lẫn returning). */
 const TENANT_COLUMNS = [
   'id',
@@ -122,8 +117,8 @@ const TENANT_CONFIG_COLUMNS = [
  * Ánh xạ dữ kiện tạo tenant (camelCase) sang values insert
  * (snake_case), LOẠI mọi trường mang `undefined` (quy tắc T-4).
  */
-function tenantInsertValues(values: NewTenant): Insertable<CentreDB['tenants']> {
-  const row: Insertable<CentreDB['tenants']> = {
+function tenantInsertValues(values: NewTenant): InsertObject<CentreDB, 'tenants'> {
+  const row: InsertObject<CentreDB, 'tenants'> = {
     slug: values.slug,
     name: values.name,
     kind: values.kind,
@@ -142,8 +137,8 @@ function tenantInsertValues(values: NewTenant): Insertable<CentreDB['tenants']> 
  * patch chỉ chứa trường nào thì chỉ trường đó đổi (quy tắc T-4).
  * Mốc `updated_at` do repository tự đóng dấu ở điểm gọi.
  */
-function tenantUpdateSet(patch: Partial<TenantRow>): Updateable<CentreDB['tenants']> {
-  const set: Updateable<CentreDB['tenants']> = {};
+function tenantUpdateSet(patch: Partial<TenantRow>): UpdateObject<CentreDB, 'tenants'> {
+  const set: UpdateObject<CentreDB, 'tenants'> = {};
   if (patch.slug !== undefined) set.slug = patch.slug;
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.kind !== undefined) set.kind = patch.kind;
@@ -154,8 +149,8 @@ function tenantUpdateSet(patch: Partial<TenantRow>): Updateable<CentreDB['tenant
 }
 
 /** Ánh xạ dữ kiện tạo membership (camelCase) sang values insert (snake_case), loại `undefined` như mọi đường ghi khác. */
-function membershipInsertValues(values: NewTenantMembership): Insertable<CentreDB['tenant_memberships']> {
-  const row: Insertable<CentreDB['tenant_memberships']> = {
+function membershipInsertValues(values: NewTenantMembership): InsertObject<CentreDB, 'tenant_memberships'> {
+  const row: InsertObject<CentreDB, 'tenant_memberships'> = {
     tenant_id: values.tenantId,
     user_id: values.userId,
   };
@@ -173,8 +168,8 @@ function membershipInsertValues(values: NewTenantMembership): Insertable<CentreD
  * dấu mốc nào ở đường cập nhật này — đúng hành vi đường bộ máy cũ
  * trước đây.
  */
-function membershipUpdateSet(patch: Partial<TenantMembershipRow>): Updateable<CentreDB['tenant_memberships']> {
-  const set: Updateable<CentreDB['tenant_memberships']> = {};
+function membershipUpdateSet(patch: Partial<TenantMembershipRow>): UpdateObject<CentreDB, 'tenant_memberships'> {
+  const set: UpdateObject<CentreDB, 'tenant_memberships'> = {};
   if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
   if (patch.userId !== undefined) set.user_id = patch.userId;
   if (patch.status !== undefined) set.status = patch.status;
@@ -191,28 +186,32 @@ function membershipUpdateSet(patch: Partial<TenantMembershipRow>): Updateable<Ce
 export class TenantsRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): TenantsDb {
+    return this.handle;
+  }
+
   /** Handle Kysely định tuyến theo không gian của repository, dùng khi caller cần ghép truy vấn vào cùng kho. */
   get dbHandle(): CentreDb { return this.handle; }
 
-  async insertTenant(v: NewTenant): Promise<TenantRow> {
-    const rows = await this.handle
+  async insertTenant(v: NewTenant, db: TenantsDb = this.db()): Promise<TenantRow> {
+    return db
       .insertInto('tenants')
       .values(tenantInsertValues(v))
       .returning(TENANT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
-  async getTenant(id: string): Promise<TenantRow | undefined> {
-    return this.handle
+  async getTenant(id: string, db: TenantsDb = this.db()): Promise<TenantRow | undefined> {
+    return db
       .selectFrom('tenants')
       .select(TENANT_COLUMNS)
       .where('id', '=', id)
       .executeTakeFirst();
   }
 
-  async getTenantBySlug(slug: string): Promise<TenantRow | undefined> {
-    return this.handle
+  async getTenantBySlug(slug: string, db: TenantsDb = this.db()): Promise<TenantRow | undefined> {
+    return db
       .selectFrom('tenants')
       .select(TENANT_COLUMNS)
       .where('slug', '=', slug)
@@ -234,40 +233,39 @@ export class TenantsRepository {
    * mặc định); đường đọc cần trạng thái tươi dùng `getTenantBySlug` /
    * `getTenant` như cũ.
    */
-  async getPlatformTenant(): Promise<TenantRow | undefined> {
+  async getPlatformTenant(db: TenantsDb = this.db()): Promise<TenantRow | undefined> {
     if (!this.platformTenantCache) {
-      this.platformTenantCache = await this.getTenantBySlug(PLATFORM_TENANT_SLUG);
+      this.platformTenantCache = await this.getTenantBySlug(PLATFORM_TENANT_SLUG, db);
     }
     return this.platformTenantCache;
   }
 
-  async listTenants(): Promise<TenantRow[]> {
-    return this.handle
+  async listTenants(db: TenantsDb = this.db()): Promise<TenantRow[]> {
+    return db
       .selectFrom('tenants')
       .select(TENANT_COLUMNS)
       .orderBy('created_at', 'asc')
       .execute();
   }
 
-  async updateTenant(id: string, patch: Partial<TenantRow>): Promise<void> {
-    await this.handle
+  async updateTenant(id: string, patch: Partial<TenantRow>, db: TenantsDb = this.db()): Promise<void> {
+    await db
       .updateTable('tenants')
       .set({ ...tenantUpdateSet(patch), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
-  async insertMembership(v: NewTenantMembership): Promise<TenantMembershipRow> {
-    const rows = await this.handle
+  async insertMembership(v: NewTenantMembership, db: TenantsDb = this.db()): Promise<TenantMembershipRow> {
+    return db
       .insertInto('tenant_memberships')
       .values(membershipInsertValues(v))
       .returning(TENANT_MEMBERSHIP_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
-  async getMembership(tenantId: string, userId: string): Promise<TenantMembershipRow | undefined> {
-    return this.handle
+  async getMembership(tenantId: string, userId: string, db: TenantsDb = this.db()): Promise<TenantMembershipRow | undefined> {
+    return db
       .selectFrom('tenant_memberships')
       .select(TENANT_MEMBERSHIP_COLUMNS)
       .where('tenant_id', '=', tenantId)
@@ -275,8 +273,8 @@ export class TenantsRepository {
       .executeTakeFirst();
   }
 
-  async listMembershipsForUser(userId: string): Promise<TenantMembershipRow[]> {
-    return this.handle
+  async listMembershipsForUser(userId: string, db: TenantsDb = this.db()): Promise<TenantMembershipRow[]> {
+    return db
       .selectFrom('tenant_memberships')
       .select(TENANT_MEMBERSHIP_COLUMNS)
       .where('user_id', '=', userId)
@@ -284,8 +282,8 @@ export class TenantsRepository {
       .execute();
   }
 
-  async listMembershipsForTenant(tenantId: string): Promise<TenantMembershipRow[]> {
-    return this.handle
+  async listMembershipsForTenant(tenantId: string, db: TenantsDb = this.db()): Promise<TenantMembershipRow[]> {
+    return db
       .selectFrom('tenant_memberships')
       .select(TENANT_MEMBERSHIP_COLUMNS)
       .where('tenant_id', '=', tenantId)
@@ -293,16 +291,16 @@ export class TenantsRepository {
       .execute();
   }
 
-  async updateMembership(id: string, patch: Partial<TenantMembershipRow>): Promise<void> {
-    await this.handle
+  async updateMembership(id: string, patch: Partial<TenantMembershipRow>, db: TenantsDb = this.db()): Promise<void> {
+    await db
       .updateTable('tenant_memberships')
       .set(membershipUpdateSet(patch))
       .where('id', '=', id)
       .execute();
   }
 
-  async getConfigValue(tenantId: string, key: string): Promise<TenantConfigRow | undefined> {
-    const row = await this.handle
+  async getConfigValue(tenantId: string, key: string, db: TenantsDb = this.db()): Promise<TenantConfigRow | undefined> {
+    const row = await db
       .selectFrom('tenant_config')
       .select(TENANT_CONFIG_COLUMNS)
       .where('tenant_id', '=', tenantId)
@@ -311,8 +309,8 @@ export class TenantsRepository {
     return row as TenantConfigRow | undefined;
   }
 
-  async listConfigForTenant(tenantId: string): Promise<TenantConfigRow[]> {
-    const rows = await this.handle
+  async listConfigForTenant(tenantId: string, db: TenantsDb = this.db()): Promise<TenantConfigRow[]> {
+    const rows = await db
       .selectFrom('tenant_config')
       .select(TENANT_CONFIG_COLUMNS)
       .where('tenant_id', '=', tenantId)
@@ -320,9 +318,9 @@ export class TenantsRepository {
     return rows as TenantConfigRow[];
   }
 
-  async upsertConfigValue(tenantId: string, key: string, value: unknown): Promise<void> {
+  async upsertConfigValue(tenantId: string, key: string, value: unknown, db: TenantsDb = this.db()): Promise<void> {
     const stored = value === null || value === undefined ? null : jsonbValue(value);
-    await this.handle
+    await db
       .insertInto('tenant_config')
       .values({ tenant_id: tenantId, key, value: stored })
       .onConflict((oc) => oc.columns(['tenant_id', 'key']).doUpdateSet({
@@ -332,8 +330,8 @@ export class TenantsRepository {
       .execute();
   }
 
-  async deleteConfigValue(tenantId: string, key: string): Promise<void> {
-    await this.handle
+  async deleteConfigValue(tenantId: string, key: string, db: TenantsDb = this.db()): Promise<void> {
+    await db
       .deleteFrom('tenant_config')
       .where('tenant_id', '=', tenantId)
       .where('key', '=', key)

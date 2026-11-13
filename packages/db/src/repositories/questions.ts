@@ -1,7 +1,8 @@
-import { sql, type RawBuilder } from 'kysely';
-import type { CentreDb, CentreTx } from '../client';
+import { sql, type Expression, type InsertObject, type SqlBool, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreDB, CentreTx } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
 import type { Json } from '../types/centre-db';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /**
  * Kho dữ liệu câu hỏi trên Kysely: quản lý danh mục, phiên bản câu hỏi, ngữ liệu, đáp án, lượt làm và các gắn kết chương trình dùng cho tìm kiếm và đánh giá.
@@ -726,61 +727,42 @@ const CURRICULUM_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL NULL, giá trị thì xâu hoá qua `jsonbValue`.
 // ---------------------------------------------------------------------------
 
-/**
- * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh rồi ép `::jsonb`, theo khuôn của tài liệu Kysely (mục `JSONColumnType` ở Getting Started) và của pilot — pg không suy được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
-/**
- * Ánh xạ phần jsonb nullable cho values/set: giữ ba trạng thái
- * như ghi chú trên. Giá trị phía tiêu thụ là `unknown` (hợp đồng
- * cũ không có `$type<>` cho các cột này) nên ép về kiểu `Json`
- * của codegen tại điểm ghi — đúng kiểu cột mà Kysely kiểm chứng.
- */
-function jsonbField(value: unknown): RawBuilder<Json> | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  return jsonbValue(value as Json);
-}
-
-function qCategoryInsertValues(v: NewQCategory) {
+function qCategoryInsertValues(values: NewQCategory): InsertObject<CentreDB, 'question_categories'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    name: v.name,
-    context_id: v.contextId,
-    ...(v.bankId !== undefined ? { bank_id: v.bankId } : {}),
-    ...(v.info !== undefined ? { info: v.info } : {}),
-    ...(v.parent !== undefined ? { parent: v.parent } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.stamp !== undefined ? { stamp: v.stamp } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    name: values.name,
+    context_id: values.contextId,
+    ...(values.bankId !== undefined ? { bank_id: values.bankId } : {}),
+    ...(values.info !== undefined ? { info: values.info } : {}),
+    ...(values.parent !== undefined ? { parent: values.parent } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
+    ...(values.stamp !== undefined ? { stamp: values.stamp } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function questionInsertValues(v: NewQuestion) {
+function questionInsertValues(values: NewQuestion): InsertObject<CentreDB, 'question'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    category: v.category,
-    qtype: v.qtype,
-    ...(v.createdBy !== undefined ? { created_by: v.createdBy } : {}),
-    ...(v.modifiedBy !== undefined ? { modified_by: v.modifiedBy } : {}),
-    ...(v.derivedFromQuestionId !== undefined ? { derived_from_question_id: v.derivedFromQuestionId } : {}),
-    ...(v.derivedFromVersionId !== undefined ? { derived_from_version_id: v.derivedFromVersionId } : {}),
-    ...(v.derivedFromBankId !== undefined ? { derived_from_bank_id: v.derivedFromBankId } : {}),
-    ...(v.originalAuthorId !== undefined ? { original_author_id: v.originalAuthorId } : {}),
-    ...(v.sourceKind !== undefined ? { source_kind: v.sourceKind } : {}),
-    ...(v.sourceRef !== undefined ? { source_ref: v.sourceRef } : {}),
-    ...(v.idnumber !== undefined ? { idnumber: v.idnumber } : {}),
-    ...(v.copyCount !== undefined ? { copy_count: v.copyCount } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    category: values.category,
+    qtype: values.qtype,
+    ...(values.createdBy !== undefined ? { created_by: values.createdBy } : {}),
+    ...(values.modifiedBy !== undefined ? { modified_by: values.modifiedBy } : {}),
+    ...(values.derivedFromQuestionId !== undefined ? { derived_from_question_id: values.derivedFromQuestionId } : {}),
+    ...(values.derivedFromVersionId !== undefined ? { derived_from_version_id: values.derivedFromVersionId } : {}),
+    ...(values.derivedFromBankId !== undefined ? { derived_from_bank_id: values.derivedFromBankId } : {}),
+    ...(values.originalAuthorId !== undefined ? { original_author_id: values.originalAuthorId } : {}),
+    ...(values.sourceKind !== undefined ? { source_kind: values.sourceKind } : {}),
+    ...(values.sourceRef !== undefined ? { source_ref: values.sourceRef } : {}),
+    ...(values.idnumber !== undefined ? { idnumber: values.idnumber } : {}),
+    ...(values.copyCount !== undefined ? { copy_count: values.copyCount } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function questionUpdateSet(patch: Partial<QuestionRow>) {
+function questionUpdateSet(patch: Partial<QuestionRow>): UpdateObject<CentreDB, 'question'> {
   return {
     ...(patch.category !== undefined ? { category: patch.category } : {}),
     ...(patch.qtype !== undefined ? { qtype: patch.qtype } : {}),
@@ -798,22 +780,22 @@ function questionUpdateSet(patch: Partial<QuestionRow>) {
   };
 }
 
-function entryInsertValues(v: NewEntry) {
+function entryInsertValues(values: NewEntry): InsertObject<CentreDB, 'question_bank_entries'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_category_id: v.questionCategoryId,
-    question_id: v.questionId,
-    ...(v.latestVersion !== undefined ? { latest_version: v.latestVersion } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.withdrawnReason !== undefined ? { withdrawn_reason: v.withdrawnReason } : {}),
-    ...(v.withdrawnBy !== undefined ? { withdrawn_by: v.withdrawnBy } : {}),
-    ...(v.withdrawnAt !== undefined ? { withdrawn_at: v.withdrawnAt } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_category_id: values.questionCategoryId,
+    question_id: values.questionId,
+    ...(values.latestVersion !== undefined ? { latest_version: values.latestVersion } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.withdrawnReason !== undefined ? { withdrawn_reason: values.withdrawnReason } : {}),
+    ...(values.withdrawnBy !== undefined ? { withdrawn_by: values.withdrawnBy } : {}),
+    ...(values.withdrawnAt !== undefined ? { withdrawn_at: values.withdrawnAt } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function entryUpdateSet(patch: Partial<EntryRow>) {
+function entryUpdateSet(patch: Partial<EntryRow>): UpdateObject<CentreDB, 'question_bank_entries'> {
   return {
     ...(patch.questionCategoryId !== undefined ? { question_category_id: patch.questionCategoryId } : {}),
     ...(patch.questionId !== undefined ? { question_id: patch.questionId } : {}),
@@ -826,23 +808,23 @@ function entryUpdateSet(patch: Partial<EntryRow>) {
   };
 }
 
-function versionInsertValues(v: NewVersion) {
+function versionInsertValues(values: NewVersion): InsertObject<CentreDB, 'question_versions'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_bank_entry_id: v.questionBankEntryId,
-    question_id: v.questionId,
-    version: v.version,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.questionText !== undefined ? { question_text: jsonbValue(v.questionText as Json) } : {}),
-    ...(v.generalFeedback !== undefined ? { general_feedback: jsonbField(v.generalFeedback) } : {}),
-    ...(v.defaultMark !== undefined ? { default_mark: v.defaultMark } : {}),
-    ...(v.penalty !== undefined ? { penalty: v.penalty } : {}),
-    ...(v.stimulusId !== undefined ? { stimulus_id: v.stimulusId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_bank_entry_id: values.questionBankEntryId,
+    question_id: values.questionId,
+    version: values.version,
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.questionText !== undefined ? { question_text: jsonbValue(values.questionText as Json) } : {}),
+    ...(values.generalFeedback !== undefined ? { general_feedback: jsonbField(values.generalFeedback) } : {}),
+    ...(values.defaultMark !== undefined ? { default_mark: values.defaultMark } : {}),
+    ...(values.penalty !== undefined ? { penalty: values.penalty } : {}),
+    ...(values.stimulusId !== undefined ? { stimulus_id: values.stimulusId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
 }
 
-function versionUpdateSet(patch: Partial<VersionRow>) {
+function versionUpdateSet(patch: Partial<VersionRow>): UpdateObject<CentreDB, 'question_versions'> {
   // `question_versions` không có cột `updated_at` — patch không tự
   // thêm dấu thời gian như các bảng khác (đúng hợp đồng cũ).
   return {
@@ -858,18 +840,18 @@ function versionUpdateSet(patch: Partial<VersionRow>) {
   };
 }
 
-function stimulusInsertValues(v: NewStimulus) {
+function stimulusInsertValues(values: NewStimulus): InsertObject<CentreDB, 'stimuli'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    category_id: v.categoryId,
-    ...(v.createdBy !== undefined ? { created_by: v.createdBy } : {}),
-    content: jsonbValue(v.content as Json),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    category_id: values.categoryId,
+    ...(values.createdBy !== undefined ? { created_by: values.createdBy } : {}),
+    content: jsonbValue(values.content as Json),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function stimulusUpdateSet(patch: Partial<StimulusRow>) {
+function stimulusUpdateSet(patch: Partial<StimulusRow>): UpdateObject<CentreDB, 'stimuli'> {
   return {
     ...(patch.categoryId !== undefined ? { category_id: patch.categoryId } : {}),
     ...(patch.createdBy !== undefined ? { created_by: patch.createdBy } : {}),
@@ -878,112 +860,112 @@ function stimulusUpdateSet(patch: Partial<StimulusRow>) {
   };
 }
 
-function answerInsertValues(v: NewAnswer) {
+function answerInsertValues(values: NewAnswer): InsertObject<CentreDB, 'question_answers'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_version_id: v.questionVersionId,
-    answer: jsonbValue(v.answer as Json),
-    ...(v.isCorrect !== undefined ? { is_correct: v.isCorrect } : {}),
-    ...(v.feedback !== undefined ? { feedback: jsonbField(v.feedback) } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_version_id: values.questionVersionId,
+    answer: jsonbValue(values.answer as Json),
+    ...(values.isCorrect !== undefined ? { is_correct: values.isCorrect } : {}),
+    ...(values.feedback !== undefined ? { feedback: jsonbField(values.feedback) } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
   };
 }
 
-function answerKeyInsertValues(v: NewAnswerKey) {
+function answerKeyInsertValues(values: NewAnswerKey): InsertObject<CentreDB, 'question_answer_keys'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_version_id: v.questionVersionId,
-    ...(v.guidance !== undefined ? { guidance: jsonbField(v.guidance) } : {}),
-    ...(v.solution !== undefined ? { solution: jsonbField(v.solution) } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_version_id: values.questionVersionId,
+    ...(values.guidance !== undefined ? { guidance: jsonbField(values.guidance) } : {}),
+    ...(values.solution !== undefined ? { solution: jsonbField(values.solution) } : {}),
   };
 }
 
-function multichoiceOptionsInsertValues(v: NewMultichoiceOptions) {
+function multichoiceOptionsInsertValues(values: NewMultichoiceOptions): InsertObject<CentreDB, 'qtype_multichoice_options'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_version_id: v.questionVersionId,
-    ...(v.shuffleAnswers !== undefined ? { shuffle_answers: v.shuffleAnswers } : {}),
-    ...(v.answerNumbering !== undefined ? { answer_numbering: v.answerNumbering } : {}),
-    ...(v.correctFeedback !== undefined ? { correct_feedback: jsonbField(v.correctFeedback) } : {}),
-    ...(v.incorrectFeedback !== undefined ? { incorrect_feedback: jsonbField(v.incorrectFeedback) } : {}),
-    ...(v.showStandardInstruction !== undefined ? { show_standard_instruction: v.showStandardInstruction } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_version_id: values.questionVersionId,
+    ...(values.shuffleAnswers !== undefined ? { shuffle_answers: values.shuffleAnswers } : {}),
+    ...(values.answerNumbering !== undefined ? { answer_numbering: values.answerNumbering } : {}),
+    ...(values.correctFeedback !== undefined ? { correct_feedback: jsonbField(values.correctFeedback) } : {}),
+    ...(values.incorrectFeedback !== undefined ? { incorrect_feedback: jsonbField(values.incorrectFeedback) } : {}),
+    ...(values.showStandardInstruction !== undefined ? { show_standard_instruction: values.showStandardInstruction } : {}),
   };
 }
 
-function truefalseOptionsInsertValues(v: NewTruefalseOptions) {
+function truefalseOptionsInsertValues(values: NewTruefalseOptions): InsertObject<CentreDB, 'question_truefalse'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_version_id: v.questionVersionId,
-    true_answer: v.trueAnswer,
-    false_answer: v.falseAnswer,
-    ...(v.showStandardInstruction !== undefined ? { show_standard_instruction: v.showStandardInstruction } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_version_id: values.questionVersionId,
+    true_answer: values.trueAnswer,
+    false_answer: values.falseAnswer,
+    ...(values.showStandardInstruction !== undefined ? { show_standard_instruction: values.showStandardInstruction } : {}),
   };
 }
 
-function shortanswerOptionsInsertValues(v: NewShortanswerOptions) {
+function shortanswerOptionsInsertValues(values: NewShortanswerOptions): InsertObject<CentreDB, 'qtype_shortanswer_options'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_version_id: v.questionVersionId,
-    ...(v.useCase !== undefined ? { use_case: v.useCase } : {}),
-    ...(v.numericAnswer !== undefined ? { numeric_answer: v.numericAnswer } : {}),
-    ...(v.numericMaxLength !== undefined ? { numeric_max_length: v.numericMaxLength } : {}),
-    ...(v.numericAllowSign !== undefined ? { numeric_allow_sign: v.numericAllowSign } : {}),
-    ...(v.numericAllowDecimal !== undefined ? { numeric_allow_decimal: v.numericAllowDecimal } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_version_id: values.questionVersionId,
+    ...(values.useCase !== undefined ? { use_case: values.useCase } : {}),
+    ...(values.numericAnswer !== undefined ? { numeric_answer: values.numericAnswer } : {}),
+    ...(values.numericMaxLength !== undefined ? { numeric_max_length: values.numericMaxLength } : {}),
+    ...(values.numericAllowSign !== undefined ? { numeric_allow_sign: values.numericAllowSign } : {}),
+    ...(values.numericAllowDecimal !== undefined ? { numeric_allow_decimal: values.numericAllowDecimal } : {}),
   };
 }
 
-function essayOptionsInsertValues(v: NewEssayOptions) {
+function essayOptionsInsertValues(values: NewEssayOptions): InsertObject<CentreDB, 'qtype_essay_options'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_version_id: v.questionVersionId,
-    ...(v.responseFormat !== undefined ? { response_format: v.responseFormat } : {}),
-    ...(v.responseRequired !== undefined ? { response_required: v.responseRequired } : {}),
-    ...(v.responseFieldLines !== undefined ? { response_field_lines: v.responseFieldLines } : {}),
-    ...(v.minWordLimit !== undefined ? { min_word_limit: v.minWordLimit } : {}),
-    ...(v.maxWordLimit !== undefined ? { max_word_limit: v.maxWordLimit } : {}),
-    ...(v.graderInfo !== undefined ? { grader_info: jsonbField(v.graderInfo) } : {}),
-    ...(v.responseTemplate !== undefined ? { response_template: jsonbField(v.responseTemplate) } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_version_id: values.questionVersionId,
+    ...(values.responseFormat !== undefined ? { response_format: values.responseFormat } : {}),
+    ...(values.responseRequired !== undefined ? { response_required: values.responseRequired } : {}),
+    ...(values.responseFieldLines !== undefined ? { response_field_lines: values.responseFieldLines } : {}),
+    ...(values.minWordLimit !== undefined ? { min_word_limit: values.minWordLimit } : {}),
+    ...(values.maxWordLimit !== undefined ? { max_word_limit: values.maxWordLimit } : {}),
+    ...(values.graderInfo !== undefined ? { grader_info: jsonbField(values.graderInfo) } : {}),
+    ...(values.responseTemplate !== undefined ? { response_template: jsonbField(values.responseTemplate) } : {}),
   };
 }
 
-function usageInsertValues(v: NewUsage) {
+function usageInsertValues(values: NewUsage): InsertObject<CentreDB, 'question_usages'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    component: v.component,
-    ...(v.instanceId !== undefined ? { instance_id: v.instanceId } : {}),
-    ...(v.owningContextId !== undefined ? { owning_context_id: v.owningContextId } : {}),
-    ...(v.preferredBehaviour !== undefined ? { preferred_behaviour: v.preferredBehaviour } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    component: values.component,
+    ...(values.instanceId !== undefined ? { instance_id: values.instanceId } : {}),
+    ...(values.owningContextId !== undefined ? { owning_context_id: values.owningContextId } : {}),
+    ...(values.preferredBehaviour !== undefined ? { preferred_behaviour: values.preferredBehaviour } : {}),
+    ...(values.userId !== undefined ? { user_id: values.userId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function attemptInsertValues(v: NewAttempt) {
+function attemptInsertValues(values: NewAttempt): InsertObject<CentreDB, 'question_attempts'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_usage_id: v.questionUsageId,
-    slot: v.slot,
-    ...(v.behaviour !== undefined ? { behaviour: v.behaviour } : {}),
-    question_id: v.questionId,
-    ...(v.questionVersionId !== undefined ? { question_version_id: v.questionVersionId } : {}),
-    ...(v.variant !== undefined ? { variant: v.variant } : {}),
-    ...(v.maxMark !== undefined ? { max_mark: v.maxMark } : {}),
-    ...(v.minFraction !== undefined ? { min_fraction: v.minFraction } : {}),
-    ...(v.maxFraction !== undefined ? { max_fraction: v.maxFraction } : {}),
-    ...(v.flagged !== undefined ? { flagged: v.flagged } : {}),
-    ...(v.questionSummary !== undefined ? { question_summary: v.questionSummary } : {}),
-    ...(v.responseSummary !== undefined ? { response_summary: v.responseSummary } : {}),
-    ...(v.rightAnswer !== undefined ? { right_answer: v.rightAnswer } : {}),
-    ...(v.state !== undefined ? { state: v.state } : {}),
-    ...(v.fraction !== undefined ? { fraction: v.fraction } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_usage_id: values.questionUsageId,
+    slot: values.slot,
+    ...(values.behaviour !== undefined ? { behaviour: values.behaviour } : {}),
+    question_id: values.questionId,
+    ...(values.questionVersionId !== undefined ? { question_version_id: values.questionVersionId } : {}),
+    ...(values.variant !== undefined ? { variant: values.variant } : {}),
+    ...(values.maxMark !== undefined ? { max_mark: values.maxMark } : {}),
+    ...(values.minFraction !== undefined ? { min_fraction: values.minFraction } : {}),
+    ...(values.maxFraction !== undefined ? { max_fraction: values.maxFraction } : {}),
+    ...(values.flagged !== undefined ? { flagged: values.flagged } : {}),
+    ...(values.questionSummary !== undefined ? { question_summary: values.questionSummary } : {}),
+    ...(values.responseSummary !== undefined ? { response_summary: values.responseSummary } : {}),
+    ...(values.rightAnswer !== undefined ? { right_answer: values.rightAnswer } : {}),
+    ...(values.state !== undefined ? { state: values.state } : {}),
+    ...(values.fraction !== undefined ? { fraction: values.fraction } : {}),
+    ...(values.userId !== undefined ? { user_id: values.userId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function attemptUpdateSet(patch: Partial<AttemptRow>) {
+function attemptUpdateSet(patch: Partial<AttemptRow>): UpdateObject<CentreDB, 'question_attempts'> {
   return {
     ...(patch.behaviour !== undefined ? { behaviour: patch.behaviour } : {}),
     ...(patch.questionVersionId !== undefined ? { question_version_id: patch.questionVersionId } : {}),
@@ -1002,43 +984,43 @@ function attemptUpdateSet(patch: Partial<AttemptRow>) {
   };
 }
 
-function stepInsertValues(v: NewStep) {
+function stepInsertValues(values: NewStep): InsertObject<CentreDB, 'question_attempt_steps'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_attempt_id: v.questionAttemptId,
-    sequence_number: v.sequenceNumber,
-    state: v.state,
-    ...(v.fraction !== undefined ? { fraction: v.fraction } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_attempt_id: values.questionAttemptId,
+    sequence_number: values.sequenceNumber,
+    state: values.state,
+    ...(values.fraction !== undefined ? { fraction: values.fraction } : {}),
+    ...(values.userId !== undefined ? { user_id: values.userId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
 }
 
-function stepDataInsertValues(v: NewStepData) {
+function stepDataInsertValues(values: NewStepData): InsertObject<CentreDB, 'question_attempt_step_data'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    attempt_step_id: v.attemptStepId,
-    name: v.name,
-    ...(v.value !== undefined ? { value: v.value } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    attempt_step_id: values.attemptStepId,
+    name: values.name,
+    ...(values.value !== undefined ? { value: values.value } : {}),
   };
 }
 
-function questionSubjectLinkInsertValues(v: NewQuestionSubjectLink) {
+function questionSubjectLinkInsertValues(values: NewQuestionSubjectLink): InsertObject<CentreDB, 'question_subjects'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_id: v.questionId,
-    subject_id: v.subjectId,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_id: values.questionId,
+    subject_id: values.subjectId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
 }
 
-function questionOutcomeLinkInsertValues(v: NewQuestionOutcomeLink) {
+function questionOutcomeLinkInsertValues(values: NewQuestionOutcomeLink): InsertObject<CentreDB, 'question_learning_outcomes'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    question_id: v.questionId,
-    learning_outcome_id: v.learningOutcomeId,
-    cognitive_level: v.cognitiveLevel,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    question_id: values.questionId,
+    learning_outcome_id: values.learningOutcomeId,
+    cognitive_level: values.cognitiveLevel,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
 }
 
@@ -1047,12 +1029,19 @@ function questionOutcomeLinkInsertValues(v: NewQuestionOutcomeLink) {
  * tuỳ chọn: không truyền thì chạy trên handle gốc của repository,
  * truyền handle giao dịch (từ `transaction(fn)` của repository
  * này hoặc của repository Kysely khác cùng kho) thì chạy trong
- * giao dịch đó — đúng khuôn `(tx ?? this.db)` của repository cũ.
+ * giao dịch đó — đúng khuôn `(db = this.db())` của repository cũ.
  */
+/**
+ * Điều kiện "YCCĐ hiện hành" dùng chung cho các nhánh tra cứu theo chương trình trong `resolveCurriculumCandidateIds` (S18): dòng đã rút (`retired_at`) không còn hiệu lực; dòng derived chỉ hiện hành khi dòng gốc hiện hành. Viết bằng mảnh `sql` thay vì `eb` vì hai nhánh có tập bảng join khác nhau (nhánh subject join thêm `curriculum_nodes`/`curricula`) nên không có một kiểu `ExpressionBuilder` chung cho cả hai; văn bản SQL giữ nguyên đúng hai điều kiện đã viết inline trước đây.
+ */
+function currentOutcomeConditions(): Expression<SqlBool> {
+  return sql<SqlBool>`lo.retired_at is null and (lo.derived_from_id is null or learning_outcome_root.retired_at is null)`;
+}
+
 export class QuestionsRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Handle gốc của repository (điểm mở giao dịch + truy vấn ngoài giao dịch). */
+  /** Handle gốc của repository (điểm mở giao dịch + truy vấn ngoài giao dịch). Giữ public: test tích hợp phía `apps/api` dùng `repo.db()` để ghi trực tiếp (question-view-batch.int-spec.ts:276). */
   db(): CentreDb {
     return this.handle;
   }
@@ -1067,8 +1056,7 @@ export class QuestionsRepository {
   /**
    * Chèn category mới — điểm ghi category chuẩn phía Kysely.
    */
-  async insertCategory(v: NewQCategory, tx?: QuestionsDb): Promise<QCategoryRow> {
-    const db = tx ?? this.handle;
+  async insertCategory(v: NewQCategory, db: QuestionsDb = this.db()): Promise<QCategoryRow> {
     return db
       .insertInto('question_categories')
       .values(qCategoryInsertValues(v))
@@ -1077,8 +1065,7 @@ export class QuestionsRepository {
   }
 
   /** Category theo id. */
-  async getCategory(id: string, tx?: QuestionsDb): Promise<QCategoryRow | undefined> {
-    const db = tx ?? this.handle;
+  async getCategory(id: string, db: QuestionsDb = this.db()): Promise<QCategoryRow | undefined> {
     return db
       .selectFrom('question_categories')
       .select(Q_CATEGORY_COLUMNS)
@@ -1087,9 +1074,8 @@ export class QuestionsRepository {
   }
 
   /** Nhiều category theo tập id trong một truy vấn (tập rỗng trả `[]` ngay, không truy vấn). */
-  async getCategoriesByIds(ids: string[], tx?: QuestionsDb): Promise<QCategoryRow[]> {
+  async getCategoriesByIds(ids: string[], db: QuestionsDb = this.db()): Promise<QCategoryRow[]> {
     if (!ids.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question_categories')
       .select(Q_CATEGORY_COLUMNS)
@@ -1098,8 +1084,7 @@ export class QuestionsRepository {
   }
 
   /** Bank theo id (chỉ đọc — bank do phía bank sở hữu ghi). */
-  async getBankById(id: string, tx?: QuestionsDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getBankById(id: string, db: QuestionsDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -1108,8 +1093,7 @@ export class QuestionsRepository {
   }
 
   /** Bank theo context của nó. */
-  async getBankByContextId(contextId: string, tx?: QuestionsDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getBankByContextId(contextId: string, db: QuestionsDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -1122,8 +1106,7 @@ export class QuestionsRepository {
    * theo thời gian tạo rồi id — giữ nguyên cách sắp của repository
    * cũ (không đẩy xuống `ORDER BY`).
    */
-  async listCategories(contextId?: string, tx?: QuestionsDb): Promise<QCategoryRow[]> {
-    const db = tx ?? this.handle;
+  async listCategories(contextId?: string, db: QuestionsDb = this.db()): Promise<QCategoryRow[]> {
     let query = db.selectFrom('question_categories').select(Q_CATEGORY_COLUMNS);
     if (contextId !== undefined) query = query.where('context_id', '=', contextId);
     const rows = await query.execute();
@@ -1133,8 +1116,7 @@ export class QuestionsRepository {
   // --- questions ---------------------------------------------------------------
 
   /** Chèn câu hỏi mới. */
-  async insertQuestion(v: NewQuestion, tx?: QuestionsDb): Promise<QuestionRow> {
-    const db = tx ?? this.handle;
+  async insertQuestion(v: NewQuestion, db: QuestionsDb = this.db()): Promise<QuestionRow> {
     return db
       .insertInto('question')
       .values(questionInsertValues(v))
@@ -1143,8 +1125,7 @@ export class QuestionsRepository {
   }
 
   /** Câu hỏi theo id. */
-  async getQuestion(id: string, tx?: QuestionsDb): Promise<QuestionRow | undefined> {
-    const db = tx ?? this.handle;
+  async getQuestion(id: string, db: QuestionsDb = this.db()): Promise<QuestionRow | undefined> {
     return db
       .selectFrom('question')
       .select(QUESTION_COLUMNS)
@@ -1153,9 +1134,8 @@ export class QuestionsRepository {
   }
 
   /** Nhiều câu hỏi theo tập id trong một truy vấn (tập rỗng trả `[]` ngay). */
-  async getQuestionsByIds(ids: string[], tx?: QuestionsDb): Promise<QuestionRow[]> {
+  async getQuestionsByIds(ids: string[], db: QuestionsDb = this.db()): Promise<QuestionRow[]> {
     if (!ids.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question')
       .select(QUESTION_COLUMNS)
@@ -1164,8 +1144,8 @@ export class QuestionsRepository {
   }
 
   /** Cập nhật câu hỏi theo patch (trường `undefined` giữ nguyên — T-4) + `updated_at` mới. */
-  async updateQuestion(id: string, patch: Partial<QuestionRow>): Promise<void> {
-    await this.handle
+  async updateQuestion(id: string, patch: Partial<QuestionRow>, db: QuestionsDb = this.db()): Promise<void> {
+    await db
       .updateTable('question')
       .set(questionUpdateSet(patch))
       .where('id', '=', id)
@@ -1173,8 +1153,7 @@ export class QuestionsRepository {
   }
 
   /** Mọi câu hỏi trong một category, thứ tự id. */
-  async listQuestionsInCategory(categoryId: string, tx?: QuestionsDb): Promise<QuestionRow[]> {
-    const db = tx ?? this.handle;
+  async listQuestionsInCategory(categoryId: string, db: QuestionsDb = this.db()): Promise<QuestionRow[]> {
     return db
       .selectFrom('question')
       .select(QUESTION_COLUMNS)
@@ -1186,8 +1165,7 @@ export class QuestionsRepository {
   // --- entries & versions ---------------------------------------------------------
 
   /** Chèn entry mới. */
-  async insertEntry(v: NewEntry, tx?: QuestionsDb): Promise<EntryRow> {
-    const db = tx ?? this.handle;
+  async insertEntry(v: NewEntry, db: QuestionsDb = this.db()): Promise<EntryRow> {
     return db
       .insertInto('question_bank_entries')
       .values(entryInsertValues(v))
@@ -1196,8 +1174,7 @@ export class QuestionsRepository {
   }
 
   /** Entry của một câu hỏi. */
-  async getEntryByQuestion(questionId: string, tx?: QuestionsDb): Promise<EntryRow | undefined> {
-    const db = tx ?? this.handle;
+  async getEntryByQuestion(questionId: string, db: QuestionsDb = this.db()): Promise<EntryRow | undefined> {
     return db
       .selectFrom('question_bank_entries')
       .select(ENTRY_COLUMNS)
@@ -1206,9 +1183,8 @@ export class QuestionsRepository {
   }
 
   /** Entry của nhiều câu hỏi trong một truy vấn (tập rỗng trả `[]` ngay). */
-  async getEntriesByQuestionIds(questionIds: string[], tx?: QuestionsDb): Promise<EntryRow[]> {
+  async getEntriesByQuestionIds(questionIds: string[], db: QuestionsDb = this.db()): Promise<EntryRow[]> {
     if (!questionIds.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question_bank_entries')
       .select(ENTRY_COLUMNS)
@@ -1217,8 +1193,7 @@ export class QuestionsRepository {
   }
 
   /** Cập nhật entry theo patch (trường `undefined` giữ nguyên — T-4) + `updated_at` mới. */
-  async updateEntry(id: string, patch: Partial<EntryRow>, tx?: QuestionsDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateEntry(id: string, patch: Partial<EntryRow>, db: QuestionsDb = this.db()): Promise<void> {
     await db
       .updateTable('question_bank_entries')
       .set(entryUpdateSet(patch))
@@ -1231,8 +1206,8 @@ export class QuestionsRepository {
    * T-4; cột jsonb phân biệt `null` ghi NULL với giá trị xâu hoá).
    * Bảng này không có `updated_at` nên không tự thêm dấu thời gian.
    */
-  async updateVersion(id: string, patch: Partial<VersionRow>): Promise<void> {
-    await this.handle
+  async updateVersion(id: string, patch: Partial<VersionRow>, db: QuestionsDb = this.db()): Promise<void> {
+    await db
       .updateTable('question_versions')
       .set(versionUpdateSet(patch))
       .where('id', '=', id)
@@ -1240,8 +1215,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn version mới. */
-  async insertVersion(v: NewVersion, tx?: QuestionsDb): Promise<VersionRow> {
-    const db = tx ?? this.handle;
+  async insertVersion(v: NewVersion, db: QuestionsDb = this.db()): Promise<VersionRow> {
     return db
       .insertInto('question_versions')
       .values(versionInsertValues(v))
@@ -1250,8 +1224,7 @@ export class QuestionsRepository {
   }
 
   /** Version theo id. */
-  async getVersion(id: string, tx?: QuestionsDb): Promise<VersionRow | undefined> {
-    const db = tx ?? this.handle;
+  async getVersion(id: string, db: QuestionsDb = this.db()): Promise<VersionRow | undefined> {
     return db
       .selectFrom('question_versions')
       .select(VERSION_COLUMNS)
@@ -1260,8 +1233,7 @@ export class QuestionsRepository {
   }
 
   /** Version theo (entry, số hiệu version). */
-  async getVersionByNumber(entryId: string, version: number, tx?: QuestionsDb): Promise<VersionRow | undefined> {
-    const db = tx ?? this.handle;
+  async getVersionByNumber(entryId: string, version: number, db: QuestionsDb = this.db()): Promise<VersionRow | undefined> {
     return db
       .selectFrom('question_versions')
       .select(VERSION_COLUMNS)
@@ -1271,8 +1243,7 @@ export class QuestionsRepository {
   }
 
   /** Mọi version của một entry, thứ tự số hiệu version. */
-  async listVersions(entryId: string, tx?: QuestionsDb): Promise<VersionRow[]> {
-    const db = tx ?? this.handle;
+  async listVersions(entryId: string, db: QuestionsDb = this.db()): Promise<VersionRow[]> {
     return db
       .selectFrom('question_versions')
       .select(VERSION_COLUMNS)
@@ -1282,9 +1253,8 @@ export class QuestionsRepository {
   }
 
   /** Mọi version của nhiều entry trong một truy vấn (tập rỗng trả `[]` ngay), thứ tự (entry, version). */
-  async listVersionsForEntries(entryIds: string[], tx?: QuestionsDb): Promise<VersionRow[]> {
+  async listVersionsForEntries(entryIds: string[], db: QuestionsDb = this.db()): Promise<VersionRow[]> {
     if (!entryIds.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question_versions')
       .select(VERSION_COLUMNS)
@@ -1297,8 +1267,7 @@ export class QuestionsRepository {
   // --- stimuli --------------------------------------------------------------------
 
   /** Chèn stimulus mới. */
-  async insertStimulus(v: NewStimulus, tx?: QuestionsDb): Promise<StimulusRow> {
-    const db = tx ?? this.handle;
+  async insertStimulus(v: NewStimulus, db: QuestionsDb = this.db()): Promise<StimulusRow> {
     return db
       .insertInto('stimuli')
       .values(stimulusInsertValues(v))
@@ -1307,8 +1276,7 @@ export class QuestionsRepository {
   }
 
   /** Stimulus theo id. */
-  async getStimulus(id: string, tx?: QuestionsDb): Promise<StimulusRow | undefined> {
-    const db = tx ?? this.handle;
+  async getStimulus(id: string, db: QuestionsDb = this.db()): Promise<StimulusRow | undefined> {
     return db
       .selectFrom('stimuli')
       .select(STIMULUS_COLUMNS)
@@ -1317,8 +1285,7 @@ export class QuestionsRepository {
   }
 
   /** Mọi stimulus trong một category. */
-  async listStimuliInCategory(categoryId: string, tx?: QuestionsDb): Promise<StimulusRow[]> {
-    const db = tx ?? this.handle;
+  async listStimuliInCategory(categoryId: string, db: QuestionsDb = this.db()): Promise<StimulusRow[]> {
     return db
       .selectFrom('stimuli')
       .select(STIMULUS_COLUMNS)
@@ -1327,8 +1294,8 @@ export class QuestionsRepository {
   }
 
   /** Cập nhật stimulus theo patch (trường `undefined` giữ nguyên — T-4) + `updated_at` mới. */
-  async updateStimulus(id: string, patch: Partial<StimulusRow>): Promise<void> {
-    await this.handle
+  async updateStimulus(id: string, patch: Partial<StimulusRow>, db: QuestionsDb = this.db()): Promise<void> {
+    await db
       .updateTable('stimuli')
       .set(stimulusUpdateSet(patch))
       .where('id', '=', id)
@@ -1336,8 +1303,8 @@ export class QuestionsRepository {
   }
 
   /** Xoá stimulus theo id. */
-  async deleteStimulus(id: string): Promise<void> {
-    await this.handle.deleteFrom('stimuli').where('id', '=', id).execute();
+  async deleteStimulus(id: string, db: QuestionsDb = this.db()): Promise<void> {
+    await db.deleteFrom('stimuli').where('id', '=', id).execute();
   }
 
   /**
@@ -1345,8 +1312,7 @@ export class QuestionsRepository {
    * danh sách id (giữ nguyên cách đếm của repository cũ, không đổi
    * sang `count(*)` ở database).
    */
-  async countVersionsReferencingStimulus(stimulusId: string, tx?: QuestionsDb): Promise<number> {
-    const db = tx ?? this.handle;
+  async countVersionsReferencingStimulus(stimulusId: string, db: QuestionsDb = this.db()): Promise<number> {
     const rows = await db
       .selectFrom('question_versions')
       .select('id')
@@ -1358,8 +1324,7 @@ export class QuestionsRepository {
   // --- answers & options --------------------------------------------------------------
 
   /** Chèn một đáp án của version. */
-  async insertAnswer(v: NewAnswer, tx?: QuestionsDb): Promise<AnswerRow> {
-    const db = tx ?? this.handle;
+  async insertAnswer(v: NewAnswer, db: QuestionsDb = this.db()): Promise<AnswerRow> {
     return db
       .insertInto('question_answers')
       .values(answerInsertValues(v))
@@ -1368,8 +1333,7 @@ export class QuestionsRepository {
   }
 
   /** Mọi đáp án của một version, thứ tự (sort_order, id). */
-  async listAnswers(versionId: string, tx?: QuestionsDb): Promise<AnswerRow[]> {
-    const db = tx ?? this.handle;
+  async listAnswers(versionId: string, db: QuestionsDb = this.db()): Promise<AnswerRow[]> {
     return db
       .selectFrom('question_answers')
       .select(ANSWER_COLUMNS)
@@ -1380,8 +1344,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn bản ghi phía đáp án (guidance/solution) của version. */
-  async insertAnswerKey(v: NewAnswerKey, tx?: QuestionsDb): Promise<AnswerKeyRow> {
-    const db = tx ?? this.handle;
+  async insertAnswerKey(v: NewAnswerKey, db: QuestionsDb = this.db()): Promise<AnswerKeyRow> {
     return db
       .insertInto('question_answer_keys')
       .values(answerKeyInsertValues(v))
@@ -1390,8 +1353,7 @@ export class QuestionsRepository {
   }
 
   /** Bản ghi phía đáp án của một version. */
-  async getAnswerKey(versionId: string, tx?: QuestionsDb): Promise<AnswerKeyRow | undefined> {
-    const db = tx ?? this.handle;
+  async getAnswerKey(versionId: string, db: QuestionsDb = this.db()): Promise<AnswerKeyRow | undefined> {
     return db
       .selectFrom('question_answer_keys')
       .select(ANSWER_KEY_COLUMNS)
@@ -1400,8 +1362,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn options multichoice của version. */
-  async insertMultichoiceOptions(v: NewMultichoiceOptions, tx?: QuestionsDb): Promise<MultichoiceOptionsRow> {
-    const db = tx ?? this.handle;
+  async insertMultichoiceOptions(v: NewMultichoiceOptions, db: QuestionsDb = this.db()): Promise<MultichoiceOptionsRow> {
     return db
       .insertInto('qtype_multichoice_options')
       .values(multichoiceOptionsInsertValues(v))
@@ -1410,8 +1371,7 @@ export class QuestionsRepository {
   }
 
   /** Options multichoice của một version. */
-  async getMultichoiceOptions(versionId: string, tx?: QuestionsDb): Promise<MultichoiceOptionsRow | undefined> {
-    const db = tx ?? this.handle;
+  async getMultichoiceOptions(versionId: string, db: QuestionsDb = this.db()): Promise<MultichoiceOptionsRow | undefined> {
     return db
       .selectFrom('qtype_multichoice_options')
       .select(MULTICHOICE_OPTIONS_COLUMNS)
@@ -1420,8 +1380,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn options true/false của version. */
-  async insertTruefalseOptions(v: NewTruefalseOptions, tx?: QuestionsDb): Promise<TruefalseOptionsRow> {
-    const db = tx ?? this.handle;
+  async insertTruefalseOptions(v: NewTruefalseOptions, db: QuestionsDb = this.db()): Promise<TruefalseOptionsRow> {
     return db
       .insertInto('question_truefalse')
       .values(truefalseOptionsInsertValues(v))
@@ -1430,8 +1389,7 @@ export class QuestionsRepository {
   }
 
   /** Options true/false của một version. */
-  async getTruefalseOptions(versionId: string, tx?: QuestionsDb): Promise<TruefalseOptionsRow | undefined> {
-    const db = tx ?? this.handle;
+  async getTruefalseOptions(versionId: string, db: QuestionsDb = this.db()): Promise<TruefalseOptionsRow | undefined> {
     return db
       .selectFrom('question_truefalse')
       .select(TRUEFALSE_OPTIONS_COLUMNS)
@@ -1440,8 +1398,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn options shortanswer của version. */
-  async insertShortanswerOptions(v: NewShortanswerOptions, tx?: QuestionsDb): Promise<ShortanswerOptionsRow> {
-    const db = tx ?? this.handle;
+  async insertShortanswerOptions(v: NewShortanswerOptions, db: QuestionsDb = this.db()): Promise<ShortanswerOptionsRow> {
     return db
       .insertInto('qtype_shortanswer_options')
       .values(shortanswerOptionsInsertValues(v))
@@ -1450,8 +1407,7 @@ export class QuestionsRepository {
   }
 
   /** Options shortanswer của một version. */
-  async getShortanswerOptions(versionId: string, tx?: QuestionsDb): Promise<ShortanswerOptionsRow | undefined> {
-    const db = tx ?? this.handle;
+  async getShortanswerOptions(versionId: string, db: QuestionsDb = this.db()): Promise<ShortanswerOptionsRow | undefined> {
     return db
       .selectFrom('qtype_shortanswer_options')
       .select(SHORTANSWER_OPTIONS_COLUMNS)
@@ -1460,8 +1416,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn options essay của version. */
-  async insertEssayOptions(v: NewEssayOptions, tx?: QuestionsDb): Promise<EssayOptionsRow> {
-    const db = tx ?? this.handle;
+  async insertEssayOptions(v: NewEssayOptions, db: QuestionsDb = this.db()): Promise<EssayOptionsRow> {
     return db
       .insertInto('qtype_essay_options')
       .values(essayOptionsInsertValues(v))
@@ -1470,8 +1425,7 @@ export class QuestionsRepository {
   }
 
   /** Options essay của một version. */
-  async getEssayOptions(versionId: string, tx?: QuestionsDb): Promise<EssayOptionsRow | undefined> {
-    const db = tx ?? this.handle;
+  async getEssayOptions(versionId: string, db: QuestionsDb = this.db()): Promise<EssayOptionsRow | undefined> {
     return db
       .selectFrom('qtype_essay_options')
       .select(ESSAY_OPTIONS_COLUMNS)
@@ -1482,8 +1436,8 @@ export class QuestionsRepository {
   // --- usages, attempts & steps (engine) -----------------------------------------
 
   /** Chèn question usage (một lượt sử dụng bộ câu hỏi, vd một lần làm bài quiz). */
-  async insertUsage(v: NewUsage): Promise<UsageRow> {
-    return this.handle
+  async insertUsage(v: NewUsage, db: QuestionsDb = this.db()): Promise<UsageRow> {
+    return db
       .insertInto('question_usages')
       .values(usageInsertValues(v))
       .returning(USAGE_COLUMNS)
@@ -1491,8 +1445,8 @@ export class QuestionsRepository {
   }
 
   /** Usage theo id. */
-  async getUsage(id: string): Promise<UsageRow | undefined> {
-    return this.handle
+  async getUsage(id: string, db: QuestionsDb = this.db()): Promise<UsageRow | undefined> {
+    return db
       .selectFrom('question_usages')
       .select(USAGE_COLUMNS)
       .where('id', '=', id)
@@ -1504,9 +1458,9 @@ export class QuestionsRepository {
    * #489): bản theo lô của `getUsage`; thứ tự trả về không cam
    * kết, caller tự tra theo id. Tập rỗng trả `[]` ngay.
    */
-  async getUsagesByIds(ids: string[]): Promise<UsageRow[]> {
+  async getUsagesByIds(ids: string[], db: QuestionsDb = this.db()): Promise<UsageRow[]> {
     if (!ids.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_usages')
       .select(USAGE_COLUMNS)
       .where('id', 'in', ids)
@@ -1518,8 +1472,8 @@ export class QuestionsRepository {
    * hoạt động sở hữu usage bị xoá (vd quiz bị xoá kéo theo các
    * lượt làm).
    */
-  async deleteUsage(id: string): Promise<void> {
-    await this.handle.deleteFrom('question_usages').where('id', '=', id).execute();
+  async deleteUsage(id: string, db: QuestionsDb = this.db()): Promise<void> {
+    await db.deleteFrom('question_usages').where('id', '=', id).execute();
   }
 
   /**
@@ -1528,8 +1482,8 @@ export class QuestionsRepository {
    * dòng. Dùng để cổng kênh HTTP biết usage này thuộc về một lượt
    * thi (issue #60).
    */
-  async findQuizAttemptByUsageId(usageId: string): Promise<QuizAttemptLinkRow | undefined> {
-    return this.handle
+  async findQuizAttemptByUsageId(usageId: string, db: QuestionsDb = this.db()): Promise<QuizAttemptLinkRow | undefined> {
+    return db
       .selectFrom('exam_attempts')
       .select(QUIZ_ATTEMPT_LINK_COLUMNS)
       .where('usage_id', '=', usageId)
@@ -1537,8 +1491,8 @@ export class QuestionsRepository {
   }
 
   /** Chèn question attempt (một câu trong một usage). */
-  async insertAttempt(v: NewAttempt): Promise<AttemptRow> {
-    return this.handle
+  async insertAttempt(v: NewAttempt, db: QuestionsDb = this.db()): Promise<AttemptRow> {
+    return db
       .insertInto('question_attempts')
       .values(attemptInsertValues(v))
       .returning(ATTEMPT_COLUMNS)
@@ -1546,8 +1500,8 @@ export class QuestionsRepository {
   }
 
   /** Attempt theo id. */
-  async getAttempt(id: string): Promise<AttemptRow | undefined> {
-    return this.handle
+  async getAttempt(id: string, db: QuestionsDb = this.db()): Promise<AttemptRow | undefined> {
+    return db
       .selectFrom('question_attempts')
       .select(ATTEMPT_COLUMNS)
       .where('id', '=', id)
@@ -1555,8 +1509,8 @@ export class QuestionsRepository {
   }
 
   /** Các attempt của một usage, thứ tự slot. */
-  async listAttempts(usageId: string): Promise<AttemptRow[]> {
-    return this.handle
+  async listAttempts(usageId: string, db: QuestionsDb = this.db()): Promise<AttemptRow[]> {
+    return db
       .selectFrom('question_attempts')
       .select(ATTEMPT_COLUMNS)
       .where('question_usage_id', '=', usageId)
@@ -1570,9 +1524,9 @@ export class QuestionsRepository {
    * theo slot để khi caller gom theo usage, thứ tự attempt trong
    * từng usage vẫn là slot tăng dần như đường đọc lẻ.
    */
-  async listAttemptsForUsages(usageIds: string[]): Promise<AttemptRow[]> {
+  async listAttemptsForUsages(usageIds: string[], db: QuestionsDb = this.db()): Promise<AttemptRow[]> {
     if (!usageIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_attempts')
       .select(ATTEMPT_COLUMNS)
       .where('question_usage_id', 'in', usageIds)
@@ -1582,8 +1536,8 @@ export class QuestionsRepository {
   }
 
   /** Cập nhật attempt theo patch (trường `undefined` giữ nguyên — T-4) + `updated_at` mới. */
-  async updateAttempt(id: string, patch: Partial<AttemptRow>): Promise<void> {
-    await this.handle
+  async updateAttempt(id: string, patch: Partial<AttemptRow>, db: QuestionsDb = this.db()): Promise<void> {
+    await db
       .updateTable('question_attempts')
       .set(attemptUpdateSet(patch))
       .where('id', '=', id)
@@ -1591,8 +1545,7 @@ export class QuestionsRepository {
   }
 
   /** Ghi một bước tương tác (step) của attempt. */
-  async insertStep(v: NewStep, tx?: QuestionsDb): Promise<StepRow> {
-    const db = tx ?? this.handle;
+  async insertStep(v: NewStep, db: QuestionsDb = this.db()): Promise<StepRow> {
     return db
       .insertInto('question_attempt_steps')
       .values(stepInsertValues(v))
@@ -1601,8 +1554,8 @@ export class QuestionsRepository {
   }
 
   /** Các bước của một attempt theo thứ tự số hiệu bước. */
-  async listSteps(attemptId: string): Promise<StepRow[]> {
-    return this.handle
+  async listSteps(attemptId: string, db: QuestionsDb = this.db()): Promise<StepRow[]> {
+    return db
       .selectFrom('question_attempt_steps')
       .select(STEP_COLUMNS)
       .where('question_attempt_id', '=', attemptId)
@@ -1616,9 +1569,9 @@ export class QuestionsRepository {
    * số thứ tự bước để thứ tự bước trong từng attempt giữ nguyên
    * như đường đọc lẻ khi caller gom lại.
    */
-  async listStepsForAttempts(attemptIds: string[]): Promise<StepRow[]> {
+  async listStepsForAttempts(attemptIds: string[], db: QuestionsDb = this.db()): Promise<StepRow[]> {
     if (!attemptIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_attempt_steps')
       .select(STEP_COLUMNS)
       .where('question_attempt_id', 'in', attemptIds)
@@ -1628,14 +1581,13 @@ export class QuestionsRepository {
   }
 
   /** Ghi dữ kiện của một bước (câu trả lời đã nộp) — không trả dòng. */
-  async insertStepData(v: NewStepData, tx?: QuestionsDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async insertStepData(v: NewStepData, db: QuestionsDb = this.db()): Promise<void> {
     await db.insertInto('question_attempt_step_data').values(stepDataInsertValues(v)).execute();
   }
 
   /** Dữ kiện bước theo id bước (đường đọc lẻ không sắp xếp). */
-  async listStepData(stepId: string): Promise<StepDataRow[]> {
-    return this.handle
+  async listStepData(stepId: string, db: QuestionsDb = this.db()): Promise<StepDataRow[]> {
+    return db
       .selectFrom('question_attempt_step_data')
       .select(STEP_DATA_COLUMNS)
       .where('attempt_step_id', '=', stepId)
@@ -1649,9 +1601,9 @@ export class QuestionsRepository {
    * được gom theo tên ở tầng service, thứ tự dòng không mang
    * nghĩa.
    */
-  async listStepDataForSteps(stepIds: string[]): Promise<StepDataRow[]> {
+  async listStepDataForSteps(stepIds: string[], db: QuestionsDb = this.db()): Promise<StepDataRow[]> {
     if (!stepIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_attempt_step_data')
       .select(STEP_DATA_COLUMNS)
       .where('attempt_step_id', 'in', stepIds)
@@ -1684,8 +1636,8 @@ export class QuestionsRepository {
   // thẳng các bảng đó cùng chuỗi outcome → node → curriculum → subject.
 
   /** Môn học theo id (đích gắn kết mức môn). */
-  async getSubjectRow(id: string): Promise<SubjectRow | undefined> {
-    return this.handle
+  async getSubjectRow(id: string, db: QuestionsDb = this.db()): Promise<SubjectRow | undefined> {
+    return db
       .selectFrom('subjects')
       .select(SUBJECT_COLUMNS)
       .where('id', '=', id)
@@ -1697,33 +1649,33 @@ export class QuestionsRepository {
    * lần tra tuần tự outcome → node → curriculum → subject, thiếu
    * một mắt xích thì trả `undefined`.
    */
-  async getOutcomeChain(id: string): Promise<OutcomeChain | undefined> {
-    const outcome = await this.handle
+  async getOutcomeChain(id: string, db: QuestionsDb = this.db()): Promise<OutcomeChain | undefined> {
+    const outcome = await db
       .selectFrom('learning_outcomes')
       .select(LEARNING_OUTCOME_COLUMNS)
       .where('id', '=', id)
       .executeTakeFirst();
     if (!outcome) return undefined;
-    const node = await this.handle
+    const node = await db
       .selectFrom('curriculum_nodes')
       .select(CURRICULUM_NODE_COLUMNS)
       .where('id', '=', outcome.nodeId)
       .executeTakeFirst();
     if (!node) return undefined;
-    const curriculum = await this.handle
+    const curriculum = await db
       .selectFrom('curricula')
       .select(CURRICULUM_COLUMNS)
       .where('id', '=', node.curriculumId)
       .executeTakeFirst();
     if (!curriculum) return undefined;
-    const subject = await this.getSubjectRow(curriculum.subjectId);
+    const subject = await this.getSubjectRow(curriculum.subjectId, db);
     if (!subject) return undefined;
     return { outcome, node, curriculum, subject };
   }
 
   /** Các dòng gắn môn của một câu hỏi, thứ tự tạo. */
-  async listQuestionSubjectLinks(questionId: string): Promise<QuestionSubjectLinkRow[]> {
-    return this.handle
+  async listQuestionSubjectLinks(questionId: string, db: QuestionsDb = this.db()): Promise<QuestionSubjectLinkRow[]> {
+    return db
       .selectFrom('question_subjects')
       .select(QUESTION_SUBJECT_LINK_COLUMNS)
       .where('question_id', '=', questionId)
@@ -1737,9 +1689,9 @@ export class QuestionsRepository {
    * theo câu hỏi rồi theo thời điểm tạo để thứ tự dòng gắn trong
    * từng câu hỏi giữ nguyên như đường đọc lẻ khi caller gom lại.
    */
-  async listQuestionSubjectLinksForQuestions(questionIds: string[]): Promise<QuestionSubjectLinkRow[]> {
+  async listQuestionSubjectLinksForQuestions(questionIds: string[], db: QuestionsDb = this.db()): Promise<QuestionSubjectLinkRow[]> {
     if (!questionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_subjects')
       .select(QUESTION_SUBJECT_LINK_COLUMNS)
       .where('question_id', 'in', questionIds)
@@ -1749,8 +1701,8 @@ export class QuestionsRepository {
   }
 
   /** Một dòng gắn môn theo cặp (câu hỏi, môn). */
-  async getQuestionSubjectLink(questionId: string, subjectId: string): Promise<QuestionSubjectLinkRow | undefined> {
-    return this.handle
+  async getQuestionSubjectLink(questionId: string, subjectId: string, db: QuestionsDb = this.db()): Promise<QuestionSubjectLinkRow | undefined> {
+    return db
       .selectFrom('question_subjects')
       .select(QUESTION_SUBJECT_LINK_COLUMNS)
       .where('question_id', '=', questionId)
@@ -1759,8 +1711,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn dòng gắn môn. */
-  async insertQuestionSubjectLink(v: NewQuestionSubjectLink, tx?: QuestionsDb): Promise<QuestionSubjectLinkRow> {
-    const db = tx ?? this.handle;
+  async insertQuestionSubjectLink(v: NewQuestionSubjectLink, db: QuestionsDb = this.db()): Promise<QuestionSubjectLinkRow> {
     return db
       .insertInto('question_subjects')
       .values(questionSubjectLinkInsertValues(v))
@@ -1769,8 +1720,8 @@ export class QuestionsRepository {
   }
 
   /** Xoá dòng gắn môn; trả `true` khi có dòng bị xoá. */
-  async deleteQuestionSubjectLink(questionId: string, subjectId: string): Promise<boolean> {
-    const rows = await this.handle
+  async deleteQuestionSubjectLink(questionId: string, subjectId: string, db: QuestionsDb = this.db()): Promise<boolean> {
+    const rows = await db
       .deleteFrom('question_subjects')
       .where('question_id', '=', questionId)
       .where('subject_id', '=', subjectId)
@@ -1780,8 +1731,8 @@ export class QuestionsRepository {
   }
 
   /** Các dòng gắn YCCĐ của một câu hỏi, thứ tự tạo. */
-  async listQuestionOutcomeLinks(questionId: string): Promise<QuestionOutcomeLinkRow[]> {
-    return this.handle
+  async listQuestionOutcomeLinks(questionId: string, db: QuestionsDb = this.db()): Promise<QuestionOutcomeLinkRow[]> {
+    return db
       .selectFrom('question_learning_outcomes')
       .select(QUESTION_OUTCOME_LINK_COLUMNS)
       .where('question_id', '=', questionId)
@@ -1795,9 +1746,9 @@ export class QuestionsRepository {
    * `listQuestionOutcomeLinks`; sắp theo câu hỏi rồi theo thời
    * điểm tạo như đường đọc lẻ.
    */
-  async listQuestionOutcomeLinksForQuestions(questionIds: string[]): Promise<QuestionOutcomeLinkRow[]> {
+  async listQuestionOutcomeLinksForQuestions(questionIds: string[], db: QuestionsDb = this.db()): Promise<QuestionOutcomeLinkRow[]> {
     if (!questionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_learning_outcomes')
       .select(QUESTION_OUTCOME_LINK_COLUMNS)
       .where('question_id', 'in', questionIds)
@@ -1807,8 +1758,8 @@ export class QuestionsRepository {
   }
 
   /** Một dòng gắn YCCĐ theo cặp (câu hỏi, YCCĐ). */
-  async getQuestionOutcomeLink(questionId: string, outcomeId: string): Promise<QuestionOutcomeLinkRow | undefined> {
-    return this.handle
+  async getQuestionOutcomeLink(questionId: string, outcomeId: string, db: QuestionsDb = this.db()): Promise<QuestionOutcomeLinkRow | undefined> {
+    return db
       .selectFrom('question_learning_outcomes')
       .select(QUESTION_OUTCOME_LINK_COLUMNS)
       .where('question_id', '=', questionId)
@@ -1817,8 +1768,7 @@ export class QuestionsRepository {
   }
 
   /** Chèn dòng gắn YCCĐ kèm mức độ nhận thức của cặp. */
-  async insertQuestionOutcomeLink(v: NewQuestionOutcomeLink, tx?: QuestionsDb): Promise<QuestionOutcomeLinkRow> {
-    const db = tx ?? this.handle;
+  async insertQuestionOutcomeLink(v: NewQuestionOutcomeLink, db: QuestionsDb = this.db()): Promise<QuestionOutcomeLinkRow> {
     return db
       .insertInto('question_learning_outcomes')
       .values(questionOutcomeLinkInsertValues(v))
@@ -1827,8 +1777,8 @@ export class QuestionsRepository {
   }
 
   /** Đổi mức độ nhận thức của một dòng gắn YCCĐ (chỉ cột này — bảng nối không có `updated_at`). */
-  async updateQuestionOutcomeLink(questionId: string, outcomeId: string, cognitiveLevel: string): Promise<void> {
-    await this.handle
+  async updateQuestionOutcomeLink(questionId: string, outcomeId: string, cognitiveLevel: string, db: QuestionsDb = this.db()): Promise<void> {
+    await db
       .updateTable('question_learning_outcomes')
       .set({ cognitive_level: cognitiveLevel })
       .where('question_id', '=', questionId)
@@ -1837,8 +1787,8 @@ export class QuestionsRepository {
   }
 
   /** Xoá dòng gắn YCCĐ; trả `true` khi có dòng bị xoá. */
-  async deleteQuestionOutcomeLink(questionId: string, outcomeId: string): Promise<boolean> {
-    const rows = await this.handle
+  async deleteQuestionOutcomeLink(questionId: string, outcomeId: string, db: QuestionsDb = this.db()): Promise<boolean> {
+    const rows = await db
       .deleteFrom('question_learning_outcomes')
       .where('question_id', '=', questionId)
       .where('learning_outcome_id', '=', outcomeId)
@@ -1855,9 +1805,9 @@ export class QuestionsRepository {
    * Entry là duy nhất theo câu hỏi (unique
    * `question_bank_entries_question_unique`).
    */
-  async getEntriesByQuestions(questionIds: string[]): Promise<EntryRow[]> {
+  async getEntriesByQuestions(questionIds: string[], db: QuestionsDb = this.db()): Promise<EntryRow[]> {
     if (!questionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_bank_entries')
       .select(ENTRY_COLUMNS)
       .where('question_id', 'in', questionIds)
@@ -1876,9 +1826,9 @@ export class QuestionsRepository {
    * nguyên đường lỗi `question.version_missing` như đường đọc
    * đơn.
    */
-  async getLatestVersionsByEntries(entries: EntryRow[]): Promise<VersionRow[]> {
+  async getLatestVersionsByEntries(entries: EntryRow[], db: QuestionsDb = this.db()): Promise<VersionRow[]> {
     if (!entries.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_versions as v')
       .innerJoin('question_bank_entries as e', (join) =>
         join
@@ -1895,9 +1845,9 @@ export class QuestionsRepository {
    * thứ tự của `listAnswers`) để phía lắp view nhóm lại theo
    * version không đổi thứ tự đáp án.
    */
-  async listAnswersByVersions(versionIds: string[]): Promise<AnswerRow[]> {
+  async listAnswersByVersions(versionIds: string[], db: QuestionsDb = this.db()): Promise<AnswerRow[]> {
     if (!versionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_answers')
       .select(ANSWER_COLUMNS)
       .where('question_version_id', 'in', versionIds)
@@ -1907,9 +1857,9 @@ export class QuestionsRepository {
   }
 
   /** Mọi bản ghi phía đáp án (guidance + solution) của một tập version. */
-  async listAnswerKeysByVersions(versionIds: string[]): Promise<AnswerKeyRow[]> {
+  async listAnswerKeysByVersions(versionIds: string[], db: QuestionsDb = this.db()): Promise<AnswerKeyRow[]> {
     if (!versionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('question_answer_keys')
       .select(ANSWER_KEY_COLUMNS)
       .where('question_version_id', 'in', versionIds)
@@ -1917,9 +1867,9 @@ export class QuestionsRepository {
   }
 
   /** Mọi options multichoice của một tập version. */
-  async listMultichoiceOptionsByVersions(versionIds: string[]): Promise<MultichoiceOptionsRow[]> {
+  async listMultichoiceOptionsByVersions(versionIds: string[], db: QuestionsDb = this.db()): Promise<MultichoiceOptionsRow[]> {
     if (!versionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('qtype_multichoice_options')
       .select(MULTICHOICE_OPTIONS_COLUMNS)
       .where('question_version_id', 'in', versionIds)
@@ -1927,9 +1877,9 @@ export class QuestionsRepository {
   }
 
   /** Mọi options shortanswer của một tập version. */
-  async listShortanswerOptionsByVersions(versionIds: string[]): Promise<ShortanswerOptionsRow[]> {
+  async listShortanswerOptionsByVersions(versionIds: string[], db: QuestionsDb = this.db()): Promise<ShortanswerOptionsRow[]> {
     if (!versionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('qtype_shortanswer_options')
       .select(SHORTANSWER_OPTIONS_COLUMNS)
       .where('question_version_id', 'in', versionIds)
@@ -1937,9 +1887,9 @@ export class QuestionsRepository {
   }
 
   /** Mọi options essay của một tập version. */
-  async listEssayOptionsByVersions(versionIds: string[]): Promise<EssayOptionsRow[]> {
+  async listEssayOptionsByVersions(versionIds: string[], db: QuestionsDb = this.db()): Promise<EssayOptionsRow[]> {
     if (!versionIds.length) return [];
-    return this.handle
+    return db
       .selectFrom('qtype_essay_options')
       .select(ESSAY_OPTIONS_COLUMNS)
       .where('question_version_id', 'in', versionIds)
@@ -1947,9 +1897,9 @@ export class QuestionsRepository {
   }
 
   /** Mọi stimulus theo một tập id trong một lượt truy vấn. */
-  async listStimuliByIds(ids: string[]): Promise<StimulusRow[]> {
+  async listStimuliByIds(ids: string[], db: QuestionsDb = this.db()): Promise<StimulusRow[]> {
     if (!ids.length) return [];
-    return this.handle
+    return db
       .selectFrom('stimuli')
       .select(STIMULUS_COLUMNS)
       .where('id', 'in', ids)
@@ -1966,10 +1916,10 @@ export class QuestionsRepository {
    * danh tính câu; status là trạng thái của bank entry. Các điều
    * kiện gắn kết giao nhau (AND).
    */
-  async filterQuestionsByCurriculumLinks(filter: CurriculumLinkFilter): Promise<QuestionRow[]> {
-    const candidateIds = await this.resolveCurriculumCandidateIds(filter);
+  async filterQuestionsByCurriculumLinks(filter: CurriculumLinkFilter, db: QuestionsDb = this.db()): Promise<QuestionRow[]> {
+    const candidateIds = await this.resolveCurriculumCandidateIds(filter, db);
     if (candidateIds !== null && candidateIds.size === 0) return [];
-    let query = this.handle
+    let query = db
       .selectFrom('question as q')
       .innerJoin('question_bank_entries as e', 'e.question_id', 'q.id')
       .select(QUESTION_COLUMNS_Q)
@@ -2000,10 +1950,11 @@ export class QuestionsRepository {
    */
   async countQuestionsByCurriculumFilterPerCategory(
     filter: CurriculumLinkFilter,
+    db: QuestionsDb = this.db(),
   ): Promise<{ categoryId: string; count: number }[]> {
-    const candidateIds = await this.resolveCurriculumCandidateIds(filter);
+    const candidateIds = await this.resolveCurriculumCandidateIds(filter, db);
     if (candidateIds !== null && candidateIds.size === 0) return [];
-    let query = this.handle
+    let query = db
       .selectFrom('question as q')
       .innerJoin('question_bank_entries as e', 'e.question_id', 'q.id')
       .select(['e.question_category_id as categoryId', sql<number>`count(*)::int`.as('count')])
@@ -2028,7 +1979,7 @@ export class QuestionsRepository {
    * hợp nhất hai đường gắn (mức môn và qua YCCĐ), và điều kiện
    * YCCĐ hiện hành chỉ áp trên các nhánh có join outcome.
    */
-  private async resolveCurriculumCandidateIds(filter: CurriculumLinkFilter): Promise<Set<string> | null> {
+  private async resolveCurriculumCandidateIds(filter: CurriculumLinkFilter, db: QuestionsDb = this.db()): Promise<Set<string> | null> {
     // Điều kiện HIỆN HÀNH của dòng YCCĐ trên các nhánh có join
     // outcome (đợt neo lại định danh, issue #161): dòng đã rút
     // (retired_at khác NULL) không còn đưa câu vào diện lọc; dòng
@@ -2040,12 +1991,12 @@ export class QuestionsRepository {
     // đóng vai trò dòng gốc.
     const idSets: Set<string>[] = [];
     if (filter.subjectId !== undefined) {
-      const viaSubjects = await this.handle
+      const viaSubjects = await db
         .selectFrom('question_subjects')
         .select('question_id as questionId')
         .where('subject_id', '=', filter.subjectId)
         .execute();
-      const viaOutcomes = await this.handle
+      const viaOutcomes = await db
         .selectFrom('question_learning_outcomes as qlo')
         .innerJoin('learning_outcomes as lo', 'lo.id', 'qlo.learning_outcome_id')
         .leftJoin('learning_outcomes as learning_outcome_root', 'learning_outcome_root.id', 'lo.derived_from_id')
@@ -2053,12 +2004,7 @@ export class QuestionsRepository {
         .innerJoin('curricula as c', 'c.id', 'n.curriculum_id')
         .select('qlo.question_id as questionId')
         .where('c.subject_id', '=', filter.subjectId)
-        .where('lo.retired_at', 'is', null)
-        .where((eb) =>
-          eb.or([
-            eb('lo.derived_from_id', 'is', null),
-            eb('learning_outcome_root.retired_at', 'is', null),
-          ]))
+        .where(currentOutcomeConditions())
         .execute();
       idSets.push(new Set([...viaSubjects.map((r) => r.questionId), ...viaOutcomes.map((r) => r.questionId)]));
     }
@@ -2067,18 +2013,13 @@ export class QuestionsRepository {
       if (filter.nodeId !== undefined) {
         // Nhánh có nodeId: join outcome + dòng gốc, áp điều kiện
         // hiện hành; nodeId khớp trên `node_id` của chính outcome.
-        let query = this.handle
+        let query = db
           .selectFrom('question_learning_outcomes as qlo')
           .innerJoin('learning_outcomes as lo', 'lo.id', 'qlo.learning_outcome_id')
           .leftJoin('learning_outcomes as learning_outcome_root', 'learning_outcome_root.id', 'lo.derived_from_id')
           .select('qlo.question_id as questionId')
           .where('lo.node_id', '=', filter.nodeId)
-          .where('lo.retired_at', 'is', null)
-          .where((eb) =>
-            eb.or([
-              eb('lo.derived_from_id', 'is', null),
-              eb('learning_outcome_root.retired_at', 'is', null),
-            ]));
+          .where(currentOutcomeConditions());
         if (filter.outcomeId !== undefined) query = query.where('qlo.learning_outcome_id', '=', filter.outcomeId);
         if (filter.cognitiveLevel !== undefined) query = query.where('qlo.cognitive_level', '=', filter.cognitiveLevel);
         rows = await query.execute();
@@ -2086,7 +2027,7 @@ export class QuestionsRepository {
         // Nhánh không nodeId: tra thẳng trên bảng nối, không join
         // outcome, không áp điều kiện hiện hành (xem ghi chú đầu
         // phương thức).
-        let query = this.handle
+        let query = db
           .selectFrom('question_learning_outcomes')
           .select('question_id as questionId');
         if (filter.outcomeId !== undefined) query = query.where('learning_outcome_id', '=', filter.outcomeId);

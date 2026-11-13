@@ -6,22 +6,15 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
-import { ApiError } from '#lib/api';
 import { type CurriculumSubject } from '#lib/curriculum';
 import { LESSON_POSITIONS, LEVELS, RESOURCE_TYPES, SOURCE_KINDS, TARGET_AUDIENCES } from '../types/content-bank';
 import type { LibraryItemInput, LibrarySpace } from '../types/content-bank';
-import { fileToBase64 } from '../utils/content-bank';
+import { errorText, fileToBase64 } from '../utils/content-bank';
+import { selectClass } from '#lib/form-classes';
 import { useQueryClient } from '@tanstack/react-query';
 import { contentBankCurriculumNodesQueryOptions, contentBankItemQueryOptions, contentBankQuestionCategoriesQueryOptions, contentBankSpacesQueryOptions, contentBankSubjectsQueryOptions, useCreateContentBankItem, useUpdateContentBankItem, useUploadContentBankItemFile } from '../queries/content-bank';
 import type { FlatNode, QuestionCategoryView } from '../types/content-bank';
-
-const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
-
-function errorText(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? (err.problem.detail ?? err.problem.title ?? fallback) : fallback;
-}
-
-
+import { platformKeyMeta } from '#lib/route-meta';
 
 /**
  * Màn tạo/sửa học liệu RIÊNG của Kho học liệu (CB-1, chuẩn §9 — không nhồi form vào danh sách). Metadata chương trình lấy từ cây GDPT 2018 thật (môn → chương trình theo khối → node → YCCĐ trong subtree của node). Loại "bộ câu hỏi" chỉ chọn category để THAM CHIẾU ngân hàng câu hỏi. File chọn từ máy được tải lên sau khi lưu bản ghi (API upload base64 sẵn có); học liệu chia sẻ đã/chờ duyệt bị sửa sẽ quay về nháp ở phía server.
@@ -212,7 +205,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lib-type">{t('libraryFormType')}</Label>
-              <select id="lib-type" className={SELECT_CLASS} value={resourceType} onChange={(e) => setResourceType(e.target.value)}>
+              <select id="lib-type" className={selectClass} value={resourceType} onChange={(e) => setResourceType(e.target.value)}>
                 {RESOURCE_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {t(
@@ -232,7 +225,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lib-scope">{t('libraryFormScope')}</Label>
-              <select id="lib-scope" className={SELECT_CLASS} value={scope} onChange={(e) => setScope(e.target.value)}>
+              <select id="lib-scope" className={selectClass} value={scope} onChange={(e) => setScope(e.target.value)}>
                 <option value="personal">{t('libraryScopePersonal')}</option>
                 <option value="org">{t('libraryScopeOrg')}</option>
                 <option value="school">{t('libraryScopeSchool')}</option>
@@ -241,7 +234,7 @@ export function ContentBankEditPage() {
             {scope === 'org' ? (
               <div className="space-y-1">
                 <Label htmlFor="lib-space">{t('libraryFormOrg')}</Label>
-                <select id="lib-space" className={SELECT_CLASS} value={spaceId} onChange={(e) => setSpaceId(e.target.value)} required>
+                <select id="lib-space" className={selectClass} value={spaceId} onChange={(e) => setSpaceId(e.target.value)} required>
                   <option value="">{t('libraryFormNone')}</option>
                   {orgSpaces.map((s) => (
                     <option key={s.spaceId ?? ''} value={s.spaceId ?? ''}>{s.name}</option>
@@ -251,7 +244,7 @@ export function ContentBankEditPage() {
             ) : null}
             <div className="space-y-1">
               <Label htmlFor="lib-subject">{t('libraryFormSubject')}</Label>
-              <select id="lib-subject" className={SELECT_CLASS} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+              <select id="lib-subject" className={selectClass} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {subjects.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -260,7 +253,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lib-grade">{t('libraryFormGrade')}</Label>
-              <select id="lib-grade" className={SELECT_CLASS} value={grade} onChange={(e) => setGrade(e.target.value)}>
+              <select id="lib-grade" className={selectClass} value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
                   <option key={g} value={g}>{t('libraryGradeOption', { grade: g })}</option>
@@ -269,7 +262,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1 sm:col-span-2">
               <Label htmlFor="lib-node">{t('libraryFormNode')}</Label>
-              <select id="lib-node" className={SELECT_CLASS} value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
+              <select id="lib-node" className={selectClass} value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {nodes.map((n) => (
                   <option key={n.id} value={n.id}>
@@ -298,7 +291,7 @@ export function ContentBankEditPage() {
             {resourceType === 'question_set' ? (
               <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="lib-category">{t('libraryFormCategory')}</Label>
-                <select id="lib-category" className={SELECT_CLASS} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <select id="lib-category" className={selectClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                   <option value="">{t('libraryFormNone')}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -309,7 +302,7 @@ export function ContentBankEditPage() {
             ) : null}
             <div className="space-y-1">
               <Label htmlFor="lib-level">{t('libraryFormLevel')}</Label>
-              <select id="lib-level" className={SELECT_CLASS} value={level} onChange={(e) => setLevel(e.target.value)}>
+              <select id="lib-level" className={selectClass} value={level} onChange={(e) => setLevel(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {LEVELS.map((lv) => (
                   <option key={lv} value={lv}>
@@ -336,7 +329,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lib-audience">{t('libraryFormAudience')}</Label>
-              <select id="lib-audience" className={SELECT_CLASS} value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)}>
+              <select id="lib-audience" className={selectClass} value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {TARGET_AUDIENCES.map((a) => (
                   <option key={a} value={a}>
@@ -347,7 +340,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lib-position">{t('libraryFormPosition')}</Label>
-              <select id="lib-position" className={SELECT_CLASS} value={lessonPosition} onChange={(e) => setLessonPosition(e.target.value)}>
+              <select id="lib-position" className={selectClass} value={lessonPosition} onChange={(e) => setLessonPosition(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {LESSON_POSITIONS.map((p) => (
                   <option key={p} value={p}>
@@ -366,7 +359,7 @@ export function ContentBankEditPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lib-source-kind">{t('libraryFormSourceKind')}</Label>
-              <select id="lib-source-kind" className={SELECT_CLASS} value={sourceKind} onChange={(e) => setSourceKind(e.target.value)}>
+              <select id="lib-source-kind" className={selectClass} value={sourceKind} onChange={(e) => setSourceKind(e.target.value)}>
                 <option value="">{t('libraryFormNone')}</option>
                 {SOURCE_KINDS.map((s) => (
                   <option key={s} value={s}>
@@ -418,7 +411,6 @@ export default ContentBankEditPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('libraryFormTitleEdit');
 }

@@ -3,10 +3,13 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CentreDb, CentreDB } from '../client';
 import type { ExamVariant } from '../jsonb-types';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { createTestKysely } from '../test-support/create-test-kysely';
 import { runInTestPlatformContext, TestTenantPool } from '../test-support/tenant-context';
 import { ExamsRepository, type ExamRow } from './exams';
+import { CONTEXT_LEVEL_COURSE } from './dashboard';
 
 /**
  * Spec tích hợp của repository exams trên Kysely (issue #643, nhóm G3).
@@ -24,15 +27,12 @@ import { ExamsRepository, type ExamRow } from './exams';
  *   hồ sơ đang hiệu lực có loại trừ) giữ đúng ngữ nghĩa gốc
  *   (T-13: điều kiện vắng mặt không thành `where(undefined)`).
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DATABASE = 'giaokhoa_db_g3_exams';
 const TEST_ROLE = 'giaokhoa_db_g3_exams';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g3_exams_pw';
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ACTOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';
 const TEACHER_ID = '01a19887-6b35-7760-8e64-a5960bfd0811';
 const STUDENT_ID = '01a19887-6b35-7760-8e64-a5960bfd0812';
@@ -57,7 +57,7 @@ function platform<T>(fn: () => Promise<T>): Promise<T> {
 async function seedParents(): Promise<void> {
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g3-exams', name: 'Trung tâm G3 Exams', kind: 'centre' })
+    .values({ slug: 'g3-exams', name: 'Trung tâm G3 Exams', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   const bank = await db
@@ -158,10 +158,10 @@ afterAll(async () => {
 }, 60_000);
 
 describe('repository exams trên Kysely — đối chiếu hành vi', () => {
-  it('insertPaper/getPaper tròn trịa, id UUIDv7; listPapersInBank sắp xếp updated_at giảm dần', async () => {
+  it('đề thi: chèn và đọc lại đúng dữ kiện với id UUIDv7; liệt kê trong ngân hàng sắp theo updated_at giảm dần', async () => {
     const a = await platform(() => seedPaper());
     const b = await platform(() => seedPaper());
-    expect(a.id).toMatch(UUIDV7_PATTERN);
+    expect(a.id).toMatch(UUIDV7_RE);
     expect((await platform(() => repo.getPaper(a.id)))!.bankId).toBe(bankId);
     // Cập nhật A sau cùng → updated_at của A mới nhất → A đứng đầu.
     await platform(() => repo.updatePaper(a.id, { status: 'ready' }));
@@ -402,7 +402,7 @@ describe('repository exams trên Kysely — đối chiếu hành vi', () => {
     const context = await platform(() =>
       db
         .insertInto('context')
-        .values({ context_level: 50, depth: 2, instance_id: courseId, path: '/1/50' })
+        .values({ context_level: CONTEXT_LEVEL_COURSE, depth: 2, instance_id: courseId, path: '/1/50' })
         .returning('id')
         .executeTakeFirstOrThrow(),
     );

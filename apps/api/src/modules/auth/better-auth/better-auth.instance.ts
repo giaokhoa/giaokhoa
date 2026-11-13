@@ -25,12 +25,22 @@ import { jwt, username } from 'better-auth/plugins';
 import type { CentreDb } from '@giaokhoa/db';
 import { PasswordService } from '../../users/password.service';
 import { createEmailOtpPlugin, type AuthMailPort } from '../../mail/email-otp.plugin';
-import { createMfaGateHook, type MfaGateDeps } from './mfa-gate';
+import { createMfaGateHook, type GateContext, type MfaGateDeps } from './mfa-gate';
 import type { LockoutGuardPort } from '../login-lockout.service';
 import { lockoutHooks } from './lockout.hooks';
 
 /** Đường dẫn gốc mà handler của Better Auth được mount tại (xem better-auth.mount.ts). */
 export const BETTER_AUTH_BASE_PATH = '/api/v1/auth';
+
+/**
+ * Hình tối thiểu của đối tượng cấu hình adapter mà lõi Better Auth đọc cờ `supportsArrays` (xem ghi chú tại `withPostgresArrays`): cùng một đối tượng cấu hình cho adapter ngoài lẫn adapter giao dịch.
+ */
+interface PostgresAdapterConfig {
+  options: { adapterConfig: { supportsArrays?: boolean | undefined } };
+}
+
+/** Kiểu hàm transaction của adapter: callback nhận adapter giao dịch mang cùng hình cấu hình như adapter ngoài. */
+type AdapterTransaction = <R>(callback: (tx: PostgresAdapterConfig) => Promise<R>) => Promise<R>;
 
 /**
  * Khai báo `supportsArrays` thật cho Postgres (issue #654, D2).
@@ -49,26 +59,14 @@ export const BETTER_AUTH_BASE_PATH = '/api/v1/auth';
  * ở tầng adapter của lõi đều ở sai phía của điểm JSON-hoá — chỉ lật cờ mới tới được đúng điểm. Ghi chú này giữ lại để lần sau không quay lại đường bọc.
  */
 function withPostgresArrays<T extends {
-  options?: { adapterConfig: { supportsArrays?: boolean | undefined } };
+  options?: PostgresAdapterConfig['options'];
   transaction?: unknown;
 }>(adapter: T): T {
   if (adapter.options) adapter.options.adapterConfig.supportsArrays = true;
   if (typeof adapter.transaction === 'function') {
-    const baseTransaction = adapter.transaction as <R>(
-      callback: (tx: {
-        options: { adapterConfig: { supportsArrays?: boolean | undefined } };
-      }) => Promise<R>,
-    ) => Promise<R>;
-    (adapter as {
-      transaction: <R>(
-        callback: (tx: {
-          options: { adapterConfig: { supportsArrays?: boolean | undefined } };
-        }) => Promise<R>,
-      ) => Promise<R>;
-    }).transaction = <R>(
-      callback: (tx: {
-        options: { adapterConfig: { supportsArrays?: boolean | undefined } };
-      }) => Promise<R>,
+    const baseTransaction = adapter.transaction as AdapterTransaction;
+    (adapter as { transaction: AdapterTransaction }).transaction = <R>(
+      callback: (tx: PostgresAdapterConfig) => Promise<R>,
     ) =>
       baseTransaction((tx) => {
         tx.options.adapterConfig.supportsArrays = true;
@@ -198,27 +196,393 @@ function composeAfterHooks(
  * - Lỗi APIError (redirect của cổng MFA ở đường callback) mang
  *   header của hook theo cơ chế riêng của better-call và dispatch tự hợp nhất khi bắt lỗi — đường ném không qua hàm này.
  */
-type ChainedHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+/**
+ * Kết quả dạng `{ headers, response }` mà tầng middleware better-call trả khi context mang `returnHeaders` (xem TSDoc của `invokeChainedHook`): `headers` giữ cookie/header hook đã ghi, `response` là đáp ứng thay thế thật của hook.
+ */
+interface ChainedHookResult {
+  headers: Headers;
+  response: unknown;
+}
 
-async function invokeChainedHook(hook: AuthMiddleware, ctx: ChainedHookContext): Promise<unknown> {
+async function invokeChainedHook(hook: AuthMiddleware, ctx: GateContext): Promise<unknown> {
+  // `ctx as never`: context của chuỗi hook là `GateContext` (kiểu suy ra từ `createAuthMiddleware`), còn chữ ký `AuthMiddleware` đòi đúng kiểu context nội bộ của nó — hai kiểu tương thích ở runtime, ép kiểu ở đúng điểm gọi duy nhất này thay vì nới kiểu ở mọi hook.
   const result: unknown = await hook(ctx as never);
   if (
     result !== null &&
     typeof result === 'object' &&
     'response' in result &&
     'headers' in result &&
-    (result as { headers: unknown }).headers instanceof Headers
+    (result as ChainedHookResult).headers instanceof Headers
   ) {
-    const headers = (result as { headers: Headers }).headers;
+    const headers = (result as ChainedHookResult).headers;
     for (const cookie of headers.getSetCookie()) {
       ctx.responseHeaders.append('set-cookie', cookie);
     }
     for (const [key, value] of headers.entries()) {
       if (key !== 'set-cookie') ctx.responseHeaders.set(key, value);
     }
-    return (result as { response: unknown }).response;
+    return (result as ChainedHookResult).response;
   }
   return result;
+}
+
+/**
+ * Dựng khối `hooks` của instance: before-hook lockout khi có + chuỗi after-hook DUY NHẤT
+ * (lockout, cổng MFA, đồng bộ ngược hash) qua `composeAfterHooks` — thứ tự và lý do xem
+ * ghi chú bên trong và TSDoc của `composeAfterHooks`.
+ */
+function buildHooksConfig(
+  deps: BetterAuthFactoryDeps,
+  lockoutHookSet: ReturnType<typeof lockoutHooks> | null,
+  mfaGate: AuthMiddleware,
+) {
+  return {
+    // Chuỗi after-hook DUY NHẤT của instance: `hooks.after` của 1.7.12 chỉ nhận MỘT handler (dispatch bọc nó bằng matcher luôn đúng — đã đối chiếu dist), nên cả ba khâu after phải chuỗi vào đây qua composeAfterHooks — không phía nào ghi đè phía nào:
+    // (1) lockout ghi attempt (điểm 2.4, dựa trên đáp ứng gốc của
+    // endpoint); (2) cổng MFA của mọi đường đăng nhập (tự đi qua ở mọi đường không cấp phiên mới; ném redirect cho đường callback, trả JSON twoFactorRedirect cho đường sign-in);
+    // (3) đồng bộ ngược hash của cửa sổ bake ở hai endpoint đổi/đặt
+    // mật khẩu. Ba khâu tác động ba tập đường rời nhau nên thứ tự không đổi semantics của nhau.
+    ...(lockoutHookSet?.before ? { before: lockoutHookSet.before } : {}),
+    after: composeAfterHooks(lockoutHookSet?.after, createAuthMiddleware(async (ctx) => {
+      // Cổng MFA có thể trả đáp ứng thay thế (JSON twoFactorRedirect cho đường sign-in) — gọi qua invokeChainedHook để header của cổng (cookie chờ, xoá cookie phiên) được hợp nhất, rồi truyền đáp ứng thay thế ra ngoài ngay, không chạy khâu sau trên một đáp ứng đã bị thay.
+      const gateResult = await invokeChainedHook(mfaGate, ctx);
+      if (gateResult !== undefined) return gateResult;
+      // Đồng bộ ngược hash trong cửa sổ bake (xem `legacyPasswordSync` ở deps): hai endpoint đổi/đặt mật khẩu của chính user mang phiên trong context — sau khi endpoint chạy, hash hiện hành đã nằm ở dòng credential, service chép nó về users.password_hash. Endpoint lỗi (sai mật khẩu hiện tại…) thì hash không đổi, lần chép này là no-op vô hại — cơ chế đồng bộ theo trạng thái, không theo sự kiện thành công.
+      if (ctx.path !== '/change-password' && ctx.path !== '/set-password') return;
+      if (ctx.context.returned instanceof APIError) return;
+      const userId = ctx.context.session?.user?.id;
+      if (!userId) return;
+      if (deps.legacyPasswordSync) await deps.legacyPasswordSync.syncFromCredentialAccount(userId);
+      // Đổi mật khẩu trong BA cũng phải thu hồi các phiên của hệ cũ.
+      if (ctx.path === '/change-password' && deps.sessionRevocation) {
+        await deps.sessionRevocation.revokeLegacySessions(userId);
+      }
+    })),
+  };
+}
+
+/**
+ * Dựng khối `emailAndPassword`: đăng nhập mật khẩu uỷ thác `PasswordService`; callback gửi
+ * mail reset và callback đồng bộ ngược hash chỉ khai khi có cổng tương ứng (xem ghi chú bên trong).
+ */
+function buildEmailAndPasswordConfig(deps: BetterAuthFactoryDeps) {
+  return {
+    enabled: true,
+    disableSignUp: true,
+    // Thu hồi mọi phiên còn lại khi đặt lại mật khẩu (chốt trong issue; luồng reset thi công ở Giai đoạn 2, cấu hình đặt sẵn từ nền này).
+    revokeSessionsOnPasswordReset: true,
+    // Chặng 2.5 (lát BA-2): callback gửi mail reset CHỈ ghi yêu cầu vào outbox qua cổng mail (AuthMailService lo phần đó) — không gửi đồng bộ trong request như khuyến nghị chống timing attack của Better Auth. Chưa nối cổng mail thì không khai callback này: endpoint reset tự từ chối thay vì nhận yêu cầu rồi để mất.
+    ...(deps.authMail
+      ? {
+          sendResetPassword: async ({
+            user,
+            url,
+          }: {
+            user: { id: string; email: string };
+            url: string;
+            token: string;
+          }): Promise<void> => {
+            await deps.authMail!.sendPasswordResetEmail({ userId: user.id, email: user.email, url });
+          },
+        }
+      : {}),
+    // Đồng bộ ngược hash trong cửa sổ bake (xem `legacyPasswordSync` ở deps): callback này của 1.7.12 chạy SAU khi mật khẩu mới đã ghi vào credential — ở cả endpoint reset bằng link lẫn đường reset bằng email OTP của plugin (cả hai đều gọi onPasswordReset, đã đối chiếu dist) — nên một điểm nối phủ đủ mọi đường reset; service tự đọc hash hiện hành từ dòng credential rồi chép về users.password_hash.
+    ...(deps.legacyPasswordSync || deps.sessionRevocation
+      ? {
+          onPasswordReset: async ({ user }: { user: { id: string } }): Promise<void> => {
+            // Phục hồi tương thích mật khẩu cũ khi bake, nhưng luôn thu hồi phiên JWT/Redis nếu hệ BA reset credential thành công.
+            if (deps.legacyPasswordSync) await deps.legacyPasswordSync.syncFromCredentialAccount(user.id);
+            if (deps.sessionRevocation) await deps.sessionRevocation.revokeLegacySessions(user.id);
+          },
+        }
+      : {}),
+    password: {
+      hash: async (password: string): Promise<string> => {
+        const violations = deps.passwordService.validatePolicy(password);
+        if (violations.length > 0) {
+          throw new APIError('BAD_REQUEST', {
+            message: `Password policy violated: ${violations.join('; ')}`,
+          });
+        }
+        return deps.passwordService.hash(password);
+      },
+      verify: async ({ hash, password }: { hash: string; password: string }): Promise<boolean> =>
+        deps.passwordService.verify(hash, password),
+    },
+  };
+}
+
+/**
+ * Dựng danh sách plugin: `username` luôn có; `emailOTP` khi có cổng mail; `jwt` + `mcp` +
+ * `cimd` chỉ khi compose máy chủ OAuth cho MCP — plugin twoFactor CHỦ ĐÍCH không đăng ký
+ * (xem ghi chú bên trong khối plugins).
+ */
+function buildPlugins(deps: BetterAuthFactoryDeps, mcpAs: BetterAuthMcpAsConfig | null) {
+  return [
+    username({ displayUsername: false }),
+    // Plugin twoFactor của Better Auth CHỦ ĐÍCH không đăng ký:
+    // (1) cổng tự động của nó quyết định theo cờ `twoFactorEnabled`
+    // và kho `two_factor`, trong khi trạng thái MFA của sản phẩm
+    // sống ở `user_totp` — đăng ký một mình không gác được gì;
+    // (2) schema của plugin khai trường user `twoFactorEnabled`
+    // kèm giá trị mặc định, tầng core chèn trường đó vào mọi
+    // payload tạo user và adapter bộ máy cũ từ chối vì ánh xạ user
+    // của hệ không có trường này — bật plugin là hỏng mọi đường
+    // tạo user (đã kiểm chứng trên bản 1.7.12 đã ghim). Thêm cột
+    // thật sẽ dựng nguồn trạng thái MFA thứ hai phải đồng bộ với
+    // `user_totp`. Vì vậy: quyết định gác nằm ở cổng riêng
+    // (mfa-gate.ts) tra `user_totp`, còn bước hoàn tất nằm ở tầng
+    // Nest (`two-factor-completion.*`) kiểm mã thẳng vào
+    // `user_totp` — chi tiết ở đầu file của hai nơi đó.
+    // Lát BA-2 (issue #7 chặng 2.5): đăng nhập bằng email OTP — plugin dựng từ factory trong module mail, mã gửi qua cổng mail (outbox → Resend).
+    ...(deps.authMail ? [createEmailOtpPlugin(deps.authMail)] : []),
+    // ── Lát MCP-1 (issue #163): máy chủ OAuth cho MCP ──────────────
+    // Chỉ compose khi cờ MCP_AS_ENABLED bật (service truyền mcpAs).
+    // CIMD (client_id là URL tài liệu metadata, hồ sơ
+    // mcp-2026-07-28) là đường đăng ký chính; DCR để lại cho client
+    // legacy nên bật tường minh cả ba tuỳ chọn theo addendum §2.
+    ...(mcpAs
+      ? [
+          jwt({
+            disableSettingJwtHeader: true,
+            // Ánh xạ jwks → cột snake_case (issue #654, D2): schema
+            // gốc của plugin jwt không khai fieldName nên adapter
+            // hỏi đúng tên field; bảng vật lý dùng snake_case nên
+            // override tại đây qua `mergeSchema` (cùng cơ chế như
+            // schema của plugin oauth-provider). Không override thì
+            // lần dùng đầu tiên của JWKS ném lỗi cột không tồn tại
+            // (adapter bật validateSchema mặc định nên lỗi lộ ngay,
+            // không truy vấn sai lặng lẽ).
+            schema: {
+              jwks: {
+                fields: {
+                  publicKey: 'public_key',
+                  privateKey: 'private_key',
+                  createdAt: 'created_at',
+                  expiresAt: 'expires_at',
+                },
+              },
+            },
+          }),
+          mcp({
+            loginPage: mcpAs.loginPage,
+            consentPage: mcpAs.consentPage,
+            resource: mcpAs.resource,
+            // Scope của AS = 4 scope quyền của resource + scope
+            // giao thức `offline_access` (plugin bắt scope này nằm
+            // trong danh sách của AS thì client mới đăng ký/ xin
+            // được nó; metadata của RESOURCE tự lọc các scope
+            // phía-AS ra nên PRM vẫn chỉ quảng bá 4 scope quyền).
+            scopes: [...MCP_OAUTH_SCOPES, 'offline_access'],
+            resources: [
+              {
+                identifier: mcpAs.resource,
+                // CỐ Ý không ghim allowedScopes cho resource:
+                // plugin tính effectiveScopes bằng phép giao với
+                // allowedScopes, làm scope giao thức offline_access
+                // bị tước khỏi scope LƯU trên refresh token → ở
+                // grant refresh, plugin không còn căn cứ cấp token
+                // xoay vòng (kiểm chứng dist + DB ở e2e MCP-1:
+                // refresh chỉ trả access token mới, token cũ không
+                // bị thu hồi). Bỏ allowedScopes thì trần scope của
+                // resource vẫn do danh sách scope của AS (đúng 4
+                // scope quyền + offline_access) và scope client đã
+                // đăng ký gác; đổi lại access token mang thêm
+                // offline_access trong claim scope — RS bỏ qua
+                // scope không thuộc bộ tool.
+                accessTokenTtl: MCP_ACCESS_TOKEN_TTL_SECONDS,
+              },
+            ],
+            // JWT đã phát không thu hồi được → KHÔNG cho cửa sổ ân
+            // hạn tái dùng refresh token (mặc định plugin là 30s):
+            // refresh cũ dùng lại là bị chặn ngay (addendum §2).
+            refreshTokenReuseInterval: 0,
+            allowDynamicClientRegistration: true,
+            allowUnauthenticatedClientRegistration: true,
+            clientRegistrationDefaultApplicationType: 'infer',
+            // `offline_access` là scope GIAO THỨC phía AS, không
+            // phải scope quyền của resource /mcp: plugin chỉ cho
+            // client đăng ký scope này khi AS khai tường minh tại
+            // đây, và chỉ cấp refresh token khi authorize xin nó
+            // (cơ chế oauth-provider 1.7.12 — kiểm chứng trong
+            // dist + e2e mcp-as-oauth; thiếu khai này thì DCR của
+            // client xin phiên dài chết invalid_scope ngay).
+            clientRegistrationAllowedScopes: ['offline_access'],
+            // ── Ánh xạ bảng OAuth → bảng vật lý (issue #654, D2) ──
+            // Cơ chế chính thức: plugin oauth-provider đọc
+            // `opts.schema?.<model>.modelName/fields` qua `mergeSchema`
+            // (chỉ override field đã có trong schema gốc). Bảng vật lý
+            // có tiền tố `oauth_` + tên cột snake_case; `usePlural`
+            // không dùng được vì nó số nhiều hoá cả `session` →
+            // `sessions`. Bảng `jwks` của plugin jwt được override
+            // riêng tại khối `jwt()` bên dưới (không thuộc schema
+            // của plugin oauth-provider).
+            schema: {
+              oauthClient: {
+                modelName: 'oauth_client',
+                fields: {
+                  clientId: 'client_id',
+                  clientSecret: 'client_secret',
+                  clientDiscoveryId: 'client_discovery_id',
+                  skipConsent: 'skip_consent',
+                  enableEndSession: 'enable_end_session',
+                  subjectType: 'subject_type',
+                  clientCredentialsScopes: 'client_credentials_scopes',
+                  userId: 'user_id',
+                  createdAt: 'created_at',
+                  updatedAt: 'updated_at',
+                  softwareId: 'software_id',
+                  softwareVersion: 'software_version',
+                  softwareStatement: 'software_statement',
+                  redirectUris: 'redirect_uris',
+                  postLogoutRedirectUris: 'post_logout_redirect_uris',
+                  backchannelLogoutUri: 'backchannel_logout_uri',
+                  backchannelLogoutSessionRequired:
+                    'backchannel_logout_session_required',
+                  tokenEndpointAuthMethod: 'token_endpoint_auth_method',
+                  applicationType: 'application_type',
+                  jwksUri: 'jwks_uri',
+                  grantTypes: 'grant_types',
+                  responseTypes: 'response_types',
+                  requirePKCE: 'require_pkce',
+                  dpopBoundAccessTokens: 'dpop_bound_access_tokens',
+                  referenceId: 'reference_id',
+                },
+              },
+              oauthResource: {
+                modelName: 'oauth_resource',
+                fields: {
+                  accessTokenTtl: 'access_token_ttl',
+                  refreshTokenTtl: 'refresh_token_ttl',
+                  signingAlgorithm: 'signing_algorithm',
+                  signingKeyId: 'signing_key_id',
+                  allowedScopes: 'allowed_scopes',
+                  customClaims: 'custom_claims',
+                  dpopBoundAccessTokensRequired:
+                    'dpop_bound_access_tokens_required',
+                  createdAt: 'created_at',
+                  updatedAt: 'updated_at',
+                  policyVersion: 'policy_version',
+                },
+              },
+              oauthClientResource: {
+                modelName: 'oauth_client_resource',
+                fields: {
+                  clientId: 'client_id',
+                  resourceId: 'resource_id',
+                  createdAt: 'created_at',
+                },
+              },
+              oauthAccessToken: {
+                modelName: 'oauth_access_token',
+                fields: {
+                  clientId: 'client_id',
+                  sessionId: 'session_id',
+                  userId: 'user_id',
+                  referenceId: 'reference_id',
+                  authorizationCodeId: 'authorization_code_id',
+                  requestedUserInfoClaims: 'requested_user_info_claims',
+                  refreshId: 'refresh_id',
+                  expiresAt: 'expires_at',
+                  createdAt: 'created_at',
+                },
+              },
+              oauthRefreshToken: {
+                modelName: 'oauth_refresh_token',
+                fields: {
+                  clientId: 'client_id',
+                  sessionId: 'session_id',
+                  userId: 'user_id',
+                  referenceId: 'reference_id',
+                  authorizationCodeId: 'authorization_code_id',
+                  requestedUserInfoClaims: 'requested_user_info_claims',
+                  expiresAt: 'expires_at',
+                  createdAt: 'created_at',
+                  rotatedAt: 'rotated_at',
+                  rotationReplayResponse: 'rotation_replay_response',
+                  rotationReplayExpiresAt: 'rotation_replay_expires_at',
+                  authTime: 'auth_time',
+                },
+              },
+              oauthConsent: {
+                modelName: 'oauth_consent',
+                fields: {
+                  clientId: 'client_id',
+                  userId: 'user_id',
+                  referenceId: 'reference_id',
+                  requestedUserInfoClaims: 'requested_user_info_claims',
+                  createdAt: 'created_at',
+                  updatedAt: 'updated_at',
+                },
+              },
+              oauthClientAssertion: {
+                modelName: 'oauth_client_assertion',
+                fields: {
+                  expiresAt: 'expires_at',
+                },
+              },
+            },
+          }),
+          cimd({
+            fetchClientMetadataResource: mcpAs.cimdFetch ?? defaultCimdFetch,
+            metadataProfile: 'mcp-2026-07-28',
+          }),
+        ]
+      : []),
+  ];
+}
+
+/**
+ * Dựng phần `databaseHooks` của instance (chỉ có khi ở cửa sổ bake): hook chỉ nối ở chiều
+ * TẠO credential — chi tiết xem ghi chú bên trong.
+ */
+function buildDatabaseHooksConfig(deps: BetterAuthFactoryDeps) {
+  // Đồng bộ ngược trong cửa sổ bake (xem `legacyPasswordSync` ở
+  // deps): database hook chỉ nối ở chiều TẠO credential — hook
+  // create.after nhận đúng bản ghi vừa tạo nên biết chắc user. Các
+  // đường CẬP NHẬT mật khẩu (change-password, reset) nối ở tầng
+  // endpoint/callback như ghi ở deps, KHÔNG nối ở database hook
+  // update: `updatePassword` của 1.7.12 đi qua updateMany mà
+  // adapter trả số dòng bị ảnh hưởng — hook update.after sẽ nhận
+  // một con số và im lặng không làm gì (bẫy đã kiểm chứng trong
+  // dist, xem tài liệu của `legacyPasswordSync`).
+  return deps.legacyPasswordSync
+    ? {
+        databaseHooks: {
+          account: {
+            create: {
+              after: async (account: { providerId: string; userId: string }) => {
+                if (account.providerId === 'credential') {
+                  await deps.legacyPasswordSync!.syncFromCredentialAccount(account.userId);
+                }
+              },
+            },
+          },
+        },
+      }
+    : {};
+}
+
+/**
+ * Dựng khối `session`: ánh xạ session → cột snake_case + tắt cookieCache — hai phần phải
+ * ở chung một khối `session` (xem ghi chú bên trong).
+ */
+function buildSessionConfig() {
+  return {
+    // Ánh xạ session → cột snake_case (issue #654, D2): cùng khối
+    // với cookieCache — KHÔNG tách thành khối `session` riêng vì
+    // khóa trùng trong object literal sẽ bị khối sau ghi đè (khuyết
+    // tật đã bắt tại e2e: adapter báo thiếu cột session.expiresAt…).
+    fields: {
+      expiresAt: 'expires_at',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      ipAddress: 'ip_address',
+      userAgent: 'user_agent',
+      userId: 'user_id',
+    },
+    cookieCache: { enabled: false },
+  };
 }
 
 export function createBetterAuth(deps: BetterAuthFactoryDeps) {
@@ -260,7 +624,10 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
       },
       accountLinking: {
         enabled: true,
-        // ĐÃ CHỐT trong kế hoạch GĐ2: Facebook KHÔNG vào trustedProviders — và theo source 1.7.12, Facebook luôn trả emailVerified=false (cả đường id_token lẫn userinfo) nên không bao giờ tự liên kết theo email; chỉ Google (có xác thực email của chính Google) mới liên kết ngầm.
+        // Mảng hiện đang RỖNG: hiện KHÔNG provider nào được liên kết ngầm
+        // theo email, kể cả Google — quyết định có thêm 'google' vào
+        // đây hay không thuộc về issue #48, không tự đổi hành vi ở đây.
+        // Riêng Facebook thì theo source 1.7.12 luôn trả emailVerified=false (cả đường id_token lẫn userinfo) nên không bao giờ tự liên kết theo email.
         trustedProviders: [],
         // Issue #8: tài khoản công cộng tự đăng ký có emailVerified=false.
         // Chỉ xác thực email của Google là CHƯA đủ: kẻ xấu có thể giữ
@@ -279,29 +646,7 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
         updatedAt: 'updated_at',
       },
     },
-    hooks: {
-      // Chuỗi after-hook DUY NHẤT của instance: `hooks.after` của 1.7.12 chỉ nhận MỘT handler (dispatch bọc nó bằng matcher luôn đúng — đã đối chiếu dist), nên cả ba khâu after phải chuỗi vào đây qua composeAfterHooks — không phía nào ghi đè phía nào:
-      // (1) lockout ghi attempt (điểm 2.4, dựa trên đáp ứng gốc của
-      // endpoint); (2) cổng MFA của mọi đường đăng nhập (tự đi qua ở mọi đường không cấp phiên mới; ném redirect cho đường callback, trả JSON twoFactorRedirect cho đường sign-in);
-      // (3) đồng bộ ngược hash của cửa sổ bake ở hai endpoint đổi/đặt
-      // mật khẩu. Ba khâu tác động ba tập đường rời nhau nên thứ tự không đổi semantics của nhau.
-      ...(lockoutHookSet?.before ? { before: lockoutHookSet.before } : {}),
-      after: composeAfterHooks(lockoutHookSet?.after, createAuthMiddleware(async (ctx) => {
-        // Cổng MFA có thể trả đáp ứng thay thế (JSON twoFactorRedirect cho đường sign-in) — gọi qua invokeChainedHook để header của cổng (cookie chờ, xoá cookie phiên) được hợp nhất, rồi truyền đáp ứng thay thế ra ngoài ngay, không chạy khâu sau trên một đáp ứng đã bị thay.
-        const gateResult = await invokeChainedHook(mfaGate, ctx);
-        if (gateResult !== undefined) return gateResult;
-        // Đồng bộ ngược hash trong cửa sổ bake (xem `legacyPasswordSync` ở deps): hai endpoint đổi/đặt mật khẩu của chính user mang phiên trong context — sau khi endpoint chạy, hash hiện hành đã nằm ở dòng credential, service chép nó về users.password_hash. Endpoint lỗi (sai mật khẩu hiện tại…) thì hash không đổi, lần chép này là no-op vô hại — cơ chế đồng bộ theo trạng thái, không theo sự kiện thành công.
-        if (ctx.path !== '/change-password' && ctx.path !== '/set-password') return;
-        if (ctx.context.returned instanceof APIError) return;
-        const userId = ctx.context.session?.user?.id;
-        if (!userId) return;
-        if (deps.legacyPasswordSync) await deps.legacyPasswordSync.syncFromCredentialAccount(userId);
-        // Đổi mật khẩu trong BA cũng phải thu hồi các phiên của hệ cũ.
-        if (ctx.path === '/change-password' && deps.sessionRevocation) {
-          await deps.sessionRevocation.revokeLegacySessions(userId);
-        }
-      })),
-    },
+    hooks: buildHooksConfig(deps, lockoutHookSet, mfaGate),
     // Khi compose AS: tắt endpoint `/token` của plugin jwt() theo tài liệu OAuth Provider (token chỉ phát qua `/oauth2/token`).
     ...(mcpAs ? { disabledPaths: ['/token'] } : {}),
     database: ((options) => {
@@ -311,301 +656,10 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
       });
       return withPostgresArrays(baseAdapter(options));
     }) as ReturnType<typeof kyselyAdapter>,
-    emailAndPassword: {
-      enabled: true,
-      disableSignUp: true,
-      // Thu hồi mọi phiên còn lại khi đặt lại mật khẩu (chốt trong issue; luồng reset thi công ở Giai đoạn 2, cấu hình đặt sẵn từ nền này).
-      revokeSessionsOnPasswordReset: true,
-      // Chặng 2.5 (lát BA-2): callback gửi mail reset CHỈ ghi yêu cầu vào outbox qua cổng mail (AuthMailService lo phần đó) — không gửi đồng bộ trong request như khuyến nghị chống timing attack của Better Auth. Chưa nối cổng mail thì không khai callback này: endpoint reset tự từ chối thay vì nhận yêu cầu rồi để mất.
-      ...(deps.authMail
-        ? {
-            sendResetPassword: async ({
-              user,
-              url,
-            }: {
-              user: { id: string; email: string };
-              url: string;
-              token: string;
-            }): Promise<void> => {
-              await deps.authMail!.sendPasswordResetEmail({ userId: user.id, email: user.email, url });
-            },
-          }
-        : {}),
-      // Đồng bộ ngược hash trong cửa sổ bake (xem `legacyPasswordSync` ở deps): callback này của 1.7.12 chạy SAU khi mật khẩu mới đã ghi vào credential — ở cả endpoint reset bằng link lẫn đường reset bằng email OTP của plugin (cả hai đều gọi onPasswordReset, đã đối chiếu dist) — nên một điểm nối phủ đủ mọi đường reset; service tự đọc hash hiện hành từ dòng credential rồi chép về users.password_hash.
-      ...(deps.legacyPasswordSync || deps.sessionRevocation
-        ? {
-            onPasswordReset: async ({ user }: { user: { id: string } }): Promise<void> => {
-              // Phục hồi tương thích mật khẩu cũ khi bake, nhưng luôn thu hồi phiên JWT/Redis nếu hệ BA reset credential thành công.
-              if (deps.legacyPasswordSync) await deps.legacyPasswordSync.syncFromCredentialAccount(user.id);
-              if (deps.sessionRevocation) await deps.sessionRevocation.revokeLegacySessions(user.id);
-            },
-          }
-        : {}),
-      password: {
-        hash: async (password: string): Promise<string> => {
-          const violations = deps.passwordService.validatePolicy(password);
-          if (violations.length > 0) {
-            throw new APIError('BAD_REQUEST', {
-              message: `Password policy violated: ${violations.join('; ')}`,
-            });
-          }
-          return deps.passwordService.hash(password);
-        },
-        verify: async ({ hash, password }: { hash: string; password: string }): Promise<boolean> =>
-          deps.passwordService.verify(hash, password),
-      },
-    },
-    plugins: [
-      username({ displayUsername: false }),
-      // Plugin twoFactor của Better Auth CHỦ ĐÍCH không đăng ký:
-      // (1) cổng tự động của nó quyết định theo cờ `twoFactorEnabled`
-      // và kho `two_factor`, trong khi trạng thái MFA của sản phẩm
-      // sống ở `user_totp` — đăng ký một mình không gác được gì;
-      // (2) schema của plugin khai trường user `twoFactorEnabled`
-      // kèm giá trị mặc định, tầng core chèn trường đó vào mọi
-      // payload tạo user và adapter bộ máy cũ từ chối vì ánh xạ user
-      // của hệ không có trường này — bật plugin là hỏng mọi đường
-      // tạo user (đã kiểm chứng trên bản 1.7.12 đã ghim). Thêm cột
-      // thật sẽ dựng nguồn trạng thái MFA thứ hai phải đồng bộ với
-      // `user_totp`. Vì vậy: quyết định gác nằm ở cổng riêng
-      // (mfa-gate.ts) tra `user_totp`, còn bước hoàn tất nằm ở tầng
-      // Nest (`two-factor-completion.*`) kiểm mã thẳng vào
-      // `user_totp` — chi tiết ở đầu file của hai nơi đó.
-      // Lát BA-2 (issue #7 chặng 2.5): đăng nhập bằng email OTP — plugin dựng từ factory trong module mail, mã gửi qua cổng mail (outbox → Resend).
-      ...(deps.authMail ? [createEmailOtpPlugin(deps.authMail)] : []),
-      // ── Lát MCP-1 (issue #163): máy chủ OAuth cho MCP ──────────────
-      // Chỉ compose khi cờ MCP_AS_ENABLED bật (service truyền mcpAs).
-      // CIMD (client_id là URL tài liệu metadata, hồ sơ
-      // mcp-2026-07-28) là đường đăng ký chính; DCR để lại cho client
-      // legacy nên bật tường minh cả ba tuỳ chọn theo addendum §2.
-      ...(mcpAs
-        ? [
-            jwt({
-              disableSettingJwtHeader: true,
-              // Ánh xạ jwks → cột snake_case (issue #654, D2): schema
-              // gốc của plugin jwt không khai fieldName nên adapter
-              // hỏi đúng tên field; bảng vật lý dùng snake_case nên
-              // override tại đây qua `mergeSchema` (cùng cơ chế như
-              // schema của plugin oauth-provider). Không override thì
-              // lần dùng đầu tiên của JWKS ném lỗi cột không tồn tại
-              // (adapter bật validateSchema mặc định nên lỗi lộ ngay,
-              // không truy vấn sai lặng lẽ).
-              schema: {
-                jwks: {
-                  fields: {
-                    publicKey: 'public_key',
-                    privateKey: 'private_key',
-                    createdAt: 'created_at',
-                    expiresAt: 'expires_at',
-                  },
-                },
-              },
-            }),
-            mcp({
-              loginPage: mcpAs.loginPage,
-              consentPage: mcpAs.consentPage,
-              resource: mcpAs.resource,
-              // Scope của AS = 4 scope quyền của resource + scope
-              // giao thức `offline_access` (plugin bắt scope này nằm
-              // trong danh sách của AS thì client mới đăng ký/ xin
-              // được nó; metadata của RESOURCE tự lọc các scope
-              // phía-AS ra nên PRM vẫn chỉ quảng bá 4 scope quyền).
-              scopes: [...MCP_OAUTH_SCOPES, 'offline_access'],
-              resources: [
-                {
-                  identifier: mcpAs.resource,
-                  // CỐ Ý không ghim allowedScopes cho resource:
-                  // plugin tính effectiveScopes bằng phép giao với
-                  // allowedScopes, làm scope giao thức offline_access
-                  // bị tước khỏi scope LƯU trên refresh token → ở
-                  // grant refresh, plugin không còn căn cứ cấp token
-                  // xoay vòng (kiểm chứng dist + DB ở e2e MCP-1:
-                  // refresh chỉ trả access token mới, token cũ không
-                  // bị thu hồi). Bỏ allowedScopes thì trần scope của
-                  // resource vẫn do danh sách scope của AS (đúng 4
-                  // scope quyền + offline_access) và scope client đã
-                  // đăng ký gác; đổi lại access token mang thêm
-                  // offline_access trong claim scope — RS bỏ qua
-                  // scope không thuộc bộ tool.
-                  accessTokenTtl: MCP_ACCESS_TOKEN_TTL_SECONDS,
-                },
-              ],
-              // JWT đã phát không thu hồi được → KHÔNG cho cửa sổ ân
-              // hạn tái dùng refresh token (mặc định plugin là 30s):
-              // refresh cũ dùng lại là bị chặn ngay (addendum §2).
-              refreshTokenReuseInterval: 0,
-              allowDynamicClientRegistration: true,
-              allowUnauthenticatedClientRegistration: true,
-              clientRegistrationDefaultApplicationType: 'infer',
-              // `offline_access` là scope GIAO THỨC phía AS, không
-              // phải scope quyền của resource /mcp: plugin chỉ cho
-              // client đăng ký scope này khi AS khai tường minh tại
-              // đây, và chỉ cấp refresh token khi authorize xin nó
-              // (cơ chế oauth-provider 1.7.12 — kiểm chứng trong
-              // dist + e2e mcp-as-oauth; thiếu khai này thì DCR của
-              // client xin phiên dài chết invalid_scope ngay).
-              clientRegistrationAllowedScopes: ['offline_access'],
-              // ── Ánh xạ bảng OAuth → bảng vật lý (issue #654, D2) ──
-              // Cơ chế chính thức: plugin oauth-provider đọc
-              // `opts.schema?.<model>.modelName/fields` qua `mergeSchema`
-              // (chỉ override field đã có trong schema gốc). Bảng vật lý
-              // có tiền tố `oauth_` + tên cột snake_case; `usePlural`
-              // không dùng được vì nó số nhiều hoá cả `session` →
-              // `sessions`. Bảng `jwks` của plugin jwt được override
-              // riêng tại khối `jwt()` bên dưới (không thuộc schema
-              // của plugin oauth-provider).
-              schema: {
-                oauthClient: {
-                  modelName: 'oauth_client',
-                  fields: {
-                    clientId: 'client_id',
-                    clientSecret: 'client_secret',
-                    clientDiscoveryId: 'client_discovery_id',
-                    skipConsent: 'skip_consent',
-                    enableEndSession: 'enable_end_session',
-                    subjectType: 'subject_type',
-                    clientCredentialsScopes: 'client_credentials_scopes',
-                    userId: 'user_id',
-                    createdAt: 'created_at',
-                    updatedAt: 'updated_at',
-                    softwareId: 'software_id',
-                    softwareVersion: 'software_version',
-                    softwareStatement: 'software_statement',
-                    redirectUris: 'redirect_uris',
-                    postLogoutRedirectUris: 'post_logout_redirect_uris',
-                    backchannelLogoutUri: 'backchannel_logout_uri',
-                    backchannelLogoutSessionRequired:
-                      'backchannel_logout_session_required',
-                    tokenEndpointAuthMethod: 'token_endpoint_auth_method',
-                    applicationType: 'application_type',
-                    jwksUri: 'jwks_uri',
-                    grantTypes: 'grant_types',
-                    responseTypes: 'response_types',
-                    requirePKCE: 'require_pkce',
-                    dpopBoundAccessTokens: 'dpop_bound_access_tokens',
-                    referenceId: 'reference_id',
-                  },
-                },
-                oauthResource: {
-                  modelName: 'oauth_resource',
-                  fields: {
-                    accessTokenTtl: 'access_token_ttl',
-                    refreshTokenTtl: 'refresh_token_ttl',
-                    signingAlgorithm: 'signing_algorithm',
-                    signingKeyId: 'signing_key_id',
-                    allowedScopes: 'allowed_scopes',
-                    customClaims: 'custom_claims',
-                    dpopBoundAccessTokensRequired:
-                      'dpop_bound_access_tokens_required',
-                    createdAt: 'created_at',
-                    updatedAt: 'updated_at',
-                    policyVersion: 'policy_version',
-                  },
-                },
-                oauthClientResource: {
-                  modelName: 'oauth_client_resource',
-                  fields: {
-                    clientId: 'client_id',
-                    resourceId: 'resource_id',
-                    createdAt: 'created_at',
-                  },
-                },
-                oauthAccessToken: {
-                  modelName: 'oauth_access_token',
-                  fields: {
-                    clientId: 'client_id',
-                    sessionId: 'session_id',
-                    userId: 'user_id',
-                    referenceId: 'reference_id',
-                    authorizationCodeId: 'authorization_code_id',
-                    requestedUserInfoClaims: 'requested_user_info_claims',
-                    refreshId: 'refresh_id',
-                    expiresAt: 'expires_at',
-                    createdAt: 'created_at',
-                  },
-                },
-                oauthRefreshToken: {
-                  modelName: 'oauth_refresh_token',
-                  fields: {
-                    clientId: 'client_id',
-                    sessionId: 'session_id',
-                    userId: 'user_id',
-                    referenceId: 'reference_id',
-                    authorizationCodeId: 'authorization_code_id',
-                    requestedUserInfoClaims: 'requested_user_info_claims',
-                    expiresAt: 'expires_at',
-                    createdAt: 'created_at',
-                    rotatedAt: 'rotated_at',
-                    rotationReplayResponse: 'rotation_replay_response',
-                    rotationReplayExpiresAt: 'rotation_replay_expires_at',
-                    authTime: 'auth_time',
-                  },
-                },
-                oauthConsent: {
-                  modelName: 'oauth_consent',
-                  fields: {
-                    clientId: 'client_id',
-                    userId: 'user_id',
-                    referenceId: 'reference_id',
-                    requestedUserInfoClaims: 'requested_user_info_claims',
-                    createdAt: 'created_at',
-                    updatedAt: 'updated_at',
-                  },
-                },
-                oauthClientAssertion: {
-                  modelName: 'oauth_client_assertion',
-                  fields: {
-                    expiresAt: 'expires_at',
-                  },
-                },
-              },
-            }),
-            cimd({
-              fetchClientMetadataResource: mcpAs.cimdFetch ?? defaultCimdFetch,
-              metadataProfile: 'mcp-2026-07-28',
-            }),
-          ]
-        : []),
-    ],
-    // Đồng bộ ngược trong cửa sổ bake (xem `legacyPasswordSync` ở
-    // deps): database hook chỉ nối ở chiều TẠO credential — hook
-    // create.after nhận đúng bản ghi vừa tạo nên biết chắc user. Các
-    // đường CẬP NHẬT mật khẩu (change-password, reset) nối ở tầng
-    // endpoint/callback như ghi ở deps, KHÔNG nối ở database hook
-    // update: `updatePassword` của 1.7.12 đi qua updateMany mà
-    // adapter trả số dòng bị ảnh hưởng — hook update.after sẽ nhận
-    // một con số và im lặng không làm gì (bẫy đã kiểm chứng trong
-    // dist, xem tài liệu của `legacyPasswordSync`).
-    ...(deps.legacyPasswordSync
-      ? {
-          databaseHooks: {
-            account: {
-              create: {
-                after: async (account: { providerId: string; userId: string }) => {
-                  if (account.providerId === 'credential') {
-                    await deps.legacyPasswordSync!.syncFromCredentialAccount(account.userId);
-                  }
-                },
-              },
-            },
-          },
-        }
-      : {}),
-    session: {
-      // Ánh xạ session → cột snake_case (issue #654, D2): cùng khối
-      // với cookieCache — KHÔNG tách thành khối `session` riêng vì
-      // khóa trùng trong object literal sẽ bị khối sau ghi đè (khuyết
-      // tật đã bắt tại e2e: adapter báo thiếu cột session.expiresAt…).
-      fields: {
-        expiresAt: 'expires_at',
-        createdAt: 'created_at',
-        updatedAt: 'updated_at',
-        ipAddress: 'ip_address',
-        userAgent: 'user_agent',
-        userId: 'user_id',
-      },
-      cookieCache: { enabled: false },
-    },
+    emailAndPassword: buildEmailAndPasswordConfig(deps),
+    plugins: buildPlugins(deps, mcpAs),
+    ...buildDatabaseHooksConfig(deps),
+    session: buildSessionConfig(),
     advanced: {
       disableOriginCheck: false,
       // BA-1 (chốt blocker của BA-2, comment 6405565755 trên #7):

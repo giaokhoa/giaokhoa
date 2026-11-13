@@ -4,32 +4,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/component
 import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
+import { errorText } from '#lib/api';
 import { useAuth } from '#lib/auth';
 import { usePermissions } from '#lib/permissions';
+import { appKeyMeta } from '#lib/route-meta';
 import { useTranslation } from 'react-i18next';
 import { DataTable, type DataColumn } from '#components/data-table';
 import { CompetencyAdmin } from '../components/competency-admin';
 import { type PlanDetail, type PlanView } from '../types/types';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useLearningPlanDetail, useRequestCompetencyReview, useRequestPlanReview, useUserLearningPlans } from '../queries/learning-plan';
+import { usePlanStatusLabels } from '../utils/plan-status';
 import '#config/i18n';
 
 /**
  * Kế hoạch học tập: học viên thấy các kế hoạch của mình, mức thành thạo của từng competency (do thang của framework quyết định, không bao giờ suy ra từ điểm) và trạng thái review, và có thể yêu cầu review một competency — hành động khởi đầu quy trình của người review.
  *
  * Dữ liệu phần người học đọc qua tầng TanStack Query
- * (`lib/learning-plan-data.ts`): danh sách kế hoạch theo khoá của
+ * (`features/learning-plan/queries/learning-plan.ts`): danh sách kế hoạch theo khoá của
  * người dùng trong phiên, chi tiết theo khoá của kế hoạch đang chọn xem; gửi yêu cầu duyệt qua đột biến làm mới đúng bề mặt liên quan.
  */
 export function LearningPlanPage() {
   const { t } = useTranslation('app');
-  const PLAN_STATUS: Record<number, string> = {
-    0: t('planStatusDraft'),
-    1: t('planStatusActive'),
-    2: t('planStatusWaiting'),
-    3: t('planStatusInReview'),
-    4: t('planStatusComplete'),
-  };
+  const planStatusLabels = usePlanStatusLabels();
   const REVIEW_STATUS: Record<number, string> = {
     0: t('reviewStatusNone'),
     1: t('reviewStatusWaiting'),
@@ -90,18 +87,26 @@ export function LearningPlanPage() {
 
   async function requestReview(planId: string) {
     if (!user) return;
-    await requestPlanReview.mutateAsync({ planId, userId: user.id });
-    setMessage(t('reviewRequested'));
+    try {
+      await requestPlanReview.mutateAsync({ planId, userId: user.id });
+      setMessage(t('reviewRequested'));
+    } catch (err) {
+      setMessage(errorText(err, t('reviewRequestFailed')));
+    }
   }
 
   async function requestCompetencyReview(usercompId: string) {
     if (!detail) return;
-    await requestCompetencyReviewMutation.mutateAsync({
-      usercompId,
-      planId: detail.plan.id,
-      description: t('evidenceReviewDescription'),
-    });
-    setMessage(t('competencySentForReview'));
+    try {
+      await requestCompetencyReviewMutation.mutateAsync({
+        usercompId,
+        planId: detail.plan.id,
+        description: t('evidenceReviewDescription'),
+      });
+      setMessage(t('competencySentForReview'));
+    } catch (err) {
+      setMessage(errorText(err, t('competencyReviewRequestFailed')));
+    }
   }
 
   return (
@@ -134,7 +139,7 @@ export function LearningPlanPage() {
                 {plans.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 text-sm">
                     <span className="font-medium">{p.name}</span>
-                    <span>{PLAN_STATUS[p.status] ?? p.status}</span>
+                    <span>{planStatusLabels[p.status] ?? p.status}</span>
                     <Button type="button" variant="outline" onClick={() => open(p)}>
                       {t('view')}
                     </Button>
@@ -187,7 +192,6 @@ export default LearningPlanPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navLearningPlan');
 }

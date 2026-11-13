@@ -10,9 +10,10 @@
  *
  * Khuôn hình dạng dữ liệu ở biên repository (như pilot): bên trong dùng tên bảng/cột snake_case của interface schema sinh bằng codegen; bên ngoài trả/nhận hình dạng dòng camelCase như phía tiêu thụ đang dùng (danh sách cột tường minh có bí danh cho cả select lẫn returning, kiểu dòng công khai khai ngay trong file này — không import từ file schema bộ máy cũ vốn bị xoá ở hạng mục gỡ bộ máy cũ); giá trị ghi vào cột jsonb đi qua helper serialize tường minh + `::jsonb`; mọi giá trị where là tham số bắt buộc. Các phương thức ghi bản chụp nhận handle giao dịch tuỳ chọn do bên gọi truyền tường minh (khuôn `tx ?? handle gốc`) — một transaction chỉ chứa một ORM, cấm giao dịch lai.
  */
-import { sql, type RawBuilder } from 'kysely';
+
 import type { CentreDb, CentreTx } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
+import { jsonbValue } from '../jsonb';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type SbCentreTx = CentreTx;
@@ -79,21 +80,6 @@ export interface SystemBankCurriculumRow {
   updatedAt: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + ép kiểu `::jsonb`) — khuôn duy nhất cho đường ghi
- * jsonb của repository này: driver `pg` hiểu MẢNG ở cấp cao nhất
- * là mảng PostgreSQL chứ không phải tài liệu JSON (phát hiện của
- * pilot kho control plane).
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu cột `T` ở tầng TypeScript.
- */
-function jsonbColumn<T>(value: unknown): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng truy vết nhập bản chụp. */
 const SYSTEM_QUESTION_IMPORT_COLUMNS = [
   'question_id as questionId',
@@ -152,11 +138,16 @@ const CURRICULUM_COLUMNS = [
  * handle đó hoặc trên handle giao dịch bên gọi truyền vào.
  */
 export class SystemBankCentreRepository {
-  constructor(private readonly db: CentreDb) {}
+  constructor(private readonly handle: CentreDb) {}
+
+  /** Handle gốc của kho trung tâm (định tuyến theo không gian do tầng ứng dụng cấp). */
+  private db(): CentreDb {
+    return this.handle;
+  }
 
   /** Slug của tenant theo id (null khi không có) — dùng suy slug trung tâm cho dòng importer khi request không mang slug kho riêng. */
-  async resolveTenantSlug(tenantId: string): Promise<string | null> {
-    const rows = await this.db
+  async resolveTenantSlug(tenantId: string, db: SbCentreDb = this.db()): Promise<string | null> {
+    const rows = await db
       .selectFrom('tenants')
       .select(['slug'])
       .where('id', '=', tenantId)
@@ -166,8 +157,8 @@ export class SystemBankCentreRepository {
   }
 
   /** YCCĐ có tồn tại trong bản cài cục bộ của trung tâm không (theo id đã giữ nguyên qua bản cài gói). */
-  async outcomeExists(outcomeId: string): Promise<boolean> {
-    const rows = await this.db
+  async outcomeExists(outcomeId: string, db: SbCentreDb = this.db()): Promise<boolean> {
+    const rows = await db
       .selectFrom('learning_outcomes')
       .select(['id'])
       .where('id', '=', outcomeId)
@@ -188,10 +179,9 @@ export class SystemBankCentreRepository {
       importedBy: string | null;
       kind: 'pristine' | 'derived';
     },
-    tx?: SbCentreDb,
+    db: SbCentreDb = this.db(),
   ): Promise<SystemQuestionImportRow> {
-    const handle = tx ?? this.db;
-    const [row] = await handle
+    const [row] = await db
       .insertInto('system_question_imports')
       .values({
         question_id: input.questionId,
@@ -210,9 +200,8 @@ export class SystemBankCentreRepository {
   }
 
   /** Đọc dòng nhập bản chụp của một câu trung tâm (null khi câu không phải bản nhập). */
-  async getImportRow(questionId: string, tx?: SbCentreDb): Promise<SystemQuestionImportRow | null> {
-    const handle = tx ?? this.db;
-    const row = await handle
+  async getImportRow(questionId: string, db: SbCentreDb = this.db()): Promise<SystemQuestionImportRow | null> {
+    const row = await db
       .selectFrom('system_question_imports')
       .select(SYSTEM_QUESTION_IMPORT_COLUMNS)
       .where('question_id', '=', questionId)
@@ -227,9 +216,8 @@ export class SystemBankCentreRepository {
    * truy vết khác — phiên bản nguyên trạng vẫn đọc lại được theo
    * `importedVersionNumber`.
    */
-  async flipImportToDerived(questionId: string, tx?: SbCentreDb): Promise<void> {
-    const handle = tx ?? this.db;
-    await handle
+  async flipImportToDerived(questionId: string, db: SbCentreDb = this.db()): Promise<void> {
+    await db
       .updateTable('system_question_imports')
       .set({ kind: 'derived' })
       .where('question_id', '=', questionId)
@@ -242,18 +230,21 @@ export class SystemBankCentreRepository {
    * cặp sự kiện + slug trung tâm): insert-bỏ-qua-khi-trùng, nếu
    * cặp đã có thì đọc lại dòng hiện hữu.
    */
-  async insertEventReceipt(input: {
-    eventId: string;
-    centreSlug: string;
-  }): Promise<SystemBankEventReceiptRow> {
-    const [row] = await this.db
+  async insertEventReceipt(
+    input: {
+      eventId: string;
+      centreSlug: string;
+    },
+    db: SbCentreDb = this.db(),
+  ): Promise<SystemBankEventReceiptRow> {
+    const [row] = await db
       .insertInto('system_bank_event_receipts')
       .values({ event_id: input.eventId, centre_slug: input.centreSlug })
       .onConflict((oc) => oc.columns(['event_id', 'centre_slug']).doNothing())
       .returning(SYSTEM_BANK_EVENT_RECEIPT_COLUMNS)
       .execute();
     if (row) return row;
-    const existing = await this.db
+    const existing = await db
       .selectFrom('system_bank_event_receipts')
       .select(SYSTEM_BANK_EVENT_RECEIPT_COLUMNS)
       .where('event_id', '=', input.eventId)
@@ -265,8 +256,8 @@ export class SystemBankCentreRepository {
   }
 
   /** Liệt kê định danh các sự kiện một trung tâm đã ghi nhận (theo slug của chính trung tâm đó). */
-  async listEventReceiptEventIds(centreSlug: string): Promise<string[]> {
-    const rows = await this.db
+  async listEventReceiptEventIds(centreSlug: string, db: SbCentreDb = this.db()): Promise<string[]> {
+    const rows = await db
       .selectFrom('system_bank_event_receipts')
       .select(['event_id as eventId'])
       .where('centre_slug', '=', centreSlug)
@@ -275,8 +266,8 @@ export class SystemBankCentreRepository {
   }
 
   /** Đọc bản cài gói YCCĐ mới nhất của trung tâm (null khi chưa cài gói nào) — dùng suy phiên bản trước khi ghi vết cài mới. */
-  async getOutcomePackageInstall(): Promise<OutcomePackageInstallRow | null> {
-    const row = await this.db
+  async getOutcomePackageInstall(db: SbCentreDb = this.db()): Promise<OutcomePackageInstallRow | null> {
+    const row = await db
       .selectFrom('outcome_package_installs')
       .select(OUTCOME_PACKAGE_INSTALL_COLUMNS)
       .orderBy('installed_at', 'desc')
@@ -286,8 +277,8 @@ export class SystemBankCentreRepository {
   }
 
   /** Môn học của trung tâm theo slug duy nhất (null khi chưa có). */
-  async findSubjectBySlug(slug: string): Promise<SystemBankSubjectRow | null> {
-    const row = await this.db
+  async findSubjectBySlug(slug: string, db: SbCentreDb = this.db()): Promise<SystemBankSubjectRow | null> {
+    const row = await db
       .selectFrom('subjects')
       .select(SUBJECT_COLUMNS)
       .where('slug', '=', slug)
@@ -297,8 +288,12 @@ export class SystemBankCentreRepository {
   }
 
   /** Chương trình của trung tâm theo cặp (môn, khối) — dùng phát hiện xung đột id trước khi cài. */
-  async findCurriculumBySubjectGrade(subjectId: string, grade: number): Promise<SystemBankCurriculumRow | null> {
-    const row = await this.db
+  async findCurriculumBySubjectGrade(
+    subjectId: string,
+    grade: number,
+    db: SbCentreDb = this.db(),
+  ): Promise<SystemBankCurriculumRow | null> {
+    const row = await db
       .selectFrom('curricula')
       .select(CURRICULUM_COLUMNS)
       .where('subject_id', '=', subjectId)
@@ -309,8 +304,11 @@ export class SystemBankCentreRepository {
   }
 
   /** Upsert một chương trình theo id giữ nguyên (bản cài gói). */
-  async upsertCurriculum(input: { id: string; subjectId: string; grade: number }): Promise<void> {
-    await this.db
+  async upsertCurriculum(
+    input: { id: string; subjectId: string; grade: number },
+    db: SbCentreDb = this.db(),
+  ): Promise<void> {
+    await db
       .insertInto('curricula')
       .values({ id: input.id, subject_id: input.subjectId, grade: input.grade })
       .onConflict((oc) =>
@@ -320,17 +318,20 @@ export class SystemBankCentreRepository {
   }
 
   /** Upsert một node cây chương trình theo id giữ nguyên (gọi theo thứ tự cha trước). */
-  async upsertCurriculumNode(input: {
-    id: string;
-    curriculumId: string;
-    parentId: string | null;
-    title: string;
-    kind: string;
-    position: number;
-    durationPeriods: number | null;
-    durationPercent: number | null;
-  }): Promise<void> {
-    await this.db
+  async upsertCurriculumNode(
+    input: {
+      id: string;
+      curriculumId: string;
+      parentId: string | null;
+      title: string;
+      kind: string;
+      position: number;
+      durationPeriods: number | null;
+      durationPercent: number | null;
+    },
+    db: SbCentreDb = this.db(),
+  ): Promise<void> {
+    await db
       .insertInto('curriculum_nodes')
       .values({
         id: input.id,
@@ -364,21 +365,24 @@ export class SystemBankCentreRepository {
    * dòng derived của trung tâm có id khác nên không bao giờ va
    * vào upsert này.
    */
-  async upsertLearningOutcome(input: {
-    id: string;
-    nodeId: string;
-    position: number;
-    content: unknown;
-    sourceKind: string;
-    sourceRef: string | null;
-  }): Promise<void> {
-    await this.db
+  async upsertLearningOutcome(
+    input: {
+      id: string;
+      nodeId: string;
+      position: number;
+      content: unknown;
+      sourceKind: string;
+      sourceRef: string | null;
+    },
+    db: SbCentreDb = this.db(),
+  ): Promise<void> {
+    await db
       .insertInto('learning_outcomes')
       .values({
         id: input.id,
         node_id: input.nodeId,
         position: input.position,
-        content: jsonbColumn<LearningOutcomeDoc>(input.content),
+        content: jsonbValue<LearningOutcomeDoc>(input.content),
         source_kind: input.sourceKind,
         source_ref: input.sourceRef,
       })
@@ -386,7 +390,7 @@ export class SystemBankCentreRepository {
         oc.column('id').doUpdateSet({
           node_id: input.nodeId,
           position: input.position,
-          content: jsonbColumn<LearningOutcomeDoc>(input.content),
+          content: jsonbValue<LearningOutcomeDoc>(input.content),
           source_kind: input.sourceKind,
           source_ref: input.sourceRef,
         }),
@@ -395,13 +399,16 @@ export class SystemBankCentreRepository {
   }
 
   /** Ghi nhận một lần cài gói (upsert theo phiên bản gói — cài lại cùng phiên bản chỉ làm mới vết). */
-  async recordOutcomePackageInstall(input: {
-    packageVersion: string;
-    previousVersion: string | null;
-    scope: string;
-    installedBy: string | null;
-  }): Promise<OutcomePackageInstallRow> {
-    const [row] = await this.db
+  async recordOutcomePackageInstall(
+    input: {
+      packageVersion: string;
+      previousVersion: string | null;
+      scope: string;
+      installedBy: string | null;
+    },
+    db: SbCentreDb = this.db(),
+  ): Promise<OutcomePackageInstallRow> {
+    const [row] = await db
       .insertInto('outcome_package_installs')
       .values({
         package_version: input.packageVersion,

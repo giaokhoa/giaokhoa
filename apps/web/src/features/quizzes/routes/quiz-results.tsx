@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type { Route } from './+types/quiz-results';
+import { titleMeta } from '#lib/route-meta';
 import { Link, useParams } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -12,6 +14,7 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { quizResultsQueryOptions, useGradeQuizQuestion, useQuizResults } from '../queries/quiz-results';
 import type { NeedsGradingItem } from '../types/quiz-results';
+import { QUIZ_GRADE_METHOD_LABEL_KEYS, quizAttemptStateKey } from '../utils/utils';
 import { queryClient } from '#lib/query-client';
 
 /**
@@ -70,7 +73,7 @@ export function QuizResultsPage() {
     <PageShell width="medium">
       <PageHeader
         title={t('quizResultsTitle', { name: data.quiz.name })}
-        description={t('quizResultsDescription', { method: t(`quizGradeMethod_${data.quiz.gradeMethod}`) })}
+        description={t('quizResultsDescription', { method: t(QUIZ_GRADE_METHOD_LABEL_KEYS[data.quiz.gradeMethod]) })}
       />
       <Card>
         <CardContent className="space-y-4">
@@ -95,7 +98,7 @@ export function QuizResultsPage() {
             <ul className="text-sm">
               {data.attempts.map((a) => (
                 <li key={a.id} data-testid={`result-attempt-${a.id}`}>
-                  {a.userId} — {t('quizAttemptLine', { number: a.attemptNumber, state: t(`quizAttemptState_${a.state}`) })}
+                  {a.userId} — {t('quizAttemptLine', { number: a.attemptNumber, state: t(quizAttemptStateKey(a.state)) })}
                   {a.makeup ? (
                     <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900">{t('quizMakeupBadge')}</span>
                   ) : null}
@@ -215,7 +218,7 @@ export default function QuizResultsRoute() {
  * prefetch query kết quả vào QueryClient singleton dùng chung, đúng
  * khoá factory, trước khi component mount.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.pinId) {
     await queryClient.prefetchQuery(quizResultsQueryOptions(params.pinId));
   }
@@ -224,7 +227,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Kết quả bài kiểm tra');
 }

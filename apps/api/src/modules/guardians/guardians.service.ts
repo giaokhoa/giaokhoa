@@ -121,21 +121,27 @@ export class GuardiansService {
       aggregate: 'guardian', type: 'guardian_link_revoked',
       payload: { actorId, userId: link.studentUserId, guardianUserId: link.guardianUserId, linkId: link.id, objectId: link.id },
     });
-    return (await this.repo.getLink(linkId))!;
+    // Dòng vừa cập nhật thành công nên phải còn — vắng là trạng thái không thể xảy ra, ném 404 thay vì khẳng định non-null.
+    const revoked = await this.repo.getLink(linkId);
+    if (!revoked) throw new NotFoundException({ message: `Active guardian link ${linkId} not found`, code: 'guardian.link_not_found' });
+    return revoked;
   }
 
   /** Các con đang liên kết của chính actor (bề mặt phụ huynh tự xem). */
   async myStudents(actorId: string): Promise<GuardianStudentView[]> {
     const links = await this.repo.listLinks({ guardianUserId: actorId, status: 'active' });
-    const out: GuardianStudentView[] = [];
-    for (const link of links) {
-      const student = await this.users.getUser(link.studentUserId);
-      out.push({
+    // Nạp học sinh theo lô thay vì một truy vấn mỗi liên kết; getByIds không đảm bảo thứ tự trả về nên tra cứu lại theo id để giữ đúng thứ tự liên kết.
+    const students = await this.users.getUsersByIds(links.map((link) => link.studentUserId));
+    const byId = new Map(students.map((student) => [student.id, student]));
+    return links.map((link) => {
+      // Liên kết trỏ tới học sinh không còn tồn tại thì lỗi như đường đọc từng học sinh trước đây.
+      const student = byId.get(link.studentUserId);
+      if (!student) throw new NotFoundException({ message: `User ${link.studentUserId} not found`, code: 'user.not_found' });
+      return {
         link,
         student: { id: student.id, username: student.username, firstName: student.firstName, lastName: student.lastName, email: student.email },
-      });
-    }
-    return out;
+      };
+    });
   }
 
   /** Những người giám hộ đang liên kết với chính actor (học sinh tự xem — minh bạch liên kết theo research mục 5.3.4). */
@@ -168,6 +174,7 @@ export class GuardiansService {
 
   /** Audit một lần phụ huynh xem dữ liệu của con (event_log qua outbox). */
   private async auditView(guardianId: string, studentId: string, courseId: string | null, surface: string): Promise<void> {
+    // Audit xem là ghi phụ — lỗi ghi audit không được làm hỏng lần xem dữ liệu chính (lần xem vẫn trả về); lỗi audit vì vậy được nuốt có chủ đích.
     await this.outbox.enqueueStandalone({
       aggregate: 'guardian', type: 'guardian_student_results_viewed',
       payload: { actorId: guardianId, userId: studentId, courseId, objectId: studentId, surface },

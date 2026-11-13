@@ -19,6 +19,20 @@ export interface ChartRange {
 }
 
 /**
+ * Props của biểu đồ vùng tương tác: tiêu đề/mô tả/nhãn chuỗi/dòng trạng
+ * thái trống, chuỗi điểm dữ liệu và các lựa chọn khoảng hiển thị (bỏ qua
+ * thì hiện toàn bộ chuỗi, không có nút chuyển khoảng).
+ */
+export interface ChartAreaInteractiveProps {
+  title: string;
+  description: string;
+  seriesLabel: string;
+  emptyText: string;
+  data: ChartPoint[];
+  ranges?: ChartRange[];
+}
+
+/**
  * Biểu đồ vùng tương tác theo block dashboard-01 (Recharts AreaChart trong ChartContainer, có chuyển khoảng hiển thị ở góc phải header). Chuỗi số được truyền từ trang gọi — là dữ liệu thật của API (người dùng mới theo tuần, phân bố điểm, sự kiện theo ngày); khi chuỗi rỗng component hiện dòng trạng thái trống đã dịch thay vì vẽ biểu đồ giả.
  */
 export function ChartAreaInteractive({
@@ -28,14 +42,7 @@ export function ChartAreaInteractive({
   emptyText,
   data,
   ranges,
-}: {
-  title: string;
-  description: string;
-  seriesLabel: string;
-  emptyText: string;
-  data: ChartPoint[];
-  ranges?: ChartRange[];
-}) {
+}: ChartAreaInteractiveProps) {
   const [range, setRange] = React.useState<string>(ranges?.[ranges.length - 1]?.value ?? '');
   const activeRange = ranges?.find((r) => r.value === range) ?? ranges?.[ranges.length - 1];
   const visible = activeRange ? data.slice(-activeRange.count) : data;

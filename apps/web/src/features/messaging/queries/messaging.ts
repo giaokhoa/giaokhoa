@@ -1,3 +1,11 @@
+/**
+ * Tầng dữ liệu TanStack Query của trang Tin nhắn: queryOptions cho cây nhóm, danh sách
+ * hội thoại, chi tiết + phân trang tin, danh bạ và hồ sơ người, cùng các đột biến gửi
+ * tin, đặt trạng thái, chặn/báo cáo và tạo hội thoại. Đột biến tự invalidate/vá cache
+ * ở `onSuccess` theo đúng khoá trang đang đọc; tin mới đẩy hội thoại lên đầu mục của
+ * nó theo đúng thứ tự server (ghim trước rồi mới tới cập nhật mới nhất).
+ */
+
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
@@ -8,6 +16,7 @@ import {
   fetchMessagingPersonProfile,
   fetchRosterPage, hardDeleteMessage, markConversationRead, recallMessage, removeConversationMember,
   reportConversation, respondContactRequest, searchConversationMessages, sendContactRequest, sendMessage,
+  type SendMessageBody,
   setContactBlocked, setConversationEnabled, setConversationState,
 } from '../api/messaging';
 import type {
@@ -199,18 +208,18 @@ export function useSetContactBlocked() {
 export function useSendMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, body }: { conversationId: string; body: Record<string, unknown> }) =>
+    mutationFn: ({ conversationId, body }: { conversationId: string; body: SendMessageBody }) =>
       sendMessage(conversationId, body),
     onSuccess: (saved, { conversationId }) => {
-      queryClient.setQueryData<ConversationView[]>(queryKeys.messagingConversations, (old) => {
-        if (!old) return old;
-        const target = old.find((c) => c.id === conversationId);
-        if (!target) return old;
-        return [
-          { ...target, lastMessage: saved, lastMessageSeq: saved.seq },
-          ...old.filter((c) => c.id !== conversationId),
-        ];
-      });
+      queryClient.setQueryData<ConversationView[]>(queryKeys.messagingConversations, (old) =>
+        old
+          ? withConversationMovedToSectionTop(old, conversationId, (c) => ({
+              ...c,
+              lastMessage: saved,
+              lastMessageSeq: saved.seq,
+            }))
+          : old,
+      );
       queryClient.setQueryData<ConversationView[]>(queryKeys.messagingArchivedConversations, (old) =>
         old
           ? withConversationMovedToSectionTop(old, conversationId, (c) => ({
@@ -224,75 +233,65 @@ export function useSendMessage() {
   });
 }
 
-/** Đột biến gửi yêu cầu kết bạn (POST /messages/contacts/:id) — trả pending hoặc accepted ngay; làm mới hàng chờ kết bạn và danh bạ (accepted thì danh bạ có thêm người). */
-export function useSendContactRequest() {
+/** Đột biến chỉ làm mới cache — theo mẫu `useGradeMutation` ở grades: thành công thì invalidate đúng các khoá truyền vào (khoá cố định, hoặc dựng từ biến đột biến khi khoá phụ thuộc biến như chi tiết hội thoại). */
+function useInvalidateMutation<TVars>(
+  mutationFn: (vars: TVars) => Promise<unknown>,
+  keysToInvalidate: readonly unknown[][] | ((vars: TVars) => readonly unknown[][]),
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (userId: string) => sendContactRequest(userId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingContactRequests });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingContacts });
+    mutationFn,
+    onSuccess: (_data, vars) => {
+      const keys = typeof keysToInvalidate === 'function' ? keysToInvalidate(vars) : keysToInvalidate;
+      for (const key of keys) void queryClient.invalidateQueries({ queryKey: key as readonly unknown[] });
     },
   });
+}
+
+/** Đột biến gửi yêu cầu kết bạn (POST /messages/contacts/:id) — trả pending hoặc accepted ngay; làm mới hàng chờ kết bạn và danh bạ (accepted thì danh bạ có thêm người). */
+export function useSendContactRequest() {
+  return useInvalidateMutation((userId: string) => sendContactRequest(userId), [
+    queryKeys.messagingContactRequests,
+    queryKeys.messagingContacts,
+  ]);
 }
 
 /** Đột biến trả lời một yêu cầu kết bạn (POST /messages/contacts/requests/:id/accept|decline) — làm mới hàng chờ kết bạn và danh bạ. */
 export function useRespondContactRequest() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ userId, action }: { userId: string; action: 'accept' | 'decline' }) =>
-      respondContactRequest(userId, action),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingContactRequests });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingContacts });
-    },
-  });
+  return useInvalidateMutation(
+    ({ userId, action }: { userId: string; action: 'accept' | 'decline' }) => respondContactRequest(userId, action),
+    [queryKeys.messagingContactRequests, queryKeys.messagingContacts],
+  );
 }
 
 /** Đột biến mở hội thoại 1–1 với một liên hệ (POST /messages/conversations với memberIds) — làm mới danh sách hội thoại. */
 export function useCreateDirectConversation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (userId: string) => createDirectConversation(userId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingConversations });
-    },
-  });
+  return useInvalidateMutation((userId: string) => createDirectConversation(userId), [
+    queryKeys.messagingConversations,
+  ]);
 }
 
 /** Đột biến tạo/lấy hội thoại của một nhóm con trong khoá (POST /messages/conversations/group) — làm mới danh sách hội thoại và cây nhóm. */
 export function useCreateGroupConversation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (groupId: string) => createGroupConversation(groupId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingConversations });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingGroupTree });
-    },
-  });
+  return useInvalidateMutation((groupId: string) => createGroupConversation(groupId), [
+    queryKeys.messagingConversations,
+    queryKeys.messagingGroupTree,
+  ]);
 }
 
 /** Đột biến tạo nhóm tự do (POST /messages/conversations với type 2 + tên + thành viên) — làm mới danh sách hội thoại và cây nhóm. */
 export function useCreateFreeGroup() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ name, memberIds }: { name: string; memberIds: string[] }) => createFreeGroup(name, memberIds),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingConversations });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingGroupTree });
-    },
-  });
+  return useInvalidateMutation(
+    ({ name, memberIds }: { name: string; memberIds: string[] }) => createFreeGroup(name, memberIds),
+    [queryKeys.messagingConversations, queryKeys.messagingGroupTree],
+  );
 }
 
 /** Đột biến báo cáo hội thoại đang mở (POST .../report) — làm mới chi tiết hội thoại để bề mặt hội thoại phản ánh trạng thái phía server mới nhất. */
 export function useReportConversation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (conversationId: string) => reportConversation(conversationId),
-    onSuccess: (_data, conversationId) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messagingConversationDetail(conversationId) });
-    },
-  });
+  return useInvalidateMutation((conversationId: string) => reportConversation(conversationId), (conversationId) => [
+    queryKeys.messagingConversationDetail(conversationId),
+  ]);
 }
 
 /** Đột biến gỡ một thành viên khỏi nhóm tự do (DELETE .../members/:userId) — đáp ứng là hội thoại đã cập nhật nên vá thẳng vào cache danh sách và cache chi tiết. */

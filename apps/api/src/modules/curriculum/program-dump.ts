@@ -67,22 +67,38 @@ function insertStatement(table: string, columns: string[], values: unknown[]): s
 }
 
 /**
- * Sắp các node cây theo độ sâu tăng dần (cha trước con) để restore không vi phạm FK parent khi chèn tuần tự; cùng độ sâu giữ thứ tự position. Node có parent không nằm trong tập (không xảy ra với DB chuẩn nguyên vẹn) được coi như gốc.
+ * Sắp các dòng có liên kết cha theo độ sâu tăng dần (cha trước con) để restore không vi phạm FK khi chèn tuần tự; cùng độ sâu giữ thứ tự position. Độ sâu tính MỘT lần vào Map rồi sort theo đó (không tính lại cho mỗi phép so sánh). Dòng có cha không nằm trong tập (không xảy ra với DB chuẩn nguyên vẹn) được coi như gốc.
  */
-function orderNodesTopologically<T extends { id: string; parentId: string | null; position: number }>(rows: T[]): T[] {
+function orderByParentDepth<T extends { id: string; position: number }>(
+  rows: T[],
+  getParentId: (row: T) => string | null,
+): T[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const depthOf = (row: T): number => {
+  const depthById = new Map<string, number>();
+  for (const row of rows) {
     let depth = 0;
     let cursor: T | undefined = row;
     const guard = new Set<string>();
-    while (cursor?.parentId && byId.has(cursor.parentId) && !guard.has(cursor.id)) {
+    while (cursor) {
+      const parentId = getParentId(cursor);
+      if (!parentId || !byId.has(parentId) || guard.has(cursor.id)) break;
       guard.add(cursor.id);
       depth += 1;
-      cursor = byId.get(cursor.parentId);
+      cursor = byId.get(parentId);
     }
-    return depth;
-  };
-  return [...rows].sort((a, b) => depthOf(a) - depthOf(b) || a.position - b.position);
+    depthById.set(row.id, depth);
+  }
+  return [...rows].sort(
+    (a, b) =>
+      (depthById.get(a.id) ?? 0) - (depthById.get(b.id) ?? 0) || a.position - b.position,
+  );
+}
+
+/**
+ * Sắp các node cây theo độ sâu tăng dần (cha trước con) để restore không vi phạm FK parent khi chèn tuần tự; cùng độ sâu giữ thứ tự position. Node có parent không nằm trong tập (không xảy ra với DB chuẩn nguyên vẹn) được coi như gốc.
+ */
+function orderNodesTopologically<T extends { id: string; parentId: string | null; position: number }>(rows: T[]): T[] {
+  return orderByParentDepth(rows, (row) => row.parentId);
 }
 
 /**
@@ -90,19 +106,14 @@ function orderNodesTopologically<T extends { id: string; parentId: string | null
  * (FK derived_from_id) — cùng thuật toán độ sâu như cây node.
  */
 function orderOutcomesTopologically<T extends { id: string; derivedFromId: string | null; position: number }>(rows: T[]): T[] {
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const depthOf = (row: T): number => {
-    let depth = 0;
-    let cursor: T | undefined = row;
-    const guard = new Set<string>();
-    while (cursor?.derivedFromId && byId.has(cursor.derivedFromId) && !guard.has(cursor.id)) {
-      guard.add(cursor.id);
-      depth += 1;
-      cursor = byId.get(cursor.derivedFromId);
-    }
-    return depth;
-  };
-  return [...rows].sort((a, b) => depthOf(a) - depthOf(b) || a.position - b.position);
+  return orderByParentDepth(rows, (row) => row.derivedFromId);
+}
+
+/** Một bảng của dump: tên bảng + cột INSERT + các dòng đã ánh xạ thành giá trị theo đúng thứ tự cột. */
+interface DumpTable {
+  table: string;
+  columns: string[];
+  values: unknown[][];
 }
 
 /**
@@ -178,33 +189,37 @@ export async function buildProgramDumpSql(db: CentreDb, opts?: { datasetKey?: st
     '-- =====================================================================',
     '',
   ];
-  for (const r of subjectRows) {
-    lines.push(insertStatement('subjects',
-      ['id', 'context_id', 'name', 'slug', 'position', 'created_at', 'updated_at'],
-      [r.id, r.contextId, r.name, r.slug, r.position, r.createdAt, r.updatedAt]));
-  }
-  for (const r of curriculaRows) {
-    lines.push(insertStatement('curricula',
-      ['id', 'subject_id', 'grade', 'created_at', 'updated_at'],
-      [r.id, r.subjectId, r.grade, r.createdAt, r.updatedAt]));
-  }
-  for (const r of nodeRows) {
-    lines.push(insertStatement('curriculum_nodes',
-      ['id', 'curriculum_id', 'parent_id', 'title', 'kind', 'position', 'duration_periods', 'duration_percent', 'created_at', 'updated_at'],
-      [r.id, r.curriculumId, r.parentId, r.title, r.kind, r.position, r.durationPeriods, r.durationPercent, r.createdAt, r.updatedAt]));
-  }
-  for (const r of outcomeRows) {
-    // Cột content nay là tài liệu Tiptap (jsonb): sqlLiteral render
-    // đối tượng thành literal `'...json...'::jsonb`, restore vào cột
-    // jsonb nguyên văn, giữ cấu trúc cha–con của tài liệu.
-    lines.push(insertStatement('learning_outcomes',
-      ['id', 'tenant_id', 'node_id', 'content', 'position', 'source_kind', 'source_ref', 'derived_from_id', 'retired_at', 'created_at', 'updated_at'],
-      [r.id, r.tenantId, r.nodeId, r.content, r.position, r.sourceKind, r.sourceRef, r.derivedFromId, r.retiredAt, r.createdAt, r.updatedAt]));
-  }
-  for (const r of recordRows) {
-    lines.push(insertStatement('curriculum_program_records',
-      ['id', 'dataset_key', 'record_id', 'subject_id', 'curriculum_id', 'node_id', 'content_hash', 'source', 'created_at', 'updated_at'],
-      [r.id, r.datasetKey, r.recordId, r.subjectId, r.curriculumId, r.nodeId, r.contentHash, r.source, r.createdAt, r.updatedAt]));
+  // Xuất theo bảng (thứ tự tôn trọng FK như trên): mỗi bảng một mục cấu hình — tên bảng + cột INSERT + các dòng đã ánh xạ thành giá trị theo đúng thứ tự cột — rồi một vòng lặp chung phát câu INSERT. (Các câu SELECT giữ viết tường minh từng bảng vì Kysely cần tên bảng literal để có kiểu dòng; chỉ phần phát INSERT là lặp hình dạng nên mới gộp.)
+  const dumpTables: DumpTable[] = [
+    {
+      table: 'subjects',
+      columns: ['id', 'context_id', 'name', 'slug', 'position', 'created_at', 'updated_at'],
+      values: subjectRows.map((r) => [r.id, r.contextId, r.name, r.slug, r.position, r.createdAt, r.updatedAt]),
+    },
+    {
+      table: 'curricula',
+      columns: ['id', 'subject_id', 'grade', 'created_at', 'updated_at'],
+      values: curriculaRows.map((r) => [r.id, r.subjectId, r.grade, r.createdAt, r.updatedAt]),
+    },
+    {
+      table: 'curriculum_nodes',
+      columns: ['id', 'curriculum_id', 'parent_id', 'title', 'kind', 'position', 'duration_periods', 'duration_percent', 'created_at', 'updated_at'],
+      values: nodeRows.map((r) => [r.id, r.curriculumId, r.parentId, r.title, r.kind, r.position, r.durationPeriods, r.durationPercent, r.createdAt, r.updatedAt]),
+    },
+    {
+      table: 'learning_outcomes',
+      columns: ['id', 'tenant_id', 'node_id', 'content', 'position', 'source_kind', 'source_ref', 'derived_from_id', 'retired_at', 'created_at', 'updated_at'],
+      // Cột content nay là tài liệu Tiptap (jsonb): sqlLiteral render đối tượng thành literal `'...json...'::jsonb`, restore vào cột jsonb nguyên văn, giữ cấu trúc cha–con của tài liệu.
+      values: outcomeRows.map((r) => [r.id, r.tenantId, r.nodeId, r.content, r.position, r.sourceKind, r.sourceRef, r.derivedFromId, r.retiredAt, r.createdAt, r.updatedAt]),
+    },
+    {
+      table: 'curriculum_program_records',
+      columns: ['id', 'dataset_key', 'record_id', 'subject_id', 'curriculum_id', 'node_id', 'content_hash', 'source', 'created_at', 'updated_at'],
+      values: recordRows.map((r) => [r.id, r.datasetKey, r.recordId, r.subjectId, r.curriculumId, r.nodeId, r.contentHash, r.source, r.createdAt, r.updatedAt]),
+    },
+  ];
+  for (const { table, columns, values } of dumpTables) {
+    for (const row of values) lines.push(insertStatement(table, columns, row));
   }
   lines.push('');
   return lines.join('\n');

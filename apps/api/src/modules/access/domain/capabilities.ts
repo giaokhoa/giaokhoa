@@ -1,3 +1,5 @@
+import { CAP_ALLOW } from './permission';
+
 export interface CapabilityDefinition {
   name: string;
   capType: 'read' | 'write';
@@ -6,7 +8,6 @@ export interface CapabilityDefinition {
   /** Quyền mặc định theo từng archetype của role, được seed dưới dạng override tại context hệ thống. */
   archetypes: Partial<Record<string, number>>;
 }
-import { CAP_ALLOW } from './permission';
 
 const ALL_STAFF = { manager: CAP_ALLOW, coursecreator: CAP_ALLOW, editingteacher: CAP_ALLOW, teacher: CAP_ALLOW };
 

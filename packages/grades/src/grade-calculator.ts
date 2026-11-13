@@ -90,10 +90,7 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-/** Áp multiplicator/offset (trừ khi đã đóng băng) và clamp vào khoảng của item. */
-/**
- * Chuẩn hoá điểm của item về thang 0..1 theo gradeMin/gradeMax; item ẩn hoặc chưa có điểm trả null (không tính vào tổng hợp).
- */
+/** Điểm đã điều chỉnh của item: áp multiplicator/offset (trừ khi đã đóng băng) rồi clamp vào khoảng [gradeMin, gradeMax] của item; trả null chỉ khi item chưa có điểm. */
 export function adjustedGrade(item: CalcItemInput): number | null {
   if (item.grade === null || item.grade === undefined) return null;
   if (item.frozen) return clamp(item.grade, item.gradeMin, item.gradeMax);
@@ -115,10 +112,7 @@ interface Prepared {
   isExtra: boolean;
 }
 
-/** Trọng số hiệu lực của natural: các item bị ghi đè giữ nguyên trọng số của chúng; phần còn lại của 100% được chia theo (max-min). */
-/**
- * Trọng số “tự nhiên” của Moodle: mỗi item đóng góp tỉ lệ theo (gradeMax - gradeMin) của nó sau khi chuẩn hoá, extra credit không làm tăng mẫu số.
- */
+/** Trọng số hiệu lực của natural: các item bị ghi đè giữ nguyên trọng số của chúng; phần còn lại của 100% được chia theo (max-min) — trọng số “tự nhiên” của Moodle: mỗi item đóng góp tỉ lệ theo (gradeMax - gradeMin) của nó sau khi chuẩn hoá, extra credit không làm tăng mẫu số. */
 export function naturalWeights(items: CalcItemInput[]): Record<string, number> {
   const nonExtra = items.filter((i) => !i.extraCredit);
   const weights: Record<string, number> = {};
@@ -279,10 +273,7 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
   return { finalGrade, gradeMin, gradeMax, weights, fraction: capped };
 }
 
-/** Letter cho một điểm: phần trăm theo khoảng của item được đối chiếu với các biên (biên cao nhất <= pct sẽ thắng). */
-/**
- * Ánh xạ điểm phần trăm sang chữ cái (letter) theo bảng grade letters của khoá học; biên dưới của mỗi khoảng là bao hàm.
- */
+/** Letter cho một điểm: phần trăm theo khoảng của item được đối chiếu với các biên (biên cao nhất <= pct sẽ thắng) — ánh xạ điểm phần trăm sang chữ cái (letter) theo bảng grade letters của khoá học; biên dưới của mỗi khoảng là bao hàm. */
 export function letterForGrade(
   finalGrade: number, gradeMin: number, gradeMax: number,
   letters: { letter: string; lowerBoundary: number }[],

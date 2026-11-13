@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { EnrolRepository } from './enrol';
 
 /**
@@ -23,12 +25,9 @@ import { EnrolRepository } from './enrol';
  *   instance sở hữu lên từng dòng.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g645_enrol';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let pool: Pool;
 let db: CentreDb;
@@ -46,7 +45,7 @@ beforeAll(async () => {
 
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g645-enrol', name: 'Trung tâm spec G5 enrol', kind: 'center' })
+    .values({ slug: 'g645-enrol', name: 'Trung tâm spec G5 enrol', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   const category = await db
@@ -76,12 +75,12 @@ describe('EnrolRepository trên Kysely (issue #645)', () => {
       cost: 0, currency: '', paymentAccountId: null, enrolmentKey: null,
       sendWelcomeMessage: false, welcomeMessage: null,
     });
-    expect(instance.id).toMatch(UUIDV7_PATTERN);
+    expect(instance.id).toMatch(UUIDV7_RE);
     expect((await repo.listInstances(courseId)).map((i) => i.id)).toContain(instance.id);
 
     const userId = randomUUID();
     const ue = await repo.insertUserEnrolment({ enrolId: instance.id, userId, status: 0 });
-    expect(ue.id).toMatch(UUIDV7_PATTERN);
+    expect(ue.id).toMatch(UUIDV7_RE);
     expect(ue.timeStart).toBeInstanceOf(Date);
     expect((await repo.getUserEnrolment(instance.id, userId))?.id).toBe(ue.id);
   });

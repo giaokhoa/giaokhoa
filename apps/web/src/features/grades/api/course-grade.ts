@@ -1,4 +1,10 @@
-import { apiJson } from '#lib/api';
+/**
+ * Tầng gọi API thuần của trang bảng điểm: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
+ * Gồm lịch sử điểm, nhập/sửa điểm, tạo/sửa/xoá mục điểm, chính sách công bố, công bố/thu hồi, và xuất Excel vnEdu rồi tải file về máy.
+ * Tầng `queries/` của feature bọc các hàm này thành queryOptions và đột biến cho route dùng.
+ */
+
+import { apiFetch, apiJson, downloadBlob } from '#lib/api';
 import type { GradeHistoryView } from '../types/course-grade';
 
 /**
@@ -101,4 +107,37 @@ export function setGradeItemPublished(vars: { itemId: string; published: boolean
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+/**
+ * Thân xuất Excel vnEdu (POST /courses/:courseId/grade-exports).
+ *
+ * `provider: 'vnedu'` chọn nhà cung cấp xuất; các trường tuỳ chọn (học kỳ, năm học, môn, lớp) để trống thì server lấy mặc định từ khoá học.
+ */
+export type VneduGradeExportBody = {
+  provider: 'vnedu';
+  regularItemIds: string[];
+  midtermItemId: string;
+  finalItemId: string;
+  semester: number;
+  schoolYear?: string;
+  subjectName?: string;
+  className?: string;
+};
+
+/**
+ * Xuất Excel vnEdu cho một khoá rồi tải file về máy.
+ *
+ * Trước đây lời gọi này nằm ngay trong route; nay ở tầng api/ để route chỉ giữ logic chọn bài và ánh xạ cột.
+ *
+ * @param courseId - Định danh khoá.
+ * @param body - Thân xuất vnEdu (xem `VneduGradeExportBody`).
+ * @returns Promise hoàn tất sau khi lượt tải đã được kích hoạt.
+ */
+export async function exportGradesVnedu(courseId: string, body: VneduGradeExportBody): Promise<void> {
+  const res = await apiFetch(`/api/v1/courses/${courseId}/grade-exports`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  await downloadBlob(res, `vnedu-${courseId}.xlsx`);
 }

@@ -1,3 +1,9 @@
+/**
+ * Tầng dữ liệu TanStack Query cho màn tạo/sửa ma trận: queryOptions và hook dùng chung cho trang và clientLoader của route, bọc các hàm gọi API thuần ở tầng `api/`.
+ * Gồm bank ma trận, chương trình theo môn, chi tiết ma trận, cây chương trình và khả dụng kho câu theo ô; các đột biến tạo/sửa/thêm/xoá ô làm mới chi tiết và bản đặc tả của ma trận đó.
+ * Bản đặc tả chỉ được đọc (tải lười khi giáo viên mở mục đặc tả) và xuất file; không có đường ghi/sửa đặc tả nào ở phía client.
+ */
+
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
@@ -12,6 +18,7 @@ import {
   fetchMatrixSpecification,
   updateMatrix,
 } from '../api/matrix';
+import type { AddMatrixCellBody, CreateMatrixBody, UpdateMatrixBody } from '../api/matrix';
 import { queryKeys } from './keys';
 
 /**
@@ -136,18 +143,23 @@ export function useMatrixSpecification(matrixId: string | undefined, enabled: bo
 export function useCreateMatrix() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: {
-      name: string;
-      subjectId: string;
-      curriculumId: string;
-      bankId: string;
-      levelSet: 'three' | 'four';
-      totalScore: number;
-      isTemplate: boolean;
-      status: string;
-    }) => createMatrix(body),
+    mutationFn: (body: CreateMatrixBody) => createMatrix(body),
     onSuccess: (_data, body) => {
       void queryClient.invalidateQueries({ queryKey: sharedQueryKeys.bankMatrices(body.bankId) });
+    },
+  });
+}
+
+/** Đột biến trên một ma trận, xong thì làm mới cả chi tiết lẫn đặc tả: chi tiết chứa dữ kiện vừa đổi (tên/tổng điểm nằm trong view model đặc tả nên cũng phải nạp lại), còn đặc tả là bảng suy ra từ tập ô nên ô đổi thì đặc tả phải nạp lại theo. */
+function useMatrixDetailMutation<TVars extends { matrixId: string }>(
+  mutationFn: (vars: TVars) => Promise<unknown>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: (_data, vars) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixDetail(vars.matrixId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixSpecification(vars.matrixId) });
     },
   });
 }
@@ -156,52 +168,21 @@ export function useCreateMatrix() {
  * Lưu thông tin chung của ma trận: xong thì invalidate chi tiết để trang nạp bản mới (thay loadMatrix thủ công). `levelSet` là trường tuỳ chọn do checkbox Vận dụng cao ở màn sửa điều khiển (I-3, issue #233): tick = 'four', không tick = 'three'. Server tự chặn hạ xuống 'three' khi còn ô Vận dụng cao (400 `quiz.matrix_level_in_use`) nên web không cần tự kiểm tập ô trước khi gửi.
  */
 export function useUpdateMatrix() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: {
-      matrixId: string;
-      body: { name: string; status: string; isTemplate: boolean; totalScore: number; levelSet?: 'three' | 'four' };
-    }) => updateMatrix(vars.matrixId, vars.body),
-    onSuccess: (_data, vars) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixDetail(vars.matrixId) });
-      // Tên/tổng điểm của ma trận cũng nằm trong view model đặc tả — lưu thông tin chung xong thì đặc tả đang mở phải nạp lại theo.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixSpecification(vars.matrixId) });
-    },
-  });
+  return useMatrixDetailMutation((vars: { matrixId: string; body: UpdateMatrixBody }) =>
+    updateMatrix(vars.matrixId, vars.body),
+  );
 }
 
 /** Thêm một ô vào ma trận: xong thì invalidate chi tiết như trên. */
 export function useAddMatrixCell() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: {
-      matrixId: string;
-      body: {
-        curriculumNodeId: string;
-        cognitiveLevel: string;
-        qtype: string;
-        questionCount: number;
-        cellScore: number;
-      };
-    }) => addMatrixCell(vars.matrixId, vars.body),
-    onSuccess: (_data, vars) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixDetail(vars.matrixId) });
-      // Đặc tả là bảng SUY RA từ các ô: ô đổi thì đặc tả phải nạp lại.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixSpecification(vars.matrixId) });
-    },
-  });
+  return useMatrixDetailMutation((vars: { matrixId: string; body: AddMatrixCellBody }) =>
+    addMatrixCell(vars.matrixId, vars.body),
+  );
 }
 
 /** Xoá một ô khỏi ma trận: xong thì invalidate chi tiết như trên. */
 export function useDeleteMatrixCell() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { matrixId: string; cellId: string }) =>
-      deleteMatrixCell(vars.matrixId, vars.cellId),
-    onSuccess: (_data, vars) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixDetail(vars.matrixId) });
-      // Như thêm ô: đặc tả suy ra từ tập ô nên xoá ô cũng phải nạp lại.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.matrixSpecification(vars.matrixId) });
-    },
-  });
+  return useMatrixDetailMutation((vars: { matrixId: string; cellId: string }) =>
+    deleteMatrixCell(vars.matrixId, vars.cellId),
+  );
 }

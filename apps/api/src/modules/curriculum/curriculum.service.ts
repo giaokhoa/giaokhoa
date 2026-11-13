@@ -19,7 +19,8 @@ export type CurriculumOutcomeView = Omit<LearningOutcomeRow, 'content'> & {
  * Chuyển một dòng YCCĐ từ DB thành hình dạng trả ra: text canonical trích từ tài liệu lưu trực tiếp, kèm tài liệu gốc cho bề mặt bảng. Dòng nào thiếu tài liệu (không xảy ra với dữ liệu đã chuyển đổi) được coi là tài liệu rỗng thay vì ném lỗi ồn ào ở đường đọc.
  */
 export function toCurriculumOutcomeView(row: LearningOutcomeRow): CurriculumOutcomeView {
-  const contentDoc = (row.content ?? { type: 'doc' }) as ProgramOutcomeDoc;
+  // Cột `content` của DB đã mang kiểu LearningOutcomeDoc (override jsonb ở codegen) — cùng hình dạng với ProgramOutcomeDoc nên không ép kiểu; chỉ chốt tài liệu rỗng cho dòng cũ thiếu tài liệu.
+  const contentDoc: ProgramOutcomeDoc = row.content ?? { type: 'doc' };
   return {
     ...row,
     content: programOutcomeDocText(contentDoc),
@@ -34,6 +35,16 @@ export const CURRICULUM_MANAGE = 'curriculum:manage';
 /** Capability sửa khoá — nhánh quyền phụ cho đường đọc cây phục vụ nạp khung vào chính khoá đó. */
 const COURSE_UPDATE = 'course:update';
 
+/** Vị trí mặc định khi tạo mới môn/node/YCCĐ mà caller không cho vị trí — vị trí 1-based nên phần tử đầu tiên là 1. */
+const DEFAULT_POSITION = 1;
+
+/** Số YCCĐ tối đa trả về mặc định khi caller không cho limit ở searchOutcomes. */
+const SEARCH_OUTCOMES_DEFAULT_LIMIT = 20;
+/** Trần limit caller được xin ở searchOutcomes. */
+const SEARCH_OUTCOMES_MAX_LIMIT = 50;
+/** Số dòng lấy dư ở SQL rồi lọc quyền theo môn ở searchOutcomes — tránh trang đầu toàn YCCĐ của môn không đọc được làm cạn kết quả oan. */
+const SEARCH_OUTCOMES_FETCH_LIMIT = 200;
+
 /** Một node của cây nội dung kèm outcomes của chính nó và các node con (đệ quy). */
 export interface CurriculumNodeView extends CurriculumNodeRow {
   outcomes: CurriculumOutcomeView[];
@@ -47,6 +58,19 @@ export interface CurriculumTreeView {
   nodes: CurriculumNodeView[];
 }
 
+/** Một YCCĐ khớp tìm kiếm, kèm vị trí của nó trong cây (node/môn/khối) để client hiển thị và liên kết. */
+export interface CurriculumOutcomeSearchResult {
+  id: string;
+  content: string;
+  sourceKind: string;
+  sourceRef: string | null;
+  nodeId: string;
+  nodeTitle: string;
+  subjectId: string;
+  subjectName: string;
+  grade: number;
+}
+
 /** Kiểm tra mã unique violation 23505 trên lỗi gốc hoặc trên các lớp `cause` mà adapter có thể bao lại. */
 function isUniqueViolation(err: unknown): boolean {
   let e: unknown = err;
@@ -55,6 +79,21 @@ function isUniqueViolation(err: unknown): boolean {
     e = (e as { cause?: unknown }).cause;
   }
   return false;
+}
+
+/**
+ * Chạy một thao tác ghi, dịch lỗi unique violation 23505 thành ConflictException kèm mã ProblemDetails đã chốt; lỗi khác ném tiếp nguyên vẹn.
+ */
+async function withUniqueCheck<T>(
+  fn: () => Promise<T>,
+  conflict: { message: string; code: string },
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new ConflictException(conflict);
+    throw err;
+  }
 }
 
 @Injectable()
@@ -119,16 +158,18 @@ export class CurriculumService implements OnModuleInit {
   async createSubject(actorId: string, input: { contextId: string; name: string; slug: string; position?: number }): Promise<SubjectRow> {
     const ctx = await this.contextOrSystem(input.contextId);
     await this.evaluator.requireCapability(actorId, CURRICULUM_MANAGE, ctx.id);
-    try {
-      return await this.repo.insertSubject({
-        contextId: ctx.id, name: input.name, slug: input.slug, position: input.position ?? 1,
-      });
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject slug ${input.slug} is already taken`, code: 'curriculum.subject_slug_taken' });
-      }
-      throw err;
-    }
+    return withUniqueCheck(
+      () => this.repo.insertSubject({
+        contextId: ctx.id,
+        name: input.name,
+        slug: input.slug,
+        position: input.position ?? DEFAULT_POSITION,
+      }),
+      {
+        message: `Subject slug ${input.slug} is already taken`,
+        code: 'curriculum.subject_slug_taken',
+      },
+    );
   }
   /**
    * Liệt kê môn học trong một context (cần quyền xem tại context đó;
@@ -153,14 +194,13 @@ export class CurriculumService implements OnModuleInit {
   async updateSubject(actorId: string, id: string, input: { name?: string; slug?: string; position?: number }): Promise<SubjectRow> {
     const row = await this.subjectOr404(id);
     await this.evaluator.requireCapability(actorId, CURRICULUM_MANAGE, row.contextId);
-    try {
-      await this.repo.updateSubject(id, input);
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject slug ${input.slug} is already taken`, code: 'curriculum.subject_slug_taken' });
-      }
-      throw err;
-    }
+    await withUniqueCheck(
+      () => this.repo.updateSubject(id, input),
+      {
+        message: `Subject slug ${input.slug} is already taken`,
+        code: 'curriculum.subject_slug_taken',
+      },
+    );
     return this.subjectOr404(id);
   }
   /** Xoá môn học (cascade toàn bộ chương trình bên dưới); còn tham chiếu cứng vào cây/YCCĐ của môn → 409 (xem assertNotReferenced). */
@@ -179,14 +219,16 @@ export class CurriculumService implements OnModuleInit {
   async createCurriculum(actorId: string, input: { subjectId: string; grade: number }): Promise<CurriculumRow> {
     const subject = await this.subjectOr404(input.subjectId);
     await this.evaluator.requireCapability(actorId, CURRICULUM_MANAGE, subject.contextId);
-    try {
-      return await this.repo.insertCurriculum({ subjectId: subject.id, grade: input.grade });
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject already has a curriculum for grade ${input.grade}`, code: 'curriculum.grade_exists' });
-      }
-      throw err;
-    }
+    return withUniqueCheck(
+      () => this.repo.insertCurriculum({
+        subjectId: subject.id,
+        grade: input.grade,
+      }),
+      {
+        message: `Subject already has a curriculum for grade ${input.grade}`,
+        code: 'curriculum.grade_exists',
+      },
+    );
   }
   /** Liệt kê chương trình của một môn (nhánh `forCourseId` như listSubjects). */
   async listCurricula(actorId: string, subjectId: string, forCourseId?: string): Promise<CurriculumRow[]> {
@@ -204,14 +246,13 @@ export class CurriculumService implements OnModuleInit {
   async updateCurriculum(actorId: string, id: string, input: { grade?: number }): Promise<CurriculumRow> {
     const { subject } = await this.curriculumChainOr404(id);
     await this.evaluator.requireCapability(actorId, CURRICULUM_MANAGE, subject.contextId);
-    try {
-      await this.repo.updateCurriculum(id, input);
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject already has a curriculum for grade ${input.grade}`, code: 'curriculum.grade_exists' });
-      }
-      throw err;
-    }
+    await withUniqueCheck(
+      () => this.repo.updateCurriculum(id, input),
+      {
+        message: `Subject already has a curriculum for grade ${input.grade}`,
+        code: 'curriculum.grade_exists',
+      },
+    );
     return (await this.curriculumChainOr404(id)).curriculum;
   }
   /** Xoá chương trình (cascade cây node + outcomes); còn tham chiếu cứng vào cây/YCCĐ của chương trình → 409. */
@@ -242,7 +283,7 @@ export class CurriculumService implements OnModuleInit {
       parentId: input.parentId ?? null,
       title: input.title,
       kind: input.kind ?? 'topic',
-      position: input.position ?? 1,
+      position: input.position ?? DEFAULT_POSITION,
       durationPeriods: input.durationPeriods ?? null,
       durationPercent: input.durationPercent ?? null,
     });
@@ -282,10 +323,19 @@ export class CurriculumService implements OnModuleInit {
     const all = await this.repo.listNodes(node.curriculumId);
     const childrenByParent = new Map<string, string[]>();
     for (const n of all) {
-      if (n.parentId) childrenByParent.set(n.parentId, [...(childrenByParent.get(n.parentId) ?? []), n.id]);
+      if (!n.parentId) continue;
+      // Đẩy vào mảng đã có thay vì spread tạo mảng mới cho mỗi node (vòng BFS dưới duyệt lại toàn bộ tập này).
+      const siblings = childrenByParent.get(n.parentId) ?? [];
+      siblings.push(n.id);
+      childrenByParent.set(n.parentId, siblings);
     }
     const nodeIds = [id];
-    for (let i = 0; i < nodeIds.length; i += 1) nodeIds.push(...(childrenByParent.get(nodeIds[i]!) ?? []));
+    for (let i = 0; i < nodeIds.length; i += 1) {
+      // Chỉ số i luôn < độ dài mảng đang duyệt nên phần tử tồn tại; guard chỉ để TypeScript khỏi cần non-null assertion.
+      const currentId = nodeIds[i];
+      if (currentId === undefined) continue;
+      nodeIds.push(...(childrenByParent.get(currentId) ?? []));
+    }
     // Gác xoá phải thấy CẢ dòng đã rút: chúng vẫn mang liên kết cứng
     // (FK restrict) dù đã rời các đường đọc hiện hành.
     const outcomes = await this.repo.listOutcomesForNodes(nodeIds, { includeRetired: true });
@@ -331,7 +381,9 @@ export class CurriculumService implements OnModuleInit {
     for (const outcome of outcomes) byId.get(outcome.nodeId)?.outcomes.push(toCurriculumOutcomeView(outcome));
     const roots: CurriculumNodeView[] = [];
     for (const node of nodes) {
-      const view = byId.get(node.id)!;
+      // byId dựng từ chính tập nodes này nên view tồn tại; guard chỉ để TypeScript khỏi cần non-null assertion.
+      const view = byId.get(node.id);
+      if (!view) continue;
       const parent = node.parentId ? byId.get(node.parentId) : undefined;
       if (parent) parent.children.push(view); else roots.push(view);
     }
@@ -375,54 +427,21 @@ export class CurriculumService implements OnModuleInit {
   // --- đường đọc tham chiếu nội bộ cho các luồng của module khác ----------------
 
   /**
-   * Đọc THAM CHIẾU môn học theo id (đường NỘI BỘ, không cổng
-   * capability riêng — cùng khuôn {@link getFrameUnits} và
-   * {@link programRecordIdForNode}): môn học là dữ liệu tham chiếu
-   * của chương trình quốc gia, và các luồng tiêu thụ nó để GHI ở nơi
-   * khác (nhập ma trận từ file, tạo ma trận gắn bank — tầng Quiz)
-   * chốt quyền tại cổng của chính luồng đó (quyền ghi tại bank
-   * đích), nên không đòi thêm `curriculum:view` tại context của môn
-   * ở đây. Đòi quyền đọc đó từng chặn nhầm mọi giáo viên: giáo viên
-   * chỉ được gán vai tại context khoá/trung tâm trong khi môn GDPT
-   * neo tại context hệ thống (điểm chặn của nghiệm thu D-3 trên
-   * production, issue #233). CHỈ dùng cho caller đã tự gác cổng của
-   * luồng mình trước khi gọi; bề mặt đọc công khai giữ nguyên cổng
-   * ở {@link getSubject}.
-   *
-   * @param id - Id môn học cần đọc tham chiếu.
-   * @returns Dòng môn học.
-   * @throws NotFoundException `curriculum.subject_not_found` khi môn
-   *   không tồn tại — caller dịch sang lỗi của luồng mình nếu cần.
+   * Đọc THAM CHIẾU môn học theo id — bản nội bộ của {@link getSubject}, không tự gác quyền (xem TSDoc của class).
    */
   async getSubjectReference(id: string): Promise<SubjectRow> {
     return this.subjectOr404(id);
   }
 
   /**
-   * Đọc THAM CHIẾU chương trình theo id — bản nội bộ của
-   * {@link getCurriculum}, cùng khuôn và cùng điều kiện dùng như
-   * {@link getSubjectReference}.
-   *
-   * @param id - Id chương trình cần đọc tham chiếu.
-   * @returns Dòng chương trình.
-   * @throws NotFoundException `curriculum.curriculum_not_found` khi
-   *   chương trình không tồn tại.
+   * Đọc THAM CHIẾU chương trình theo id — bản nội bộ của {@link getCurriculum}, không tự gác quyền (xem TSDoc của class).
    */
   async getCurriculumReference(id: string): Promise<CurriculumRow> {
     return (await this.curriculumChainOr404(id)).curriculum;
   }
 
   /**
-   * Đọc THAM CHIẾU cây nội dung trọn vẹn của một chương trình — bản
-   * nội bộ của {@link getTree}, cùng khuôn và cùng điều kiện dùng
-   * như {@link getSubjectReference} (luồng nhập ma trận cần cây để
-   * dựng mẫu và đối chiếu Mã ĐVK sau khi đã qua cổng bank của
-   * luồng).
-   *
-   * @param curriculumId - Id chương trình cần đọc cây tham chiếu.
-   * @returns Cây nội dung kèm môn và chương trình.
-   * @throws NotFoundException `curriculum.curriculum_not_found` khi
-   *   chương trình không tồn tại.
+   * Đọc THAM CHIẾU cây nội dung trọn vẹn của một chương trình — bản nội bộ của {@link getTree}, không tự gác quyền (xem TSDoc của class).
    */
   async getTreeReference(curriculumId: string): Promise<CurriculumTreeView> {
     const { curriculum, subject } = await this.curriculumChainOr404(curriculumId);
@@ -430,16 +449,7 @@ export class CurriculumService implements OnModuleInit {
   }
 
   /**
-   * Đọc THAM CHIẾU node theo id — bản nội bộ của {@link getNode},
-   * cùng khuôn và cùng điều kiện dùng như {@link getSubjectReference}
-   * (bản đặc tả của ma trận dùng node để dựng chủ đề/ĐVK sau khi
-   * wrapper của nó đã gác cổng xem ma trận tại bank đích, hoặc sau
-   * khi phía gọi của đề đã gác cổng của đề).
-   *
-   * @param id - Id node cần đọc tham chiếu.
-   * @returns Dòng node.
-   * @throws NotFoundException `curriculum.node_not_found` khi node
-   *   không tồn tại.
+   * Đọc THAM CHIẾU node theo id — bản nội bộ của {@link getNode}, không tự gác quyền (xem TSDoc của class).
    */
   async getNodeReference(id: string): Promise<CurriculumNodeRow> {
     return (await this.nodeChainOr404(id)).node;
@@ -459,8 +469,12 @@ export class CurriculumService implements OnModuleInit {
     // đoạn văn để cột jsonb luôn chứa tài liệu hợp lệ; text canonical
     // trích lại từ tài liệu đó khớp đúng text đã nhập.
     return toCurriculumOutcomeView(await this.repo.insertOutcome({
-      nodeId: input.nodeId, content: programOutcomeTextToDoc(input.content), position: input.position ?? 1,
-      sourceKind: input.sourceKind ?? 'program', sourceRef: input.sourceRef ?? null, derivedFromId: input.derivedFromId ?? null,
+      nodeId: input.nodeId,
+      content: programOutcomeTextToDoc(input.content),
+      position: input.position ?? DEFAULT_POSITION,
+      sourceKind: input.sourceKind ?? 'program',
+      sourceRef: input.sourceRef ?? null,
+      derivedFromId: input.derivedFromId ?? null,
     }));
   }
   /**
@@ -475,19 +489,7 @@ export class CurriculumService implements OnModuleInit {
     return (await this.repo.listOutcomes(nodeId, opts)).map(toCurriculumOutcomeView);
   }
   /**
-   * Liệt kê THAM CHIẾU YCCĐ của một node — bản nội bộ của
-   * {@link listOutcomes}, cùng khuôn và cùng điều kiện dùng như
-   * {@link getSubjectReference}: không tự đòi `curriculum:view`,
-   * chỉ dùng cho caller đã gác cổng của luồng mình trước. Ngữ nghĩa
-   * lọc giữ nguyên bản công khai: mặc định chỉ dòng hiện hành (loại
-   * dòng đã rút), `includeRetired` truyền thẳng xuống repository
-   * như bản công khai.
-   *
-   * @param nodeId - Id node cần liệt kê YCCĐ tham chiếu.
-   * @param opts - Tuỳ chọn lọc như bản công khai.
-   * @returns Danh sách YCCĐ của node.
-   * @throws NotFoundException `curriculum.node_not_found` khi node
-   *   không tồn tại.
+   * Liệt kê THAM CHIẾU YCCĐ của một node — bản nội bộ của {@link listOutcomes}, không tự gác quyền (xem TSDoc của class).
    */
   async listOutcomesReference(nodeId: string, opts?: { includeRetired?: boolean }): Promise<CurriculumOutcomeView[]> {
     await this.nodeChainOr404(nodeId);
@@ -512,16 +514,7 @@ export class CurriculumService implements OnModuleInit {
     return toCurriculumOutcomeView(outcome);
   }
   /**
-   * Đọc THAM CHIẾU YCCĐ theo id — bản nội bộ của {@link getOutcome},
-   * cùng khuôn và cùng điều kiện dùng như {@link getSubjectReference}
-   * (bản đặc tả của ma trận tra YCCĐ gốc của dòng derived sau khi
-   * wrapper của nó đã gác cổng xem ma trận tại bank đích, hoặc sau
-   * khi phía gọi của đề đã gác cổng của đề).
-   *
-   * @param id - Id YCCĐ cần đọc tham chiếu.
-   * @returns Dòng YCCĐ.
-   * @throws NotFoundException `curriculum.outcome_not_found` khi
-   *   YCCĐ không tồn tại.
+   * Đọc THAM CHIẾU YCCĐ theo id — bản nội bộ của {@link getOutcome}, không tự gác quyền (xem TSDoc của class).
    */
   async getOutcomeReference(id: string): Promise<CurriculumOutcomeView> {
     return toCurriculumOutcomeView((await this.outcomeChainOr404(id)).outcome);
@@ -538,31 +531,21 @@ export class CurriculumService implements OnModuleInit {
   async searchOutcomes(
     actorId: string,
     input: { query: string; subjectId?: string; gradeLevel?: number; limit?: number },
-  ): Promise<{
-    id: string;
-    content: string;
-    sourceKind: string;
-    sourceRef: string | null;
-    nodeId: string;
-    nodeTitle: string;
-    subjectId: string;
-    subjectName: string;
-    grade: number;
-  }[]> {
-    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+  ): Promise<CurriculumOutcomeSearchResult[]> {
+    const limit = Math.min(
+      Math.max(input.limit ?? SEARCH_OUTCOMES_DEFAULT_LIMIT, 1),
+      SEARCH_OUTCOMES_MAX_LIMIT,
+    );
     // Lấy dư ở SQL rồi lọc quyền theo môn: tránh trường hợp trang đầu
     // toàn YCCĐ của môn không đọc được làm cạn kết quả oan.
     const rows = await this.repo.searchOutcomes({
       query: input.query,
       subjectId: input.subjectId,
       grade: input.gradeLevel,
-      limit: 200,
+      limit: SEARCH_OUTCOMES_FETCH_LIMIT,
     });
     const readableBySubject = new Map<string, boolean>();
-    const results: {
-      id: string; content: string; sourceKind: string; sourceRef: string | null;
-      nodeId: string; nodeTitle: string; subjectId: string; subjectName: string; grade: number;
-    }[] = [];
+    const results: CurriculumOutcomeSearchResult[] = [];
     for (const row of rows) {
       let readable = readableBySubject.get(row.subjectId);
       if (readable === undefined) {
@@ -572,7 +555,7 @@ export class CurriculumService implements OnModuleInit {
       if (!readable) continue;
       results.push({
         id: row.outcome.id,
-        content: programOutcomeDocText(row.outcome.content as ProgramOutcomeDoc),
+        content: programOutcomeDocText(row.outcome.content),
         sourceKind: row.outcome.sourceKind,
         sourceRef: row.outcome.sourceRef,
         nodeId: row.outcome.nodeId,

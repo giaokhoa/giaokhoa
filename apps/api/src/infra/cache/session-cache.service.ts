@@ -7,6 +7,9 @@ import { cacheRedisConfigFromUrl } from '../../config/env';
 /**
  * Chế độ "session" của MUC: backed bởi Redis nhưng nằm trong namespace riêng (`giaokhoa:session`), tách biệt về mặt vật lý khỏi các khoá cache của ứng dụng.
  */
+
+/** TTL mặc định của phiên (1 giờ) — dài hơn TTL cache ứng dụng (5 phút) vì phiên sống theo lượt đăng nhập, không theo dữ kiện. */
+const SESSION_CACHE_TTL_MS = 60 * 60 * 1000;
 @Injectable()
 export class SessionCacheService implements OnModuleDestroy {
   private readonly keyv: Keyv;
@@ -15,7 +18,7 @@ export class SessionCacheService implements OnModuleDestroy {
     this.keyv = new Keyv({
       store: new KeyvRedis(cacheRedisConfigFromUrl(config.getOrThrow<string>('REDIS_URL'))),
       namespace: 'giaokhoa:session',
-      ttl: 60 * 60 * 1000,
+      ttl: SESSION_CACHE_TTL_MS,
     });
   }
 

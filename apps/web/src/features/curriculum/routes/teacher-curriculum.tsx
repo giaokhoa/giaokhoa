@@ -17,6 +17,7 @@ import {
   type CurriculumTree,
 } from '#lib/curriculum';
 import '#config/i18n';
+import { appKeyMeta } from '#lib/route-meta';
 
 /**
  * TRANG XEM CHƯƠNG TRÌNH GDPT CHO GIÁO VIÊN (issue #161, lát T2 — quyết định 3 của issue: mọi bề mặt nhìn chương trình đều trình bày môn → lớp → bảng nhóm theo Mạch nội dung, 2 cột "Nội dung | Yêu cầu cần đạt" theo mẫu bảng của Bộ).
@@ -36,6 +37,25 @@ import '#config/i18n';
  */
 
 type ProgramGroup = ReturnType<typeof buildProgramGroups>[number];
+
+/**
+ * Chọn id hiệu lực từ một danh sách đã tải, theo đúng thứ tự ưu tiên của các effect thủ công trước đây: id mặc định (môn/khối gắn sẵn của khoá) nếu còn trong danh sách, rồi tới lựa chọn cũ nếu còn hợp lệ, cuối cùng là phần tử đầu. Danh sách chưa tải xong (null) thì giữ lựa chọn cũ (hoặc rỗng) để các hook phía dưới không đổi khoá truy vấn giữa chừng.
+ *
+ * @param items - Danh sách đã tải (null = chưa tải xong).
+ * @param preferredId - Id mặc định từ khoá (môn/khối gắn sẵn); undefined = không có mặc định.
+ * @param selection - Lựa chọn cũ của người dùng (null = chưa chọn).
+ * @returns Id hiệu lực, hoặc '' khi danh sách rỗng/chưa tải và chưa có lựa chọn.
+ */
+function resolveSelection<T extends { id: string }>(
+  items: readonly T[] | null,
+  preferredId: string | undefined,
+  selection: string | null,
+): string {
+  if (items === null) return selection ?? '';
+  if (preferredId !== undefined && items.some((item) => item.id === preferredId)) return preferredId;
+  if (selection !== null && items.some((item) => item.id === selection)) return selection;
+  return items[0]?.id ?? '';
+}
 
 /** Danh sách số trang ở nút phân trang — cùng quy tắc rút gọn với trang cây quản trị (1 … quanh trang hiện tại … cuối). */
 function pageNumberItems(total: number, current: number): (number | 'gap')[] {
@@ -61,12 +81,7 @@ export function TeacherCurriculumPage() {
   const coursesQuery = useCourseList();
   const courses = coursesQuery.data ?? null;
   const [courseSelection, setCourseSelection] = useState<string | null>(null);
-  const courseId =
-    courses === null
-      ? (courseSelection ?? '')
-      : courseSelection && courses.some((c) => c.id === courseSelection)
-        ? courseSelection
-        : (courses[0]?.id ?? '');
+  const courseId = resolveSelection(courses, undefined, courseSelection);
   const course = courses?.find((c) => c.id === courseId);
 
   const contextsQuery = useAccessContexts();
@@ -82,14 +97,7 @@ export function TeacherCurriculumPage() {
     (contextsQuery.data !== undefined && systemContextId === null);
   const subjects = subjectsQuery.data ?? (subjectsLoaded ? [] : null);
   const [subjectSelection, setSubjectSelection] = useState<string | null>(null);
-  const subjectId =
-    subjects === null
-      ? (subjectSelection ?? '')
-      : course?.subjectId && subjects.some((s) => s.id === course.subjectId)
-        ? course.subjectId
-        : subjectSelection && subjects.some((s) => s.id === subjectSelection)
-          ? subjectSelection
-          : (subjects[0]?.id ?? '');
+  const subjectId = resolveSelection(subjects, course?.subjectId, subjectSelection);
 
   const curriculaQuery = useCurriculumCurriculaScoped(
     subjectId,
@@ -107,13 +115,7 @@ export function TeacherCurriculumPage() {
     course?.subjectId === subjectId && course?.grade != null
       ? curricula?.find((c) => c.grade === course.grade)
       : undefined;
-  const curriculumId =
-    curricula === null
-      ? (curriculumSelection ?? '')
-      : (preferredCurriculum?.id ??
-        (curriculumSelection && curricula.some((c) => c.id === curriculumSelection)
-          ? curriculumSelection
-          : (curricula[0]?.id ?? '')));
+  const curriculumId = resolveSelection(curricula, preferredCurriculum?.id, curriculumSelection);
 
   const treeQuery = useCurriculumTreeScoped(curriculumId, courseId || undefined, curricula !== null);
   const tree: CurriculumTree | null = treeQuery.data ?? null;
@@ -299,7 +301,6 @@ export function TeacherCurriculumPage() {
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('teacherProgrammeTitle');
 }

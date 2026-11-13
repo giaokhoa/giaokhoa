@@ -7,6 +7,7 @@ import { McpBridgeAuth } from './mcp-bridge-auth';
 import type { McpActor } from './mcp.context';
 import type { McpOAuthVerifier } from './mcp-oauth-verifier';
 import { McpRateLimiter } from './mcp-rate-limit';
+import { MCP_TOOL_REGISTRY } from './mcp-tool-registry';
 import { createGiaoKhoaMcpServer } from './mcp.server';
 import type { McpToolDeps } from './mcp.tools';
 import { tenantAls } from '../tenants/tenant-als';
@@ -26,7 +27,25 @@ import { tenantAls } from '../tenants/tenant-als';
 const logger = new Logger('McpMount');
 
 const MAX_BODY_BYTES = 256 * 1024;
-const MCP_SCOPES = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giaokhoa.questions.write', 'giaokhoa.banks.contribute'] as const;
+/** Mã lỗi JSON-RPC dùng ở mount (đặc tả JSON-RPC + Streamable HTTP): -32000 lỗi server do mount, -32700 parse, -32600 request không hợp lệ, -32020 header lệch, -32001 chưa xác thực, -32003 thiếu scope, -32029 rate limit, -32603 lỗi nội bộ. */
+const JSON_RPC = {
+  SERVER_ERROR: -32000,
+  PARSE_ERROR: -32700,
+  INVALID_REQUEST: -32600,
+  HEADER_MISMATCH: -32020,
+  UNAUTHORIZED: -32001,
+  FORBIDDEN: -32003,
+  RATE_LIMITED: -32029,
+  INTERNAL_ERROR: -32603,
+} as const;
+/** Độ dài tối đa của client_id tự giới thiệu (chỉ để truy vết) trước khi cắt ngắn. */
+const MAX_CLIENT_ID_LENGTH = 64;
+/**
+ * Toàn bộ scope mà PRM quảng bá — suy từ đăng ký tool duy nhất
+ * (`MCP_TOOL_REGISTRY`), thứ tự xuất hiện đầu tiên: read, draft,
+ * write, contribute. Thêm scope mới cho tool thì thêm vào registry.
+ */
+const MCP_SCOPES: readonly string[] = [...new Set(Object.values(MCP_TOOL_REGISTRY).map((entry) => entry.scope))];
 
 /**
  * Tập scope kỷ nguyên CẦU AUTH cấp cho token hệ thống (authInfo.scopes):
@@ -36,21 +55,11 @@ const BRIDGE_SCOPES: readonly string[] = ['giaokhoa.questions.read', 'giaokhoa.q
 
 /**
  * Scope riêng của TỪNG tool (lát MCP-1 hoàn thiện bản đồ của MCP-0):
- * thiếu scope → 403 `insufficient_scope` + challenge step-up (research Phần 2.2). Scope chỉ là TRẦN của token — quyền nghiệp vụ thật vẫn do capability tại context của bank quyết ở tầng tool như REST.
+ * thiếu scope → 403 `insufficient_scope` + challenge step-up (research Phần 2.2). Suy từ đăng ký tool duy nhất (`MCP_TOOL_REGISTRY`) — không liệt kê tay ở đây nữa để thêm tool không phải sửa 3 nơi. Scope chỉ là TRẦN của token — quyền nghiệp vụ thật vẫn do capability tại context của bank quyết ở tầng tool như REST.
  */
-const TOOL_REQUIRED_SCOPES: Record<string, string> = {
-  list_my_banks: 'giaokhoa.questions.read',
-  list_categories: 'giaokhoa.questions.read',
-  get_question: 'giaokhoa.questions.read',
-  search_questions: 'giaokhoa.questions.read',
-  check_duplicates: 'giaokhoa.questions.read',
-  search_curriculum_outcomes: 'giaokhoa.questions.read',
-  create_question: 'giaokhoa.questions.draft',
-  create_questions_batch: 'giaokhoa.questions.draft',
-  create_stimulus_with_questions: 'giaokhoa.questions.draft',
-  publish_questions: 'giaokhoa.questions.write',
-  submit_contribution: 'giaokhoa.banks.contribute',
-};
+const TOOL_REQUIRED_SCOPES: Record<string, string> = Object.fromEntries(
+  Object.entries(MCP_TOOL_REGISTRY).map(([tool, entry]) => [tool, entry.scope]),
+);
 
 interface JsonRpcEnvelope {
   jsonrpc?: unknown;
@@ -73,7 +82,7 @@ function clientIdOf(body: JsonRpcEnvelope): string {
   const meta = body.params?._meta?.['io.modelcontextprotocol/clientInfo'] as { name?: unknown } | undefined;
   const raw = meta?.name ?? body.params?.clientInfo?.name;
   if (typeof raw !== 'string' || raw.length === 0) return 'unknown';
-  const cleaned = raw.replace(/[^a-zA-Z0-9._:-]/g, '').slice(0, 64);
+  const cleaned = raw.replace(/[^a-zA-Z0-9._:-]/g, '').slice(0, MAX_CLIENT_ID_LENGTH);
   return cleaned.length > 0 ? cleaned : 'unknown';
 }
 
@@ -175,154 +184,217 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
   });
 
   server.all('/mcp', (req: Request, res: Response, _next: NextFunction) => {
-    void (async () => {
-      if (req.method !== 'POST') {
-        // Kỷ nguyên modern không có GET stream riêng; legacy stateless
-        // trả 405 cho GET/DELETE — uỷ cho handler của SDK quyết định.
-        const webRes = await handler.fetch(toWebRequest(req, null), {});
-        return pipeWebResponse(webRes, res);
-      }
-      const raw = await readRawBody(req);
-      if (raw === null) {
-        return jsonRpcError(res, 413, null, -32000, 'Request body too large (limit 256 KB)');
-      }
-      let body: JsonRpcEnvelope;
-      try {
-        body = JSON.parse(raw.toString('utf8')) as JsonRpcEnvelope;
-      } catch {
-        return jsonRpcError(res, 400, null, -32700, 'Parse error: request body is not valid JSON');
-      }
-      if (typeof body !== 'object' || body === null || typeof body.method !== 'string') {
-        return jsonRpcError(res, 400, null, -32600, 'Invalid Request: missing JSON-RPC method');
-      }
-      // Lớp 0: header Mcp-Method/Mcp-Name (bắt buộc ở kỷ nguyên
-      // 2026-07-28) khi client gửi thì PHẢI khớp body — lệch là
-      // HeaderMismatchError -32020 theo đặc tả Streamable HTTP.
-      const headerMethod = req.get('mcp-method');
-      if (headerMethod !== undefined && headerMethod !== body.method) {
-        return jsonRpcError(res, 400, body.id, -32020, 'HeaderMismatchError: Mcp-Method header does not match the request method');
-      }
-      if (body.method === 'tools/call') {
-        const headerName = req.get('mcp-name');
-        const toolName = typeof body.params?.name === 'string' ? body.params.name : undefined;
-        if (headerName !== undefined && toolName !== undefined && headerName !== toolName) {
-          return jsonRpcError(res, 400, body.id, -32020, 'HeaderMismatchError: Mcp-Name header does not match the tool name');
-        }
-      }
-      // Token phải hợp lệ trước khi bất kỳ tool nào chạy (research 3.1 lớp 0).
-      // Hai đường auth, chọn theo deps (lát MCP-1):
-      // - AS bật (deps.oauthVerifier): RS thật — verifier của plugin
-      //   kiểm chữ ký JWKS + iss/aud + hạn; scope + client_id lấy từ
-      //   CHÍNH token; tài khoản phải còn hoạt động qua resolveActor
-      //   (cùng nghĩa kiểm tra trong cầu bridge).
-      // - AS tắt: đường lùi cầu auth MCP-0 (token JWT hệ thống HS256,
-      //   trần scope = BRIDGE_SCOPES) — giữ nguyên hành vi MCP-0.
-      let identity: { userId: string; username: string; tenantId: string | null };
-      let tokenScopes: readonly string[];
-      let verifiedClientId: string | null = null;
-      if (deps.oauthVerifier) {
-        const verdict = await deps.oauthVerifier.verify(toWebRequest(req, raw));
-        if (!verdict.ok) {
-          res.setHeader(
-            'WWW-Authenticate',
-            verdict.wwwAuthenticate ??
-              `Bearer resource_metadata="${baseOf(req)}/.well-known/oauth-protected-resource", error="invalid_token"`,
-          );
-          const forbidden = verdict.status === 403;
-          return jsonRpcError(
-            res,
-            forbidden ? 403 : 401,
-            body.id,
-            forbidden ? -32003 : -32001,
-            forbidden
-              ? 'Insufficient scope: the access token does not carry the required scope'
-              : 'Unauthorized: a valid GiaoKhoa access token is required',
-          );
-        }
-        const actor = deps.resolveActor ? await deps.resolveActor(verdict.identity.userId) : null;
-        if (!actor || verdict.identity.userId.length === 0) {
-          res.setHeader(
-            'WWW-Authenticate',
-            `Bearer resource_metadata="${baseOf(req)}/.well-known/oauth-protected-resource", error="invalid_token"`,
-          );
-          return jsonRpcError(res, 401, body.id, -32001, 'Unauthorized: the token subject is not an active GiaoKhoa user');
-        }
-        identity = {
-          userId: verdict.identity.userId,
-          username: actor.username,
-          // TENANT-1 (#196): tenant của phiên — claim `tid` trên token
-          // AS nếu có, không thì tenant mặc định theo membership do
-          // resolveActor phân giải.
-          tenantId: verdict.identity.tenantId ?? actor.tenantId ?? null,
-        };
-        tokenScopes = verdict.identity.scopes;
-        verifiedClientId = verdict.identity.clientId;
-      } else {
-        const bridgeIdentity = await deps.bridgeAuth.authenticate(req.get('authorization'));
-        if (!bridgeIdentity) {
-          res.setHeader(
-            'WWW-Authenticate',
-            `Bearer resource_metadata="${baseOf(req)}/.well-known/oauth-protected-resource", error="invalid_token"`,
-          );
-          return jsonRpcError(res, 401, body.id, -32001, 'Unauthorized: a valid GiaoKhoa access token is required');
-        }
-        identity = bridgeIdentity;
-        tokenScopes = BRIDGE_SCOPES;
-      }
-      const effectiveScopes = deps.grantedScopes ?? tokenScopes;
-      if (body.method === 'tools/call') {
-        const toolName = typeof body.params?.name === 'string' ? body.params.name : undefined;
-        // Cổng scope ở tầng mount (cùng họ 401/429): tool có scope
-        // riêng mà trần hiệu lực không có → 403 + challenge step-up
-        // gồm đủ scope còn thiếu trong một lần (research Phần 2.2).
-        const requiredScope = toolName ? TOOL_REQUIRED_SCOPES[toolName] : undefined;
-        if (requiredScope && !effectiveScopes.includes(requiredScope)) {
-          res.setHeader(
-            'WWW-Authenticate',
-            `Bearer error="insufficient_scope", scope="${requiredScope}", resource_metadata="${baseOf(req)}/.well-known/oauth-protected-resource"`,
-          );
-          return jsonRpcError(res, 403, body.id, -32003, `Insufficient scope: this tool requires "${requiredScope}"`);
-        }
-        // Batch tính rate-limit theo SỐ ITEM (hồ sơ 3.3: hạn mức tạo
-        // tính theo câu), các tool khác một lượt gọi = một đơn vị.
-        const args = body.params?.arguments;
-        const cost =
-          toolName === 'create_questions_batch' &&
-          typeof args === 'object' &&
-          args !== null &&
-          Array.isArray((args as { items?: unknown }).items)
-            ? ((args as { items: unknown[] }).items.length ?? 1)
-            : 1;
-        const decision = deps.rateLimiter.check(identity.userId, McpRateLimiter.bucketForTool(toolName), Date.now(), cost);
-        if (!decision.allowed) {
-          res.setHeader('Retry-After', String(decision.retryAfterSeconds));
-          return jsonRpcError(res, 429, body.id, -32029, 'Rate limit exceeded for this tool; retry later');
-        }
-      }
-      const authInfo: AuthInfo = {
-        token: (req.get('authorization') ?? '').slice('Bearer '.length),
-        // Đường OAuth: client_id ĐÃ ĐƯỢC AS XÁC THỰC trên token. Đường
-        // cầu auth: chỉ còn clientInfo tự giới thiệu (truy vết).
-        clientId: verifiedClientId ?? clientIdOf(body),
-        scopes: [...effectiveScopes],
-        extra: { userId: identity.userId, username: identity.username, ip: req.ip ?? null, tenantId: identity.tenantId },
-      };
-      // TENANT-1 (#196): toàn lượt thực thi tool chạy trong ngữ cảnh
-      // tenant của PHIÊN (ALS) — pool gắn GUC theo ALS nên RLS
-      // fail-closed giới hạn mọi truy vấn của tool trong tenant này;
-      // bank đích của các tool ghi phân giải trong đúng tenant của
-      // phiên. Phiên không phân giải được tenant → store không có
-      // tenantId = fail-closed (chỉ thấy dữ liệu platform).
-      const webRes = await tenantAls.run(
-        { tenantId: identity.tenantId ?? undefined, userId: identity.userId },
-        () => handler.fetch(toWebRequest(req, raw), { authInfo }),
-      );
-      return pipeWebResponse(webRes, res);
-    })().catch((err: unknown) => {
+    void handleMcpRequest(req, res, deps, handler, baseOf).catch((err: unknown) => {
       logger.error(`[mcp] mount error: ${err instanceof Error ? (err.stack ?? String(err)) : String(err)}`);
-      if (!res.headersSent) jsonRpcError(res, 500, null, -32603, 'Internal error');
+      if (!res.headersSent) jsonRpcError(res, 500, null, JSON_RPC.INTERNAL_ERROR, 'Internal error');
     });
   });
+}
+}
+
+type McpAuthResult =
+  | { ok: true; identity: { userId: string; username: string; tenantId: string | null }; tokenScopes: readonly string[]; verifiedClientId: string | null }
+  | { ok: false; status: 401 | 403; message: string; wwwAuthenticate: string };
+
+/** Challenge WWW-Authenticate mặc định cho token không hợp lệ (trỏ PRM của mount này). */
+function invalidTokenChallenge(base: string): string {
+  return `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource", error="invalid_token"`;
+}
+
+/**
+ * Lớp 0 — header Mcp-Method/Mcp-Name (bắt buộc ở kỷ nguyên 2026-07-28)
+ * khi client gửi thì PHẢI khớp body; lệch là HeaderMismatchError -32020
+ * theo đặc tả Streamable HTTP. Trả null khi khớp.
+ */
+function validateRpcHeaders(req: Request, body: JsonRpcEnvelope): { code: number; message: string } | null {
+  const headerMethod = req.get('mcp-method');
+  if (headerMethod !== undefined && headerMethod !== body.method) {
+    return { code: JSON_RPC.HEADER_MISMATCH, message: 'HeaderMismatchError: Mcp-Method header does not match the request method' };
+  }
+  if (body.method === 'tools/call') {
+    const headerName = req.get('mcp-name');
+    const toolName = typeof body.params?.name === 'string' ? body.params.name : undefined;
+    if (headerName !== undefined && toolName !== undefined && headerName !== toolName) {
+      return { code: JSON_RPC.HEADER_MISMATCH, message: 'HeaderMismatchError: Mcp-Name header does not match the tool name' };
+    }
+  }
+  return null;
+}
+
+/**
+ * Xác thực token trước khi bất kỳ tool nào chạy (research 3.1 lớp 0).
+ * Hai đường, chọn theo deps (lát MCP-1):
+ * - AS bật (deps.oauthVerifier): RS thật — verifier của plugin kiểm chữ
+ *   ký JWKS + iss/aud + hạn; scope + client_id lấy từ CHÍNH token; tài
+ *   khoản phải còn hoạt động qua resolveActor (cùng nghĩa kiểm tra trong
+ *   cầu bridge).
+ * - AS tắt: đường lùi cầu auth MCP-0 (token JWT hệ thống HS256, trần
+ *   scope = BRIDGE_SCOPES) — giữ nguyên hành vi MCP-0.
+ */
+async function authenticateMcpRequest(req: Request, raw: Buffer, deps: McpMountDeps, base: string): Promise<McpAuthResult> {
+  if (deps.oauthVerifier) {
+    const verdict = await deps.oauthVerifier.verify(toWebRequest(req, raw));
+    if (!verdict.ok) {
+      const forbidden = verdict.status === 403;
+      return {
+        ok: false,
+        status: forbidden ? 403 : 401,
+        message: forbidden
+          ? 'Insufficient scope: the access token does not carry the required scope'
+          : 'Unauthorized: a valid GiaoKhoa access token is required',
+        wwwAuthenticate: verdict.wwwAuthenticate ?? invalidTokenChallenge(base),
+      };
+    }
+    const actor = deps.resolveActor ? await deps.resolveActor(verdict.identity.userId) : null;
+    if (!actor || verdict.identity.userId.length === 0) {
+      return {
+        ok: false,
+        status: 401,
+        message: 'Unauthorized: the token subject is not an active GiaoKhoa user',
+        wwwAuthenticate: invalidTokenChallenge(base),
+      };
+    }
+    return {
+      ok: true,
+      identity: {
+        userId: verdict.identity.userId,
+        username: actor.username,
+        // TENANT-1 (#196): tenant của phiên — claim `tid` trên token
+        // AS nếu có, không thì tenant mặc định theo membership do
+        // resolveActor phân giải.
+        tenantId: verdict.identity.tenantId ?? actor.tenantId ?? null,
+      },
+      tokenScopes: verdict.identity.scopes,
+      verifiedClientId: verdict.identity.clientId,
+    };
+  }
+  const bridgeIdentity = await deps.bridgeAuth.authenticate(req.get('authorization'));
+  if (!bridgeIdentity) {
+    return {
+      ok: false,
+      status: 401,
+      message: 'Unauthorized: a valid GiaoKhoa access token is required',
+      wwwAuthenticate: invalidTokenChallenge(base),
+    };
+  }
+  return { ok: true, identity: bridgeIdentity, tokenScopes: BRIDGE_SCOPES, verifiedClientId: null };
+}
+
+type McpGateRejection = { status: number; code: number; message: string; wwwAuthenticate?: string; retryAfterSeconds?: number };
+
+/**
+ * Cổng scope + rate limit cho `tools/call` (không áp cho method khác):
+ * tool có scope riêng mà trần hiệu lực không có → 403 + challenge
+ * step-up gồm đủ scope còn thiếu trong một lần (research Phần 2.2);
+ * batch tính rate-limit theo SỐ ITEM (hồ sơ 3.3: hạn mức tạo tính theo
+ * câu), các tool khác một lượt gọi = một đơn vị. Trả null khi qua cổng.
+ */
+function gateToolCall(
+  body: JsonRpcEnvelope,
+  userId: string,
+  effectiveScopes: readonly string[],
+  deps: McpMountDeps,
+  base: string,
+): McpGateRejection | null {
+  if (body.method !== 'tools/call') return null;
+  const toolName = typeof body.params?.name === 'string' ? body.params.name : undefined;
+  // Cổng scope ở tầng mount (cùng họ 401/429): tool có scope riêng mà
+  // trần hiệu lực không có → 403 + challenge step-up.
+  const requiredScope = toolName ? TOOL_REQUIRED_SCOPES[toolName] : undefined;
+  if (requiredScope && !effectiveScopes.includes(requiredScope)) {
+    return {
+      status: 403,
+      code: JSON_RPC.FORBIDDEN,
+      message: `Insufficient scope: this tool requires "${requiredScope}"`,
+      wwwAuthenticate: `Bearer error="insufficient_scope", scope="${requiredScope}", resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+    };
+  }
+  const args = body.params?.arguments;
+  const cost =
+    toolName === 'create_questions_batch' &&
+    typeof args === 'object' &&
+    args !== null &&
+    Array.isArray((args as { items?: unknown }).items)
+      ? ((args as { items: unknown[] }).items.length ?? 1)
+      : 1;
+  const decision = deps.rateLimiter.check(userId, McpRateLimiter.bucketForTool(toolName), Date.now(), cost);
+  if (!decision.allowed) {
+    return {
+      status: 429,
+      code: JSON_RPC.RATE_LIMITED,
+      message: 'Rate limit exceeded for this tool; retry later',
+      retryAfterSeconds: decision.retryAfterSeconds,
+    };
+  }
+  return null;
+}
+
+/**
+ * Xử lý một request tới /mcp theo từng bước: method → đọc body → parse
+ * JSON → validate header → xác thực → cổng scope/rate limit → chạy tool
+ * trong ngữ cảnh tenant của phiên (ALS). Lỗi vận hành ngoài các bước
+ * này do caller (server.all) bắt và trả -32603.
+ */
+async function handleMcpRequest(
+  req: Request,
+  res: Response,
+  deps: McpMountDeps,
+  handler: McpHttpHandler,
+  baseOf: (req: Request) => string,
+): Promise<void> {
+  if (req.method !== 'POST') {
+    // Kỷ nguyên modern không có GET stream riêng; legacy stateless
+    // trả 405 cho GET/DELETE — uỷ cho handler của SDK quyết định.
+    const webRes = await handler.fetch(toWebRequest(req, null), {});
+    return pipeWebResponse(webRes, res);
+  }
+  const raw = await readRawBody(req);
+  if (raw === null) {
+    return jsonRpcError(res, 413, null, JSON_RPC.SERVER_ERROR, `Request body too large (limit ${MAX_BODY_BYTES / 1024} KB)`);
+  }
+  let body: JsonRpcEnvelope;
+  try {
+    body = JSON.parse(raw.toString('utf8')) as JsonRpcEnvelope;
+  } catch {
+    return jsonRpcError(res, 400, null, JSON_RPC.PARSE_ERROR, 'Parse error: request body is not valid JSON');
+  }
+  if (typeof body !== 'object' || body === null || typeof body.method !== 'string') {
+    return jsonRpcError(res, 400, null, JSON_RPC.INVALID_REQUEST, 'Invalid Request: missing JSON-RPC method');
+  }
+  const headerError = validateRpcHeaders(req, body);
+  if (headerError) return jsonRpcError(res, 400, body.id, headerError.code, headerError.message);
+  const auth = await authenticateMcpRequest(req, raw, deps, baseOf(req));
+  if (!auth.ok) {
+    res.setHeader('WWW-Authenticate', auth.wwwAuthenticate);
+    return jsonRpcError(res, auth.status, body.id, auth.status === 403 ? JSON_RPC.FORBIDDEN : JSON_RPC.UNAUTHORIZED, auth.message);
+  }
+  const { identity, tokenScopes, verifiedClientId } = auth;
+  const effectiveScopes = deps.grantedScopes ?? tokenScopes;
+  const rejection = gateToolCall(body, identity.userId, effectiveScopes, deps, baseOf(req));
+  if (rejection) {
+    if (rejection.wwwAuthenticate) res.setHeader('WWW-Authenticate', rejection.wwwAuthenticate);
+    if (rejection.retryAfterSeconds !== undefined) res.setHeader('Retry-After', String(rejection.retryAfterSeconds));
+    return jsonRpcError(res, rejection.status, body.id, rejection.code, rejection.message);
+  }
+  const authInfo: AuthInfo = {
+    token: (req.get('authorization') ?? '').slice('Bearer '.length),
+    // Đường OAuth: client_id ĐÃ ĐƯỢC AS XÁC THỰC trên token. Đường
+    // cầu auth: chỉ còn clientInfo tự giới thiệu (truy vết).
+    clientId: verifiedClientId ?? clientIdOf(body),
+    scopes: [...effectiveScopes],
+    extra: { userId: identity.userId, username: identity.username, ip: req.ip ?? null, tenantId: identity.tenantId },
+  };
+  // TENANT-1 (#196): toàn lượt thực thi tool chạy trong ngữ cảnh
+  // tenant của PHIÊN (ALS) — pool gắn GUC theo ALS nên RLS
+  // fail-closed giới hạn mọi truy vấn của tool trong tenant này;
+  // bank đích của các tool ghi phân giải trong đúng tenant của
+  // phiên. Phiên không phân giải được tenant → store không có
+  // tenantId = fail-closed (chỉ thấy dữ liệu platform).
+  const webRes = await tenantAls.run(
+    { tenantId: identity.tenantId ?? undefined, userId: identity.userId },
+    () => handler.fetch(toWebRequest(req, raw), { authInfo }),
+  );
+  return pipeWebResponse(webRes, res);
 }
 
 function toWebRequest(req: Request, rawBody: Buffer | null): globalThis.Request {

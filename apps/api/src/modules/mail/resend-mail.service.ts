@@ -5,6 +5,9 @@ import type { MailMessage, MailSendResult } from './mail.types';
 /** Endpoint HTTP API của Resend (gửi một email). */
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
 
+/** Độ dài tối đa phần chi tiết lỗi của Resend kèm vào Error ném ra cho consumer outbox. */
+const RESEND_ERROR_DETAIL_MAX_LENGTH = 300;
+
 /**
  * Transport gửi mail qua Resend (issue #7 chặng 2.5; quyết định ngày 26/10/2026: email hệ thống gửi qua Resend thay SMTP).
  *
@@ -71,7 +74,7 @@ export class ResendMailService {
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new Error(`Resend API trả ${response.status}: ${detail.slice(0, 300)}`);
+      throw new Error(`Resend API trả ${response.status}: ${detail.slice(0, RESEND_ERROR_DETAIL_MAX_LENGTH)}`);
     }
     const body = (await response.json().catch(() => null)) as { id?: string } | null;
     return { status: 'sent', providerId: body?.id ?? null };

@@ -1,4 +1,5 @@
 import { CONTEXT_LEVELS } from './contexts';
+import { ENROL_ACTIVE } from './enrol-status';
 import { RoleContextConflictError } from './errors';
 import { TEACHING_ROLE_ARCHETYPES } from './plan-limits';
 import type { EnrolDatabase, PlatformScopeRunner } from './types';
@@ -8,9 +9,6 @@ import type { EnrolDatabase, PlatformScopeRunner } from './types';
  * (lõi gán vai tiêm lõi này).
  */
 const ENROL_ASSIGNMENT_COMPONENT_VALUE = 'enrol';
-
-/** Trạng thái ghi danh đang hoạt động (0 = ACTIVE trong bảng `user_enrolments`). */
-const ENROL_ACTIVE_STATUS = 0;
 
 /** Một tài khoản trong báo cáo kiểm toán tách vai (chỉ đọc). */
 export interface RoleConflictAuditEntry {
@@ -178,7 +176,7 @@ export class RoleSeparationCore {
         .where((eb) => eb.and([
           eb('user_enrolments.user_id', '=', userId),
           eb('enrol.course_id', '=', courseId),
-          eb('user_enrolments.status', '=', ENROL_ACTIVE_STATUS),
+          eb('user_enrolments.status', '=', ENROL_ACTIVE),
           eb.or([
             eb('role.archetype', 'is', null),
             eb('role.archetype', 'not in', [...TEACHING_ROLE_ARCHETYPES]),
@@ -414,7 +412,7 @@ export class RoleSeparationCore {
           'enrol.course_id as courseId',
         ])
         .where((eb) => eb.and([
-          eb('user_enrolments.status', '=', ENROL_ACTIVE_STATUS),
+          eb('user_enrolments.status', '=', ENROL_ACTIVE),
           eb.or([
             eb('role.archetype', 'is', null),
             eb('role.archetype', 'not in', [...TEACHING_ROLE_ARCHETYPES]),

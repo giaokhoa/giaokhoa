@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { useAccessCapabilities, useAccessContexts } from '#lib/access';
+import { findSystemContext } from '#lib/permissions';
+import { appKeyMeta } from '#lib/route-meta';
 import { contextOptionLabel } from '../api/context-labels';
 import { AdminSelect } from '../components/admin-select';
 import { PermissionsMatrix } from '../components/permissions-matrix';
@@ -23,7 +25,7 @@ import { groupCapabilitiesByResource } from '../types/admin-roles';
  * 1. Ba query TanStack: danh mục capability, cây context (dùng chung
  *    ở `src/lib/access.ts`) và ma trận toàn trang theo ngữ cảnh
  *    (feature query, `GET /access/capability-matrix`). Bộ chọn ngữ
- *    cảnh là bắt buộc — ghi đè sống theo (năng lực × ngữ cảnh) nên trang không có trạng thái "mọi ngữ cảnh"; ngữ cảnh mặc định là ngữ cảnh hệ thống (cấp 10), nhãn ngữ cảnh lấy qua adapter nhãn
+ *    cảnh là bắt buộc — ghi đè sống theo (năng lực × ngữ cảnh) nên trang không có trạng thái "mọi ngữ cảnh"; ngữ cảnh mặc định là ngữ cảnh hệ thống (CONTEXT_LEVEL.SYSTEM), nhãn ngữ cảnh lấy qua adapter nhãn
  *    (tên cấp dạng chữ). Đổi ngữ cảnh là đổi tập ghi đè đang xem —
  *    sửa đổi lạc quan của ngữ cảnh trước bị xoá sạch như hộp thoại ma trận, không lẫn sang ngữ cảnh mới.
  * 2. Ba thẻ tổng quan trên bảng: số vai trò trong đáp ứng ma trận, số
@@ -53,8 +55,9 @@ export function AdminPermissionsPage() {
   const capabilitiesQuery = useAccessCapabilities();
   const contextsQuery = useAccessContexts();
   const contexts = contextsQuery.data ?? [];
+  // Không tìm thấy context hệ thống thì lùi về context đầu tiên như trước (S15, rà soát #50): chưa xác minh được trường hợp thiếu context hệ thống là không thể xảy ra, nên giữ nguyên fallback của trang thay vì thống nhất về rỗng.
   const systemContextId =
-    contexts.find((ctx) => ctx.contextLevel === 10)?.id ?? contexts[0]?.id ?? '';
+    findSystemContext(contexts)?.id ?? contexts[0]?.id ?? '';
   const contextId = contextOverride || systemContextId;
   /**
    * Gương ngữ cảnh mới nhất để đối chiếu khi lỗi muộn về: callback lỗi của lần ghi chụp ngữ cảnh lúc gọi, còn ngữ cảnh hiển thị có thể đã đổi trong lúc chờ — chỉ hiện lỗi khi hai bên vẫn trùng nhau (xem `handleCellChange`).
@@ -280,7 +283,6 @@ export default AdminPermissionsPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navPermissions');
 }

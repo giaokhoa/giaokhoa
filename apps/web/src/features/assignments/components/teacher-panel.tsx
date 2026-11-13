@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { assignmentSubmissionsQueryOptions, useReleaseSubmissionsBatch } from '../queries/assignment';
 import { queryKeys } from '../queries/keys';
 import { GradingPanel } from './grading-panel';
+import { ASSIGN_GRADE_STATUS_LABEL_KEYS, ASSIGN_STATUS_LABEL_KEYS } from '../utils/shared';
 
 /**
  * Phía giáo viên: danh sách bài nộp cả lớp + trả bài theo đợt + mở bề mặt chấm từng em. Danh sách bài nộp là dữ kiện máy chủ nên đọc trực tiếp từ cache TanStack qua `assignmentSubmissionsQueryOptions`
@@ -80,10 +81,10 @@ export function TeacherPanel({ data }: { data: AssignmentForUserView }) {
             {summaries.map((s) => (
               <li key={s.userId} className="flex flex-wrap items-center gap-2 rounded border p-2 text-sm">
                 <span className="font-medium">{s.displayName}</span>
-                <Badge variant={s.status === 'none' ? 'secondary' : 'default'}>{t(`assignStatus_${s.status}`)}</Badge>
+                <Badge variant={s.status === 'none' ? 'secondary' : 'default'}>{t(ASSIGN_STATUS_LABEL_KEYS[s.status])}</Badge>
                 {s.late ? <Badge variant="destructive">{t('assignLateBadge')}</Badge> : null}
                 <span className="text-muted-foreground">{t('assignFileCount', { count: s.fileCount })}</span>
-                <Badge variant="outline">{t(`assignGradeStatus_${s.gradeStatus}`)}</Badge>
+                <Badge variant="outline">{t(ASSIGN_GRADE_STATUS_LABEL_KEYS[s.gradeStatus])}</Badge>
                 {s.grade !== null ? <span>{t('assignGradeLine', { grade: s.grade, max: assignment.grade })}</span> : null}
                 <Button
                   type="button"

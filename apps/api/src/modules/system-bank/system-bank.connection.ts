@@ -13,7 +13,7 @@ import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createSystemBankKysely, type SystemBankDb } from '@giaokhoa/db/system-bank';
 import { Pool } from 'pg';
-import { databaseConnectionFromEnv } from '../../config/env';
+import { databaseConnectionFromEnv, toPoolConfig } from '../../config/env';
 
 @Injectable()
 export class SystemBankConnection implements OnModuleDestroy {
@@ -29,7 +29,7 @@ export class SystemBankConnection implements OnModuleDestroy {
       return;
     }
     const connection = databaseConnectionFromEnv(url, config.get<boolean>('DATABASE_SSL') ?? false);
-    const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
+    const poolConfig = toPoolConfig(connection);
     this.pool = new Pool(poolConfig);
     this.kysely = createSystemBankKysely(this.pool);
   }

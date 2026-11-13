@@ -287,7 +287,7 @@ function gradeMultichoice(data: GradingData, response: string | null): GradeOutc
   const selectedIds = new Set((response ?? '').split(',').map((x) => x.trim()).filter((x) => x !== ''));
   const selected = data.answers.filter((a) => selectedIds.has(a.id));
   const correctRow = data.answers.find((a) => a.isCorrect);
-  const fraction = selected.length === 1 && selected[0]!.isCorrect ? 1 : 0;
+  const fraction = selected.length === 1 && selected[0]!.isCorrect ? 1 : 0; // Bất biến: selected.length === 1 nên phần tử đầu tồn tại.
   return { fraction, state: gradedStateForFraction(fraction), rightAnswer: correctRow?.text ?? '' };
 }
 

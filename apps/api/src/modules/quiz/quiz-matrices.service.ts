@@ -33,6 +33,8 @@ import {
 } from '@giaokhoa/db/repositories/quiz';
 import {
   isMatrixContentSignatureConflict,
+  MATRIX_DUPLICATE_CONTENT_CODE,
+  MATRIX_DUPLICATE_CONTENT_MESSAGE,
   matrixContentSignature,
 } from './matrix-content-signature';
 import { QuizSharedService } from './quiz-shared.service';
@@ -112,7 +114,8 @@ export class QuizMatricesService {
     };
   }
 
-  private async matrixView(row: ExamMatrixRow): Promise<ExamMatrixView> {
+  /** View đầy đủ của một dòng ma trận (ô + cảnh báo) — bản công khai cho lớp bank (MB-1) dùng sau khi đã tự gác quyền. */
+  async matrixView(row: ExamMatrixRow): Promise<ExamMatrixView> {
     const cells = await this.repo.listMatrixCells(row.id);
     return {
       id: row.id, name: row.name, subjectId: row.subjectId, curriculumId: row.curriculumId,
@@ -135,11 +138,6 @@ export class QuizMatricesService {
         targetLevelPercents: row.targetLevelPercents, totalScore: row.totalScore,
       }),
     };
-  }
-
-  /** View đầy đủ của một dòng ma trận (ô + cảnh báo) — bản công khai cho lớp bank (MB-1) dùng sau khi đã tự gác quyền. */
-  async viewMatrixRow(row: ExamMatrixRow): Promise<ExamMatrixView> {
-    return this.matrixView(row);
   }
 
   /**
@@ -304,7 +302,7 @@ export class QuizMatricesService {
    */
   private rethrowAsDuplicateContentConflict(err: unknown): never {
     if (isMatrixContentSignatureConflict(err)) {
-      throw new ConflictException({ message: 'A matrix with identical content already exists in the target bank', code: 'quiz.matrix_duplicate_content' });
+      throw new ConflictException({ message: MATRIX_DUPLICATE_CONTENT_MESSAGE, code: MATRIX_DUPLICATE_CONTENT_CODE });
     }
     throw err;
   }

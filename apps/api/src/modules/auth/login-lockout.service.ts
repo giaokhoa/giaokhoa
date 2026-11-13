@@ -7,11 +7,21 @@ import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 export const AUTH_LOCKED_OUT_CODE = 'auth.locked_out';
 /** Thông điệp khoá tạm thời — giữ nguyên văn của hệ legacy để đáp ứng hai đường không lệch nhau. */
 export const AUTH_LOCKED_OUT_MESSAGE = 'Account is locked out due to failed login attempts';
+/** Số mili-giây trong một phút — đổi cửa sổ/khoảng khoá từ phút sang mili-giây. */
+const MS_PER_MINUTE = 60_000;
 
 /** Định danh đăng nhập ở tầng endpoint: `username` cho đường sign-in username, `email` cho đường sign-in email. */
 export interface LoginIdentifier {
   username?: string;
   email?: string;
+}
+
+/** Một lần thử đăng nhập của một user đã xác định được, ghi vào bảng `login_attempts`. */
+export interface LoginAttemptInput {
+  userId: string;
+  username: string;
+  success: boolean;
+  ip?: string;
 }
 
 /**
@@ -48,18 +58,18 @@ export class LoginLockoutService implements LockoutGuardPort {
     if (threshold <= 0) return false; // khoá bị tắt khi ngưỡng bằng 0 (hành vi của Moodle)
     const windowMin = this.config.get<number>('LOCKOUT_WINDOW_MINUTES') ?? 20;
     const durationMin = this.config.get<number>('LOCKOUT_DURATION_MINUTES') ?? 30;
-    const since = new Date(Date.now() - windowMin * 60_000);
+    const since = new Date(Date.now() - windowMin * MS_PER_MINUTE);
     const failures = await this.repo.recentFailedAttempts(userId, since);
     if (failures.length < threshold) return false;
     const lastSuccess = await this.repo.lastSuccessfulAttemptAt(userId);
     const relevant = lastSuccess ? failures.filter((f) => f.attemptedAt > lastSuccess) : failures;
     if (relevant.length < threshold) return false;
     const thresholdHitAt = relevant[threshold - 1]!.attemptedAt.getTime();
-    return Date.now() < thresholdHitAt + durationMin * 60_000;
+    return Date.now() < thresholdHitAt + durationMin * MS_PER_MINUTE;
   }
 
   /** Ghi một lần thử đăng nhập cho một user đã xác định được (đường legacy dùng trực tiếp). */
-  async recordAttempt(v: { userId: string; username: string; success: boolean; ip?: string }): Promise<void> {
+  async recordAttempt(v: LoginAttemptInput): Promise<void> {
     await this.repo.recordAttempt(v);
   }
 

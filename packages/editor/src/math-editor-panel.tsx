@@ -1,6 +1,31 @@
 import { useMemo } from 'react';
 import { renderMathHtml } from './math.js';
 
+/**
+ * Panel soạn một công thức LaTeX dạng overlay nổi, dùng chung cho cả
+ * hai loại node công thức (`inlineMath` trong dòng, `blockMath` tách
+ * dòng) của trình soạn rich text.
+ *
+ * Flow tổng thể của file này (đầu vào là mã LaTeX + loại công thức
+ * hiện tại qua props, đầu ra là các callback về phía chứa):
+ *
+ * 1. Người soạn nhập mã LaTeX trong ô nhập, gạt nút tách dòng để đổi
+ *    loại công thức; vùng xem trước render trực tiếp bằng KaTeX theo
+ *    từng thay đổi (mã rỗng thì không xem trước).
+ * 2. Enter trong ô nhập là xác nhận, Escape là huỷ; nút xác nhận gọi
+ *    `onConfirm` (phía chứa kiểm tra cú pháp bằng `validateMathLatex`
+ *    trước khi áp vào tài liệu), nút huỷ gọi `onCancel` để đóng panel
+ *    mà không đổi tài liệu, nút xoá (`onDelete`, chỉ khi đang sửa một
+ *    công thức có sẵn) gỡ công thức khỏi tài liệu.
+ * 3. Panel mang `data-editor-owner` theo editor đang mở nó để cơ chế
+ *    một-toolbar của {@link RichTextEditor} biết tương tác trong panel
+ *    vẫn thuộc về editor đó (không tắt trạng thái active của editor).
+ *
+ * Bất biến: panel chỉ trình bày — việc kiểm tra cú pháp và áp mã vào
+ * tài liệu nằm ở phía chứa; LaTeX là nguồn sự thật, bản render KaTeX
+ * chỉ là phái sinh.
+ */
+
 /** Loại node công thức mà panel đang soạn: trong dòng hoặc tách dòng. */
 export type MathNodeKind = 'inlineMath' | 'blockMath';
 

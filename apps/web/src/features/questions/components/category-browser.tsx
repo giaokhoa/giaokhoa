@@ -17,7 +17,7 @@ import { questionVersionsQueryOptions, useCopyQuestionToMyBank, useCreateQuestio
 import type { AttributionLite } from '../types/questions';
 import { CollapsibleSection } from '#components/collapsible-section';
 import { DataTable, type DataColumn } from '#components/data-table';
-import { plainText, QTYPE_LABEL_KEYS, QTYPES, questionExcerpt, type Qtype } from '../utils/shared';
+import { entryStatus, plainText, QTYPE_LABEL_KEYS, QTYPES, questionExcerpt, type Qtype } from '../utils/shared';
 
 /** Props của panel duyệt câu hỏi theo danh mục. */
 export interface CategoryBrowserProps {
@@ -115,7 +115,7 @@ export function CategoryBrowser({
         return (
           <span>
             {questionExcerpt(view)}
-            {(view.entry as { status?: string }).status === 'hidden' ? (
+            {entryStatus(view) === 'hidden' ? (
               <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-xs">{t('withdrawnBadge')}</span>
             ) : null}
             {isCopy && a ? (
@@ -191,7 +191,7 @@ export function CategoryBrowser({
             {t('copyToMyBank')}
           </Button>
           <Button type="button" variant="outline" onClick={() => void toggleWithdraw(view)}>
-            {(view.entry as { status?: string }).status === 'hidden' ? t('restoreQuestion') : t('withdrawQuestion')}
+            {entryStatus(view) === 'hidden' ? t('restoreQuestion') : t('withdrawQuestion')}
           </Button>
         </span>
       ),
@@ -211,7 +211,7 @@ export function CategoryBrowser({
 
   /** Rút / hoàn rút một câu khỏi bank của nó. */
   async function toggleWithdraw(view: QuestionView) {
-    const status = (view.entry as { status?: string }).status;
+    const status = entryStatus(view);
     try {
       if (status === 'hidden') {
         await restoreQuestionMutation.mutateAsync(view.question.id);

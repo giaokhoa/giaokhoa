@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import type { Request } from 'express';
 import { SessionCacheService } from '../../infra/cache/session-cache.service';
 
 /** Siêu dữ liệu trình bày của một phiên web (bảng phiên của report_usersessions: thiết bị, IP, lần truy cập cuối). */
@@ -23,6 +24,22 @@ export interface ListedWebSession { id: string; session: WebSession }
 
 /** Ngưỡng tiết kiệm ghi khi chạm hoạt động: lần truy cập cuối chỉ cần chính xác tới phút. */
 const TOUCH_INTERVAL_MS = 60_000;
+
+/**
+ * Đọc một cookie theo tên từ header Cookie thô (giá trị đã decode URI).
+ * Điểm đọc cookie thô dùng chung của module auth — cùng logic tách `;`
+ * rồi `=` như trước đây viết lặp ở `AuthController.sessionCookieOf` và
+ * `two-factor-completion.service.ts`, nay cả hai đều dùng chung hàm này.
+ */
+export function cookieValueOf(req: Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return decodeURIComponent(rest.join('='));
+  }
+  return undefined;
+}
 
 /**
  * SessionModule (nằm trong AuthModule theo report §3.7): phiên web phía server trong namespace cache *session* của Redis. Cookie chỉ mang id; đăng nhập sẽ xoay vòng id (chống fixation) và phiên của người dùng bị đình chỉ/đã xoá sẽ ngừng hợp lệ vì AuthService kiểm tra lại trạng thái tài khoản ở mỗi lần đọc phiên.
@@ -89,8 +106,8 @@ export class SessionService {
     await this.store.delete(`web:${id}`);
     if (session) await this.indexRemove(session.userId, id);
   }
-  /** Xoay vòng: huỷ id cũ (nếu có) và cấp một id mới cho cùng một danh tính. */
   /**
+   * Xoay vòng: huỷ id cũ (nếu có) và cấp một id mới cho cùng một danh tính.
    * Xoay session id (sau đăng nhập/leo quyền) để chống fixation; phiên cũ bị huỷ.
    */
   async rotate(oldId: string | undefined, data: Omit<WebSession, 'createdAt' | 'lastActivityAt'>): Promise<string> {
@@ -112,14 +129,17 @@ export class SessionService {
     return alive;
   }
   /**
-   * Huỷ mọi phiên web của user ngoại trừ `keepId` (phiên hiện tại khi
-   * người dùng bấm "huỷ mọi phiên khác"); trả số phiên đã huỷ.
+   * Huỷ mọi phiên web của user, kể cả phiên hiện tại; trả số phiên đã huỷ.
+   * Dùng khi đổi/đặt lại mật khẩu: mọi phiên đều mất hiệu lực.
    */
-  /** Password reset/change: revoke all Redis web sessions, including current. */
   async destroyAllForUser(userId: string): Promise<number> {
     return this.destroyOthersForUser(userId);
   }
 
+  /**
+   * Huỷ mọi phiên web của user ngoại trừ `keepId` (phiên hiện tại khi
+   * người dùng bấm "huỷ mọi phiên khác"); trả số phiên đã huỷ.
+   */
   async destroyOthersForUser(userId: string, keepId?: string): Promise<number> {
     const listed = await this.listForUser(userId);
     let destroyed = 0;

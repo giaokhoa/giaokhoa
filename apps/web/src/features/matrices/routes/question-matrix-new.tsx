@@ -1,4 +1,11 @@
+/**
+ * Route module của màn tạo ma trận (`/matrices/new`): chỉ tái xuất `MatrixNewPage` từ `./question-matrix` làm component mặc định của route.
+ * `clientLoader` prefetch bank ma trận và danh sách môn vào QueryClient trước khi component mount, đúng khoá trang sẽ đọc.
+ * File này không chứa form hay logic tạo nào; tiêu đề và biên lỗi theo route nằm ở `meta` và `ErrorBoundary` cuối file.
+ */
+
 export { MatrixNewPage as default } from './question-matrix';
+import { appKeyMeta } from '#lib/route-meta';
 
 import { matrixBanksQueryOptions } from '../queries/matrix';
 import { curriculumSubjectsQueryOptions } from '#lib/curriculum';
@@ -20,7 +27,6 @@ export async function clientLoader() {
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
-  return titleMeta('Tạo ma trận');
+  return appKeyMeta('matrixCreate');
 }

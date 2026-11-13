@@ -1,9 +1,34 @@
+/**
+ * Module gốc của API — lắp toàn bộ ứng dụng.
+ *
+ * Flow lắp ráp:
+ * - Cấu hình: `ConfigModule` toàn cục với `validateEnv` (mọi biến môi
+ *   trường phải qua schema Zod ở `config/env.ts` mới được khởi động);
+ *   `I18nFoundationModule` cho catalog dịch và pipe validation.
+ * - Hạ tầng nền: BullMQ trên Redis (chính sách job mặc định: thử lại
+ *   tối đa 3 lần, giãn cách hàm mũ từ 1 giây, chỉ giữ 1.000 job
+ *   đã xong/lỗi gần nhất); Throttler theo IP với ba hạn mức độc lập
+ *   (chung / credential / đăng ký tự do); cache (`CacheInfraModule`),
+ *   outbox/sự kiện (`EventsModule`), health và khung định tuyến kho
+ *   theo trung tâm (`SpaceRoutingModule`).
+ * - Miền nghiệp vụ: toàn bộ module trong `src/modules/` (định danh,
+ *   học tập, đánh giá, tương tác, vận hành).
+ * - Gắn handle kho chung: provider `SHARED_CENTRE_KYSELY` dựng
+ *   `TenantAwarePool` (tự gắn GUC tenant theo ngữ cảnh ALS ở mọi
+ *   checkout) và gắn handle Kysely của nó vào `SpaceDatabaseService`
+ *   để mọi điểm tiêu thụ dùng handle định tuyến `routedKysely`.
+ * - Chuỗi guard toàn cục (thứ tự có ý nghĩa): Throttler → phiên Better
+ *   Auth → JWT → Audience → Tenant → SpaceContext → Capability; kèm
+ *   `TenantContextInterceptor` bọc ALS tenant quanh handler và pipe
+ *   validation Zod có dịch thông điệp theo catalog i18n.
+ * - `configure()`: áp middleware header bảo mật cho mọi route.
+ */
 import { BullModule } from '@nestjs/bullmq';
 import { Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { createCentreKysely } from '@giaokhoa/db';
-import { databaseConnectionFromEnv, redisConnectionFromUrl, validateEnv } from './config/env';
+import { databaseConnectionFromEnv, redisConnectionFromUrl, toPoolConfig, validateEnv } from './config/env';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { SpaceRoutingModule } from './db/routing/space-routing.module';
 import { TenantAwarePool } from './db/tenant-pool';
@@ -82,6 +107,18 @@ const REGISTRATION_ROUTES = /^\/api\/v\d+\/auth\/public\/register$/;
 /**
  * Token của provider gắn handle kho chung (xem khai báo trong `providers` của AppModule): giá trị của provider không được inject ở đâu — provider tồn tại vì hành động gắn lúc khởi tạo.
  */
+/**
+ * Bỏ qua throttler trừ khi request là POST vào một route trong bảng
+ * cho trước (hạn mức credential/đăng ký chỉ áp cho lượt POST thật).
+ */
+function skipUnlessPostTo(routes: RegExp): (context: ExecutionContext) => boolean {
+  return (context: ExecutionContext) => {
+    const req = context.switchToHttp().getRequest<{ method?: string; path?: string; url?: string }>();
+    const path = req.path ?? req.url ?? '';
+    return !(req.method === 'POST' && routes.test(path));
+  };
+}
+
 const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
 
 @Module({
@@ -119,20 +156,13 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
             name: 'auth',
             ttl: 60_000,
             limit: config.get<number>('RATE_LIMIT_AUTH_PER_MINUTE') ?? 300,
-            skipIf: (context: ExecutionContext) => {
-              const req = context.switchToHttp().getRequest<{ method?: string; path?: string; url?: string }>();
-              const path = req.path ?? req.url ?? '';
-              return !(req.method === 'POST' && CREDENTIAL_ROUTES.test(path));
-            },
+            skipIf: skipUnlessPostTo(CREDENTIAL_ROUTES),
           },
           {
             name: 'registration',
             ttl: 60_000,
             limit: config.get<number>('RATE_LIMIT_REGISTRATION_PER_MINUTE') ?? 5,
-            skipIf: (context: ExecutionContext) => {
-              const req = context.switchToHttp().getRequest<{ method?: string; path?: string; url?: string }>();
-              return !(req.method === 'POST' && REGISTRATION_ROUTES.test(req.path ?? req.url ?? ''));
-            },
+            skipIf: skipUnlessPostTo(REGISTRATION_ROUTES),
           },
         ],
       }),
@@ -203,7 +233,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
           config.getOrThrow<string>('DATABASE_URL'),
           config.get<boolean>('DATABASE_SSL') ?? false,
         );
-        const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
+        const poolConfig = toPoolConfig(connection);
         const poolMax = config.get<number>('DATABASE_POOL_MAX');
         const pool = new TenantAwarePool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
         spaceDatabase.bindSharedKysely(createCentreKysely(pool));

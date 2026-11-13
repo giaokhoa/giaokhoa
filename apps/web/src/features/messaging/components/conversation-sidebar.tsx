@@ -1,17 +1,22 @@
+/**
+ * Khung trái màn Tin nhắn: một ô tìm kiếm duy nhất phía trên thanh tab bốn tab Tất cả / Chưa đọc / Nhóm / Lưu trữ, mỗi tab hiện số đếm của chính tập đó.
+ * Tab Tất cả và Chưa đọc liệt kê hội thoại chưa lưu trữ theo mục Ghim / Gần đây; tab Nhóm trình bày cây nhóm (lớp → khoá → nhóm con) thành danh sách phẳng; tab Lưu trữ liệt kê riêng tập hội thoại đã lưu.
+ * Tab đang chọn do trang chứa giữ để nhớ ngữ cảnh; nút Tin nhắn mới mở hộp thoại danh bạ/kết bạn, sheet tạo nhóm mở từ tab Nhóm.
+ */
+
 import { useState, type ReactNode } from 'react';
-import { BellOff, ChevronDown, MessageSquare, Pin, Search, UserPlus } from 'lucide-react';
+import { MessageSquare, Search, UserPlus } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button } from '@giaokhoa/ui/components/button';
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from '@giaokhoa/ui/components/collapsible';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@giaokhoa/ui/components/input-group';
 import { Separator } from '@giaokhoa/ui/components/separator';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@giaokhoa/ui/components/tabs';
 import { cn } from '@giaokhoa/ui/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { ConversationRow } from './conversation-row';
+import { ConversationSection } from './conversation-section';
 import { CreateGroupSheet } from './create-group-sheet';
 import { GroupListNav, countGroupListEntries } from './group-list-nav';
 import { NewMessageDialog } from './new-message-dialog';
@@ -24,6 +29,7 @@ import type {
   PeoplePickerContext,
   RosterMember,
 } from '../types/types';
+import { CONVERSATION_TYPE_DIRECT, CONVERSATION_TYPE_GROUP } from '../types/types';
 import {
   PRESENCE_DOT_CLASS, conversationTime,
   initialsOf, presenceStatusOf,
@@ -211,7 +217,6 @@ export function ConversationSidebar({
   archivedLoading, archivedError, onRetryArchived,
 }: ConversationSidebarProps) {
   const { t, i18n } = useTranslation('app');
-  const open = onOpenConversation;
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   /** Sheet hồ sơ của chính người xem (mở từ nút avatar ở đầu cột — giai đoạn 2 của vòng sửa PR #610). */
@@ -253,12 +258,16 @@ export function ConversationSidebar({
       onTabChange('groups');
     }
   };
+  /** Đối tác của một hội thoại 1–1 (thành viên khác chính mình); hội thoại nhóm thì không có đối tác. */
+  const otherMemberId = (c: ConversationView) =>
+    c.type === CONVERSATION_TYPE_DIRECT ? c.members.find((id) => id !== myId) : undefined;
+
   /**
    * Tên hiển thị của hội thoại: hội thoại có tên (nhóm) dùng tên đó. Hội thoại 1–1 không có tên — backend không đặt tên cho 1–1 — thì hiện tên ĐỐI TÁC suy từ danh sách thành viên; chỉ khi không xác định được đối tác mới rơi về nhãn dự phòng liệt kê mọi thành viên. Ô lọc danh sách khớp trên chính nhãn này nên tìm theo tên đối tác vẫn trúng sau thay đổi.
    */
   const labelOf = (c: ConversationView) => {
     if (c.name !== null) return c.name;
-    const otherId = c.type === 1 ? c.members.find((id) => id !== myId) : undefined;
+    const otherId = otherMemberId(c);
     return otherId
       ? nameOf(otherId)
       : t('conversationWithUser', { members: c.members.map((id) => nameOf(id)).join(', ') });
@@ -280,7 +289,7 @@ export function ConversationSidebar({
   /** Một dòng hội thoại chuẩn app nhắn tin: một nút nguyên khối mang avatar + tên + trích đoạn/giờ + cụm biểu tượng trạng thái (ghim/tắt tiếng). */
   const renderConversationItem = (c: ConversationView) => {
     const isActive = active?.id === c.id;
-    const otherId = c.type === 1 ? c.members.find((id) => id !== myId) : undefined;
+    const otherId = otherMemberId(c);
     /**
      * Hiện diện của đối tác trên hàng hội thoại giữ BA trạng thái như ở đầu khung (vòng sửa PR #593): đã xác nhận trực tuyến thì chấm xanh lá, đã xác nhận ngoại tuyến thì chấm xám, chưa biết (chưa có sự kiện nào) thì không chấm — không gộp chưa biết thành ngoại tuyến.
      */
@@ -290,114 +299,50 @@ export function ConversationSidebar({
     const unreadCount = c.unread ?? 0;
     return (
       <li key={c.id}>
-        {/*
-          Hàng là MỘT nút nguyên khối như bản demo (điểm C16,
-          trích chuỗi class từ chunk của demo): hàng đang chọn
-          mang nền `bg-muted` kèm ring 1px `ring-border` KHẢM
-          TRONG (`ring-inset`) ngay trên nút, `overflow-hidden`
-          như lớp nền của chuỗi demo để nội dung hàng bị cắt
-          theo góc bo tròn; hàng chưa chọn chỉ mang
-          `hover:bg-muted/75` như class điều kiện của demo.
-          Nút phụ ⋯ từng đứng ở cuối hàng đã bỏ hẳn theo phán
-          quyết điểm C3 (issue #623) — hàng của demo không có
-          nút phụ, và ghim/tắt tiếng đã có đường vào ở menu
-          đầu khung cùng panel của cuộc trò chuyện đã mở.
-        */}
-          <button
-            type="button"
-            aria-current={isActive || undefined}
-            className={cn(
-              'flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2.5 text-left transition-colors',
-              isActive ? 'bg-muted ring-1 ring-border ring-inset' : 'hover:bg-muted/75',
-            )}
-            onClick={() => void open(c)}
-          >
-            <span className="relative shrink-0">
-              <Avatar size="lg">
-                <AvatarFallback className={cn(isActive && 'bg-background/50')}>{initialsOf(avatarLabel)}</AvatarFallback>
-              </Avatar>
-              {otherStatus !== undefined ? (
-                <span
-                  className={cn(
-                    'absolute right-0 bottom-0 size-2.5 rounded-full ring-2 ring-background',
-                    PRESENCE_DOT_CLASS[otherStatus],
-                  )}
-                />
-              ) : null}
+        <ConversationRow
+          label={labelOf(c)}
+          avatarLabel={avatarLabel}
+          titleClassName={c.type === CONVERSATION_TYPE_GROUP ? 'font-semibold text-foreground' : 'font-medium text-foreground/90'}
+          isActive={isActive}
+          onOpen={() => void onOpenConversation(c)}
+          time={c.lastMessage ? (
+            <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums" data-testid={`conversation-last-time-${c.id}`}>
+              {conversationTime(c.lastMessage.createdAt, t, i18n.language)}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                {/*
-                  Độ đậm tên trên hàng theo LOẠI hội thoại như
-                  bản demo (issue #608): nhóm đậm 600 màu đầy
-                  đủ, 1–1 vừa 500 màu 90% — cố định, không phụ
-                  thuộc trạng thái đã đọc như trước.
-                */}
-                <span
-                  className={cn(
-                    'min-w-0 flex-1 truncate text-sm',
-                    c.type === 2 ? 'font-semibold text-foreground' : 'font-medium text-foreground/90',
-                  )}
-                >
-                  {labelOf(c)}
-                </span>
-                {c.lastMessage ? (
-                  <span className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums" data-testid={`conversation-last-time-${c.id}`}>
-                    {conversationTime(c.lastMessage.createdAt, t, i18n.language)}
-                  </span>
-                ) : null}
-              </span>
-              <span className="mt-0.5 flex items-center gap-1.5">
-                {c.lastMessage ? (
-                  <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">
-                    {/*
-                      Xem trước tin cuối: tin của chính người xem
-                      mang tiền tố "Bạn:"; ở hội thoại NHÓM, tin
-                      của người khác mang tiền tố tên người gửi —
-                      đúng nhận diện nhóm như hàng ở tab Nhóm
-                      (hàng 1–1 không cần tiền tố vì tên đối tác
-                      đã là tiêu đề hàng).
-                    */}
-                    {c.lastMessage.userIdFrom === myId
-                      ? `${t('lastMessageOwnPrefix')} `
-                      : c.type === 1
-                        ? ''
-                        : `${nameOf(c.lastMessage.userIdFrom)}: `}
-                    {c.lastMessage.fullMessage}
-                  </span>
-                ) : (
-                  <span className="min-w-0 flex-1" />
-                )}
-                {/*
-                  Cụm biểu tượng cuối hàng theo đúng khuôn demo
-                  (issue #608, trích từ SSR và chunk của demo):
-                  mỗi biểu tượng nằm trong ô lưới 20px căn giữa;
-                  ghim là icon 12px tô đặc mờ 70%, tắt tiếng là
-                  icon 12px màu muted.
-                */}
-                {c.pinnedAt ? (
-                  <span data-testid={`conversation-pinned-${c.id}`} className="grid size-5 shrink-0 place-items-center">
-                    <Pin className="size-3 fill-current opacity-70" aria-hidden />
-                  </span>
-                ) : null}
-                {c.muted ? (
-                  <span data-testid={`conversation-muted-${c.id}`} className="grid size-5 shrink-0 place-items-center">
-                    <BellOff className="size-3 text-muted-foreground" aria-hidden />
-                  </span>
-                ) : null}
-                {unreadCount > 0
-                  ? c.muted
-                    ? <span className="shrink-0 text-xs opacity-60">{t('unreadSuffix', { count: unreadCount })}</span>
-                    : (
-                      <>
-                        <Badge className="h-5 min-w-5 shrink-0 justify-center rounded-full px-1">{unreadCount}</Badge>
-                        <span className="sr-only">{t('unreadSuffix', { count: unreadCount })}</span>
-                      </>
-                    )
-                  : null}
-              </span>
+          ) : null}
+          preview={c.lastMessage ? (
+            <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">
+              {/*
+                Xem trước tin cuối: tin của chính người xem mang tiền tố "Bạn:"; ở hội thoại NHÓM, tin của người khác mang tiền tố tên người gửi —
+                đúng nhận diện nhóm như hàng ở tab Nhóm (hàng 1–1 không cần tiền tố vì tên đối tác đã là tiêu đề hàng).
+              */}
+              {c.lastMessage.userIdFrom === myId
+                ? `${t('lastMessageOwnPrefix')} `
+                : c.type === CONVERSATION_TYPE_DIRECT
+                  ? ''
+                  : `${nameOf(c.lastMessage.userIdFrom)}: `}
+              {c.lastMessage.fullMessage}
             </span>
-          </button>
+          ) : (
+            <span className="min-w-0 flex-1" />
+          )}
+          conversationId={c.id}
+          pinned={Boolean(c.pinnedAt)}
+          muted={c.muted}
+          presenceSlot
+          presenceStatus={otherStatus}
+          unread={unreadCount > 0
+            ? c.muted
+              ? <span className="shrink-0 text-xs opacity-60">{t('unreadSuffix', { count: unreadCount })}</span>
+              : (
+                <>
+                  <Badge className="h-5 min-w-5 shrink-0 justify-center rounded-full px-1">{unreadCount}</Badge>
+                  <span className="sr-only">{t('unreadSuffix', { count: unreadCount })}</span>
+                </>
+              )
+            : null}
+          unreadPosition="row"
+        />
       </li>
     );
   };
@@ -415,42 +360,6 @@ export function ConversationSidebar({
    * #591 — cấm trạng thái rỗng giả lúc tải).
    */
   const initialLoading = Boolean(loading) && conversations.length === 0 && !error;
-
-  /**
-   * Một mục thu gọn trong các tab danh sách (issue #564; số đo
-   * căn lại theo bản demo ở issue #608): tiêu đề phẳng kiểu
-   * demo — nhãn 12px vừa màu muted, đệm ngang 12px, đệm dưới
-   * 8px, chevron 12px, KHÔNG số đếm, hover chỉ đổi màu chữ —
-   * dựng trên primitive Collapsible của @giaokhoa/ui, không dùng vỏ
-   * Card của CollapsibleSection dùng chung và không tự chế
-   * kiểu collapse riêng.
-   *
-   * @param title - Nhãn của mục.
-   * @param open - Mục đang mở hay đóng.
-   * @param onOpenChange - Đổi trạng thái mở của mục.
-   * @param children - Nội dung mục khi mở.
-   * @returns Mục thu gọn hoàn chỉnh.
-   */
-  const renderSection = (
-    title: string,
-    open: boolean,
-    onOpenChange: (next: boolean) => void,
-    children: ReactNode,
-  ) => (
-    <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 pb-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground">
-        <span>{title}</span>
-        <ChevronDown aria-hidden className={cn('ml-auto size-3 shrink-0 transition-transform', open && 'rotate-180')} />
-      </CollapsibleTrigger>
-      {/*
-        Nội dung chỉ render khi mục mở: section đóng thì các dòng
-        trong đó biến khỏi cây hoàn toàn (không chỉ ẩn bằng CSS),
-        để hội thoại đã ghim không còn tính là "đang hiện" ở
-        danh sách khi mục đóng.
-      */}
-      <CollapsibleContent>{open ? children : null}</CollapsibleContent>
-    </Collapsible>
-  );
 
   /**
    * Nội dung cuộn của các tab danh sách (Tất cả / Chưa đọc /
@@ -555,17 +464,23 @@ export function ConversationSidebar({
           </div>
         ) : (
           <div className="space-y-1">
-            {pinned.length > 0 ? renderSection(
-              t('messagesPinnedSection'),
-              pinnedOpen,
-              setPinnedOpen,
-              <ul className="flex flex-col gap-1">{pinned.map(renderConversationItem)}</ul>,
+            {pinned.length > 0 ? (
+              <ConversationSection
+                title={t('messagesPinnedSection')}
+                open={pinnedOpen}
+                onOpenChange={setPinnedOpen}
+              >
+                <ul className="flex flex-col gap-1">{pinned.map(renderConversationItem)}</ul>
+              </ConversationSection>
             ) : null}
-            {recent.length > 0 ? renderSection(
-              t('messagesRecentSection'),
-              recentOpen,
-              setRecentOpen,
-              <ul className="flex flex-col gap-1">{recent.map(renderConversationItem)}</ul>,
+            {recent.length > 0 ? (
+              <ConversationSection
+                title={t('messagesRecentSection')}
+                open={recentOpen}
+                onOpenChange={setRecentOpen}
+              >
+                <ul className="flex flex-col gap-1">{recent.map(renderConversationItem)}</ul>
+              </ConversationSection>
             ) : null}
           </div>
         )}

@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { SiteSetting } from '@giaokhoa/contracts';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -33,6 +38,13 @@ export class TenantConfigService {
     private readonly siteConfig: SiteConfigRepository,
   ) {}
 
+  /**
+   * Khoá chuẩn của một setting trong bảng vết: `component/name`.
+   *
+   * Bản sao một dòng của `SiteConfigService.settingKey` (site-config) — giữ nguyên có chủ đích: `settingKey` bên kia
+   * là private của một service thuộc module khác (`SiteConfigModule` không nằm trong `TenantsModule`), nên dùng chung
+   * phải đổi dây module; hai bản sao một dòng này chỉ là cách nối `component`/`name` bằng `/`.
+   */
   private settingKey(def: SiteSettingDefinition): string {
     return `${def.component}/${def.name}`;
   }
@@ -49,6 +61,15 @@ export class TenantConfigService {
   }
 
   /**
+   * Giá trị ở tầng platform của một setting (ghi đè platform → mặc định registry) — phần chung của
+   * `getEffectiveValue` (sau khi đã xét ghi đè tenant) và nhánh ngoài-request của `getValueForCurrentTenant`.
+   */
+  private async platformValue<T = unknown>(def: SiteSettingDefinition): Promise<T> {
+    const stored = await this.platformStoredValue(def.component, def.name);
+    return (stored === undefined ? def.defaultValue : stored) as T;
+  }
+
+  /**
    * Giá trị hiệu lực của một setting cho một tenant cụ thể — API đọc
    * chuẩn cho mọi module cần cấu hình theo tenant (EB-3 đọc công tắc
    * duyệt qua đây). Setting chưa đăng ký trả về undefined.
@@ -60,8 +81,7 @@ export class TenantConfigService {
       const row = await this.repo.getConfigValue(tenantId, this.settingKey(def));
       if (row) return row.value as T;
     }
-    const stored = await this.platformStoredValue(component, name);
-    return (stored === undefined ? def.defaultValue : stored) as T;
+    return this.platformValue<T>(def);
   }
 
   /** Giá trị hiệu lực cho tenant của request hiện tại (ngoài request: tầng platform). */
@@ -70,8 +90,7 @@ export class TenantConfigService {
     if (!tenantId) {
       const def = findSiteSetting(component, name);
       if (!def) return undefined;
-      const stored = await this.platformStoredValue(component, name);
-      return (stored === undefined ? def.defaultValue : stored) as T;
+      return this.platformValue<T>(def);
     }
     return this.getEffectiveValue<T>(tenantId, component, name);
   }
@@ -87,13 +106,26 @@ export class TenantConfigService {
     }
     const tenantRow = def.scope === 'platform' ? undefined : await this.repo.getConfigValue(tenantId, this.settingKey(def));
     const platformStored = await this.platformStoredValue(def.component, def.name);
+    // Thứ tự hiệu lực: ghi đè tenant → ghi đè platform → mặc định registry.
+    let value: unknown;
+    let source: SiteSetting['source'];
+    if (tenantRow) {
+      value = tenantRow.value;
+      source = 'database';
+    } else if (platformStored !== undefined) {
+      value = platformStored;
+      source = 'database';
+    } else {
+      value = def.defaultValue;
+      source = 'default';
+    }
     return {
       component: def.component,
       name: def.name,
       type: def.type,
       defaultValue: def.defaultValue,
-      value: tenantRow ? tenantRow.value : platformStored === undefined ? def.defaultValue : platformStored,
-      source: tenantRow || platformStored !== undefined ? 'database' : 'default',
+      value,
+      source,
       scope: def.scope,
     };
   }
@@ -101,21 +133,32 @@ export class TenantConfigService {
   /** Danh sách setting của tenant hiệu lực (scope tenant|both) kèm giá trị hiệu lực — cổng xem: tenant:viewall/manage tại context tenant. */
   async listForTenant(actorId: string, tenantId: string): Promise<SiteSetting[]> {
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
-    const canView =
-      (await this.evaluator.hasCapability(actorId, 'tenant:viewall', tenantCtx.id)) ||
-      (await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id));
-    if (!canView) {
-      throw new BadRequestException({
-        message: 'Missing capability tenant:viewall in the active tenant',
-        code: 'access.capability_denied',
-      });
-    }
+    await this.assertTenantViewerCapability(actorId, tenantCtx.id);
     const views: SiteSetting[] = [];
     for (const def of SITE_SETTINGS) {
       if (def.scope === 'platform') continue;
       views.push(await this.viewForTenant(tenantId, def.component, def.name));
     }
     return views;
+  }
+
+  /**
+   * Cổng xem của `listForTenant`: `tenant:viewall` HOẶC `tenant:manage` tại context tenant — cùng cổng mà
+   * `assertTenantSettingsManager` dùng cho đường ghi, chỉ khác ở đây chấp nhận một trong hai capability.
+   * Thiếu cả hai → 403 `access.capability_denied` như mọi cổng capability khác (không phải 400).
+   */
+  private async assertTenantViewerCapability(
+    actorId: string,
+    tenantCtxId: string,
+  ): Promise<void> {
+    try {
+      await this.evaluator.requireCapability(actorId, 'tenant:viewall', tenantCtxId);
+    } catch (error) {
+      // Chỉ rơi xuống kiểm tra `tenant:manage` khi bị từ chối capability; lỗi khác (vd lỗi đọc dữ kiện) ném ra
+      // nguyên trạng, không nuốt thành lần kiểm tra thứ hai.
+      if (!(error instanceof ForbiddenException)) throw error;
+      await this.evaluator.requireCapability(actorId, 'tenant:manage', tenantCtxId);
+    }
   }
 
   /** Tenant admin đặt ghi đè cho tenant của mình (gác `tenant:manage` tại context tenant ngay trong service). */

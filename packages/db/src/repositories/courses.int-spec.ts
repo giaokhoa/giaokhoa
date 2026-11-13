@@ -1,7 +1,9 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { CoursesRepository, type CategoryRow } from './courses';
 
 /**
@@ -24,12 +26,9 @@ import { CoursesRepository, type CategoryRow } from './courses';
  *   sạch dòng vừa ghi.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g645_courses';
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let pool: Pool;
 let db: CentreDb;
@@ -46,7 +45,7 @@ beforeAll(async () => {
   repo = new CoursesRepository(db);
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g645-courses', name: 'Trung tâm spec G5 courses', kind: 'center' })
+    .values({ slug: 'g645-courses', name: 'Trung tâm spec G5 courses', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   tenantId = tenant.id;
@@ -80,7 +79,7 @@ describe('CoursesRepository trên Kysely (issue #645)', () => {
     const child = await makeCategory('Danh mục con G5', root);
     const other = await makeCategory('Danh mục khác G5');
 
-    expect(root.id).toMatch(UUIDV7_PATTERN);
+    expect(root.id).toMatch(UUIDV7_RE);
     expect((await repo.getCategory(child.id))?.parent).toBe(root.id);
 
     const subtreeIds = (await repo.subtreeOf(root)).map((c) => c.id).sort();
@@ -104,7 +103,7 @@ describe('CoursesRepository trên Kysely (issue #645)', () => {
       isTemplate: true,
       sortOrder: 0,
     });
-    expect(course.id).toMatch(UUIDV7_PATTERN);
+    expect(course.id).toMatch(UUIDV7_RE);
     expect((await repo.getCourse(course.id))?.shortName).toBe('g645-course');
     expect((await repo.getCourseByShortname('g645-course'))?.id).toBe(course.id);
     expect((await repo.listCourses(cat.id)).map((c) => c.id)).toEqual([course.id]);
@@ -134,7 +133,7 @@ describe('CoursesRepository trên Kysely (issue #645)', () => {
       course: course.id, section: section.id, component: 'mod_quiz', instanceId: null,
       name: 'Bài kiểm tra', availability: availabilityArray,
     });
-    expect(cm.id).toMatch(UUIDV7_PATTERN);
+    expect(cm.id).toMatch(UUIDV7_RE);
     expect((await repo.getCm(cm.id))?.availability).toEqual(availabilityArray);
     expect((await repo.listCmsInSection(section.id)).map((c) => c.id)).toEqual([cm.id]);
   });

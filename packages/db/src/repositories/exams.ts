@@ -17,9 +17,11 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
+import {sql, type InsertObject, type UpdateObject} from 'kysely';
 import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { jsonbValue, jsonbField } from '../jsonb';
+import { CONTEXT_LEVEL_COURSE } from './dashboard';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type ExamsTx = CentreTx;
@@ -27,18 +29,9 @@ export type ExamsTx = CentreTx;
 export type ExamsDb = CentreDb | CentreTx;
 
 /**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi (object lẫn mảng) để một khuôn duy nhất, không phụ
- * thuộc nhánh xử lý riêng của driver theo hình dạng giá trị.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
+ * Các archetype vai trò được coi là "đang dạy" cho cổng bảo mật đề định kỳ (`userTeachesGrade`): chỉ giáo viên (có/không quyền sửa). Đây là khái niệm KHÁC với `STAFF_ARCHETYPES` của messaging (`manager`, `coursecreator` cùng nằm trong staff nhưng không "dạy" khối) nên giữ hằng riêng, không dùng chung.
  */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
+export const TEACHER_ARCHETYPES = ['teacher', 'editingteacher'] as const;
 
 /** Một dòng của bảng `exams` (hình dạng camelCase phía tiêu thụ dùng). */
 export interface ExamRow {
@@ -112,28 +105,27 @@ export const EXAM_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
-  const row: Insertable<CentreDB['exams']> = {
+function examInsertValues(values: NewExam): InsertObject<CentreDB, 'exams'> {
+  return {
     bank_id: values.bankId,
     created_by: values.createdBy,
+    ...(values.copyCount !== undefined ? { copy_count: values.copyCount } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.derivedFromBankId !== undefined ? { derived_from_bank_id: values.derivedFromBankId } : {}),
+    ...(values.derivedFromExamId !== undefined ? { derived_from_exam_id: values.derivedFromExamId } : {}),
+    ...(values.derivedFromMatrixId !== undefined ? { derived_from_matrix_id: values.derivedFromMatrixId } : {}),
+    ...(values.derivedFromVersionNumber !== undefined ? { derived_from_version_number: values.derivedFromVersionNumber } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.kind !== undefined ? { kind: values.kind } : {}),
+    ...(values.latestVersion !== undefined ? { latest_version: values.latestVersion } : {}),
+    ...(values.originalAuthorId !== undefined ? { original_author_id: values.originalAuthorId } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.tenantId !== undefined ? { tenant_id: values.tenantId } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
+    ...(values.withdrawnAt !== undefined ? { withdrawn_at: values.withdrawnAt } : {}),
+    ...(values.withdrawnBy !== undefined ? { withdrawn_by: values.withdrawnBy } : {}),
+    ...(values.withdrawnReason !== undefined ? { withdrawn_reason: values.withdrawnReason } : {}),
   };
-  if (values.copyCount !== undefined) row.copy_count = values.copyCount;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.derivedFromBankId !== undefined) row.derived_from_bank_id = values.derivedFromBankId;
-  if (values.derivedFromExamId !== undefined) row.derived_from_exam_id = values.derivedFromExamId;
-  if (values.derivedFromMatrixId !== undefined) row.derived_from_matrix_id = values.derivedFromMatrixId;
-  if (values.derivedFromVersionNumber !== undefined) row.derived_from_version_number = values.derivedFromVersionNumber;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.kind !== undefined) row.kind = values.kind;
-  if (values.latestVersion !== undefined) row.latest_version = values.latestVersion;
-  if (values.originalAuthorId !== undefined) row.original_author_id = values.originalAuthorId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  if (values.withdrawnAt !== undefined) row.withdrawn_at = values.withdrawnAt;
-  if (values.withdrawnBy !== undefined) row.withdrawn_by = values.withdrawnBy;
-  if (values.withdrawnReason !== undefined) row.withdrawn_reason = values.withdrawnReason;
-  return row;
 }
 
 /**
@@ -143,27 +135,27 @@ function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
  * jsonb đi qua `jsonbValue`. Mốc `updated_at` do repository
  * gắn sau cùng.
  */
-function examUpdateSet(patch: Partial<ExamRow>): Updateable<CentreDB['exams']> {
-  const set: Updateable<CentreDB['exams']> = {};
-  if (patch.bankId !== undefined) set.bank_id = patch.bankId;
-  if (patch.copyCount !== undefined) set.copy_count = patch.copyCount;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.createdBy !== undefined) set.created_by = patch.createdBy;
-  if (patch.derivedFromBankId !== undefined) set.derived_from_bank_id = patch.derivedFromBankId;
-  if (patch.derivedFromExamId !== undefined) set.derived_from_exam_id = patch.derivedFromExamId;
-  if (patch.derivedFromMatrixId !== undefined) set.derived_from_matrix_id = patch.derivedFromMatrixId;
-  if (patch.derivedFromVersionNumber !== undefined) set.derived_from_version_number = patch.derivedFromVersionNumber;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.latestVersion !== undefined) set.latest_version = patch.latestVersion;
-  if (patch.originalAuthorId !== undefined) set.original_author_id = patch.originalAuthorId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  if (patch.withdrawnAt !== undefined) set.withdrawn_at = patch.withdrawnAt;
-  if (patch.withdrawnBy !== undefined) set.withdrawn_by = patch.withdrawnBy;
-  if (patch.withdrawnReason !== undefined) set.withdrawn_reason = patch.withdrawnReason;
-  return set;
+function examUpdateSet(patch: Partial<ExamRow>): UpdateObject<CentreDB, 'exams'> {
+  return {
+    ...(patch.bankId !== undefined ? { bank_id: patch.bankId } : {}),
+    ...(patch.copyCount !== undefined ? { copy_count: patch.copyCount } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.createdBy !== undefined ? { created_by: patch.createdBy } : {}),
+    ...(patch.derivedFromBankId !== undefined ? { derived_from_bank_id: patch.derivedFromBankId } : {}),
+    ...(patch.derivedFromExamId !== undefined ? { derived_from_exam_id: patch.derivedFromExamId } : {}),
+    ...(patch.derivedFromMatrixId !== undefined ? { derived_from_matrix_id: patch.derivedFromMatrixId } : {}),
+    ...(patch.derivedFromVersionNumber !== undefined ? { derived_from_version_number: patch.derivedFromVersionNumber } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+    ...(patch.latestVersion !== undefined ? { latest_version: patch.latestVersion } : {}),
+    ...(patch.originalAuthorId !== undefined ? { original_author_id: patch.originalAuthorId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.tenantId !== undefined ? { tenant_id: patch.tenantId } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+    ...(patch.withdrawnAt !== undefined ? { withdrawn_at: patch.withdrawnAt } : {}),
+    ...(patch.withdrawnBy !== undefined ? { withdrawn_by: patch.withdrawnBy } : {}),
+    ...(patch.withdrawnReason !== undefined ? { withdrawn_reason: patch.withdrawnReason } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_versions` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -230,24 +222,23 @@ export const EXAM_VERSION_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examVersionInsertValues(values: NewExamVersion): InsertObject<CentreDB, 'exam_versions'> {
-  const row: InsertObject<CentreDB, 'exam_versions'> = {
+  return {
     created_by: values.createdBy,
     exam_id: values.examId,
     name: values.name,
     version: values.version,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.durationMinutes !== undefined ? { duration_minutes: values.durationMinutes } : {}),
+    ...(values.examKind !== undefined ? { exam_kind: values.examKind } : {}),
+    ...(values.grade !== undefined ? { grade: values.grade } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.matrixId !== undefined ? { matrix_id: values.matrixId } : {}),
+    ...(values.matrixVersion !== undefined ? { matrix_version: values.matrixVersion } : {}),
+    ...(values.matrixVersionId !== undefined ? { matrix_version_id: values.matrixVersionId } : {}),
+    ...(values.subjectId !== undefined ? { subject_id: values.subjectId } : {}),
+    ...(values.tfScale !== undefined ? { tf_scale: jsonbField(values.tfScale) } : {}),
+    ...(values.totalScore !== undefined ? { total_score: values.totalScore } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.durationMinutes !== undefined) row.duration_minutes = values.durationMinutes;
-  if (values.examKind !== undefined) row.exam_kind = values.examKind;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.matrixId !== undefined) row.matrix_id = values.matrixId;
-  if (values.matrixVersion !== undefined) row.matrix_version = values.matrixVersion;
-  if (values.matrixVersionId !== undefined) row.matrix_version_id = values.matrixVersionId;
-  if (values.subjectId !== undefined) row.subject_id = values.subjectId;
-  if (values.tfScale !== undefined) row.tf_scale = values.tfScale === null ? null : jsonbValue(values.tfScale);
-  if (values.totalScore !== undefined) row.total_score = values.totalScore;
-  return row;
 }
 
 /** Một dòng của bảng `exam_slots` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -301,21 +292,20 @@ export const EXAM_SLOT_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examSlotInsertValues(values: NewExamSlot): Insertable<CentreDB['exam_slots']> {
-  const row: Insertable<CentreDB['exam_slots']> = {
+function examSlotInsertValues(values: NewExamSlot): InsertObject<CentreDB, 'exam_slots'> {
+  return {
     exam_version_id: values.examVersionId,
     position: values.position,
     question_id: values.questionId,
+    ...(values.clusterId !== undefined ? { cluster_id: values.clusterId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.matrixCellId !== undefined ? { matrix_cell_id: values.matrixCellId } : {}),
+    ...(values.maxMark !== undefined ? { max_mark: values.maxMark } : {}),
+    ...(values.pinnedVersionId !== undefined ? { pinned_version_id: values.pinnedVersionId } : {}),
+    ...(values.pinnedVersionNumber !== undefined ? { pinned_version_number: values.pinnedVersionNumber } : {}),
+    ...(values.section !== undefined ? { section: values.section } : {}),
   };
-  if (values.clusterId !== undefined) row.cluster_id = values.clusterId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.matrixCellId !== undefined) row.matrix_cell_id = values.matrixCellId;
-  if (values.maxMark !== undefined) row.max_mark = values.maxMark;
-  if (values.pinnedVersionId !== undefined) row.pinned_version_id = values.pinnedVersionId;
-  if (values.pinnedVersionNumber !== undefined) row.pinned_version_number = values.pinnedVersionNumber;
-  if (values.section !== undefined) row.section = values.section;
-  return row;
 }
 
 /** Một dòng của bảng `exam_contributions` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -403,31 +393,30 @@ const EXAM_CONTRIBUTION_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examContributionInsertValues(values: NewExamContribution): InsertObject<CentreDB, 'exam_contributions'> {
-  const row: InsertObject<CentreDB, 'exam_contributions'> = {
+  return {
     exam_id: values.examId,
     proposer_id: values.proposerId,
     target_bank_id: values.targetBankId,
+    ...(values.contentHash !== undefined ? { content_hash: values.contentHash } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.dossierExamVersionId !== undefined ? { dossier_exam_version_id: values.dossierExamVersionId } : {}),
+    ...(values.dossierExamVersionNumber !== undefined ? { dossier_exam_version_number: values.dossierExamVersionNumber } : {}),
+    ...(values.dossierMatrixId !== undefined ? { dossier_matrix_id: values.dossierMatrixId } : {}),
+    ...(values.dossierMatrixVersion !== undefined ? { dossier_matrix_version: values.dossierMatrixVersion } : {}),
+    ...(values.dossierMatrixVersionId !== undefined ? { dossier_matrix_version_id: values.dossierMatrixVersionId } : {}),
+    ...(values.dossierSpecSnapshot !== undefined ? { dossier_spec_snapshot: jsonbField(values.dossierSpecSnapshot) } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.mode !== undefined ? { mode: values.mode } : {}),
+    ...(values.nearDuplicateOf !== undefined ? { near_duplicate_of: values.nearDuplicateOf } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.rejectReason !== undefined ? { reject_reason: values.rejectReason } : {}),
+    ...(values.resultExamId !== undefined ? { result_exam_id: values.resultExamId } : {}),
+    ...(values.reviewerId !== undefined ? { reviewer_id: values.reviewerId } : {}),
+    ...(values.sourceDossierId !== undefined ? { source_dossier_id: values.sourceDossierId } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.targetExamId !== undefined ? { target_exam_id: values.targetExamId } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.contentHash !== undefined) row.content_hash = values.contentHash;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.dossierExamVersionId !== undefined) row.dossier_exam_version_id = values.dossierExamVersionId;
-  if (values.dossierExamVersionNumber !== undefined) row.dossier_exam_version_number = values.dossierExamVersionNumber;
-  if (values.dossierMatrixId !== undefined) row.dossier_matrix_id = values.dossierMatrixId;
-  if (values.dossierMatrixVersion !== undefined) row.dossier_matrix_version = values.dossierMatrixVersion;
-  if (values.dossierMatrixVersionId !== undefined) row.dossier_matrix_version_id = values.dossierMatrixVersionId;
-  if (values.dossierSpecSnapshot !== undefined) row.dossier_spec_snapshot = values.dossierSpecSnapshot === null ? null : jsonbValue(values.dossierSpecSnapshot);
-  if (values.id !== undefined) row.id = values.id;
-  if (values.mode !== undefined) row.mode = values.mode;
-  if (values.nearDuplicateOf !== undefined) row.near_duplicate_of = values.nearDuplicateOf;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.rejectReason !== undefined) row.reject_reason = values.rejectReason;
-  if (values.resultExamId !== undefined) row.result_exam_id = values.resultExamId;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.sourceDossierId !== undefined) row.source_dossier_id = values.sourceDossierId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.targetExamId !== undefined) row.target_exam_id = values.targetExamId;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -438,30 +427,30 @@ function examContributionInsertValues(values: NewExamContribution): InsertObject
  * gắn sau cùng.
  */
 function examContributionUpdateSet(patch: Partial<ExamContributionRow>): UpdateObject<CentreDB, 'exam_contributions'> {
-  const set: UpdateObject<CentreDB, 'exam_contributions'> = {};
-  if (patch.contentHash !== undefined) set.content_hash = patch.contentHash;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.dossierExamVersionId !== undefined) set.dossier_exam_version_id = patch.dossierExamVersionId;
-  if (patch.dossierExamVersionNumber !== undefined) set.dossier_exam_version_number = patch.dossierExamVersionNumber;
-  if (patch.dossierMatrixId !== undefined) set.dossier_matrix_id = patch.dossierMatrixId;
-  if (patch.dossierMatrixVersion !== undefined) set.dossier_matrix_version = patch.dossierMatrixVersion;
-  if (patch.dossierMatrixVersionId !== undefined) set.dossier_matrix_version_id = patch.dossierMatrixVersionId;
-  if (patch.dossierSpecSnapshot !== undefined) set.dossier_spec_snapshot = patch.dossierSpecSnapshot === null ? null : jsonbValue(patch.dossierSpecSnapshot);
-  if (patch.examId !== undefined) set.exam_id = patch.examId;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.mode !== undefined) set.mode = patch.mode;
-  if (patch.nearDuplicateOf !== undefined) set.near_duplicate_of = patch.nearDuplicateOf;
-  if (patch.note !== undefined) set.note = patch.note;
-  if (patch.proposerId !== undefined) set.proposer_id = patch.proposerId;
-  if (patch.rejectReason !== undefined) set.reject_reason = patch.rejectReason;
-  if (patch.resultExamId !== undefined) set.result_exam_id = patch.resultExamId;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.sourceDossierId !== undefined) set.source_dossier_id = patch.sourceDossierId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.targetBankId !== undefined) set.target_bank_id = patch.targetBankId;
-  if (patch.targetExamId !== undefined) set.target_exam_id = patch.targetExamId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  return set;
+  return {
+    ...(patch.contentHash !== undefined ? { content_hash: patch.contentHash } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.dossierExamVersionId !== undefined ? { dossier_exam_version_id: patch.dossierExamVersionId } : {}),
+    ...(patch.dossierExamVersionNumber !== undefined ? { dossier_exam_version_number: patch.dossierExamVersionNumber } : {}),
+    ...(patch.dossierMatrixId !== undefined ? { dossier_matrix_id: patch.dossierMatrixId } : {}),
+    ...(patch.dossierMatrixVersion !== undefined ? { dossier_matrix_version: patch.dossierMatrixVersion } : {}),
+    ...(patch.dossierMatrixVersionId !== undefined ? { dossier_matrix_version_id: patch.dossierMatrixVersionId } : {}),
+    ...(patch.dossierSpecSnapshot !== undefined ? { dossier_spec_snapshot: jsonbField(patch.dossierSpecSnapshot) } : {}),
+    ...(patch.examId !== undefined ? { exam_id: patch.examId } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.mode !== undefined ? { mode: patch.mode } : {}),
+    ...(patch.nearDuplicateOf !== undefined ? { near_duplicate_of: patch.nearDuplicateOf } : {}),
+    ...(patch.note !== undefined ? { note: patch.note } : {}),
+    ...(patch.proposerId !== undefined ? { proposer_id: patch.proposerId } : {}),
+    ...(patch.rejectReason !== undefined ? { reject_reason: patch.rejectReason } : {}),
+    ...(patch.resultExamId !== undefined ? { result_exam_id: patch.resultExamId } : {}),
+    ...(patch.reviewerId !== undefined ? { reviewer_id: patch.reviewerId } : {}),
+    ...(patch.sourceDossierId !== undefined ? { source_dossier_id: patch.sourceDossierId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.targetBankId !== undefined ? { target_bank_id: patch.targetBankId } : {}),
+    ...(patch.targetExamId !== undefined ? { target_exam_id: patch.targetExamId } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_contribution_reviews` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -503,17 +492,16 @@ const EXAM_CONTRIBUTION_REVIEW_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examContributionReviewInsertValues(values: NewExamContributionReview): Insertable<CentreDB['exam_contribution_reviews']> {
-  const row: Insertable<CentreDB['exam_contribution_reviews']> = {
+function examContributionReviewInsertValues(values: NewExamContributionReview): InsertObject<CentreDB, 'exam_contribution_reviews'> {
+  return {
     contribution_id: values.contributionId,
     decision: values.decision,
     level: values.level,
     reviewer_id: values.reviewerId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.reason !== undefined ? { reason: values.reason } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.reason !== undefined) row.reason = values.reason;
-  return row;
 }
 
 /** Một dòng của bảng `exam_dossiers` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -580,24 +568,23 @@ const EXAM_DOSSIER_COLUMNS = [
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
 function examDossierInsertValues(values: NewExamDossier): InsertObject<CentreDB, 'exam_dossiers'> {
-  const row: InsertObject<CentreDB, 'exam_dossiers'> = {
+  return {
     exam_id: values.examId,
     proposer_id: values.proposerId,
     target_bank_id: values.targetBankId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.examVersionId !== undefined ? { exam_version_id: values.examVersionId } : {}),
+    ...(values.examVersionNumber !== undefined ? { exam_version_number: values.examVersionNumber } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.matrixId !== undefined ? { matrix_id: values.matrixId } : {}),
+    ...(values.matrixVersion !== undefined ? { matrix_version: values.matrixVersion } : {}),
+    ...(values.matrixVersionId !== undefined ? { matrix_version_id: values.matrixVersionId } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.resultExamId !== undefined ? { result_exam_id: values.resultExamId } : {}),
+    ...(values.specSnapshot !== undefined ? { spec_snapshot: jsonbField(values.specSnapshot) } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.examVersionId !== undefined) row.exam_version_id = values.examVersionId;
-  if (values.examVersionNumber !== undefined) row.exam_version_number = values.examVersionNumber;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.matrixId !== undefined) row.matrix_id = values.matrixId;
-  if (values.matrixVersion !== undefined) row.matrix_version = values.matrixVersion;
-  if (values.matrixVersionId !== undefined) row.matrix_version_id = values.matrixVersionId;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.resultExamId !== undefined) row.result_exam_id = values.resultExamId;
-  if (values.specSnapshot !== undefined) row.spec_snapshot = values.specSnapshot === null ? null : jsonbValue(values.specSnapshot);
-  if (values.status !== undefined) row.status = values.status;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -608,23 +595,23 @@ function examDossierInsertValues(values: NewExamDossier): InsertObject<CentreDB,
  * gắn sau cùng.
  */
 function examDossierUpdateSet(patch: Partial<ExamDossierRow>): UpdateObject<CentreDB, 'exam_dossiers'> {
-  const set: UpdateObject<CentreDB, 'exam_dossiers'> = {};
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.examId !== undefined) set.exam_id = patch.examId;
-  if (patch.examVersionId !== undefined) set.exam_version_id = patch.examVersionId;
-  if (patch.examVersionNumber !== undefined) set.exam_version_number = patch.examVersionNumber;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.matrixId !== undefined) set.matrix_id = patch.matrixId;
-  if (patch.matrixVersion !== undefined) set.matrix_version = patch.matrixVersion;
-  if (patch.matrixVersionId !== undefined) set.matrix_version_id = patch.matrixVersionId;
-  if (patch.note !== undefined) set.note = patch.note;
-  if (patch.proposerId !== undefined) set.proposer_id = patch.proposerId;
-  if (patch.resultExamId !== undefined) set.result_exam_id = patch.resultExamId;
-  if (patch.specSnapshot !== undefined) set.spec_snapshot = patch.specSnapshot === null ? null : jsonbValue(patch.specSnapshot);
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.targetBankId !== undefined) set.target_bank_id = patch.targetBankId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  return set;
+  return {
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...(patch.examId !== undefined ? { exam_id: patch.examId } : {}),
+    ...(patch.examVersionId !== undefined ? { exam_version_id: patch.examVersionId } : {}),
+    ...(patch.examVersionNumber !== undefined ? { exam_version_number: patch.examVersionNumber } : {}),
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.matrixId !== undefined ? { matrix_id: patch.matrixId } : {}),
+    ...(patch.matrixVersion !== undefined ? { matrix_version: patch.matrixVersion } : {}),
+    ...(patch.matrixVersionId !== undefined ? { matrix_version_id: patch.matrixVersionId } : {}),
+    ...(patch.note !== undefined ? { note: patch.note } : {}),
+    ...(patch.proposerId !== undefined ? { proposer_id: patch.proposerId } : {}),
+    ...(patch.resultExamId !== undefined ? { result_exam_id: patch.resultExamId } : {}),
+    ...(patch.specSnapshot !== undefined ? { spec_snapshot: jsonbField(patch.specSnapshot) } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.targetBankId !== undefined ? { target_bank_id: patch.targetBankId } : {}),
+    ...(patch.updatedAt !== undefined ? { updated_at: patch.updatedAt } : {}),
+  };
 }
 
 /** Một dòng của bảng `exam_dossier_reviews` (hình dạng camelCase phía tiêu thụ dùng). */
@@ -666,17 +653,16 @@ const EXAM_DOSSIER_REVIEW_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examDossierReviewInsertValues(values: NewExamDossierReview): Insertable<CentreDB['exam_dossier_reviews']> {
-  const row: Insertable<CentreDB['exam_dossier_reviews']> = {
+function examDossierReviewInsertValues(values: NewExamDossierReview): InsertObject<CentreDB, 'exam_dossier_reviews'> {
+  return {
     decision: values.decision,
     dossier_id: values.dossierId,
     level: values.level,
     reviewer_id: values.reviewerId,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.reason !== undefined ? { reason: values.reason } : {}),
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.reason !== undefined) row.reason = values.reason;
-  return row;
 }
 /**
  * Kho dữ liệu của lớp Ngân hàng đề (EB-1): danh tính đề
@@ -699,8 +685,8 @@ export class ExamsRepository {
   }
 
   async insertPaper(v: NewExam, db: ExamsDb = this.db()): Promise<ExamRow> {
-    const rows = await db.insertInto('exams').values(examInsertValues(v)).returning(EXAM_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exams').values(examInsertValues(v)).returning(EXAM_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Các lần ghim của một đề (kèm tên khoá + số version đã ghim) — bề mặt thay cho danh sách deployments cũ. */
@@ -753,8 +739,8 @@ export class ExamsRepository {
   }
 
   async insertVersion(v: NewExamVersion, db: ExamsDb = this.db()): Promise<ExamVersionRow> {
-    const rows = await db.insertInto('exam_versions').values(examVersionInsertValues(v)).returning(EXAM_VERSION_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_versions').values(examVersionInsertValues(v)).returning(EXAM_VERSION_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   async getVersion(id: string, db: ExamsDb = this.db()): Promise<ExamVersionRow | undefined> {
@@ -868,8 +854,8 @@ export class ExamsRepository {
   }
 
   async insertContribution(v: NewExamContribution, db: ExamsDb = this.db()): Promise<ExamContributionRow> {
-    const rows = await db.insertInto('exam_contributions').values(examContributionInsertValues(v)).returning(EXAM_CONTRIBUTION_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_contributions').values(examContributionInsertValues(v)).returning(EXAM_CONTRIBUTION_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   async getContribution(id: string, db: ExamsDb = this.db()): Promise<ExamContributionRow | undefined> {
@@ -928,8 +914,8 @@ export class ExamsRepository {
 
   /** Ghi một mốc duyệt của đóng góp (cấp 1 hoặc cấp 2) — sổ mốc duyệt của đường đóng góp duy nhất. */
   async insertContributionReview(v: NewExamContributionReview, db: ExamsDb = this.db()): Promise<ExamContributionReviewRow> {
-    const rows = await db.insertInto('exam_contribution_reviews').values(examContributionReviewInsertValues(v)).returning(EXAM_CONTRIBUTION_REVIEW_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_contribution_reviews').values(examContributionReviewInsertValues(v)).returning(EXAM_CONTRIBUTION_REVIEW_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Toàn bộ mốc duyệt của một đóng góp theo thứ tự thời gian (cấp 1 trước cấp 2). */
@@ -984,8 +970,8 @@ export class ExamsRepository {
   }
 
   async insertDossier(v: NewExamDossier, db: ExamsDb = this.db()): Promise<ExamDossierRow> {
-    const rows = await db.insertInto('exam_dossiers').values(examDossierInsertValues(v)).returning(EXAM_DOSSIER_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_dossiers').values(examDossierInsertValues(v)).returning(EXAM_DOSSIER_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   async getDossier(id: string, db: ExamsDb = this.db()): Promise<ExamDossierRow | undefined> {
@@ -1044,8 +1030,8 @@ export class ExamsRepository {
   }
 
   async insertDossierReview(v: NewExamDossierReview, db: ExamsDb = this.db()): Promise<ExamDossierReviewRow> {
-    const rows = await db.insertInto('exam_dossier_reviews').values(examDossierReviewInsertValues(v)).returning(EXAM_DOSSIER_REVIEW_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('exam_dossier_reviews').values(examDossierReviewInsertValues(v)).returning(EXAM_DOSSIER_REVIEW_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Vết duyệt của một bộ hồ sơ theo thứ tự thời gian (cấp 1 trước, cấp 2 sau). */
@@ -1072,9 +1058,9 @@ export class ExamsRepository {
       .innerJoin('course', 'context.instance_id', 'course.id')
       .select(['role_assignments.id as id'])
       .where('role_assignments.user_id', '=', userId)
-      .where('context.context_level', '=', 50)
+      .where('context.context_level', '=', CONTEXT_LEVEL_COURSE)
       .where('course.grade', '=', grade)
-      .where('role.archetype', 'in', ['teacher', 'editingteacher'])
+      .where('role.archetype', 'in', [...TEACHER_ARCHETYPES])
       .limit(1)
       .execute();
     return rows.length > 0;

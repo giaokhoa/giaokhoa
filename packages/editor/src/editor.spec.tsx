@@ -366,7 +366,7 @@ describe('Khối RichTextEditor', () => {
     expect(screen.getAllByRole('toolbar')).toHaveLength(1);
   });
 
-  it('undoes and redoes an insertion from the toolbar (Hoàn tác / Làm lại)', async () => {
+  it('hoàn tác rồi làm lại lần chèn công thức từ thanh công cụ', async () => {
     const { onChange, lastChange } = collectChanges();
     const { container } = render(<RichTextEditor onChange={onChange} />);
     await focusEditor(container);
@@ -560,8 +560,6 @@ describe('Tài liệu soạn thảo MultipleChoice', () => {
 });
 
 describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
-  const textBlocks = (text: string) => [{ type: 'paragraph', content: [{ type: 'text', text }] }];
-
   it('tạo tài liệu rỗng có đúng bốn mệnh đề đã định danh', () => {
     const document = createEmptyTrueFalseDocument();
     const { stem, statements } = splitTrueFalseDocument(document);
@@ -616,7 +614,6 @@ describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
       ],
     });
     expect(isCompleteTrueFalse(emptyStem, answers)).toBe(false);
-    void textBlocks;
   });
 
   it('kết xuất tĩnh tài liệu TF đã lưu kèm thân và mọi mệnh đề', () => {
@@ -641,7 +638,7 @@ describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
     expect(container.querySelectorAll('ol.giaokhoa-statement-list li')).toHaveLength(2);
   });
 
-  it('renders one Đúng/Sai radio pair per statement and reports the picked value by statement id', async () => {
+  it('vẽ một cặp radio Đúng/Sai cho mỗi mệnh đề và báo đáp án đã chọn theo id mệnh đề', async () => {
     const document = composeTrueFalseDocument({
       type: 'doc',
       content: [

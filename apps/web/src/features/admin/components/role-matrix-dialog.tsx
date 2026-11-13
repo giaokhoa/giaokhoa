@@ -22,6 +22,7 @@ import {
 } from '@giaokhoa/ui/components/table';
 import { ErrorAlert } from '#components/error-alert';
 import type { ContextRow, RoleCapabilityRow } from '#lib/access';
+import { findSystemContext } from '#lib/permissions';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { contextOptionLabel } from '../api/context-labels';
@@ -42,7 +43,7 @@ import { isLockedPermission, PermissionCheckboxCell } from './permission-cells';
  * 1. Mở hộp thoại: trường tên/mô tả nạp từ vai đang sửa (hoặc trống khi
  *    tạo); `shortName` chỉ hiện khi tạo, bắt buộc và duy nhất, khi sửa
  *    thì khoá không cho đổi; ngữ cảnh mặc định là ngữ cảnh hệ thống
- *    (cấp 10). Trang chứa render hộp thoại có điều kiện nên mỗi lần mở
+ *    (CONTEXT_LEVEL.SYSTEM). Trang chứa render hộp thoại có điều kiện nên mỗi lần mở
  *    là một lượt làm việc mới với state khởi tạo sạch. Hành động huỷ
  *    chỉ có đúng một nút ở chân hộp thoại — đóng bằng nút × của
  *    Dialog, bằng Huỷ hay bằng Escape đều bị chặn trong lúc đang lưu.
@@ -151,8 +152,8 @@ export function RoleMatrixDialog({
   const replaceMutation = useReplaceRoleCapabilities();
   const saving = createMutation.isPending || updateMutation.isPending || replaceMutation.isPending;
 
-  /** Ngữ cảnh hệ thống (cấp 10) — ngữ cảnh mặc định của hộp thoại. */
-  const systemContextId = contexts.find((ctx) => ctx.contextLevel === 10)?.id ?? '';
+  /** Ngữ cảnh hệ thống (CONTEXT_LEVEL.SYSTEM) — ngữ cảnh mặc định của hộp thoại. */
+  const systemContextId = findSystemContext(contexts)?.id ?? '';
   /** Ngữ cảnh đang sửa: lựa chọn tường minh, nếu chưa chọn thì ngữ cảnh hệ thống. */
   const contextId = contextOverride !== '' ? contextOverride : systemContextId;
 

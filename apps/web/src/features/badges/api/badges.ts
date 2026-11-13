@@ -1,3 +1,10 @@
+/**
+ * Tầng gọi API thuần của feature badges: chỉ chứa các hàm gọi HTTP qua apiJson, không
+ * phụ thuộc React hay React Query. Gồm đọc toàn bộ huy hiệu, huy hiệu của tôi, danh sách
+ * đã cấp, tạo site badge, đặt tiêu chí hoàn thành khoá học và đổi trạng thái badge;
+ * tầng queries/ của feature bọc các hàm này thành hook.
+ */
+
 import { apiJson } from '#lib/api';
 import type { BadgeView, IssuedView, MyBadgeView } from '../types/badges';
 
@@ -5,6 +12,8 @@ import type { BadgeView, IssuedView, MyBadgeView } from '../types/badges';
  * Tầng gọi API thuần của trang huy hiệu thuộc feature badges:
  * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành hook. Tách từ module phẳng `src/lib/badges.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
+
+import { BADGE_TYPE_SITE } from '../types/badges';
 
 /**
  * Đọc toàn bộ huy hiệu (GET /badges).
@@ -41,7 +50,7 @@ export function fetchBadgeIssued(badgeId: string) {
  * @returns Đáp ứng của API.
  */
 export function createBadge(name: string) {
-  return apiJson('/api/v1/badges', { method: 'POST', body: JSON.stringify({ name, type: 1 }) });
+  return apiJson('/api/v1/badges', { method: 'POST', body: JSON.stringify({ name, type: BADGE_TYPE_SITE }) });
 }
 
 /**
@@ -62,7 +71,7 @@ export function setBadgeCriteria(badgeId: string, courseId: string) {
 }
 
 /**
- * Đổi trạng thái một badge (POST /badges/:id/status) — kích hoạt dùng { status: 1 }.
+ * Đổi trạng thái một badge (POST /badges/:id/status) — kích hoạt dùng { status: BADGE_STATUS_ACTIVE }.
  *
  * @param badgeId - Định danh huy hiệu.
  * @param status - Trạng thái mới.

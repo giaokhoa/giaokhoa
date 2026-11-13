@@ -1,3 +1,8 @@
+/**
+ * Trang trung tâm thông báo: danh sách đã nhóm theo loại sự kiện, ngữ cảnh và ngày, kèm bộ lọc theo nhóm/chỉ-chưa-đọc, phân trang con trỏ, mở rộng dòng gộp, đánh dấu đã đọc và xoá từng mục.
+ * Luồng chính: loader phía server prefetch trang đầu của bộ lọc mặc định cùng tuỳ chọn và ghi đè theo khoá rồi hydrate vào cache; mọi thao tác đọc/xoá đều làm mới khoá số chưa đọc dùng chung với chuông; phần cài đặt thông báo đã chuyển sang mục Thông báo của khu Cài đặt.
+ */
+
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -9,9 +14,9 @@ import { useNavigate } from 'react-router';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { fetchNotificationGroupItems, flattenNotificationGroups, updateNotificationGroupsCache, useClearReadNotifications, useDeleteNotification, useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationGroups, useReadNotificationGroup } from '../queries/notifications';
-import { groupsUrl, notificationGroupKey } from '../utils/notifications';
+import { groupsUrl, notificationGroupKey, openNotificationGroupWithUnread } from '../utils/notifications';
 import type { NotificationCourseOverrideView, NotificationGroupFilter, NotificationGroupView, NotificationGroupsPage, NotificationItemView, NotificationPreferenceView } from '../types/notifications';
-import { formatDate, formatDateTime } from '#utils/date-format';
+import { formatDate, formatDateTime, MS_PER_DAY, relativeTime } from '#utils/date-format';
 import { queryKeys } from '../queries/keys';
 import { buildSsrLoaderData, serverProbe, serverQueryFn, type SsrLoaderData } from '#lib/ssr-data';
 
@@ -63,9 +68,6 @@ export async function loader({ request }: { request: Request }): Promise<SsrLoad
 
 type GroupFilterSelection = NotificationGroupFilter | 'all';
 
-function groupKey(g: Pick<NotificationGroupView, 'eventType' | 'contextUrl' | 'day'>): string {
-  return notificationGroupKey(g);
-}
 
 /** Nhãn đầu mục ngày: Hôm nay / Hôm qua theo ngày lịch của trình duyệt, còn lại in ngày cụ thể. */
 function dayLabel(day: string, t: (key: string) => string): string {
@@ -76,21 +78,8 @@ function dayLabel(day: string, t: (key: string) => string): string {
   };
   const now = new Date();
   if (day === localDay(now)) return t('todayLabel');
-  if (day === localDay(new Date(now.getTime() - 86_400_000))) return t('yesterdayLabel');
+  if (day === localDay(new Date(now.getTime() - MS_PER_DAY))) return t('yesterdayLabel');
   return formatDate(`${day}T00:00:00`);
-}
-
-/** Thời gian tương đối cho mục mới nhất ("vừa xong", "3 giờ trước"…); quá một tuần thì in ngày giờ cụ thể. */
-function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 60_000) return t('justNow');
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 60) return t('minutesAgo', { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('hoursAgo', { count: hours });
-  const days = Math.floor(hours / 24);
-  if (days < 7) return t('daysAgo', { count: days });
-  return formatDateTime(iso);
 }
 
 /**
@@ -106,7 +95,7 @@ function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknow
  * thông báo" đúng chuẩn các site lớn trong research #288. Trang này
  * không còn gọi API preferences nữa.
  *
- * Dữ liệu qua TanStack Query (lib/notifications.ts, F-01): danh sách
+ * Dữ liệu qua TanStack Query (features/notifications/queries/notifications, F-01): danh sách
  * nhóm là infinite query theo khoá bộ lọc, các mục mở rộng tải qua
  * fetchQuery vào cùng cache, tuỳ chọn là một query + mutation lạc quan
  * trên cache. Điểm khác hành vi cũ quan trọng nhất: mọi thao tác
@@ -152,7 +141,7 @@ export function NotificationsPage() {
   }
 
   async function toggleExpand(group: NotificationGroupView) {
-    const key = groupKey(group);
+    const key = notificationGroupKey(group);
     if (expandedItems.has(key)) {
       setExpandedItems((prev) => {
         const next = new Map(prev);
@@ -178,9 +167,9 @@ export function NotificationsPage() {
 
   /** Đánh dấu một mục đã đọc ở trạng thái hiển thị (cache nhóm + mục đang mở rộng). */
   function applyItemRead(group: NotificationGroupView, itemId: string) {
-    const key = groupKey(group);
+    const key = notificationGroupKey(group);
     updateNotificationGroupsCache(queryClient, (prev) =>
-      prev.map((g) => (groupKey(g) === key && g.unreadCount > 0
+      prev.map((g) => (notificationGroupKey(g) === key && g.unreadCount > 0
         ? { ...g, unreadCount: g.unreadCount - 1, latest: g.latest.id === itemId ? { ...g.latest, timeRead: new Date().toISOString() } : g.latest }
         : g)),
     );
@@ -219,15 +208,7 @@ export function NotificationsPage() {
       return;
     }
     if (group.unreadCount > 0) {
-      readGroupMutation.mutate(group, {
-        onSettled: () => {
-          const key = groupKey(group);
-          updateNotificationGroupsCache(queryClient, (prev) =>
-            prev.map((g) => (groupKey(g) === key ? { ...g, unreadCount: 0 } : g)),
-          );
-          navigate(group.contextUrl!);
-        },
-      });
+      openNotificationGroupWithUnread(group, queryClient, readGroupMutation, navigate);
       return;
     }
     navigate(group.contextUrl);
@@ -237,7 +218,7 @@ export function NotificationsPage() {
   function deleteItem(group: NotificationGroupView, item: NotificationItemView) {
     deleteMutation.mutate(item.id, {
       onSettled: () => {
-        const key = groupKey(group);
+        const key = notificationGroupKey(group);
         setExpandedItems((prev) => {
           const items = prev.get(key);
           if (!items) return prev;
@@ -247,14 +228,15 @@ export function NotificationsPage() {
         });
         updateNotificationGroupsCache(queryClient, (prev) =>
           prev.flatMap((g) => {
-            if (groupKey(g) !== key) return [g];
+            if (notificationGroupKey(g) !== key) return [g];
             const count = g.count - 1;
             if (count <= 0) return [];
             const remaining = expandedItems.get(key)?.filter((n) => n.id !== item.id) ?? [];
-            const latest = g.latest.id === item.id && remaining.length > 0
+            const firstRemaining = remaining[0];
+            const latest = g.latest.id === item.id && firstRemaining
               ? {
-                  id: remaining[0]!.id, subject: remaining[0]!.subject, smallMessage: remaining[0]!.smallMessage,
-                  contextUrlName: remaining[0]!.contextUrlName, createdAt: remaining[0]!.createdAt, timeRead: remaining[0]!.timeRead,
+                  id: firstRemaining.id, subject: firstRemaining.subject, smallMessage: firstRemaining.smallMessage,
+                  contextUrlName: firstRemaining.contextUrlName, createdAt: firstRemaining.createdAt, timeRead: firstRemaining.timeRead,
                 }
               : g.latest;
             return [{ ...g, count, unreadCount: item.timeRead ? g.unreadCount : Math.max(0, g.unreadCount - 1), latest }];
@@ -346,7 +328,7 @@ export function NotificationsPage() {
           ) : (
             <ul className="space-y-2" aria-label={t('notificationsListLabel')}>
               {rows.map(({ dayHeader, group }) => {
-                const key = groupKey(group);
+                const key = notificationGroupKey(group);
                 const items = expandedItems.get(key);
                 return (
                   <li key={key} className="space-y-2">

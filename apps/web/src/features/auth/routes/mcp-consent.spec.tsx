@@ -37,7 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('consent MCP — cùng route, nhiều yêu cầu OAuth', () => {
+describe('Trang đồng ý MCP — cùng route, nhiều yêu cầu OAuth', () => {
   it('đổi A sang B, reset quyền và không để phản hồi client A ghi đè tên B hoặc payload B', async () => {
     let resolveClientA!: (response: Response) => void;
     const clientA = new Promise<Response>((resolve) => {

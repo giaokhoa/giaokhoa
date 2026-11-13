@@ -20,7 +20,13 @@ const MISSING_OBJECT_CODES = new Set(['42P01', '3F000']);
 
 /** Kiểm tra một lỗi có phải "bảng chưa tồn tại" không (để phân biệt với lỗi thật). */
 function isMissingObjectError(error: unknown): boolean {
-  return error instanceof Object && MISSING_OBJECT_CODES.has((error as { code?: string }).code ?? '');
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    MISSING_OBJECT_CODES.has(error.code)
+  );
 }
 
 /** Hình dạng kết nối tối thiểu mà hàm đọc nhật ký cần — `pg.Client` thoả trực tiếp. */

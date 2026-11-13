@@ -56,17 +56,17 @@ export class CredentialBridgeService {
   private async assertUsernameAllowed(username: string): Promise<void> {
     if (username.length < USERNAME_MIN_LENGTH) {
       throw new Error(
-        `username quá ngắn: tối thiểu ${USERNAME_MIN_LENGTH} ký tự theo luật plugin username của Better Auth`,
+        `Username too short: minimum ${USERNAME_MIN_LENGTH} characters per Better Auth username plugin rules (code: auth.username_too_short)`,
       );
     }
     if (username.length > USERNAME_MAX_LENGTH) {
       throw new Error(
-        `username quá dài: tối đa ${USERNAME_MAX_LENGTH} ký tự theo luật plugin username của Better Auth`,
+        `Username too long: maximum ${USERNAME_MAX_LENGTH} characters per Better Auth username plugin rules (code: auth.username_too_long)`,
       );
     }
     if (!USERNAME_PATTERN.test(username)) {
       throw new Error(
-        'username không hợp lệ: chỉ chấp nhận chữ cái, chữ số, dấu "_" và "." theo luật plugin username của Better Auth',
+        'Username is invalid: only letters, digits, "_" and "." are accepted per Better Auth username plugin rules (code: auth.username_invalid)',
       );
     }
     const existing = await this.db
@@ -76,7 +76,8 @@ export class CredentialBridgeService {
       .limit(1)
       .executeTakeFirst();
     if (existing) {
-      throw new Error(`username đã được sử dụng: "${username.toLowerCase()}" đã tồn tại`);
+      // Cùng mã lỗi với UsersService khi username đã có người dùng (`user.username_taken`): hai đường kiểm trùng là một luật.
+      throw new Error(`Username "${username.toLowerCase()}" is already taken (code: user.username_taken)`);
     }
   }
 
@@ -211,33 +212,10 @@ export class CredentialBridgeService {
    */
   async linkExistingPasswordHash(userId: string): Promise<boolean> {
     this.betterAuth.requireAuth();
-    const row = await this.db
-      .selectFrom('users')
-      .select('password_hash')
-      .where('id', '=', userId)
-      .limit(1)
-      .executeTakeFirst();
-    if (!row?.password_hash) return false;
-    const existing = await this.db
-      .selectFrom('account')
-      .select('id')
-      .where('user_id', '=', userId)
-      .where('provider_id', '=', 'credential')
-      .limit(1)
-      .executeTakeFirst();
+    const { passwordHash, existing } = await this.findPasswordHashAndCredential(userId);
+    if (!passwordHash) return false;
     if (existing) return false;
-    const inserted = await this.db
-      .insertInto('account')
-      .values({
-        user_id: userId,
-        provider_id: 'credential',
-        account_id: userId,
-        password: row.password_hash,
-      })
-      .onConflict((oc) => oc.columns(['user_id', 'provider_id']).doNothing())
-      .returning('id')
-      .execute();
-    if (inserted.length === 0) return false;
+    if (!(await this.insertCredentialAccount(userId, passwordHash))) return false;
     // BA-1 — cùng chốt semantics như createUserWithCredential: việc
     // hệ thống/quản trị chép hash mật khẩu hiện hữu sang credential
     // là khẳng định quyền sở hữu mailbox cho user đó (chỉ bên giữ hash
@@ -266,13 +244,34 @@ export class CredentialBridgeService {
    */
   async syncCredentialPassword(userId: string): Promise<boolean> {
     if (!this.betterAuth.auth) return false;
+    const { passwordHash, existing } = await this.findPasswordHashAndCredential(userId);
+    if (!passwordHash) return false;
+    if (existing) {
+      if (existing.password === passwordHash) return false;
+      await this.db
+        .updateTable('account')
+        .set({ password: passwordHash, updated_at: new Date() })
+        .where('id', '=', existing.id)
+        .execute();
+      return true;
+    }
+    return this.insertCredentialAccount(userId, passwordHash);
+  }
+
+  /**
+   * Tra hash mật khẩu hiện hữu ở `users.password_hash` và dòng credential của user trong bảng `account` (nếu có) — dùng chung cho `linkExistingPasswordHash` và `syncCredentialPassword` để hai đường giữ cùng một luật đọc.
+   * @returns Hash hiện hữu (`null` khi user không có hash) và dòng credential đã có (`undefined` khi chưa có).
+   */
+  private async findPasswordHashAndCredential(userId: string): Promise<{
+    passwordHash: string | null;
+    existing: { id: string; password: string | null } | undefined;
+  }> {
     const row = await this.db
       .selectFrom('users')
       .select('password_hash')
       .where('id', '=', userId)
       .limit(1)
       .executeTakeFirst();
-    if (!row?.password_hash) return false;
     const existing = await this.db
       .selectFrom('account')
       .select(['id', 'password'])
@@ -280,22 +279,21 @@ export class CredentialBridgeService {
       .where('provider_id', '=', 'credential')
       .limit(1)
       .executeTakeFirst();
-    if (existing) {
-      if (existing.password === row.password_hash) return false;
-      await this.db
-        .updateTable('account')
-        .set({ password: row.password_hash, updated_at: new Date() })
-        .where('id', '=', existing.id)
-        .execute();
-      return true;
-    }
+    return { passwordHash: row?.password_hash ?? null, existing };
+  }
+
+  /**
+   * Chèn dòng credential cho user vào bảng `account`, idempotent trên UNIQUE (user_id, provider_id): hai lời gọi đồng thời cùng chèn thì chỉ một dòng thắng, lời gọi thua nhận `false` thay vì văng lỗi trùng khoá.
+   * @returns `true` khi chèn được một dòng, `false` khi dòng đã tồn tại.
+   */
+  private async insertCredentialAccount(userId: string, passwordHash: string): Promise<boolean> {
     const inserted = await this.db
       .insertInto('account')
       .values({
         user_id: userId,
         provider_id: 'credential',
         account_id: userId,
-        password: row.password_hash,
+        password: passwordHash,
       })
       .onConflict((oc) => oc.columns(['user_id', 'provider_id']).doNothing())
       .returning('id')
@@ -303,11 +301,6 @@ export class CredentialBridgeService {
     return inserted.length > 0;
   }
 
-  /**
-   * Tạo phiên theo chương trình cho user (không qua HTTP đăng nhập) và
-   * trả giá trị cookie phiên đã ký để phía gọi đặt lên response — đúng
-   * định dạng `token.signature` mà Better Auth chấp nhận.
-   */
   /**
    * Thu hồi toàn bộ phiên cookie Better Auth của user trong đúng kho trung tâm.
    * @returns Số dòng session đã bị xoá để phục vụ audit và nghiệm thu.
@@ -322,6 +315,11 @@ export class CredentialBridgeService {
     return deleted.length;
   }
 
+  /**
+   * Tạo phiên theo chương trình cho user (không qua HTTP đăng nhập) và
+   * trả giá trị cookie phiên đã ký để phía gọi đặt lên response — đúng
+   * định dạng `token.signature` mà Better Auth chấp nhận.
+   */
   async createProgrammaticSession(userId: string): Promise<{
     sessionId: string;
     token: string;

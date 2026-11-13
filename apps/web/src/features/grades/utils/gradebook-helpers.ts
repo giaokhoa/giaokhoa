@@ -26,7 +26,5 @@ export function guessVneduColumnKind(item: GradeItem): VneduColumnKind {
   return 'regular';
 }
 
-/** Số điểm hiển thị theo ngôn ngữ (tối đa 2 chữ số thập phân, không ép 0) — cùng quy ước trang phụ huynh. */
-export function scoreLabel(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
-}
+/** Số điểm hiển thị theo ngôn ngữ — tái xuất từ `#utils/number-format` (bản duy nhất dùng chung với trang phụ huynh). */
+export { scoreLabel } from '#utils/number-format';

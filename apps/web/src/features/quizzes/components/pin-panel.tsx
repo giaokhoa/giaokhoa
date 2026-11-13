@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giao
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { DIFF_CHANGE_LABEL_KEYS } from '../utils/utils';
 import { ExamSourceInfo } from '../types/quiz';
 
 interface PinPanelProps {
@@ -113,13 +114,13 @@ export function PinPanel({
                     <li key={d.position}>
                       {t('diffSlotLine', { position: d.position })} —{' '}
                       {d.change === 'question_version_changed'
-                        ? t('diffChange_question_version_changed', {
+                        ? t(DIFF_CHANGE_LABEL_KEYS.question_version_changed, {
                             from: d.fromPinnedVersionNumber ?? 0,
                             to: d.toPinnedVersionNumber ?? 0,
                           })
                         : d.change === 'mark_changed'
-                          ? t('diffChange_mark_changed', { from: d.fromMaxMark ?? 0, to: d.toMaxMark ?? 0 })
-                          : t(`diffChange_${d.change}`)}
+                          ? t(DIFF_CHANGE_LABEL_KEYS.mark_changed, { from: d.fromMaxMark ?? 0, to: d.toMaxMark ?? 0 })
+                          : t(DIFF_CHANGE_LABEL_KEYS[d.change])}
                     </li>
                   ))}
                 </ul>

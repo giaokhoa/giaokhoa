@@ -15,10 +15,13 @@
  * Area lạ (module khác có thể đăng ký area mới phía API qua registerArea mà web chưa biết đích): trả null — bề mặt hiển thị giữ kết quả ở dạng thông tin, không bịa đường dẫn.
  */
 
+/** Area tìm kiếm toàn cục mà phía API đăng ký — đúng ba area dựng sẵn; area lạ (module khác đăng ký thêm) không nằm trong union này và rơi về nhánh mặc định (không đích) trong `globalSearchTarget`. */
+export type GlobalSearchArea = 'courses' | 'users' | 'contentbank';
+
 /** Một bản ghi kết quả của GET /api/v1/search (khớp hình dạng phía API trả). */
 export interface GlobalSearchDoc {
   id: string;
-  area: string;
+  area: GlobalSearchArea;
   itemId: string;
   title: string;
   content: string;

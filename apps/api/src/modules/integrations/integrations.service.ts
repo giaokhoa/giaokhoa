@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, NotImplementedException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -58,7 +58,17 @@ export class IntegrationsService {
       name: 'core_grades_update_grades',
       capability: 'grade:edit',
       resolveContext: async (args, _ctx, courses) => courses.courseContextId(String(args.courseId)),
-      handler: async (_callerId, args) => ({ updated: true, courseId: String(args.courseId), note: 'grade write delegated to GradesModule in production wiring' }),
+      // Chưa triển khai ghi điểm thật (S15): function vẫn đăng ký để
+      // createService chấp nhận tên và cổng kiểm capability (403) giữ nguyên,
+      // nhưng caller đủ quyền thì nhận 501 rõ ràng thay vì `updated: true`
+      // giả — ghi điểm thật cần hợp đồng args (mảng grades + item) và nối
+      // GradesModule, chưa có trong đợt này.
+      handler: async () => {
+        throw new NotImplementedException({
+          message: 'core_grades_update_grades is not implemented yet',
+          code: 'webservice.not_implemented',
+        });
+      },
     });
   }
 
@@ -107,7 +117,11 @@ export class IntegrationsService {
     const row = await this.repo.getToken(id);
     if (!row) throw new NotFoundException({ message: `Token ${id} not found`, code: 'webservice.token_not_found' });
     await this.repo.updateToken(id, { revoked: true });
-    return (await this.repo.getToken(id))!;
+    // Đọc lại sau khi ghi: dòng vừa kiểm tra còn tồn tại nên phải đọc
+    // được — mất dòng ở đây là lỗi dữ kiện, báo 404 thay vì khẳng định.
+    const updated = await this.repo.getToken(id);
+    if (!updated) throw new NotFoundException({ message: `Token ${id} not found`, code: 'webservice.token_not_found' });
+    return updated;
   }
 
   /**

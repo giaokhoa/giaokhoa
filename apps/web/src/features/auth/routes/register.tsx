@@ -7,7 +7,7 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { ErrorAlert } from '#components/error-alert';
 import { PageShell } from '#components/page-shell';
-import { ApiError, apiJson } from '#lib/api';
+import { apiJson, errorText } from '#lib/api';
 import { useAuth } from '#lib/auth';
 import '#config/i18n';
 
@@ -43,7 +43,7 @@ export function PublicRegistrationPage() {
       await login(username, password);
       navigate('/profile');
     } catch (err) {
-      setError(err instanceof ApiError ? (err.problem.detail ?? err.problem.title) : t('registrationFailed'));
+      setError(errorText(err, t('registrationFailed')));
     } finally {
       setBusy(false);
     }

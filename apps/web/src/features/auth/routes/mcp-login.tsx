@@ -4,6 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giao
 import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { ErrorAlert } from '#components/error-alert';
+import { useTranslation } from 'react-i18next';
+import '#config/i18n';
+import { apiFetch } from '#lib/api';
 
 /**
  * Trang đăng nhập cho luồng uỷ quyền MCP (lát MCP-1, issue #163).
@@ -13,6 +16,7 @@ import { ErrorAlert } from '#components/error-alert';
  * Tài khoản đã bật xác thực hai lớp: đáp ứng đăng nhập mang `twoFactorRedirect` và CHƯA có phiên nào (chỉ có cookie chờ bước hai) — trang chuyển sang form nhập mã TOTP, gọi endpoint hoàn tất bước hai để lấy cookie phiên rồi mới quay lại authorize. Bỏ qua bước này (coi mọi đáp ứng 200 là đã đăng nhập) sẽ khiến authorize đẩy về lại trang này vô hạn.
  */
 export default function McpLoginPage() {
+  const { t } = useTranslation('app');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +30,7 @@ export default function McpLoginPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/v1/auth/get-session', { credentials: 'include' });
+        const res = await apiFetch('/api/v1/auth/get-session');
         const body = (await res.json().catch(() => null)) as { user?: unknown } | null;
         if (!cancelled && res.ok && body && typeof body === 'object' && body.user) {
           window.location.assign(`/api/v1/auth/oauth2/authorize${window.location.search}`);
@@ -47,14 +51,12 @@ export default function McpLoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/auth/sign-in/username', {
+      const res = await apiFetch('/api/v1/auth/sign-in/username', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       if (!res.ok) {
-        setError('Đăng nhập không thành công. Kiểm tra lại tên đăng nhập và mật khẩu.');
+        setError(t('mcpLoginFailed'));
         setBusy(false);
         return;
       }
@@ -69,7 +71,7 @@ export default function McpLoginPage() {
       // Phiên BA đã được đặt cookie — quay lại authorize với query gốc.
       window.location.assign(`/api/v1/auth/oauth2/authorize${window.location.search}`);
     } catch {
-      setError('Không kết nối được máy chủ. Thử lại sau ít phút.');
+      setError(t('mcpServerUnreachable'));
       setBusy(false);
     }
   }
@@ -80,20 +82,18 @@ export default function McpLoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/auth/two-factor/verify-totp', {
+      const res = await apiFetch('/api/v1/auth/two-factor/verify-totp', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: mfaCode.trim() }),
       });
       if (!res.ok) {
-        setError('Mã xác thực không đúng hoặc đã hết hạn. Đăng nhập lại để nhận thử thách mới nếu mã vẫn bị từ chối.');
+        setError(t('mcpMfaInvalidCode'));
         setBusy(false);
         return;
       }
       window.location.assign(`/api/v1/auth/oauth2/authorize${window.location.search}`);
     } catch {
-      setError('Không kết nối được máy chủ. Thử lại sau ít phút.');
+      setError(t('mcpServerUnreachable'));
       setBusy(false);
     }
   }
@@ -102,15 +102,14 @@ export default function McpLoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Đăng nhập để uỷ quyền ứng dụng AI</CardTitle>
+          <CardTitle>{t('mcpLoginTitle')}</CardTitle>
           <CardDescription>
-            Một ứng dụng AI đang xin quyền truy cập ngân hàng câu hỏi thay bạn. Đăng nhập bằng tài khoản Giáo khoa
-            của bạn để tiếp tục tới bước xác nhận quyền.
+            {t('mcpLoginDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {checking ? (
-            <p className="text-sm text-muted-foreground">Đang kiểm tra phiên đăng nhập…</p>
+            <p className="text-sm text-muted-foreground">{t('mcpCheckingSession')}</p>
           ) : needsMfa ? (
             <form className="space-y-4" onSubmit={onMfaSubmit}>
               {error ? (
@@ -119,10 +118,10 @@ export default function McpLoginPage() {
                 </ErrorAlert>
               ) : null}
               <p className="text-sm text-muted-foreground">
-                Tài khoản của bạn đã bật xác thực hai lớp. Nhập mã 6 số từ ứng dụng xác thực để tiếp tục.
+                {t('mcpMfaInstruction')}
               </p>
               <div className="space-y-2">
-                <Label htmlFor="mcp-mfa-code">Mã xác thực</Label>
+                <Label htmlFor="mcp-mfa-code">{t('mfaCode')}</Label>
                 <Input
                   id="mcp-mfa-code"
                   inputMode="numeric"
@@ -133,7 +132,7 @@ export default function McpLoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? 'Đang xác thực…' : 'Xác thực và tiếp tục'}
+                {busy ? t('mfaVerifying') : t('mcpMfaVerifyContinue')}
               </Button>
             </form>
           ) : (
@@ -144,7 +143,7 @@ export default function McpLoginPage() {
                 </ErrorAlert>
               ) : null}
               <div className="space-y-2">
-                <Label htmlFor="mcp-username">Tên đăng nhập</Label>
+                <Label htmlFor="mcp-username">{t('username')}</Label>
                 <Input
                   id="mcp-username"
                   autoComplete="username"
@@ -154,7 +153,7 @@ export default function McpLoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="mcp-password">Mật khẩu</Label>
+                <Label htmlFor="mcp-password">{t('password')}</Label>
                 <Input
                   id="mcp-password"
                   type="password"
@@ -165,7 +164,7 @@ export default function McpLoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? 'Đang đăng nhập…' : 'Đăng nhập và tiếp tục'}
+                {busy ? t('signingIn') : t('mcpSignInContinue')}
               </Button>
             </form>
           )}

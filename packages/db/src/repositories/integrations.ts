@@ -7,9 +7,10 @@
  * (serialize tường minh + `::jsonb`) vì giá trị của nó là một MẢNG
  * ở cấp cao nhất — hình dạng bị driver `pg` hiểu nhầm là mảng PostgreSQL nếu gắn tham số trực tiếp.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import {type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type IntegrationsDb = CentreDb | CentreTx;
@@ -64,19 +65,6 @@ export interface NewToken {
   createdAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng external_services. */
 const SERVICE_COLUMNS = [
   'id',
@@ -126,8 +114,8 @@ function serviceUpdateSet(patch: Partial<NewService>): UpdateObject<CentreDB, 'e
 }
 
 /** Ánh xạ dữ kiện ghi token từ camelCase sang snake_case, loại `undefined` từng trường. */
-function tokenInsertValues(values: NewToken): Insertable<CentreDB['external_tokens']> {
-  const row: Insertable<CentreDB['external_tokens']> = {
+function tokenInsertValues(values: NewToken): InsertObject<CentreDB, 'external_tokens'> {
+  const row: InsertObject<CentreDB, 'external_tokens'> = {
     token_hash: values.tokenHash,
     user_id: values.userId,
     service_id: values.serviceId,
@@ -160,23 +148,27 @@ function tokenUpdateSet(patch: Partial<NewToken>): UpdateObject<CentreDB, 'exter
 export class IntegrationsRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): IntegrationsDb {
+    return this.handle;
+  }
+
   /** Handle Kysely của kho trung tâm mà repository đang giữ (tầng service dùng cho các truy vấn đọc phụ trợ của module). */
   get dbHandle(): CentreDb {
     return this.handle;
   }
 
   /** Ghi một định nghĩa dịch vụ mới, trả dòng vừa ghi. */
-  async insertService(v: NewService, db: IntegrationsDb = this.handle): Promise<ServiceRow> {
-    const rows = await db
+  async insertService(v: NewService, db: IntegrationsDb = this.db()): Promise<ServiceRow> {
+    return db
       .insertInto('external_services')
       .values(serviceInsertValues(v))
       .returning(SERVICE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy định nghĩa dịch vụ theo id. */
-  async getService(id: string, db: IntegrationsDb = this.handle): Promise<ServiceRow | undefined> {
+  async getService(id: string, db: IntegrationsDb = this.db()): Promise<ServiceRow | undefined> {
     return db
       .selectFrom('external_services')
       .select(SERVICE_COLUMNS)
@@ -185,12 +177,12 @@ export class IntegrationsRepository {
   }
 
   /** Liệt kê mọi định nghĩa dịch vụ. */
-  async listServices(db: IntegrationsDb = this.handle): Promise<ServiceRow[]> {
+  async listServices(db: IntegrationsDb = this.db()): Promise<ServiceRow[]> {
     return db.selectFrom('external_services').select(SERVICE_COLUMNS).execute();
   }
 
   /** Cập nhật một định nghĩa dịch vụ theo bản vá từng phần. */
-  async updateService(id: string, v: Partial<NewService>, db: IntegrationsDb = this.handle): Promise<void> {
+  async updateService(id: string, v: Partial<NewService>, db: IntegrationsDb = this.db()): Promise<void> {
     await db
       .updateTable('external_services')
       .set(serviceUpdateSet(v))
@@ -199,17 +191,16 @@ export class IntegrationsRepository {
   }
 
   /** Ghi một token mới, trả dòng vừa ghi. */
-  async insertToken(v: NewToken, db: IntegrationsDb = this.handle): Promise<TokenRow> {
-    const rows = await db
+  async insertToken(v: NewToken, db: IntegrationsDb = this.db()): Promise<TokenRow> {
+    return db
       .insertInto('external_tokens')
       .values(tokenInsertValues(v))
       .returning(TOKEN_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy token theo giá trị băm (đường tra cứu lúc dùng). */
-  async getTokenByHash(tokenHash: string, db: IntegrationsDb = this.handle): Promise<TokenRow | undefined> {
+  async getTokenByHash(tokenHash: string, db: IntegrationsDb = this.db()): Promise<TokenRow | undefined> {
     return db
       .selectFrom('external_tokens')
       .select(TOKEN_COLUMNS)
@@ -218,7 +209,7 @@ export class IntegrationsRepository {
   }
 
   /** Lấy token theo id. */
-  async getToken(id: string, db: IntegrationsDb = this.handle): Promise<TokenRow | undefined> {
+  async getToken(id: string, db: IntegrationsDb = this.db()): Promise<TokenRow | undefined> {
     return db
       .selectFrom('external_tokens')
       .select(TOKEN_COLUMNS)
@@ -227,12 +218,12 @@ export class IntegrationsRepository {
   }
 
   /** Liệt kê mọi token. */
-  async listTokens(db: IntegrationsDb = this.handle): Promise<TokenRow[]> {
+  async listTokens(db: IntegrationsDb = this.db()): Promise<TokenRow[]> {
     return db.selectFrom('external_tokens').select(TOKEN_COLUMNS).execute();
   }
 
   /** Cập nhật một token theo bản vá từng phần. */
-  async updateToken(id: string, v: Partial<NewToken>, db: IntegrationsDb = this.handle): Promise<void> {
+  async updateToken(id: string, v: Partial<NewToken>, db: IntegrationsDb = this.db()): Promise<void> {
     await db
       .updateTable('external_tokens')
       .set(tokenUpdateSet(v))
@@ -245,7 +236,7 @@ export class IntegrationsRepository {
    * Trả `undefined` khi không còn dòng user tương ứng — tầng service coi đó
    * là tài khoản không còn hoạt động.
    */
-  async getTokenOwnerState(userId: string, db: IntegrationsDb = this.handle): Promise<TokenOwnerState | undefined> {
+  async getTokenOwnerState(userId: string, db: IntegrationsDb = this.db()): Promise<TokenOwnerState | undefined> {
     return db
       .selectFrom('users')
       .select(['suspended', 'deleted'])

@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import type { SiteSetting, SiteSettingAuditEntry } from '@giaokhoa/contracts';
 import '#config/i18n';
 import { ApiError } from '#lib/api';
+import { appKeyMeta } from '#lib/route-meta';
 import { useResetSiteSetting, useSaveSiteSetting, useSiteSettingAudit, useSiteSettings } from '../queries/site-config';
 import { queryKeys } from '../queries/keys';
 import { buildSsrLoaderData, serverQueryFn, type SsrLoaderData } from '#lib/ssr-data';
@@ -79,7 +80,7 @@ const NOTIFICATION_MANDATORY_PROVIDERS = new Set(['enrol_expiry_warning', 'admin
 function notificationProviderOf(setting: SiteSetting): string | null {
   if (setting.component !== NOTIFICATION_POLICY_COMPONENT) return null;
   const match = /^provider_(.+)_enabled$/.exec(setting.name);
-  return match ? match[1]! : null;
+  return match ? (match[1] ?? null) : null;
 }
 
 /** Đưa một giá trị JSON về dạng hiển thị ngắn cho huy hiệu/audit. */
@@ -124,7 +125,7 @@ export function AdminSiteConfigPage() {
   /** Giá trị đang hiển thị của một dòng: bản nháp nếu người dùng đã sửa, không thì giá trị server. */
   function draftOf(setting: SiteSetting): string | boolean {
     const key = settingKey(setting);
-    if (key in drafts) return drafts[key]!;
+    if (key in drafts) return drafts[key] ?? formatValue(setting.value);
     return typeof setting.value === 'boolean' ? setting.value : formatValue(setting.value);
   }
 
@@ -341,7 +342,6 @@ export default AdminSiteConfigPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navSiteConfig');
 }

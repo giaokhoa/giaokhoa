@@ -4,6 +4,9 @@
  * Registry này cũng là nguồn sự thật DUY NHẤT của chính sách nội dung kênh ngoài (quyết định C-5, issue #219): trường `externalPolicy` của từng provider khai báo tường minh nội dung gốc có được rời app qua email/push hay không, kèm lý do — `notify()` chỉ đọc khai báo ở đây, không còn fallback im lặng theo cam kết của từng nơi gọi.
  */
 
+/** Độ dài xem trước tối đa của nội dung tin/notification khi cắt làm `smallMessage`. */
+export const MESSAGE_PREVIEW_LENGTH = 200;
+
 /** Các kênh phân phối là các PORT. 'popup' (trong ứng dụng) là kênh thật duy nhất. */
 export const MESSAGE_CHANNELS = ['popup', 'email', 'push'] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];

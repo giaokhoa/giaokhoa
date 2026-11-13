@@ -1,7 +1,7 @@
 /**
  * Repository của cụm NGƯỜI DÙNG trên Kysely.
  *
- * Vai trò: mọi truy cập tới hai bảng `users` và `user_preferences` của kho trung tâm tập trung ở đây. Repository không chứa luật nghiệp vụ — chính sách mật khẩu, đồng bộ credential và sự kiện outbox nằm ở tầng service phía ứng dụng; repository chỉ nhận handle Kysely (instance gốc hoặc transaction đang mở) do tầng ứng dụng truyền vào, và phơi đúng hai điểm ghép transaction mà tầng service cần: `transaction(fn)` để mở transaction trên handle gốc, và tham số `tx` tuỳ chọn ở các thao tác ghi để chạy trong transaction do nơi gọi mở.
+ * Vai trò: mọi truy cập tới hai bảng `users` và `user_preferences` của kho trung tâm tập trung ở đây. Repository không chứa luật nghiệp vụ — chính sách mật khẩu, đồng bộ credential và sự kiện outbox nằm ở tầng service phía ứng dụng; repository chỉ nhận handle Kysely (instance gốc hoặc transaction đang mở) do tầng ứng dụng truyền vào, và phơi đúng hai điểm ghép transaction mà tầng service cần: `transaction(fn)` để mở transaction trên handle gốc, và tham số `db` tuỳ chọn ở các thao tác ghi để chạy trong transaction do nơi gọi mở.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
@@ -15,7 +15,7 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm lắp ráp là facade định tuyến theo không gian `routedKysely`) rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của handle đó.
  */
-import { sql, type ExpressionBuilder, type Insertable, type Updateable } from 'kysely';
+import {sql, type ExpressionBuilder, type InsertObject, type UpdateObject} from 'kysely';
 import type { UserListSortBy, UserListStatus } from '@giaokhoa/contracts';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
 
@@ -100,8 +100,8 @@ const USER_COLUMNS = [
  * (snake_case), LOẠI mọi trường mang `undefined` — trường vắng mặt
  * để default của database quyết định (quy tắc T-4).
  */
-function userInsertValues(values: NewUser): Insertable<CentreDB['users']> {
-  const row: Insertable<CentreDB['users']> = {
+function userInsertValues(values: NewUser): InsertObject<CentreDB, 'users'> {
+  const row: InsertObject<CentreDB, 'users'> = {
     username: values.username,
     email: values.email,
   };
@@ -124,8 +124,8 @@ function userInsertValues(values: NewUser): Insertable<CentreDB['users']> {
 /**
  * Ánh xạ một patch hồ sơ (camelCase) sang set update (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa trường nào thì chỉ trường đó đổi, đúng ngữ nghĩa bỏ qua `undefined` của đường bộ máy cũ trước đây (quy tắc T-4). Mốc `updated_at` do repository tự đóng dấu ở điểm gọi, không nằm trong hàm ánh xạ này.
  */
-function userUpdateSet(patch: UserPatch): Updateable<CentreDB['users']> {
-  const set: Updateable<CentreDB['users']> = {};
+function userUpdateSet(patch: UserPatch): UpdateObject<CentreDB, 'users'> {
+  const set: UpdateObject<CentreDB, 'users'> = {};
   if (patch.username !== undefined) set.username = patch.username;
   if (patch.email !== undefined) set.email = patch.email;
   if (patch.emailVerified !== undefined) set.email_verified = patch.emailVerified;
@@ -148,6 +148,11 @@ function userUpdateSet(patch: UserPatch): Updateable<CentreDB['users']> {
 export class UsersRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): CentreDb {
+    return this.handle;
+  }
+
   /** Cấp handle Kysely định tuyến của repository cho các truy vấn phụ trợ cần dùng cùng database. */
   get dbHandle(): CentreDb { return this.handle; }
 
@@ -159,20 +164,19 @@ export class UsersRepository {
   /**
    * Chèn user mới (mật khẩu đã hash ở tầng service).
    */
-  async insertUser(v: NewUser, tx?: CentreTx): Promise<UserRow> {
-    const rows = await (tx ?? this.handle)
+  async insertUser(v: NewUser, db: CentreDb = this.db()): Promise<UserRow> {
+    return db
       .insertInto('users')
       .values(userInsertValues(v))
       .returning(USER_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /**
    * Cập nhật các trường hồ sơ của user; mốc `updated_at` luôn được đóng dấu tại thời điểm ghi, kể cả khi patch mang sẵn mốc riêng.
    */
-  async updateUser(id: string, v: UserPatch, tx?: CentreTx): Promise<void> {
-    await (tx ?? this.handle)
+  async updateUser(id: string, v: UserPatch, db: CentreDb = this.db()): Promise<void> {
+    await db
       .updateTable('users')
       .set({ ...userUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
@@ -182,8 +186,8 @@ export class UsersRepository {
   /**
    * Lấy user theo id.
    */
-  async getById(id: string): Promise<UserRow | undefined> {
-    return this.handle
+  async getById(id: string, db: CentreDb = this.db()): Promise<UserRow | undefined> {
+    return db
       .selectFrom('users')
       .select(USER_COLUMNS)
       .where('id', '=', id)
@@ -193,9 +197,9 @@ export class UsersRepository {
   /**
    * Lấy nhiều user theo danh sách id trong một truy vấn (phục vụ báo cáo/export cần thông tin người học hàng loạt).
    */
-  async getByIds(ids: string[]): Promise<UserRow[]> {
+  async getByIds(ids: string[], db: CentreDb = this.db()): Promise<UserRow[]> {
     if (!ids.length) return [];
-    return this.handle
+    return db
       .selectFrom('users')
       .select(USER_COLUMNS)
       .where('id', 'in', ids)
@@ -205,8 +209,8 @@ export class UsersRepository {
   /**
    * Lấy user theo username duy nhất.
    */
-  async getByUsername(username: string): Promise<UserRow | undefined> {
-    return this.handle
+  async getByUsername(username: string, db: CentreDb = this.db()): Promise<UserRow | undefined> {
+    return db
       .selectFrom('users')
       .select(USER_COLUMNS)
       .where('username', '=', username)
@@ -216,8 +220,8 @@ export class UsersRepository {
   /**
    * Lấy user theo email.
    */
-  async getByEmail(email: string): Promise<UserRow | undefined> {
-    return this.handle
+  async getByEmail(email: string, db: CentreDb = this.db()): Promise<UserRow | undefined> {
+    return db
       .selectFrom('users')
       .select(USER_COLUMNS)
       .where('email', '=', email)
@@ -229,7 +233,7 @@ export class UsersRepository {
    *
    * Điều kiện động dựng theo mẫu T-13: mọi điều kiện đều là biểu thức có giá trị bắt buộc, hợp bằng `eb.and(conds)`; nhóm OR của từ khoá là một biểu thức con trong cùng danh sách. Không bao giờ truyền `undefined` vào `where` (nó bị gắn thành NULL và lặng lẽ trả 0 dòng).
    */
-  async search(search: string | undefined, page: number, pageSize: number, filter: UserListFilter = {}): Promise<{ rows: UserRow[]; total: number }> {
+  async search(search: string | undefined, page: number, pageSize: number, filter: UserListFilter = {}, db: CentreDb = this.db()): Promise<{ rows: UserRow[]; total: number }> {
     const direction = filter.sortDirection === 'desc' ? 'desc' : 'asc';
     const applyConditions = (eb: ExpressionBuilder<CentreDB, 'users'>) => {
       const conds = [eb('deleted', '=', filter.status === 'deleted')];
@@ -246,7 +250,7 @@ export class UsersRepository {
       }
       return eb.and(conds);
     };
-    let rowsQuery = this.handle
+    let rowsQuery = db
       .selectFrom('users')
       .select(USER_COLUMNS)
       .where((eb) => applyConditions(eb));
@@ -258,7 +262,7 @@ export class UsersRepository {
           ? rowsQuery.orderBy('last_login', direction).orderBy('id', 'asc')
           : rowsQuery.orderBy('id', 'asc');
     const rows = await rowsQuery.limit(pageSize).offset((page - 1) * pageSize).execute();
-    const count = await this.handle
+    const count = await db
       .selectFrom('users')
       .select(sql<number>`count(*)::int`.as('n'))
       .where((eb) => applyConditions(eb))
@@ -269,8 +273,8 @@ export class UsersRepository {
   /**
    * Ghi tuỳ chọn cá nhân của user (upsert theo tên).
    */
-  async setPreference(userId: string, name: string, value: string | null): Promise<void> {
-    await this.handle
+  async setPreference(userId: string, name: string, value: string | null, db: CentreDb = this.db()): Promise<void> {
+    await db
       .insertInto('user_preferences')
       .values({ user_id: userId, name, value })
       .onConflict((oc) => oc.columns(['user_id', 'name']).doUpdateSet({ value }))
@@ -280,8 +284,8 @@ export class UsersRepository {
   /**
    * Đọc một tuỳ chọn cá nhân; undefined nếu chưa đặt.
    */
-  async getPreference(userId: string, name: string): Promise<string | null | undefined> {
-    const row = await this.handle
+  async getPreference(userId: string, name: string, db: CentreDb = this.db()): Promise<string | null | undefined> {
+    const row = await db
       .selectFrom('user_preferences')
       .select(['value'])
       .where('user_id', '=', userId)

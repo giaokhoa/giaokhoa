@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRecordingDb } from '../test-support/recording-db';
+import { createRecordingDb } from '../test-support';
 import { CompletionRepository } from './completion';
 
 /**

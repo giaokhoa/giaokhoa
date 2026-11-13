@@ -1550,7 +1550,7 @@ export class ExamsService {
     const ordered = [...views];
     for (let i = ordered.length - 1; i > 0; i--) {
       const j = Math.floor(rand() * (i + 1));
-      [ordered[i], ordered[j]] = [ordered[j]!, ordered[i]!];
+      [ordered[i], ordered[j]] = [ordered[j]!, ordered[i]!]; // Bất biến: i, j đều trong [0, ordered.length).
     }
     const esc = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const rows = ordered.map((v, i) => `<tr><td>${i + 1}</td><td>${esc(v.questionName ?? v.questionId)}</td><td>${esc(v.qtype ?? '')}</td><td>${v.maxMark}</td></tr>`).join('');

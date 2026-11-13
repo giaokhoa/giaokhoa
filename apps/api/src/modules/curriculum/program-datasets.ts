@@ -181,7 +181,7 @@ export function programOutcomeComparisonKey(text: string): string {
  * Kiểm chứng toàn vẹn của một bản ghi: khi `outcomes[]` đã ở dạng doc, text canonical trích từ các doc (theo đúng thứ tự) PHẢI khớp `outcome_text` nguyên văn theo khoá so sánh — lệch là dataset đã bị sửa tay sai hoặc tách ý làm rơi/thêm chữ: ném lỗi, không nạp thầm. Bản ghi còn ở dạng chuỗi (chưa chuyển đổi trong đợt #161) được bỏ qua ở cổng này; bản ghi không có doc nào cũng vậy (cổng lỗi cứng cho trường hợp đó nằm ở commit chốt hạ của đợt chuyển đổi).
  */
 export function assertProgramRecordOutcomeIntegrity(datasetKey: string, record: ProgramRecord): void {
-  if (!record.outcomes.some((outcome) => typeof outcome !== 'string')) return;
+  if (record.outcomes.every((outcome) => typeof outcome === 'string')) return;
   const lines = record.outcomes.flatMap((outcome) =>
     typeof outcome === 'string' ? [outcome] : programOutcomeDocLines(outcome),
   );
@@ -216,6 +216,32 @@ export function programOutcomeTextToDoc(text: string): ProgramOutcomeDoc {
 }
 
 /**
+ * Phân rã 3 trường hợp nguồn YCCĐ của một bản ghi — hàm chung duy nhất cho cả hai bề mặt trích bên dưới (tránh viết lại cùng một phép rẽ 3 nhánh):
+ * - Có `outcomes[]`: mỗi phần tử là một nguồn (dạng doc giữ nguyên tài liệu; dạng chuỗi là text thuần trong đợt chuyển đổi).
+ * - `outcomes[]` rỗng nhưng `outcome_text` có chữ: đúng một nguồn text bằng toàn văn `outcome_text`.
+ * - Cả hai rỗng: không có nguồn nào.
+ */
+type ProgramOutcomeSource =
+  | { kind: 'doc'; doc: ProgramOutcomeDoc }
+  | { kind: 'text'; text: string };
+
+function programRecordOutcomeSources(
+  record: ProgramRecord,
+): ProgramOutcomeSource[] {
+  if (record.outcomes.length > 0) {
+    return record.outcomes.map((outcome) =>
+      typeof outcome === 'string'
+        ? { kind: 'text', text: outcome }
+        : { kind: 'doc', doc: outcome },
+    );
+  }
+  if (record.outcome_text.trim().length > 0) {
+    return [{ kind: 'text', text: record.outcome_text }];
+  }
+  return [];
+}
+
+/**
  * Các dòng YCCĐ của một bản ghi, theo thứ tự nguyên văn:
  * - Có `outcomes[]`: mỗi ý là một dòng (phần tử dạng doc cho text
  *   canonical trích bằng programOutcomeDocText; phần tử dạng chuỗi
@@ -227,13 +253,9 @@ export function programOutcomeTextToDoc(text: string): ProgramOutcomeDoc {
  *   nội dung của node): không có dòng nào.
  */
 export function programRecordOutcomeTexts(record: ProgramRecord): string[] {
-  if (record.outcomes.length > 0) {
-    return record.outcomes.map((outcome) =>
-      typeof outcome === 'string' ? outcome : programOutcomeDocText(outcome),
-    );
-  }
-  if (record.outcome_text.trim().length > 0) return [record.outcome_text];
-  return [];
+  return programRecordOutcomeSources(record).map((source) =>
+    source.kind === 'doc' ? programOutcomeDocText(source.doc) : source.text,
+  );
 }
 
 /**
@@ -294,6 +316,10 @@ export function programRecordEffectiveGrade(records: readonly ProgramRecord[], r
   const graded = records.filter((r) => r.grade !== null);
   const sameLevel = graded.filter((r) => r.level === record.level).map((r) => r.grade as number);
   const pool = sameLevel.length > 0 ? sameLevel : graded.map((r) => r.grade as number);
+  // Dataset không có bản ghi nào mang khối thì không có khối để neo bản ghi grade=null vào — lỗi nội bộ rõ ràng thay vì để Math.min() trả Infinity trôi vào cây.
+  if (pool.length === 0) {
+    throw new Error(`Cannot determine the effective grade for record ${record.id}: dataset has no record with a grade`);
+  }
   return Math.min(...pool);
 }
 
@@ -395,15 +421,12 @@ export function programRecordOutcomeEntries(
 export function programRecordOutcomeDocs(
   record: ProgramRecord,
 ): { doc: ProgramOutcomeDoc; text: string; position: number }[] {
-  if (record.outcomes.length > 0) {
-    return record.outcomes.map((outcome, i) => {
-      const doc = typeof outcome === 'string' ? programOutcomeTextToDoc(outcome) : outcome;
-      return { doc, text: programOutcomeDocText(doc), position: i + 1 };
-    });
-  }
-  if (record.outcome_text.trim().length > 0) {
-    const doc = programOutcomeTextToDoc(record.outcome_text);
-    return [{ doc, text: programOutcomeDocText(doc), position: 1 }];
-  }
-  return [];
+  // Cùng phép phân rã 3 trường hợp với programRecordOutcomeTexts (xem programRecordOutcomeSources): phần tử dạng doc giữ nguyên tài liệu của dataset; phần tử dạng chuỗi và bản ghi chỉ có `outcome_text` được gói thành tài liệu một ý bằng programOutcomeTextToDoc (text canonical trích lại khớp nguyên văn).
+  return programRecordOutcomeSources(record).map((source, i) => {
+    const doc =
+      source.kind === 'doc'
+        ? source.doc
+        : programOutcomeTextToDoc(source.text);
+    return { doc, text: programOutcomeDocText(doc), position: i + 1 };
+  });
 }

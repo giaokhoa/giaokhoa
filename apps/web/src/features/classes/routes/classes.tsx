@@ -1,18 +1,22 @@
+/**
+ * Trang danh sách lớp của người gọi: dữ liệu từ GET /classes qua `useClasses`, mỗi dòng mang cờ khả năng do server suy cho đúng người gọi.
+ * Danh sách thu/mở theo từng lớp; nút "Tạo lớp" chỉ hiện khi có cờ tạo, Sửa/Lưu trữ/Xoá trong phần mở hiện theo cờ của chính lớp đó.
+ * Lưu trữ/xoá là thao tác có xác nhận, gọi qua các đột biến của `queries/classes`; gác quyền thật vẫn ở API.
+ */
+
 import { useState } from 'react';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
 import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ErrorAlert } from '#components/error-alert';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { CollapsibleSection } from '#components/collapsible-section';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { archiveClass, deleteClass, fetchClasses } from '../api/classes';
+import { useArchiveClass, useClasses, useDeleteClass } from '../queries/classes';
 import type { ClassListItem } from '../types/classes';
-import { queryKeys } from '#lib/query-keys';
 
 /**
  * Danh sách lớp của người gọi (CLASS-1, issue #184) — chuẩn giao diện đã chốt: danh sách dùng thu/mở (khuôn CollapsibleSection dùng chung của web), tạo mới là màn riêng (/classes/new), sửa là màn riêng
@@ -23,39 +27,32 @@ import { queryKeys } from '#lib/query-keys';
  */
 export function ClassesPage() {
   const { t } = useTranslation('app');
-  const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [openIds, setOpenIds] = useState<string[]>([]);
-  const classesQuery = useQuery({ queryKey: queryKeys.classes, queryFn: fetchClasses });
+  const classesQuery = useClasses();
+  const archiveMutation = useArchiveClass();
+  const deleteMutation = useDeleteClass();
 
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: queryKeys.classes });
-  const archiveMutation = useMutation({
-    mutationFn: (classId: string) => archiveClass(classId),
-    onSuccess: () => {
-      setMessage(t('classArchived'));
-      invalidate();
-    },
-    onError: () => setMessage(t('classArchiveFailed')),
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (classId: string) => deleteClass(classId),
-    onSuccess: () => {
-      setMessage(t('classDeleted'));
-      invalidate();
-    },
-    onError: () => setMessage(t('classDeleteFailed')),
-  });
-
-  function onArchive(cls: ClassListItem) {
+  async function onArchive(cls: ClassListItem) {
     if (!window.confirm(t('classArchiveConfirm', { name: cls.name }))) return;
     setMessage(null);
-    archiveMutation.mutate(cls.id);
+    try {
+      await archiveMutation.mutateAsync(cls.id);
+      setMessage(t('classArchived'));
+    } catch {
+      setMessage(t('classArchiveFailed'));
+    }
   }
 
-  function onDelete(cls: ClassListItem) {
+  async function onDelete(cls: ClassListItem) {
     if (!window.confirm(t('classDeleteConfirm', { name: cls.name }))) return;
     setMessage(null);
-    deleteMutation.mutate(cls.id);
+    try {
+      await deleteMutation.mutateAsync(cls.id);
+      setMessage(t('classDeleted'));
+    } catch {
+      setMessage(t('classDeleteFailed'));
+    }
   }
 
   // Khả năng tạo lớp neo tại tenant nên giống nhau ở mọi dòng của đáp số; danh sách rỗng thì không có dòng nào mang cờ — nút tạo lớp không hiện (mặc định an toàn), người có quyền vẫn vào thẳng /classes/new được như trước.

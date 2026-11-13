@@ -45,16 +45,25 @@ export class ControlPlaneController {
   constructor(private readonly registry: ControlPlaneRegistryService) {}
 
   @Post()
+  /**
+   * POST /control-plane/spaces — tạo dòng đăng ký không gian (gác tenant:manage tại context hệ thống).
+   */
   async create(@Body({ schema: createSpaceRegistrationSchema }) dto: CreateSpaceRegistrationDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.registry.createRegistration(actor.id, dto);
   }
 
   @Get('by-slug/:slug')
+  /**
+   * GET /control-plane/spaces/by-slug/:slug — tra cứu định tuyến theo slug.
+   */
   async bySlug(@Param('slug') slug: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.registry.getBySlug(actor.id, slug);
   }
 
   @Patch(':id')
+  /**
+   * PATCH /control-plane/spaces/:id — cập nhật dòng đăng ký.
+   */
   async update(
     @Param('id', { schema: uuidIdSchema }) id: string,
     @Body({ schema: updateSpaceRegistrationSchema }) dto: UpdateSpaceRegistrationDto,
@@ -64,6 +73,9 @@ export class ControlPlaneController {
   }
 
   @Post(':id/status')
+  /**
+   * POST /control-plane/spaces/:id/status — đổi trạng thái vòng đời của không gian.
+   */
   async changeStatus(
     @Param('id', { schema: uuidIdSchema }) id: string,
     @Body({ schema: changeSpaceStatusSchema }) dto: ChangeSpaceStatusDto,
@@ -73,16 +85,25 @@ export class ControlPlaneController {
   }
 
   @Get(':id/history')
+  /**
+   * GET /control-plane/spaces/:id/history — lịch sử quản trị của sổ, mới nhất trước.
+   */
   async history(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.registry.listHistory(actor.id, id);
   }
 
   @Get(':id/schema-registry')
+  /**
+   * GET /control-plane/spaces/:id/schema-registry — đọc trạng thái schema của kho.
+   */
   async getSchemaRegistry(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.registry.getSchemaRegistry(actor.id, id);
   }
 
   @Put(':id/schema-registry')
+  /**
+   * PUT /control-plane/spaces/:id/schema-registry — ghi trạng thái schema của kho.
+   */
   async updateSchemaRegistry(
     @Param('id', { schema: uuidIdSchema }) id: string,
     @Body({ schema: updateSpaceSchemaRegistrySchema }) dto: UpdateSpaceSchemaRegistryDto,
@@ -92,11 +113,17 @@ export class ControlPlaneController {
   }
 
   @Get(':id/schema-migration-runs')
+  /**
+   * GET /control-plane/spaces/:id/schema-migration-runs — các lượt chạy migration đã ghi của kho, cũ nhất trước.
+   */
   async listMigrationRuns(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.registry.listMigrationRuns(actor.id, id);
   }
 
   @Post(':id/schema-migration-runs')
+  /**
+   * POST /control-plane/spaces/:id/schema-migration-runs — ghi một lượt chạy migration (lượt `success` có `toVersion` thì nâng phiên bản hiện tại).
+   */
   async recordMigrationRun(
     @Param('id', { schema: uuidIdSchema }) id: string,
     @Body({ schema: recordSpaceSchemaMigrationRunSchema }) dto: RecordSpaceSchemaMigrationRunDto,

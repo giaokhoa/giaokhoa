@@ -1,4 +1,8 @@
-// Hình dạng dữ liệu của cụm Tin nhắn (trang + các panel con).
+/**
+ * Hình dạng dữ liệu của cụm Tin nhắn (trang + các panel con): view của hội thoại,
+ * tin nhắn, thành viên panel, cây nhóm, danh bạ và hồ sơ người, cùng các kiểu tay
+ * cầm cuộn/trích dẫn/tìm kiếm mà trang và các component con trao đổi với nhau.
+ */
 
 /** Handle cuộn tối thiểu của MessageScroller mà trang cần để nhảy tới tin gốc từ khối trích dẫn (lát M3). */
 export type ScrollerHandle = { scrollToMessage: (messageId: string, options?: { behavior?: ScrollBehavior }) => boolean };
@@ -102,15 +106,39 @@ export interface ContactRequestView {
   displayName?: string;
   username?: string;
 }
+/**
+ * Loại hội thoại 1–1 (hai người) — trị `type` của conversation 1–1.
+ */
+export const CONVERSATION_TYPE_DIRECT = 1;
+/**
+ * Loại hội thoại nhóm — trị `type` của conversation nhóm (kể cả chat cấp lớp/khoá/nhóm con).
+ */
+export const CONVERSATION_TYPE_GROUP = 2;
+
+/**
+ * Phân loại cấu trúc của một conversation (lát MSG-T1, issue #33): `core_course`/`course` = chat cấp khoá, `core_group`/`groups` = chat nhóm con,
+ * `core_class`/`class` = chat cấp lớp (MSG-T2); null ở hội thoại cá nhân và nhóm tự do.
+ */
+export type ConversationComponent =
+  | 'core_course'
+  | 'course'
+  | 'core_group'
+  | 'groups'
+  | 'core_class'
+  | 'class';
+/** Phân loại mục mà conversation gắn vào: `class` = lớp, `course` = khoá, `groups` = nhóm. */
+export type ConversationItemType = 'class' | 'course' | 'groups';
+
 export interface ConversationView {
   id: string;
-  type: number;
+  /** Loại hội thoại: 1–1 (`CONVERSATION_TYPE_DIRECT`) hoặc nhóm (`CONVERSATION_TYPE_GROUP`). */
+  type: typeof CONVERSATION_TYPE_DIRECT | typeof CONVERSATION_TYPE_GROUP;
   name: string | null;
   /**
-   * Phân loại cấu trúc (lát MSG-T1, issue #33): `core_course`/`course` = chat cấp khoá, `core_group`/`groups` = chat nhóm con, `core_class`/`class` = chat cấp lớp (MSG-T2); null ở hội thoại cá nhân và nhóm tự do. Phân loại CHỈ theo ba trường này, không đoán theo tên.
+   * Phân loại cấu trúc (lát MSG-T1, issue #33). Phân loại CHỈ theo ba trường này, không đoán theo tên.
    */
-  component?: string | null;
-  itemType?: string | null;
+  component?: ConversationComponent | null;
+  itemType?: ConversationItemType | null;
   itemId?: string | null;
   members: string[];
   /** Tên hiển thị của từng thành viên (API trả kèm) — client tra tên từ đây. */

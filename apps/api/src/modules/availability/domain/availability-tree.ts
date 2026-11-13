@@ -107,69 +107,52 @@ export async function evaluateTree(
   evaluateLeaf: (leaf: AvailabilityLeaf) => Promise<LeafResult>,
   isRoot = true,
 ): Promise<TreeEvaluation> {
-  const childResults: TreeEvaluation['children'] = [];
-  const values: boolean[] = [];
+  // Một lượt duyệt duy nhất thu thập cặp (con, kết quả) để các bước sau duyệt
+  // cặp này thay vì tra lại values/childResults theo chỉ số.
+  const evaluated: { child: AvailabilityChild; available: boolean; result: TreeEvaluation | (LeafResult & { leaf: true }) }[] = [];
   for (const child of node.c) {
     if (isTreeNode(child)) {
-      const r = await evaluateTree(child, evaluateLeaf, false);
-      childResults.push(r);
-      values.push(r.available);
+      const result = await evaluateTree(child, evaluateLeaf, false);
+      evaluated.push({ child, available: result.available, result });
     } else {
-      const r = await evaluateLeaf(child);
-      childResults.push({ ...r, leaf: true });
-      values.push(r.available);
+      const leafResult = await evaluateLeaf(child);
+      evaluated.push({ child, available: leafResult.available, result: { ...leafResult, leaf: true } });
     }
   }
-  const available = node.c.length === 0 ? (node.op === '&' || node.op === '|') : aggregate(node.op, values);
+  const available = node.c.length === 0 ? (node.op === '&' || node.op === '|') : aggregate(node.op, evaluated.map((e) => e.available));
 
-  // Ẩn thông tin: một con không đạt mà showc của nó là false sẽ ẩn mọi thứ.
   // Với các op phủ định, một con "góp phần gây không đạt" khi nó khả dụng
   // (chính thành công của con làm NOT-AND/NOT-OR không đạt).
+  const negated = node.op === '!&' || node.op === '!|';
+
+  // Ẩn thông tin: một con không đạt mà showc của nó là false sẽ ẩn mọi thứ.
   let informationHidden = false;
   if (!available) {
     if (isRoot && node.show === false) informationHidden = true;
-    node.c.forEach((child, i) => {
-      const showc = node.showc?.[i];
-      if (showc === false) {
-        const childAvailable = values[i]!;
-        const negated = node.op === '!&' || node.op === '!|';
-        const causesFailure = negated ? childAvailable : !childAvailable;
-        if (causesFailure) informationHidden = true;
-        // Con là cây lồng nhau: cờ ẩn của chính nó cũng lan lên.
-        const cr = childResults[i] as TreeEvaluation;
-        if (!isTreeNode(child) === false && cr && 'informationHidden' in cr && cr.informationHidden && causesFailure) {
-          informationHidden = true;
-        }
-      }
-    });
-    // Một cây con lồng nhau tự nó bị ẩn thông tin và gây không đạt cũng ẩn thông tin của cha.
-    node.c.forEach((child, i) => {
-      if (isTreeNode(child)) {
-        const cr = childResults[i] as TreeEvaluation;
-        const negated = node.op === '!&' || node.op === '!|';
-        const causesFailure = negated ? values[i]! : !values[i]!;
-        if (cr.informationHidden && causesFailure && node.showc?.[i] !== true) {
-          // Chỉ khi cha không hiển thị tường minh con này.
-          if (node.showc !== undefined && node.showc[i] === false) informationHidden = true;
-        }
-      }
-    });
+    for (const [i, { child, available: childAvailable, result }] of evaluated.entries()) {
+      // Con có gây không đạt ở nút này không.
+      const causesFailure = negated ? childAvailable : !childAvailable;
+      if (!causesFailure) continue;
+      // Cờ ẩn của cây con lồng nhau (chỉ nút cây mới có).
+      const childHidden = isTreeNode(child) && 'informationHidden' in result && result.informationHidden;
+      // Cha giấu riêng con này (showc=false) thì ẩn mọi thông tin hạn chế của
+      // toàn cây; cờ ẩn của cây con cũng lan lên cha khi cha không hiển thị
+      // tường minh con này (showc !== true).
+      if (node.showc?.[i] === false || (childHidden && node.showc?.[i] !== true)) informationHidden = true;
+    }
   }
 
   const failedDescriptions: string[] = [];
   if (!available && !informationHidden) {
-    node.c.forEach((_child, i) => {
-      const negated = node.op === '!&' || node.op === '!|';
-      const causesFailure = negated ? values[i]! : !values[i]!;
-      if (!causesFailure) return;
-      if (node.showc !== undefined && node.showc[i] === false) return;
-      const cr = childResults[i]!;
-      if ('failedDescriptions' in cr) failedDescriptions.push(...(cr as TreeEvaluation).failedDescriptions);
-      else if ((cr as LeafResult).description) {
-        const desc = (cr as LeafResult).description!;
-        failedDescriptions.push(negated && isRoot ? `!${desc}` : desc);
+    for (const [i, { available: childAvailable, result }] of evaluated.entries()) {
+      const causesFailure = negated ? childAvailable : !childAvailable;
+      if (!causesFailure) continue;
+      if (node.showc !== undefined && node.showc[i] === false) continue;
+      if ('failedDescriptions' in result) failedDescriptions.push(...result.failedDescriptions);
+      else if (result.description) {
+        failedDescriptions.push(negated && isRoot ? `!${result.description}` : result.description);
       }
-    });
+    }
   }
 
   return {
@@ -177,13 +160,12 @@ export async function evaluateTree(
     informationHidden,
     failedDescriptions,
     visible: available || !informationHidden,
-    children: childResults,
+    children: evaluated.map((e) => e.result),
   };
 }
 
-/** Đường tắt đồng bộ dùng bởi các golden test với giá trị lá trong bộ nhớ. */
 /**
- * Dựng map đánh giá lá từ kết quả từng điều kiện (đủ/không đủ) và mô tả hiển thị tương ứng — đầu vào cho bước gộp cây.
+ * Dựng map đánh giá lá từ kết quả từng điều kiện (đủ/không đủ) và mô tả hiển thị tương ứng — đầu vào cho bước gộp cây; đường tắt đồng bộ dùng bởi các golden test với giá trị lá trong bộ nhớ.
  */
 export function leafFromMap(values: Record<string, boolean>, descriptions: Record<string, string> = {}) {
   return async (leaf: AvailabilityLeaf): Promise<LeafResult> => {

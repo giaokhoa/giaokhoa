@@ -31,6 +31,10 @@ export const DEFAULT_OMR_THRESHOLDS: OmrThresholds = { fillDensity: 0.42, blankD
 /** Ngưỡng cổng chất lượng (Phần 3.1 của research): dưới mức này ảnh bị từ chối ngay, không vào hàng chờ chấm. */
 export const QUALITY_MIN_BLUR_VARIANCE = 55;
 export const QUALITY_MAX_GLARE_RATIO = 0.25;
+
+/**
+ * Quy ước `!` trong file này: mọi chỉ số mảng/typed-array đều bị chặn theo cấu trúc — histogram 256 ô, ma trận đồng nhất 3x3 (9 phần tử), ảnh xám có kích thước đã biết, vòng lặp chỉ chạy trong lòng ảnh. Không thay bằng guard từng chỗ vì đây là đường nóng xử lý điểm ảnh; nếu đổi kích thước ảnh/hình học thì rà lại các chỉ số này.
+ */
 export const QUALITY_MIN_MEAN = 45;
 
 const MAX_WORK_WIDTH = 1860;
@@ -60,18 +64,41 @@ function downscale(img: GrayImage, maxWidth: number): GrayImage {
   return { width, height, gray };
 }
 
+/**
+ * Lý do từ chối một ảnh phiếu ở cổng giải mã — `invalid_sheet` là tệp không
+ * phải ảnh JPEG/PNG (người dùng tải nhầm loại tệp), `unreadable_image` là
+ * ảnh đúng định dạng nhưng hỏng/không giải mã được. Cổng chất lượng trả mã
+ * này trong `ScanUploadOutcome.reasons` thay vì gộp mọi lỗi thành một mã.
+ */
+export type SheetImageReason = 'invalid_sheet' | 'unreadable_image';
+
+/** Lỗi giải mã ảnh phiếu mang mã lý do ổn định cho cổng chất lượng. */
+export class SheetImageError extends Error {
+  constructor(
+    readonly reason: SheetImageReason,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SheetImageError';
+  }
+}
+
 /** Giải mã JPEG/PNG thành ảnh xám ở độ phân giải làm việc (≤ MAX_WORK_WIDTH). Ném lỗi khi định dạng lạ/ảnh hỏng. */
 export function decodeImage(data: Buffer): GrayImage {
   let img: GrayImage;
   if (data.length > 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) {
-    const png = PNG.sync.read(data);
-    img = toGray(png.data, png.width, png.height);
+    try {
+      const png = PNG.sync.read(data);
+      img = toGray(png.data, png.width, png.height);
+    } catch (err) {
+      throw new SheetImageError('unreadable_image', err instanceof Error ? err.message : 'png decode failed');
+    }
   } else if (data.length > 3 && data[0] === 0xff && data[1] === 0xd8) {
     const decoded = jpegDecode(data, { useTArray: true, formatAsRGBA: true });
-    if (!decoded || !decoded.data) throw new Error('jpeg decode failed');
+    if (!decoded || !decoded.data) throw new SheetImageError('unreadable_image', 'jpeg decode failed');
     img = toGray(decoded.data, decoded.width, decoded.height);
   } else {
-    throw new Error('unsupported image format (expected JPEG or PNG)');
+    throw new SheetImageError('invalid_sheet', 'unsupported image format (expected JPEG or PNG)');
   }
   return downscale(img, MAX_WORK_WIDTH);
 }

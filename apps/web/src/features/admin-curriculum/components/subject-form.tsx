@@ -10,7 +10,8 @@ import {
 } from '#lib/curriculum';
 import { errorText } from '../utils/shared';
 
-export function SubjectForm({ initial, subjectId }: { initial?: CurriculumSubject; subjectId?: string }) {
+/** Form tạo/sửa môn — chế độ suy từ sự hiện diện của `initial` như NodeForm/OutcomeForm (chỉ một tín hiệu cho cùng một quyết định trong cụm form). */
+export function SubjectForm({ initial }: { initial?: CurriculumSubject }) {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
   const [name, setName] = useState(initial?.name ?? '');
@@ -24,11 +25,17 @@ export function SubjectForm({ initial, subjectId }: { initial?: CurriculumSubjec
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    // Ô `type="number"` để trống cho Number('') === 0 nên kiểm tra rỗng/NaN trước khi gửi, thay vì gửi 0 lặng lẽ.
+    const positionValue = Number(position);
+    if (position.trim() === '' || !Number.isFinite(positionValue)) {
+      setError(t('curriculumInvalidNumber'));
+      return;
+    }
     try {
-      if (subjectId) {
-        await updateSubject.mutateAsync({ subjectId, body: { name, slug, position: Number(position) } });
+      if (initial) {
+        await updateSubject.mutateAsync({ subjectId: initial.id, body: { name, slug, position: positionValue } });
       } else {
-        await createSubject.mutateAsync({ name, slug, position: Number(position) });
+        await createSubject.mutateAsync({ name, slug, position: positionValue });
       }
       navigate('/admin/curriculum');
     } catch (err) {

@@ -80,8 +80,13 @@ function eventLogConditions(
 export class EventLogRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): EventLogDb {
+    return this.handle;
+  }
+
   /** Tìm một trang nhật ký theo bộ lọc, kèm tổng số dòng khớp cùng bộ lọc đó. */
-  async search(filters: EventLogFilters, page: number, pageSize: number, db: EventLogDb = this.handle): Promise<{ rows: EventLogRow[]; total: number }> {
+  async search(filters: EventLogFilters, page: number, pageSize: number, db: EventLogDb = this.db()): Promise<{ rows: EventLogRow[]; total: number }> {
     const rows = await db
       .selectFrom('event_log')
       .select(EVENT_LOG_COLUMNS)

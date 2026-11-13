@@ -73,7 +73,7 @@ function renderPage() {
   );
 }
 
-describe('Exam paper editor (F-01 của #133)', () => {
+describe('Trình soạn đề (F-01 của #133)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();

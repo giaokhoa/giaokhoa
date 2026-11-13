@@ -1,3 +1,10 @@
+/**
+ * Dashboard theo lớp: dựng đúng theo vai của người gọi mà server suy trong gói
+ * GET /classes/:id/overview — học sinh chỉ thấy tổng quan, khoá mình đang ghi danh,
+ * giáo viên của lớp và nút Chat lớp; chủ lớp/đồng giáo viên thêm các khối quản trị
+ * roster, nhập Excel, hàng chờ duyệt, đã đình chỉ và phân quyền đồng giáo viên.
+ */
+
 import { useRef, useState, type FormEvent } from 'react';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
@@ -9,12 +16,13 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@giaokhoa/ui/components/table';
 import { ErrorAlert } from '#components/error-alert';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { addRosterMember, addRosterStudentByIdentity, decideJoinRequest, downloadRosterTemplate, ensureClassConversation, fetchClassOverview, fetchClassStaff, fetchJoinRequests, fetchRoster, fetchSuspendedMembers, importRosterFile, personName, removeRosterMember, setClassStaffRoles } from '../api/classes';
+import { downloadRosterTemplate, ensureClassConversation } from '../api/classes';
+import { useAddRosterMember, useAddRosterStudentByIdentity, useClassJoinRequests, useClassOverview, useClassRoster, useClassStaff, useClassSuspendedMembers, useDecideJoinRequest, useImportRosterFile, useRemoveRosterMember, useSetClassStaffRoles } from '../queries/classes';
+import { personName } from '#utils/name-format';
 import { CLASS_STAFF_ROLE_ORDER } from '../types/classes';
 import type { ClassRosterImportReport, ClassStaffRole } from '../types/classes';
 import { formatDate } from '#utils/date-format';
@@ -34,7 +42,6 @@ export function ClassDetailPage() {
   const { id } = useParams<{ id: string }>();
   const classId = id ?? '';
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -66,34 +73,33 @@ export function ClassDetailPage() {
    * không gọi các endpoint quản trị, đồng GV không gọi endpoint mà
    * mình không có quyền (tránh lỗi 403 vô ích và bề mặt thừa).
    */
-  const overviewQuery = useQuery({ queryKey: queryKeys.classOverview(classId), queryFn: () => fetchClassOverview(classId), enabled: Boolean(classId) });
+  const overviewQuery = useClassOverview(classId);
   const overview = overviewQuery.data;
   const isMember = overview?.viewerRole === 'member';
   const canManageRoster = overview?.canManageRoster ?? false;
-  const staffQuery = useQuery({ queryKey: queryKeys.classStaff(classId), queryFn: () => fetchClassStaff(classId), enabled: Boolean(classId) });
-  const rosterQuery = useQuery({ queryKey: queryKeys.classRoster(classId), queryFn: () => fetchRoster(classId), enabled: Boolean(classId) && Boolean(overview) && !isMember });
-  const suspendedQuery = useQuery({ queryKey: queryKeys.classSuspended(classId), queryFn: () => fetchSuspendedMembers(classId), enabled: Boolean(classId) && canManageRoster });
-  const requestsQuery = useQuery({ queryKey: queryKeys.classJoinRequests(classId), queryFn: () => fetchJoinRequests(classId), enabled: Boolean(classId) && canManageRoster });
-
-  const invalidateRoster = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.classRoster(classId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.classSuspended(classId) });
-  };
-  const invalidateStaff = () => void queryClient.invalidateQueries({ queryKey: queryKeys.classStaff(classId) });
-  const invalidateRequests = () => void queryClient.invalidateQueries({ queryKey: queryKeys.classJoinRequests(classId) });
+  const staffQuery = useClassStaff(classId);
+  const rosterQuery = useClassRoster(classId, Boolean(overview) && !isMember);
+  const suspendedQuery = useClassSuspendedMembers(classId, canManageRoster);
+  const requestsQuery = useClassJoinRequests(classId, canManageRoster);
 
   // --- Thêm học sinh theo định danh ---
   const [studentName, setStudentName] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
   const [studentPhone, setStudentPhone] = useState('');
-  const addStudentMutation = useMutation({
-    mutationFn: () =>
-      addRosterStudentByIdentity(classId, {
-        fullName: studentName.trim(),
-        ...(studentEmail.trim() ? { email: studentEmail.trim() } : {}),
-        ...(studentPhone.trim() ? { phone: studentPhone.trim() } : {}),
-      }),
-    onSuccess: (result) => {
+  const addStudentMutation = useAddRosterStudentByIdentity();
+
+  async function onAddStudent(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      const result = await addStudentMutation.mutateAsync({
+        classId,
+        input: {
+          fullName: studentName.trim(),
+          ...(studentEmail.trim() ? { email: studentEmail.trim() } : {}),
+          ...(studentPhone.trim() ? { phone: studentPhone.trim() } : {}),
+        },
+      });
       const name = result.fullName;
       if (result.outcome === 'created') setMessage(t('classStudentCreated', { name, password: result.temporaryPassword ?? '' }));
       else if (result.outcome === 'matched') setMessage(t('classStudentMatched', { name }));
@@ -101,100 +107,113 @@ export function ClassDetailPage() {
       setStudentName('');
       setStudentEmail('');
       setStudentPhone('');
-      invalidateRoster();
-    },
-    onError: () => setMessage(t('classAddStudentFailed')),
-  });
-
-  function onAddStudent(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    addStudentMutation.mutate();
+    } catch {
+      setMessage(t('classAddStudentFailed'));
+    }
   }
 
   // --- Nhập từ Excel ---
   const fileRef = useRef<HTMLInputElement>(null);
   const [importReport, setImportReport] = useState<ClassRosterImportReport | null>(null);
-  const importMutation = useMutation({
-    mutationFn: (file: File) => importRosterFile(classId, file),
-    onSuccess: (report) => {
-      setImportReport(report);
-      setMessage(null);
-      invalidateRoster();
-    },
-    onError: () => setMessage(t('classImportFailed')),
-  });
+  const importMutation = useImportRosterFile();
 
-  function onImport(event: FormEvent) {
+  async function onImport(event: FormEvent) {
     event.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file) return;
     setImportReport(null);
     setMessage(null);
-    importMutation.mutate(file);
+    try {
+      const report = await importMutation.mutateAsync({ classId, file });
+      setImportReport(report);
+      setMessage(null);
+    } catch {
+      setMessage(t('classImportFailed'));
+    }
   }
 
   // --- Đình chỉ / kích hoạt lại ---
-  const removeMutation = useMutation({
-    mutationFn: (userId: string) => removeRosterMember(classId, userId),
-    onSuccess: () => {
-      setMessage(t('classSuspendDone'));
-      invalidateRoster();
-    },
-    onError: () => setMessage(t('classSuspendFailed')),
-  });
-  const reactivateMutation = useMutation({
-    mutationFn: (userId: string) => addRosterMember(classId, userId),
-    onSuccess: (_data, userId) => {
-      const member = suspendedQuery.data?.find((m) => m.userId === userId);
-      setMessage(t('classReactivated', { name: member ? personName(member) : userId }));
-      invalidateRoster();
-    },
-    onError: () => setMessage(t('classReactivateFailed')),
-  });
+  const removeMutation = useRemoveRosterMember();
+  const reactivateMutation = useAddRosterMember();
 
-  function onRemove(userId: string, name: string) {
+  async function onRemove(userId: string, name: string) {
     const confirmText = overview?.class.onLeave === 'unenrol' ? t('classRemoveWithdrawConfirm', { name }) : t('classSuspendConfirm', { name });
     if (!window.confirm(confirmText)) return;
     setMessage(null);
-    removeMutation.mutate(userId);
+    try {
+      await removeMutation.mutateAsync({ classId, userId });
+      setMessage(t('classSuspendDone'));
+    } catch {
+      setMessage(t('classSuspendFailed'));
+    }
+  }
+
+  async function onReactivate(userId: string) {
+    setMessage(null);
+    try {
+      await reactivateMutation.mutateAsync({ classId, userId });
+      const member = suspendedQuery.data?.find((m) => m.userId === userId);
+      setMessage(t('classReactivated', { name: member ? personName(member) : userId }));
+    } catch {
+      setMessage(t('classReactivateFailed'));
+    }
   }
 
   // --- Hàng chờ duyệt ---
-  const decideMutation = useMutation({
-    mutationFn: (input: { requestId: string; approve: boolean }) => decideJoinRequest(classId, input.requestId, input.approve),
-    onSuccess: () => {
+  const decideMutation = useDecideJoinRequest();
+
+  async function onDecide(requestId: string, approve: boolean) {
+    setMessage(null);
+    try {
+      await decideMutation.mutateAsync({ classId, requestId, approve });
       setMessage(t('classRequestDone'));
-      invalidateRequests();
-      invalidateRoster();
-    },
-    onError: () => setMessage(t('classRequestFailed')),
-  });
+    } catch {
+      setMessage(t('classRequestFailed'));
+    }
+  }
 
   // --- Phân quyền đồng GV ---
   const [staffEmail, setStaffEmail] = useState('');
   const [staffRoles, setStaffRoles] = useState<ClassStaffRole[]>([]);
-  const staffMutation = useMutation({
-    mutationFn: (input: { userId?: string; email?: string; roles: ClassStaffRole[] }) => setClassStaffRoles(classId, input),
-    onSuccess: () => {
+  const staffMutation = useSetClassStaffRoles();
+
+  async function onAddStaff(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      await staffMutation.mutateAsync({ classId, input: { email: staffEmail.trim(), roles: staffRoles } });
       setMessage(t('classStaffSaved'));
       setStaffEmail('');
       setStaffRoles([]);
-      invalidateStaff();
-    },
-    onError: () => setMessage(t('classStaffFailed')),
-  });
-
-  function onAddStaff(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    staffMutation.mutate({ email: staffEmail.trim(), roles: staffRoles });
+    } catch {
+      setMessage(t('classStaffFailed'));
+    }
   }
 
-  function toggleStaffRole(userId: string, current: ClassStaffRole[], role: ClassStaffRole, on: boolean) {
+  /** Gỡ toàn bộ vai đồng giảng dạy của một thành viên (roles rỗng). */
+  async function onRemoveStaff(userId: string) {
+    setMessage(null);
+    try {
+      await staffMutation.mutateAsync({ classId, input: { userId, roles: [] } });
+      setMessage(t('classStaffSaved'));
+      setStaffEmail('');
+      setStaffRoles([]);
+    } catch {
+      setMessage(t('classStaffFailed'));
+    }
+  }
+
+  async function toggleStaffRole(userId: string, current: ClassStaffRole[], role: ClassStaffRole, on: boolean) {
     const roles = on ? [...new Set([...current, role])] : current.filter((r) => r !== role);
     setMessage(null);
-    staffMutation.mutate({ userId, roles });
+    try {
+      await staffMutation.mutateAsync({ classId, input: { userId, roles } });
+      setMessage(t('classStaffSaved'));
+      setStaffEmail('');
+      setStaffRoles([]);
+    } catch {
+      setMessage(t('classStaffFailed'));
+    }
   }
 
   const cls = overview?.class;
@@ -340,10 +359,10 @@ export function ClassDetailPage() {
                         <TableCell>{req.username}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button type="button" size="sm" disabled={decideMutation.isPending} onClick={() => decideMutation.mutate({ requestId: req.id, approve: true })}>
+                            <Button type="button" size="sm" disabled={decideMutation.isPending} onClick={() => void onDecide(req.id, true)}>
                               {t('classApprove')}
                             </Button>
-                            <Button type="button" size="sm" variant="outline" disabled={decideMutation.isPending} onClick={() => decideMutation.mutate({ requestId: req.id, approve: false })}>
+                            <Button type="button" size="sm" variant="outline" disabled={decideMutation.isPending} onClick={() => void onDecide(req.id, false)}>
                               {t('classReject')}
                             </Button>
                           </div>
@@ -493,7 +512,7 @@ export function ClassDetailPage() {
                         <TableCell>{member.username}</TableCell>
                         <TableCell>{member.email}</TableCell>
                         <TableCell className="text-right">
-                          <Button type="button" size="sm" disabled={reactivateMutation.isPending} onClick={() => reactivateMutation.mutate(member.userId)}>
+                          <Button type="button" size="sm" disabled={reactivateMutation.isPending} onClick={() => void onReactivate(member.userId)}>
                             {t('classReactivate')}
                           </Button>
                         </TableCell>
@@ -547,7 +566,7 @@ export function ClassDetailPage() {
                           ))}
                           <TableCell className="text-right">
                             {!member.isOwner && staffQuery.data.canShare ? (
-                              <Button type="button" size="sm" variant="outline" disabled={staffMutation.isPending} onClick={() => staffMutation.mutate({ userId: member.userId, roles: [] })}>
+                              <Button type="button" size="sm" variant="outline" disabled={staffMutation.isPending} onClick={() => void onRemoveStaff(member.userId)}>
                                 {t('classStaffRemove')}
                               </Button>
                             ) : null}

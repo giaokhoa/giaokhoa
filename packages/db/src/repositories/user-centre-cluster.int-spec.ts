@@ -2,7 +2,9 @@ import { sql } from 'kysely';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { AuthRepository } from './auth';
 import { CentreIdentityRepository } from './centre-identity';
 import { SiteConfigRepository } from './site-config';
@@ -24,15 +26,10 @@ import { UsersRepository } from './users';
  * - T-7 (mở rộng cho kho trung tâm): cùng một dòng đọc qua
  *   oracle độc lập (Kysely thô ngoài repository) và qua repository cho kiểu runtime khớp nhau ở các cột đại diện của cụm (timestamptz, jsonb — object lẫn mảng ở cấp trên cùng, boolean, uuid, text) và khẳng định bề mặt int8 của cụm: mười bốn bảng của cụm không có cột bigint nào (đo tại information_schema), nên luật int8-đọc-là-string không có bề mặt trong cụm này.
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL
-    ? withDatabase(process.env.DATABASE_URL, 'postgres')
-    : 'postgres://postgres:postgres@localhost:5432/postgres');
+const adminUrl = resolveTestAdminUrl();
 
 const CENTRE_DB = 'giaokhoa_db_g641_centre';
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 let pool: Pool;
 let db: CentreDb;
@@ -46,6 +43,9 @@ let tenantId = '';
 let otherTenantId = '';
 
 beforeAll(async () => {
+  if (!adminUrl) {
+    throw new Error('Thiếu kết nối quản trị cho spec tích hợp user-centre-cluster: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+  }
   const storeUrl = await buildTestDatabase({ adminUrl, database: CENTRE_DB, store: 'centre' });
   pool = new Pool({ connectionString: storeUrl });
   db = createCentreKysely(pool);
@@ -54,9 +54,9 @@ beforeAll(async () => {
   tenantsRepo = new TenantsRepository(db);
   centreRepo = new CentreIdentityRepository(db);
   siteConfigRepo = new SiteConfigRepository(db);
-  const tenant = await tenantsRepo.insertTenant({ slug: 'g641-chinh', name: 'Trung tâm chính G641', kind: 'center', status: 'active', plan: null });
+  const tenant = await tenantsRepo.insertTenant({ slug: 'g641-chinh', name: 'Trung tâm chính G641', kind: TEST_TENANT_KIND, status: 'active', plan: null });
   tenantId = tenant.id;
-  const other = await tenantsRepo.insertTenant({ slug: 'g641-phu', name: 'Trung tâm phụ G641', kind: 'center', status: 'active', plan: null });
+  const other = await tenantsRepo.insertTenant({ slug: 'g641-phu', name: 'Trung tâm phụ G641', kind: TEST_TENANT_KIND, status: 'active', plan: null });
   otherTenantId = other.id;
 }, 180_000);
 
@@ -88,7 +88,7 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
       currentTokenHash: 'hash-hien-tai-1',
       expiresAt: new Date(Date.now() + 3_600_000),
     });
-    expect(family.id).toMatch(UUIDV7_PATTERN);
+    expect(family.id).toMatch(UUIDV7_RE);
     expect(family.familyId).toBe('fam-g641-1');
     expect(family.tenantId).toBe(tenantId);
     expect(family.revoked).toBe(false);
@@ -233,7 +233,7 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
       issuerUserId: 'subject-1',
       email: 'ngoai@example.test',
     });
-    expect(link.id).toMatch(UUIDV7_PATTERN);
+    expect(link.id).toMatch(UUIDV7_RE);
     const bySubject = await authRepo.getOauthLinkBySubject('https://issuer.example.test', 'subject-1');
     expect(bySubject?.id).toBe(link.id);
     expect(await authRepo.listOauthLinksByUser(user.id)).toHaveLength(1);
@@ -361,7 +361,7 @@ describe('UsersRepository — hồ sơ, transaction, tìm kiếm động (T-13) 
 
 describe('TenantsRepository — vòng đời tenant, membership và cấu hình jsonb', () => {
   it('cập nhật tenant từng phần: chỉ trường có mặt đổi, mốc updated_at được đóng dấu lại', async () => {
-    const tenant = await tenantsRepo.insertTenant({ slug: 'g641-sua', name: 'Tên cũ', kind: 'center', status: 'active', plan: 'basic' });
+    const tenant = await tenantsRepo.insertTenant({ slug: 'g641-sua', name: 'Tên cũ', kind: TEST_TENANT_KIND, status: 'active', plan: 'basic' });
     await tenantsRepo.updateTenant(tenant.id, { name: 'Tên mới', plan: undefined });
     const after = await tenantsRepo.getTenant(tenant.id);
     expect(after?.name).toBe('Tên mới');
@@ -374,7 +374,7 @@ describe('TenantsRepository — vòng đời tenant, membership và cấu hình 
   it('membership: tạo, tra theo cặp tenant+user, liệt kê hai chiều và cập nhật trạng thái kết thúc', async () => {
     const user = await makeUser('membership');
     const membership = await tenantsRepo.insertMembership({ tenantId, userId: user.id, status: 'active' });
-    expect(membership.id).toMatch(UUIDV7_PATTERN);
+    expect(membership.id).toMatch(UUIDV7_RE);
     expect((await tenantsRepo.getMembership(tenantId, user.id))?.id).toBe(membership.id);
     expect((await tenantsRepo.listMembershipsForUser(user.id)).map((m) => m.id)).toContain(membership.id);
     expect((await tenantsRepo.listMembershipsForTenant(tenantId)).map((m) => m.id)).toContain(membership.id);
@@ -557,7 +557,7 @@ describe('T-7 mở rộng cho kho trung tâm — contract kiểu runtime trên c
   it('T-7: jsonb của tenant_config và config khớp hai chiều ghi oracle đọc repository và ghi repository đọc oracle', async () => {
     const oracleTenant = await db
       .insertInto('tenants')
-      .values({ slug: 'g641-t7', name: 'T7 tenant', kind: 'center', status: 'active', plan: null })
+      .values({ slug: 'g641-t7', name: 'T7 tenant', kind: TEST_TENANT_KIND, status: 'active', plan: null })
       .returningAll()
       .executeTakeFirstOrThrow();
     await db.insertInto('tenant_config').values({

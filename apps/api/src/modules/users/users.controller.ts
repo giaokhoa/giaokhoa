@@ -115,7 +115,7 @@ export class UsersController {
 
   @Put(':id/preferences')
   /**
-   * PUT /users/me/preferences/:name — ghi tuỳ chọn cá nhân.
+   * PUT /users/:id/preferences — ghi tuỳ chọn cá nhân (tên tuỳ chọn nằm trong body, không có segment `:name` trên path).
    */
   async setPreference(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: setUserPreferenceSchema }) dto: SetPreferenceDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.users.assertCanUpdateProfile(actor.id, id);
@@ -124,7 +124,7 @@ export class UsersController {
   }
   @Get(':id/preferences/:name')
   /**
-   * GET /users/me/preferences/:name — đọc tuỳ chọn cá nhân.
+   * GET /users/:id/preferences/:name — đọc tuỳ chọn cá nhân.
    */
   async getPreference(@Param('id', { schema: uuidIdSchema }) id: string, @Param('name') name: string, @CurrentUser() actor: AuthenticatedUser) {
     await this.users.assertCanUpdateProfile(actor.id, id);

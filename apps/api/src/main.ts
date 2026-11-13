@@ -1,3 +1,20 @@
+/**
+ * Điểm vào khởi động của API (NestJS + Express).
+ *
+ * Flow khởi động (`bootstrap`):
+ * 1. Dựng ứng dụng từ `AppModule`; tin đúng một chặng proxy để `req.ip`
+ *    là IP khách thật (`enableTrustedProxy`).
+ * 2. Mount đường auth của Better Auth (`/api/v1/auth/*`) và MCP server
+ *    (`POST /mcp` + PRM) TRƯỚC prefix/route/body parser của Nest — chỉ
+ *    khi cờ tương ứng bật; cả hai tắt thì hành vi live không đổi.
+ * 3. Bật prefix toàn cục `/api` + versioning URI (mặc định v1), filter
+ *    ProblemDetails toàn cục, CORS theo allowlist `CORS_ORIGINS`,
+ *    shutdown hooks và nén gzip cho mọi phản hồi.
+ * 4. Nếu `WEB_DIST_DIR` trỏ tới bản build của web app: phục vụ file tĩnh
+ *    (asset có hash được cache vĩnh viễn) và SPA fallback — mọi GET
+ *    ngoài `/api` trả `index.html` để React Router điều hướng phía client.
+ * 5. Mở tài liệu OpenAPI tại `/api/docs`, rồi lắng nghe trên `PORT`.
+ */
 import { existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { VersioningType } from '@nestjs/common';

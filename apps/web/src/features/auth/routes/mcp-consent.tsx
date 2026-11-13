@@ -3,6 +3,9 @@ import { useLocation } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
+import { useTranslation } from 'react-i18next';
+import '#config/i18n';
+import { apiFetch } from '#lib/api';
 
 /**
  * Trang đồng ý (consent) cho luồng uỷ quyền MCP (lát MCP-1, issue #163) — `consentPage` của máy chủ OAuth Better Auth.
@@ -10,15 +13,15 @@ import { ErrorAlert } from '#components/error-alert';
  * AS chuyển trình duyệt tới đây kèm chuỗi query authorize ĐÃ KÝ. Trang hiển thị tên client (lấy từ `/oauth2/public-client` bằng chính phiên BA) + danh sách scope xin cấp dạng tích chọn. Scope `giaokhoa.questions.write` (phát hành câu hỏi) KHÔNG tích sẵn — giáo viên phải chủ động bật. Khi bấm đồng ý/từ chối, trang POST về `/oauth2/consent` kèm `oauth_query` nguyên văn và đi tiếp theo đúng `url` máy chủ trả về (không tự ghép redirect_uri — bài học CVE-2026-67337 ghi trong addendum của issue).
  */
 
-/** Nhãn tiếng Việt + mức cảnh báo cho từng scope MCP. */
-const SCOPE_LABELS: Record<string, { label: string; sensitive?: boolean }> = {
-  'giaokhoa.questions.read': { label: 'Xem ngân hàng câu hỏi: danh sách bank, thư mục, tìm và đọc câu hỏi' },
-  'giaokhoa.questions.draft': { label: 'Tạo câu hỏi BẢN NHÁP trong ngân hàng cá nhân của bạn (chưa dùng được cho tới khi bạn duyệt)' },
+/** Khoá i18n của nhãn + mức cảnh báo cho từng scope MCP — nhãn dịch lúc render để giao diện đổi ngôn ngữ theo `i18n.language`. */
+const SCOPE_LABELS: Record<string, { key: string; sensitive?: boolean }> = {
+  'giaokhoa.questions.read': { key: 'mcpScopeQuestionsRead' },
+  'giaokhoa.questions.draft': { key: 'mcpScopeQuestionsDraft' },
   'giaokhoa.questions.write': {
-    label: 'PHÁT HÀNH câu hỏi: chuyển bản nháp của bạn thành câu hỏi chính thức dùng được trong đề thi',
+    key: 'mcpScopeQuestionsWrite',
     sensitive: true,
   },
-  'giaokhoa.banks.contribute': { label: 'Đề xuất đóng góp câu hỏi đã phát hành của bạn lên ngân hàng chung (vẫn cần người duyệt phía bank chung)' },
+  'giaokhoa.banks.contribute': { key: 'mcpScopeBanksContribute' },
 };
 
 interface ConsentContext {
@@ -56,9 +59,11 @@ export default function McpConsentPage() {
 
 /** State và request bất đồng bộ của duy nhất một yêu cầu OAuth. */
 function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
+  const { t } = useTranslation('app');
   const initialContext = useMemo(() => readConsentContext(rawQuery), [rawQuery]);
   const [context, setContext] = useState<ConsentContext | null>(initialContext);
-  const [loadError] = useState<string | null>(() => initialContext ? null : 'Liên kết uỷ quyền không hợp lệ (thiếu thông tin ứng dụng). Hãy bắt đầu lại từ ứng dụng AI của bạn.');
+  // Lỗi tải chỉ suy từ query ban đầu, không bao giờ thay đổi trong vòng đời của yêu cầu này nên giữ bằng const thường, không phải state.
+  const loadError = initialContext ? null : t('mcpConsentInvalidLink');
   const [selected, setSelected] = useState<Set<string>>(() => new Set(
     initialContext?.scopes.filter((scope) => scope !== 'giaokhoa.questions.write') ?? [],
   ));
@@ -77,9 +82,9 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
     const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/v1/auth/oauth2/public-client?client_id=${encodeURIComponent(parsed.clientId)}`,
-          { credentials: 'include', signal: controller.signal },
+          { signal: controller.signal },
         );
         if (controller.signal.aborted) return;
         if (res.status === 401) {
@@ -109,11 +114,9 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
     const controller = new AbortController();
     submitControllerRef.current = controller;
     try {
-      const res = await fetch('/api/v1/auth/oauth2/consent', {
+      const res = await apiFetch('/api/v1/auth/oauth2/consent', {
         method: 'POST',
-        credentials: 'include',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accept,
           ...(accept ? { scope: [...selected].join(' ') } : {}),
@@ -127,11 +130,11 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
         window.location.assign(body.url);
         return;
       }
-      setSubmitError('Máy chủ không chấp nhận lựa chọn này. Hãy thử lại hoặc từ chối và bắt đầu lại từ ứng dụng AI.');
+      setSubmitError(t('mcpConsentRejected'));
       setBusy(false);
     } catch {
       if (controller.signal.aborted) return;
-      setSubmitError('Không kết nối được máy chủ. Thử lại sau ít phút.');
+      setSubmitError(t('mcpServerUnreachable'));
       setBusy(false);
     } finally {
       if (submitControllerRef.current === controller) submitControllerRef.current = null;
@@ -142,11 +145,11 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Uỷ quyền cho ứng dụng AI</CardTitle>
+          <CardTitle>{t('mcpConsentTitle')}</CardTitle>
           <CardDescription>
             {context
-              ? `Ứng dụng "${context.clientName}" xin được thay bạn thực hiện các việc sau trong Giáo khoa. Chỉ cấp những quyền bạn thật sự cần — bạn thu hồi được bằng cách ngừng kết nối trong ứng dụng.`
-              : 'Đang tải thông tin uỷ quyền…'}
+              ? t('mcpConsentDescription', { clientName: context.clientName })
+              : t('mcpConsentLoading')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -177,10 +180,10 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
                         }}
                       />
                       <label htmlFor={`scope-${scope}`} className="text-sm leading-snug">
-                        {known ? known.label : scope}
+                        {known ? t(known.key) : scope}
                         {known?.sensitive ? (
                           <span className="mt-1 block font-medium text-destructive">
-                            Quyền mạnh — chỉ bật khi bạn tin tưởng ứng dụng này.
+                            {t('mcpScopeSensitiveNote')}
                           </span>
                         ) : null}
                       </label>
@@ -195,10 +198,10 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
               ) : null}
               <div className="flex gap-3">
                 <Button className="flex-1" disabled={busy || selected.size === 0} onClick={() => void submit(true)}>
-                  {busy ? 'Đang xử lý…' : 'Đồng ý uỷ quyền'}
+                  {busy ? t('mcpConsentProcessing') : t('mcpConsentAccept')}
                 </Button>
                 <Button variant="outline" className="flex-1" disabled={busy} onClick={() => void submit(false)}>
-                  Từ chối
+                  {t('mcpConsentDecline')}
                 </Button>
               </div>
             </>

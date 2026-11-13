@@ -1,7 +1,15 @@
+/**
+ * Wizard nhập ma trận từ file, 5 bước: chọn môn + chương trình + bộ mức rồi tải workbook mẫu do server sinh; tải file .xlsx đã điền lên; xem trước lưới ô dự thảo, cảnh báo, khả dụng và bảng lỗi định vị; xác nhận; mở trang sửa của ma trận vừa ghi.
+ * Trang không tự tính lại luật nào: mọi luật hợp lệ, tính tổng và khả dụng đều do server trả trong kết quả xem trước; bước ghi gửi lại chính file đã xem trước để server parse lại từ đầu rồi ghi nguyên tử.
+ * Ô neo đơn vị kiến thức × mức × dạng; khi kết quả xem trước còn lỗi thì nút xác nhận bị khoá.
+ */
+
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { SELECT_CLASS } from '#utils/form-classes';
+import { appKeyMeta } from '#lib/route-meta';
+import { useNavigate } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import { Checkbox } from '@giaokhoa/ui/components/checkbox';
 import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
 import { Input } from '@giaokhoa/ui/components/input';
@@ -14,13 +22,16 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { ApiError } from '#lib/api';
 import { commitMatrixImport, downloadMatrixImportTemplate, previewMatrixImport } from '../api/matrix';
+import { NoPersonalBankPage } from '../components/no-personal-bank-page';
+import { useAutoSelectCurriculum } from '../hooks/use-auto-select-curriculum';
+import { dashboardTableLabels, firstCourseId, levelLabelKey, qtypeLabelKey } from '../utils/matrix-helpers';
 import { matrixBanksQueryOptions, useCurriculaBySubject } from '../queries/matrix';
 import { curriculumSubjectsQueryOptions, useCurriculumSubjects } from '#lib/curriculum';
 import { queryClient } from '#lib/query-client';
 import { useCourseList } from '#features/courses/queries/course-new';
 import { usePermissions } from '#lib/permissions';
 import type { ExamMatrixView, MatrixImportIssue, MatrixImportPreview } from '@giaokhoa/contracts';
-import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiReason } from '#features/questions/utils/shared';
+import { withApiReason } from '#features/questions/utils/shared';
 
 /**
  * Wizard NHẬP MA TRẬN TỪ FILE (lát I-3, issue #233) — bề mặt web của chuỗi I-1 (xem trước) → I-2 (ghi nguyên tử). Trang KHÔNG tự tính lại luật nào: mọi luật hợp lệ, tính tổng và khả dụng đều do server trả trong kết quả xem trước; web chỉ trình bày và chuyển file.
@@ -32,7 +43,6 @@ import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiRe
  * Bất biến giữ ở mọi bước: ô neo ĐƠN VỊ KIẾN THỨC × mức × dạng (ma trận KHÔNG gắn YCCĐ — YCCĐ trong xem trước chỉ để đối chiếu, ô không dùng YCCĐ làm khoá); số câu Đúng–Sai là số CHÙM (1 chùm = 4 ý theo chú thích 2 CV 7991); bộ mức mặc định 3 mức CV 7991, cột Vận dụng cao chỉ tồn tại khi giáo viên tick checkbox ở bước 1 (và file khai khớp) — không có select chọn levelSet nào trên luồng này.
  */
 
-const SELECT_CLASS = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
 
 /** Các bước của wizard, theo đúng thứ tự nhiệm vụ I-3 giao. */
 const STEP_KEYS = [
@@ -72,13 +82,7 @@ function IssueTable({ issues }: { issues: MatrixImportIssue[] }) {
       <DataTable
         data={rows}
         columns={columns}
-        labels={{
-          columns: t('dashboard:tableColumns'),
-          previous: t('dashboard:tablePrevious'),
-          next: t('dashboard:tableNext'),
-          empty: t('dashboard:emptyTable'),
-          pageInfo: (page, pages) => t('dashboard:tablePageInfo', { page, pages }),
-        }}
+        labels={dashboardTableLabels(t)}
         getRowId={(issue) => issue.rowKey}
         pageSize={100}
       />
@@ -114,7 +118,7 @@ export function MatrixImportPage() {
   // phải về trước mới gọi, để tránh một lượt gọi không kèm khoá rồi
   // hiện lỗi giả trước khi khoá kịp về.
   const coursesQuery = useCourseList();
-  const forCourseId = coursesQuery.data?.[0]?.id;
+  const forCourseId = firstCourseId(coursesQuery.data);
   const subjectsQuery = useCurriculumSubjects(
     perms.ready && perms.canUseQuestionBank && coursesQuery.data !== undefined,
     forCourseId,
@@ -128,20 +132,8 @@ export function MatrixImportPage() {
   const subjectsLoadFailed = subjectsQuery.isError || curriculaQuery.isError;
 
   // Đổi môn: giữ chương trình nếu còn thuộc môn mới, không thì tự
-  // chọn chương trình đầu (cùng nhịp effect của màn tạo ma trận tay).
-  const [previousCurriculumScope, setPreviousCurriculumScope] = useState({
-    subjectId: '',
-    curricula: undefined as typeof curriculaQuery.data,
-  });
-  if (previousCurriculumScope.subjectId !== subjectId || previousCurriculumScope.curricula !== curriculaQuery.data) {
-    setPreviousCurriculumScope({ subjectId, curricula: curriculaQuery.data });
-    if (!subjectId) {
-      setCurriculumId('');
-    } else if (curriculaQuery.data) {
-      const rows = curriculaQuery.data;
-      setCurriculumId((prev) => (rows.some((c) => c.id === prev) ? prev : (rows[0]?.id ?? '')));
-    }
-  }
+  // chọn chương trình đầu (xem `useAutoSelectCurriculum`).
+  useAutoSelectCurriculum({ subjectId, curricula: curriculaQuery.data, setCurriculumId });
 
   /**
    * Bước 1 — tải workbook mẫu do server sinh cho đúng (môn, chương
@@ -231,22 +223,7 @@ export function MatrixImportPage() {
     );
   }
   if (!perms.canUseQuestionBank) {
-    return (
-      <PageShell width="medium">
-        <PageHeader title={t('matrixImport')} />
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('myMatrixBank')}</CardTitle>
-            <CardDescription>{t('matrixNoPersonalBank')}</CardDescription>
-          </CardHeader>
-        </Card>
-        <p>
-          <Link to="/matrices" className="text-sm underline">
-            {t('backToQuestionBankList')}
-          </Link>
-        </p>
-      </PageShell>
-    );
+    return <NoPersonalBankPage title={t('matrixImport')} />;
   }
 
   // Khả dụng của một ô dự thảo: khớp theo (ĐVK, mức, dạng) vì ô dự
@@ -273,12 +250,12 @@ export function MatrixImportPage() {
     {
       id: 'level',
       header: t('matrixCellLevel'),
-      cell: ({ cell }) => t(LEVEL_LABEL_KEYS[cell.cognitiveLevel as (typeof COGNITIVE_LEVELS)[number]]),
+      cell: ({ cell }) => t(levelLabelKey(cell.cognitiveLevel)),
     },
     {
       id: 'qtype',
       header: t('matrixCellQtype'),
-      cell: ({ cell }) => t(QTYPE_LABEL_KEYS[cell.qtype as (typeof QTYPES)[number]]),
+      cell: ({ cell }) => t(qtypeLabelKey(cell.qtype)),
     },
     { id: 'count', header: t('matrixCellCount'), cell: ({ cell }) => cell.questionCount },
     { id: 'score', header: t('matrixCellScore'), cell: ({ cell }) => cell.cellScore },
@@ -425,7 +402,7 @@ export function MatrixImportPage() {
               </p>
               {preview.totals.byForm.map((row) => (
                 <p key={row.qtype} className="text-sm text-muted-foreground">
-                  {t(QTYPE_LABEL_KEYS[row.qtype as (typeof QTYPES)[number]])}: {row.questionCount} · {row.score} ({row.percent}%)
+                  {t(qtypeLabelKey(row.qtype))}: {row.questionCount} · {row.score} ({row.percent}%)
                 </p>
               ))}
             </div>
@@ -447,13 +424,7 @@ export function MatrixImportPage() {
                 <DataTable
                   data={previewCellRows}
                   columns={previewCellColumns}
-                  labels={{
-                    columns: t('dashboard:tableColumns'),
-                    previous: t('dashboard:tablePrevious'),
-                    next: t('dashboard:tableNext'),
-                    empty: t('dashboard:emptyTable'),
-                    pageInfo: (page, pages) => t('dashboard:tablePageInfo', { page, pages }),
-                  }}
+                  labels={dashboardTableLabels(t)}
                   getRowId={({ cell }) => `${cell.curriculumNodeId}-${cell.cognitiveLevel}-${cell.qtype}`}
                   pageSize={100}
                 />
@@ -534,8 +505,7 @@ export async function clientLoader() {
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
-  return titleMeta('Nhập ma trận từ file');
+  return appKeyMeta('matrixImport');
 }
 export default MatrixImportPage;

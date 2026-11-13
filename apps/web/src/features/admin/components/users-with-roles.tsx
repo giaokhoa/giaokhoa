@@ -27,7 +27,7 @@ import { usersWithAssignmentsQueryOptions } from '../queries/admin-roles';
 import { AdminSelect } from './admin-select';
 import { RoleAssignmentDialog } from './role-assignment-dialog';
 import { RoleUserDialog, userDisplayName } from './role-user-dialog';
-import { TablePagination } from './table-pagination';
+import { ADMIN_PAGE_SIZE_OPTIONS, isAdminPageSize, TablePagination } from './table-pagination';
 
 /**
  * Bảng người dùng kèm vai trò của họ trên trang vai trò — một dòng là
@@ -82,9 +82,6 @@ export interface UsersWithRolesSectionProps {
   /** Cây context (trang đã tải, dùng cho hộp thoại gán, hộp thoại quản lý và cột vai trò). */
   contexts: ContextRow[];
 }
-
-/** Các lựa chọn cỡ trang của bảng theo mẫu (mặc định 10). */
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 /** Chữ viết tắt cho avatar: chữ đầu của họ và tên, lùi về chữ đầu của tên đăng nhập. */
 function initialsOf(user: UserWithAssignmentsListItem): string {
@@ -222,10 +219,10 @@ export function UsersWithRolesSection({ roles, contexts }: UsersWithRolesSection
               value={String(pageSize)}
               onValueChange={(next) => {
                 const size = Number(next);
-                setPageSize(PAGE_SIZE_OPTIONS.includes(size as 10 | 25 | 50 | 100) ? size : 10);
+                setPageSize(isAdminPageSize(size) ? size : 10);
                 setPage(1);
               }}
-              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+              options={ADMIN_PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
             />
             <Button type="button" className="h-9 gap-1.5 px-2.5" onClick={() => setAssignOpen(true)}>
               <Plus aria-hidden className="size-4" />

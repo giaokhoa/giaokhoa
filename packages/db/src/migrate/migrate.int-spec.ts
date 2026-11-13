@@ -14,15 +14,14 @@ import { Client, Pool } from 'pg';
 import { Migrator, type MigrationProvider } from 'kysely/migration';
 import { Kysely, PostgresDialect } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, withDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { FrozenSqlProvider, listMigrationNames } from './frozen-sql-provider';
 import { getAppliedMigrations } from './journal';
 import { installUuidv7Shim, MIGRATION_STORES, UUIDV7_SHIM } from './stores';
 import { verifyStore } from './verify';
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
+const adminUrl = resolveTestAdminUrl();
 
 const CENTRE_DB = 'giaokhoa_db_migrate_n2_centre';
 const STRANGE_DB = 'giaokhoa_db_migrate_n2_strange';
@@ -143,45 +142,14 @@ async function tableExists(dbUrl: string, table: string): Promise<boolean> {
   }
 }
 
-async function countPublic(dbUrl: string, kind: 'tables' | 'policies' | 'indexes'): Promise<number> {
-  const client = new Client({ connectionString: dbUrl });
-  await client.connect();
-  try {
-    if (kind === 'tables') {
-      const result = await client.query(
-        `SELECT count(*)::int AS n FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace
-         WHERE ns.nspname = 'public' AND c.relkind = 'r' AND c.relname NOT IN ('kysely_migration', 'kysely_migration_lock')`,
-      );
-      return result.rows[0].n as number;
-    }
-    if (kind === 'policies') {
-      const result = await client.query(
-        `SELECT count(*)::int AS n FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
-         JOIN pg_namespace ns ON ns.oid = c.relnamespace WHERE ns.nspname = 'public'`,
-      );
-      return result.rows[0].n as number;
-    }
-    // Cùng cơ số đo với hậu kiểm của package (mốc 416): chỉ index
-    // không đỡ ràng buộc PK/UNIQUE.
-    const result = await client.query(
-      `SELECT count(*)::int AS n FROM pg_index i
-       JOIN pg_class ic ON ic.oid = i.indexrelid
-       JOIN pg_namespace ns ON ns.oid = ic.relnamespace
-       JOIN pg_class tc ON tc.oid = i.indrelid
-       WHERE ns.nspname = 'public'
-         AND tc.relname NOT IN ('kysely_migration', 'kysely_migration_lock')
-         AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = i.indexrelid)`,
-    );
-    return result.rows[0].n as number;
-  } finally {
-    await client.end();
-  }
-}
 
 describe('bộ máy migration của package cho ba kho', () => {
   let centreUrl = '';
 
   beforeAll(async () => {
+    if (!adminUrl) {
+      throw new Error('Thiếu kết nối quản trị cho spec migration: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    }
     centreUrl = await buildTestDatabase({ adminUrl, database: CENTRE_DB, store: 'centre' });
   }, 300_000);
 
@@ -203,9 +171,6 @@ describe('bộ máy migration của package cho ba kho', () => {
     expect(result.policies).toBe(23);
     expect(result.indexes).toBe(419);
     expect(result.journalRows).toBe(MIGRATION_STORES.centre.expected.journalRows);
-    expect(await countPublic(centreUrl, 'tables')).toBe(204);
-    expect(await countPublic(centreUrl, 'policies')).toBe(23);
-    expect(await countPublic(centreUrl, 'indexes')).toBe(419);
   });
 
   it('hàm đọc nhật ký chỉ đọc kysely_migration: database trống trả tập rỗng, nhật ký cũ bị bỏ qua, nhật ký Kysely trả đúng tập tên', async () => {
@@ -334,7 +299,7 @@ describe('bộ máy migration của package cho ba kho', () => {
       await check.connect();
       try {
         const fn = await check.query("SELECT uuidv7() AS id");
-        expect(fn.rows[0]?.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        expect(fn.rows[0]?.id).toMatch(UUIDV7_RE);
       } finally {
         await check.end();
       }

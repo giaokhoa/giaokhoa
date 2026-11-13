@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
 import { CurriculumRepository, type LearningOutcomeRow } from './curriculum';
 
 /**
@@ -11,9 +11,7 @@ import { CurriculumRepository, type LearningOutcomeRow } from './curriculum';
  * (Ca T-13 — hợp điều kiện động — được khoá qua
  * `countGuardedReferences` và lọc `listOutcomes`.)
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g646_curriculum';
 const CONTEXT_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a1001';
@@ -50,7 +48,7 @@ async function seedTree(slug: string) {
   return { subject, curriculum, node, outcome };
 }
 
-describe('CurriculumRepository (Kysely)', () => {
+describe('CurriculumRepository trên Kysely — môn học, YCCĐ và tìm kiếm outcome', () => {
   it('chèn môn học rồi đọc lại theo context với đúng hình dạng dòng công khai', async () => {
     const { subject } = await seedTree('toan-g6');
     const listed = await repo.listSubjects(CONTEXT_ID);

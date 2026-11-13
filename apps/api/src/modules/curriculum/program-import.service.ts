@@ -1,9 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { ProgramDatasetStatus, ProgramImportChange, ProgramImportResult } from '@giaokhoa/contracts';
+import type {
+  ProgramDatasetStatus, ProgramImportChange, ProgramImportChangeKind, ProgramImportResult,
+} from '@giaokhoa/contracts';
 import type { CentreTx } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
-import { CurriculumRepository, type CurriculumNodeRow } from '@giaokhoa/db/repositories/curriculum';
+import { SECTION_SHIFT_BUFFER } from '../courses/courses.service';
+import {
+  CurriculumRepository, type CurriculumNodeRow, type SubjectRow,
+} from '@giaokhoa/db/repositories/curriculum';
 import { CURRICULUM_MANAGE, CURRICULUM_VIEW } from './curriculum.service';
 import {
   loadProgramDataset, programAncestorNodeId, programCurriculumId, programDatasetByKey, programLessonNodeId,
@@ -15,6 +20,23 @@ import {
 
 /** Trần số mục chi tiết trong báo cáo thay đổi của một lượt nạp một dataset (đếm tổng vẫn đầy đủ ở changeCounts). */
 const IMPORT_CHANGES_CAP = 500;
+
+/** Vị trí 1-based của từng dataset trong manifest — vị trí mặc định của môn mới tạo trong danh sách môn (giữ đúng thứ tự manifest). */
+const DATASET_POSITION_BY_KEY = new Map(
+  PROGRAM_DATASETS.map((datasetDef, index) => [datasetDef.key, index + 1]),
+);
+
+/** Ánh xạ loại thay đổi sang khoá đếm trong changeCounts (`text-changed` đếm vào `textChanged`, các loại còn lại trùng tên). */
+const CHANGE_COUNT_KEY: Record<
+  ProgramImportChangeKind,
+  'textChanged' | 'added' | 'removed' | 'moved' | 'revived'
+> = {
+  'text-changed': 'textChanged',
+  added: 'added',
+  removed: 'removed',
+  moved: 'moved',
+  revived: 'revived',
+};
 
 /**
  * Một lệnh ghi YCCĐ mà thuật toán diff của một bản ghi sinh ra; toàn bộ lệnh của một bản ghi được áp trong MỘT transaction (xem applyOutcomeWrites cho thứ tự áp an toàn với partial unique index). `update` gộp ba ca dùng chung hình dạng patch: moved (chỉ position), text-changed (chỉ content), revived (retiredAt về null + position).
@@ -36,6 +58,34 @@ interface TreeIndex {
 
 function childKey(parentId: string | null, kind: string, title: string): string {
   return `${parentId ?? ''}|${kind}|${title}`;
+}
+
+/** Nhóm các mục theo trường `text` — helper thuần dùng chung cho các bước ghép theo nguyên văn của diffOutcomes. */
+function groupByText<T extends { text: string }>(items: T[]): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const group = map.get(item.text);
+    if (group) group.push(item); else map.set(item.text, [item]);
+  }
+  return map;
+}
+
+/** Trạng thái dùng chung của một lượt nạp — các method tách từ runImport nhận đúng phần mình cần thay vì hàng loạt tham số rời. */
+interface ImportRunState {
+  def: ProgramDatasetDef;
+  file: ProgramDatasetFile;
+  subject: SubjectRow;
+  curricula: Map<number, string>;
+  indexes: Map<string, TreeIndex>;
+}
+
+/** Đếm + báo cáo thay đổi tích luỹ trong một lượt nạp (runImport chia cho importRecord/retireOrphanedRecords). */
+interface ImportTally {
+  created: number;
+  updated: number;
+  skipped: number;
+  outcomesWritten: number;
+  changes: ProgramImportChange[];
 }
 
 @Injectable()
@@ -173,6 +223,174 @@ export class ProgramImportService {
     }
   }
 
+  /** Chỉ mục cây theo chương trình, dựng lười khi gặp bản ghi đầu tiên của khối. */
+  private async indexFor(
+    indexes: Map<string, TreeIndex>,
+    curriculumId: string,
+  ): Promise<TreeIndex> {
+    const existing = indexes.get(curriculumId);
+    if (existing) return existing;
+    const nodes = await this.repo.listNodes(curriculumId);
+    const index: TreeIndex = { childByKey: new Map(), nextPosByParent: new Map() };
+    for (const node of nodes) {
+      index.childByKey.set(childKey(node.parentId, node.kind, node.title), node);
+      const key = node.parentId ?? '';
+      index.nextPosByParent.set(key, Math.max(index.nextPosByParent.get(key) ?? 1, node.position + 1));
+    }
+    indexes.set(curriculumId, index);
+    return index;
+  }
+
+  /**
+   * Nạp một bản ghi của dataset: khối hiệu lực → chỉ mục cây → đường tổ tiên → đối chiếu sổ đăng ký + hash rồi rẽ ba nhánh:
+   * - Sổ khớp hash (và không có dòng đã rút nào hồi sinh được) thì bỏ qua.
+   * - Chưa có trong sổ thì tạo node lesson + YCCĐ + dòng sổ trong một transaction.
+   * - Đã có nhưng hash lệch thì diff không-xoá tại chỗ (xem diffOutcomes), cập nhật node + YCCĐ + dòng sổ trong một transaction.
+   * Đếm và báo cáo thay đổi ghi vào `tally` dùng chung của lượt nạp.
+   */
+  private async importRecord(
+    state: ImportRunState,
+    record: ProgramRecord,
+    tally: ImportTally,
+  ): Promise<void> {
+    const { def, file, subject } = state;
+    const grade = programRecordEffectiveGrade(file.records, record);
+    // Map curricula dựng đủ mọi khối hiệu lực của dataset ở runImport — thiếu là lỗi nội bộ, không phải dữ liệu xấu của bản ghi.
+    const curriculumId = state.curricula.get(grade);
+    if (!curriculumId) {
+      throw new Error(`No curriculum for effective grade ${grade} of dataset ${def.key} (record ${record.id})`);
+    }
+    const index = await this.indexFor(state.indexes, curriculumId);
+    const parent = await this.ensureAncestors(index, curriculumId, def.slug, grade, record);
+    // Đường tổ tiên có thể rỗng (dataset không mang bậc cấu trúc nào,
+    // ví dụ Âm nhạc): node lesson nằm ngay ở gốc cây của khối.
+    const parentId = parent?.id ?? null;
+    // Tựa node: nguyên văn content; bản ghi requirement content rỗng
+    // thì suy xuống topic/section (xem programRecordTitle).
+    const title = programRecordTitle(record);
+    const hash = programRecordHash(record);
+    const entries = programRecordOutcomeDocs(record);
+    const reg = await this.repo.getProgramRecord(def.key, record.id);
+    if (reg && reg.contentHash === hash) {
+      // Đã khớp nguyên văn theo hash — nhưng phải loại trừ ca bản
+      // ghi vừa QUAY LẠI sau khi bị rút cả bản ghi: các dòng của nó
+      // đang ở trạng thái đã rút trong khi nguyên văn của chúng
+      // nằm trong dataset hiện tại; ca này phải rơi xuống nhánh
+      // diff để P4 hồi sinh đúng các dòng đó. Trạng thái ổn định
+      // (dòng đã rút vì bị bỏ khỏi dataset, nguyên văn không còn
+      // trong bản ghi) thì giữ đường nhanh bỏ qua như cũ.
+      const managed = await this.repo.listDatasetManagedOutcomes(reg.nodeId);
+      const entryTexts = new Set(entries.map((e) => e.text));
+      const revivable = managed.some((o) => o.retiredAt !== null && entryTexts.has(programOutcomeDocText(o.content)));
+      if (!revivable) {
+        tally.skipped += 1;
+        return;
+      }
+    }
+    const sourceRef = programRecordSourceRef(record);
+    if (!reg) {
+      const position = this.takePosition(index, parentId);
+      const lessonId = programLessonNodeId(def.key, record.id);
+      await this.repo.transaction(async (tx) => {
+        const lesson = await this.repo.insertNode({
+          id: lessonId, curriculumId, parentId, title, kind: 'lesson', position,
+        }, tx);
+        for (const entry of entries) {
+          await this.repo.insertOutcome({
+            nodeId: lesson.id, content: entry.doc, position: entry.position,
+            sourceKind: 'program', sourceRef, derivedFromId: null,
+          }, tx);
+        }
+        await this.repo.insertProgramRecord({
+          datasetKey: def.key, recordId: record.id, subjectId: subject.id,
+          curriculumId, nodeId: lesson.id, contentHash: hash, source: record.source,
+        }, tx);
+        index.childByKey.set(childKey(parentId, 'lesson', title), lesson);
+      });
+      tally.created += 1;
+      tally.outcomesWritten += entries.length;
+      for (const entry of entries) {
+        tally.changes.push({ recordId: record.id, position: entry.position, kind: 'added', newText: entry.text });
+      }
+      return;
+    }
+    // Bản ghi đã nạp nhưng dataset đã đính chính (hash lệch): DIFF
+    // không-xoá. Node cập nhật TẠI CHỖ — đổi khối lớp là chuyển
+    // curriculum_id của chính node đó (giữ id, giữ mọi tham chiếu);
+    // YCCĐ diff ghép cặp theo vị trí + nội dung (xem diffOutcomes).
+    const current = await this.repo.getNode(reg.nodeId);
+    const diff = await this.diffOutcomes({ recordId: record.id, nodeId: reg.nodeId, entries });
+    tally.changes.push(...diff.changes);
+    await this.repo.transaction(async (tx) => {
+      const patch: {
+        title: string; parentId?: string | null; position?: number; curriculumId?: string;
+      } = { title };
+      if (reg.curriculumId !== curriculumId) patch.curriculumId = curriculumId;
+      if (!current || current.parentId !== parentId || reg.curriculumId !== curriculumId) {
+        patch.parentId = parentId;
+        patch.position = this.takePosition(index, parentId);
+      }
+      await this.repo.updateNode(reg.nodeId, patch, tx);
+      await this.applyOutcomeWrites(tx, reg.nodeId, sourceRef, diff.writes);
+      await this.repo.updateProgramRecord(reg.id, {
+        subjectId: subject.id, curriculumId, nodeId: reg.nodeId, contentHash: hash, source: record.source,
+      }, tx);
+      if (current) index.childByKey.set(childKey(parentId, 'lesson', title), { ...current, ...patch });
+    });
+    tally.updated += 1;
+    tally.outcomesWritten += diff.writes.length;
+  }
+
+  /**
+   * Rút các bản ghi đã biến mất khỏi dataset (Bộ rút khỏi chương trình): node GIỮ NGUYÊN trong DB theo luật không-xoá và đếm vào số trả về; mọi dòng hiện hành thuộc diện dataset quản của node chuyển sang ĐÃ RÚT (P5 áp cho cả bản ghi) để pool và bản đặc tả thôi đếm chúng, liên kết trỏ vào chúng còn nguyên và tra theo id vẫn ra. Bản ghi quay lại ở lần nạp sau sẽ hồi sinh từng dòng theo nguyên văn ở P4. Trả số node orphaned (kể cả node không còn dòng hiện hành nào).
+   */
+  private async retireOrphanedRecords(state: ImportRunState, tally: ImportTally): Promise<number> {
+    const { def, file } = state;
+    const fileIds = new Set(file.records.map((r) => r.id));
+    const orphanRows = (await this.repo.listProgramRecords(def.key)).filter(
+      (row) => !fileIds.has(row.recordId),
+    );
+    // Nạp managed outcomes của mọi node orphan theo lô (một lượt Promise.all) thay vì await từng node trong vòng lặp — các lượt nạp này chỉ đọc, mỗi node một tập riêng nên nạp trước không đổi kết quả.
+    const orphans = await Promise.all(
+      orphanRows.map(async (row) => ({
+        row,
+        managed: await this.repo.listDatasetManagedOutcomes(row.nodeId),
+      })),
+    );
+    let orphanedNodes = 0;
+    for (const { row, managed } of orphans) {
+      orphanedNodes += 1;
+      const currentManaged = managed.filter((o) => o.retiredAt === null);
+      if (currentManaged.length === 0) continue;
+      // Text canonical tính một lần cho mỗi dòng + số dòng mang cùng một text tính một lần — để gắn cờ identicalTextAmbiguous mà không filter lại cho từng dòng.
+      const textByOutcomeId = new Map(
+        currentManaged.map((o) => [o.id, programOutcomeDocText(o.content)]),
+      );
+      const identicalTextCounts = new Map<string, number>();
+      for (const text of textByOutcomeId.values()) {
+        const count = identicalTextCounts.get(text) ?? 0;
+        identicalTextCounts.set(text, count + 1);
+      }
+      const links = await this.repo.countOutcomeLinks(currentManaged.map((o) => o.id));
+      await this.repo.transaction(async (tx) => {
+        for (const outcome of currentManaged) {
+          await this.repo.updateOutcome(outcome.id, { retiredAt: new Date() }, tx);
+        }
+      });
+      for (const outcome of currentManaged) {
+        const text = textByOutcomeId.get(outcome.id) ?? '';
+        const link = links.get(outcome.id);
+        tally.changes.push({
+          recordId: row.recordId, position: outcome.position, kind: 'removed', oldText: text,
+          identicalTextAmbiguous: (identicalTextCounts.get(text) ?? 0) >= 2 || undefined,
+          linkedQuestions: link?.questions ?? 0, linkedBookMappings: link?.bookMappings ?? 0,
+        });
+        tally.outcomesWritten += 1;
+      }
+    }
+    return orphanedNodes;
+  }
+
   private async runImport(def: ProgramDatasetDef, systemContextId: string, file: ProgramDatasetFile): Promise<ProgramImportResult> {
     if (file.records.length === 0) {
       throw new BadRequestException({ message: `Program dataset ${def.key} has no records`, code: 'curriculum.program_dataset_empty' });
@@ -186,7 +404,7 @@ export class ProgramImportService {
         contextId: systemContextId,
         name: def.subjectName,
         slug: def.slug,
-        position: PROGRAM_DATASETS.indexOf(def) + 1,
+        position: DATASET_POSITION_BY_KEY.get(def.key) ?? 1,
       });
     }
     // Chương trình theo khối: tìm theo cặp (môn, khối), chưa có thì
@@ -201,162 +419,42 @@ export class ProgramImportService {
         curricula.set(grade, created.id);
       }
     }
-    // Chỉ mục cây theo chương trình, dựng lười khi gặp bản ghi đầu tiên của khối.
-    const indexes = new Map<string, TreeIndex>();
-    const indexFor = async (curriculumId: string): Promise<TreeIndex> => {
-      const existing = indexes.get(curriculumId);
-      if (existing) return existing;
-      const nodes = await this.repo.listNodes(curriculumId);
-      const index: TreeIndex = { childByKey: new Map(), nextPosByParent: new Map() };
-      for (const node of nodes) {
-        index.childByKey.set(childKey(node.parentId, node.kind, node.title), node);
-        const key = node.parentId ?? '';
-        index.nextPosByParent.set(key, Math.max(index.nextPosByParent.get(key) ?? 1, node.position + 1));
-      }
-      indexes.set(curriculumId, index);
-      return index;
+    const state: ImportRunState = {
+      def,
+      file,
+      subject,
+      curricula,
+      indexes: new Map(),
     };
-
-    let created = 0;
-    let updated = 0;
-    let skipped = 0;
-    let outcomesWritten = 0;
     // Báo cáo thay đổi của lần nạp: tích luỹ theo từng dòng qua mọi
     // bản ghi (tạo mới, đính chính, rút cả bản ghi), chốt ở cuối lượt.
-    const changes: ProgramImportChange[] = [];
-    for (const record of file.records) {
-      const grade = programRecordEffectiveGrade(file.records, record);
-      const curriculumId = curricula.get(grade)!;
-      const index = await indexFor(curriculumId);
-      const parent = await this.ensureAncestors(index, curriculumId, def.slug, grade, record);
-      // Đường tổ tiên có thể rỗng (dataset không mang bậc cấu trúc nào,
-      // ví dụ Âm nhạc): node lesson nằm ngay ở gốc cây của khối.
-      const parentId = parent?.id ?? null;
-      // Tựa node: nguyên văn content; bản ghi requirement content rỗng
-      // thì suy xuống topic/section (xem programRecordTitle).
-      const title = programRecordTitle(record);
-      const hash = programRecordHash(record);
-      const entries = programRecordOutcomeDocs(record);
-      const reg = await this.repo.getProgramRecord(def.key, record.id);
-      if (reg && reg.contentHash === hash) {
-        // Đã khớp nguyên văn theo hash — nhưng phải loại trừ ca bản
-        // ghi vừa QUAY LẠI sau khi bị rút cả bản ghi: các dòng của nó
-        // đang ở trạng thái đã rút trong khi nguyên văn của chúng
-        // nằm trong dataset hiện tại; ca này phải rơi xuống nhánh
-        // diff để P4 hồi sinh đúng các dòng đó. Trạng thái ổn định
-        // (dòng đã rút vì bị bỏ khỏi dataset, nguyên văn không còn
-        // trong bản ghi) thì giữ đường nhanh bỏ qua như cũ.
-        const managed = await this.repo.listDatasetManagedOutcomes(reg.nodeId);
-        const entryTexts = new Set(entries.map((e) => e.text));
-        const revivable = managed.some((o) => o.retiredAt !== null && entryTexts.has(programOutcomeDocText(o.content)));
-        if (!revivable) {
-          skipped += 1;
-          continue;
-        }
-      }
-      const sourceRef = programRecordSourceRef(record);
-      if (!reg) {
-        const position = this.takePosition(index, parentId);
-        const lessonId = programLessonNodeId(def.key, record.id);
-        await this.repo.transaction(async (tx) => {
-          const lesson = await this.repo.insertNode({
-            id: lessonId, curriculumId, parentId, title, kind: 'lesson', position,
-          }, tx);
-          for (const entry of entries) {
-            await this.repo.insertOutcome({
-              nodeId: lesson.id, content: entry.doc, position: entry.position,
-              sourceKind: 'program', sourceRef, derivedFromId: null,
-            }, tx);
-          }
-          await this.repo.insertProgramRecord({
-            datasetKey: def.key, recordId: record.id, subjectId: subject.id,
-            curriculumId, nodeId: lesson.id, contentHash: hash, source: record.source,
-          }, tx);
-          index.childByKey.set(childKey(parentId, 'lesson', title), lesson);
-        });
-        created += 1;
-        outcomesWritten += entries.length;
-        for (const entry of entries) {
-          changes.push({ recordId: record.id, position: entry.position, kind: 'added', newText: entry.text });
-        }
-        continue;
-      }
-      // Bản ghi đã nạp nhưng dataset đã đính chính (hash lệch): DIFF
-      // không-xoá. Node cập nhật TẠI CHỖ — đổi khối lớp là chuyển
-      // curriculum_id của chính node đó (giữ id, giữ mọi tham chiếu);
-      // YCCĐ diff ghép cặp theo vị trí + nội dung (xem diffOutcomes).
-      const current = await this.repo.getNode(reg.nodeId);
-      const diff = await this.diffOutcomes({ recordId: record.id, nodeId: reg.nodeId, entries });
-      changes.push(...diff.changes);
-      await this.repo.transaction(async (tx) => {
-        const patch: {
-          title: string; parentId?: string | null; position?: number; curriculumId?: string;
-        } = { title };
-        if (reg.curriculumId !== curriculumId) patch.curriculumId = curriculumId;
-        if (!current || current.parentId !== parentId || reg.curriculumId !== curriculumId) {
-          patch.parentId = parentId;
-          patch.position = this.takePosition(index, parentId);
-        }
-        await this.repo.updateNode(reg.nodeId, patch, tx);
-        await this.applyOutcomeWrites(tx, reg.nodeId, sourceRef, diff.writes);
-        await this.repo.updateProgramRecord(reg.id, {
-          subjectId: subject.id, curriculumId, nodeId: reg.nodeId, contentHash: hash, source: record.source,
-        }, tx);
-        if (current) index.childByKey.set(childKey(parentId, 'lesson', title), { ...current, ...patch });
-      });
-      updated += 1;
-      outcomesWritten += diff.writes.length;
-    }
-    // Bản ghi đã biến mất khỏi dataset (Bộ rút khỏi chương trình):
-    // node GIỮ NGUYÊN trong DB theo luật không-xoá và đếm vào
-    // orphanedNodes; mọi dòng hiện hành thuộc diện dataset quản của
-    // node chuyển sang ĐÃ RÚT (P5 áp cho cả bản ghi) để pool và bản
-    // đặc tả thôi đếm chúng, liên kết trỏ vào chúng còn nguyên và tra
-    // theo id vẫn ra. Bản ghi quay lại ở lần nạp sau sẽ hồi sinh
-    // từng dòng theo nguyên văn ở P4.
-    const fileIds = new Set(file.records.map((r) => r.id));
-    let orphanedNodes = 0;
-    for (const row of await this.repo.listProgramRecords(def.key)) {
-      if (fileIds.has(row.recordId)) continue;
-      orphanedNodes += 1;
-      const managed = await this.repo.listDatasetManagedOutcomes(row.nodeId);
-      const currentManaged = managed.filter((o) => o.retiredAt === null);
-      if (currentManaged.length === 0) continue;
-      const links = await this.repo.countOutcomeLinks(currentManaged.map((o) => o.id));
-      await this.repo.transaction(async (tx) => {
-        for (const outcome of currentManaged) {
-          await this.repo.updateOutcome(outcome.id, { retiredAt: new Date() }, tx);
-        }
-      });
-      for (const outcome of currentManaged) {
-        const link = links.get(outcome.id);
-        changes.push({
-          recordId: row.recordId, position: outcome.position, kind: 'removed', oldText: programOutcomeDocText(outcome.content),
-          identicalTextAmbiguous: currentManaged.filter((o) => programOutcomeDocText(o.content) === programOutcomeDocText(outcome.content)).length >= 2 || undefined,
-          linkedQuestions: link?.questions ?? 0, linkedBookMappings: link?.bookMappings ?? 0,
-        });
-        outcomesWritten += 1;
-      }
-    }
+    const tally: ImportTally = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      outcomesWritten: 0,
+      changes: [],
+    };
+    for (const record of file.records) await this.importRecord(state, record, tally);
+    const orphanedNodes = await this.retireOrphanedRecords(state, tally);
     // Chốt báo cáo thay đổi: sắp theo (bản ghi, vị trí), đếm đầy đủ
     // cả sáu đếm, danh sách chi tiết cắt ở trần đã chốt.
-    const sortedChanges = [...changes].sort(
+    const sortedChanges = [...tally.changes].sort(
       (a, b) => a.recordId.localeCompare(b.recordId) || a.position - b.position,
     );
     const changeCounts = { textChanged: 0, added: 0, removed: 0, moved: 0, revived: 0, shiftSuspected: 0 };
-    for (const change of changes) {
-      if (change.kind === 'text-changed') changeCounts.textChanged += 1;
-      else if (change.kind === 'added') changeCounts.added += 1;
-      else if (change.kind === 'removed') changeCounts.removed += 1;
-      else if (change.kind === 'moved') changeCounts.moved += 1;
-      else changeCounts.revived += 1;
+    for (const change of tally.changes) {
+      changeCounts[CHANGE_COUNT_KEY[change.kind]] += 1;
       if (change.shiftSuspected) changeCounts.shiftSuspected += 1;
     }
     return {
       datasetKey: def.key,
       subjectId: subject.id,
       totalRecords: file.records.length,
-      created, updated, skipped, outcomesWritten,
+      created: tally.created,
+      updated: tally.updated,
+      skipped: tally.skipped,
+      outcomesWritten: tally.outcomesWritten,
       orphanedNodes,
       retiredOutcomes: await this.repo.countRetiredOutcomesForDataset(def.key),
       changeCounts,
@@ -370,8 +468,9 @@ export class ProgramImportService {
    * theo thứ tự an toàn với partial unique index "một ô (node, vị
    * trí) hiện hành duy nhất":
    * - Pha A: mọi lệnh update có đổi vị trí được dời tạm tới dải vị
-   *   trí cao riêng (≥ 1.000.000) — tránh hai dòng hoán đổi vị trí
-   *   cho nhau va vào index giữa chừng.
+   *   trí cao riêng (≥ SECTION_SHIFT_BUFFER, hằng dùng chung với
+   *   Courses — xem C4) — tránh hai dòng hoán đổi vị trí cho nhau
+   *   va vào index giữa chừng.
    * - Pha B: các lệnh rút dòng chạy TRƯỚC khi dòng mới/dòng hồi sinh
    *   chiếm ô — ô của dòng vừa rút phải trống (ra khỏi index) trước.
    * - Pha C: áp patch cuối cho các lệnh update (vị trí đích, nội
@@ -384,12 +483,11 @@ export class ProgramImportService {
    * @param writes - Các lệnh ghi do diffOutcomes sinh ra.
    */
   private async applyOutcomeWrites(tx: CentreTx, nodeId: string, sourceRef: string, writes: OutcomeWrite[]): Promise<void> {
-    const TEMP_POSITION_BASE = 1_000_000;
     let tempSeq = 0;
     for (const write of writes) {
       if (write.kind === 'update' && write.patch.position !== undefined) {
         tempSeq += 1;
-        await this.repo.updateOutcome(write.id, { position: TEMP_POSITION_BASE + tempSeq }, tx);
+        await this.repo.updateOutcome(write.id, { position: SECTION_SHIFT_BUFFER + tempSeq }, tx);
       }
     }
     for (const write of writes) {
@@ -449,6 +547,10 @@ export class ProgramImportService {
     const managed = await this.repo.listDatasetManagedOutcomes(input.nodeId);
     const current = managed.filter((o) => o.retiredAt === null);
     const retiredPool = managed.filter((o) => o.retiredAt !== null);
+    // Text canonical của từng dòng quản — tính MỘT lần rồi tra theo id ở mọi bước ghép P1–P5 (tránh tính lại cho cùng một dòng).
+    const textByOutcomeId = new Map(
+      managed.map((o) => [o.id, programOutcomeDocText(o.content)]),
+    );
     const writes: OutcomeWrite[] = [];
     const changes: ProgramImportChange[] = [];
     const takenEntries = new Set<number>();
@@ -459,7 +561,7 @@ export class ProgramImportService {
     // P1 — khớp (vị trí + nguyên văn): dòng không đổi, không ghi gì.
     entries.forEach((entry, idx) => {
       const row = current.find(
-        (o) => !takenRows.has(o.id) && o.position === entry.position && programOutcomeDocText(o.content) === entry.text,
+        (o) => !takenRows.has(o.id) && o.position === entry.position && textByOutcomeId.get(o.id) === entry.text,
       );
       if (row) {
         takenEntries.add(idx);
@@ -469,30 +571,26 @@ export class ProgramImportService {
 
     // P2 — khớp theo nguyên văn cho phần còn lại (ca xô lệch thuần):
     // nhóm trùng ghép theo thứ tự vị trí tăng dần ở cả hai phía.
-    const groupByText = <T extends { text: string }>(items: T[]): Map<string, T[]> => {
-      const map = new Map<string, T[]>();
-      for (const item of items) map.set(item.text, [...(map.get(item.text) ?? []), item]);
-      return map;
-    };
     const remainingEntries = entries
       .map((entry, idx) => ({ ...entry, idx }))
       .filter((e) => !takenEntries.has(e.idx));
     const remainingCurrent = current.filter((o) => !takenRows.has(o.id));
     const entryGroups = groupByText(remainingEntries);
-    const rowGroups = new Map<string, typeof remainingCurrent>();
-    for (const row of remainingCurrent) {
-      const text = programOutcomeDocText(row.content);
-      rowGroups.set(text, [...(rowGroups.get(text) ?? []), row]);
-    }
+    const rowGroups = groupByText(
+      remainingCurrent.map((row) => ({
+        text: textByOutcomeId.get(row.id) ?? '',
+        row,
+      })),
+    );
     for (const [text, group] of entryGroups) {
       const rows = rowGroups.get(text);
       if (!rows) continue;
       const sortedEntries = [...group].sort((a, b) => a.position - b.position);
-      const sortedRows = [...rows].sort((a, b) => a.position - b.position);
+      const sortedRows = [...rows].sort((a, b) => a.row.position - b.row.position);
       const pairs = Math.min(sortedEntries.length, sortedRows.length);
       for (let i = 0; i < pairs; i += 1) {
         const entry = sortedEntries[i]!;
-        const row = sortedRows[i]!;
+        const row = sortedRows[i]!.row;
         takenEntries.add(entry.idx);
         takenRows.add(row.id);
         // Vị trí khác nhau là chắc chắn (bằng nhau + cùng văn thì P1
@@ -514,9 +612,9 @@ export class ProgramImportService {
       // current KHÁC, hoặc văn cũ của dòng này xuất hiện ở một vị trí
       // khác trong dataset mới (dòng mang văn đó đã không được P2
       // ghép về chính dòng này — nó còn đứng ở đây chính là bằng chứng).
-      const rowText = programOutcomeDocText(row.content);
+      const rowText = textByOutcomeId.get(row.id) ?? '';
       const shiftSuspected =
-        current.some((o) => o.id !== row.id && programOutcomeDocText(o.content) === entry.text) ||
+        current.some((o) => o.id !== row.id && textByOutcomeId.get(o.id) === entry.text) ||
         entries.some((e) => e.text === rowText && e.position !== entry.position);
       const change: ProgramImportChange = {
         recordId, position: entry.position, kind: 'text-changed',
@@ -532,7 +630,7 @@ export class ProgramImportService {
     for (const [idx, entry] of entries.entries()) {
       if (takenEntries.has(idx)) continue;
       takenEntries.add(idx);
-      const revived = retiredPool.find((o) => !revivedRowIds.has(o.id) && programOutcomeDocText(o.content) === entry.text);
+      const revived = retiredPool.find((o) => !revivedRowIds.has(o.id) && textByOutcomeId.get(o.id) === entry.text);
       if (revived) {
         revivedRowIds.add(revived.id);
         writes.push({ kind: 'update', id: revived.id, patch: { position: entry.position, retiredAt: null } });
@@ -548,13 +646,19 @@ export class ProgramImportService {
     // P5 — rút các dòng current không được ghép: giữ dòng + liên kết,
     // chỉ đặt trạng thái rút. Nhóm dòng trùng hệt nhau không phân
     // định được bằng văn bản → gắn cờ để người duyệt quyết.
+    // Số dòng hiện hành mang cùng một text tính một lần ở đây (không filter lại cho từng dòng).
+    const identicalTextCounts = new Map<string, number>();
+    for (const row of current) {
+      const text = textByOutcomeId.get(row.id) ?? '';
+      identicalTextCounts.set(text, (identicalTextCounts.get(text) ?? 0) + 1);
+    }
     for (const row of current) {
       if (takenRows.has(row.id)) continue;
       writes.push({ kind: 'retire', id: row.id });
-      const rowText = programOutcomeDocText(row.content);
+      const rowText = textByOutcomeId.get(row.id) ?? '';
       const change: ProgramImportChange = {
         recordId, position: row.position, kind: 'removed', oldText: rowText,
-        identicalTextAmbiguous: current.filter((o) => programOutcomeDocText(o.content) === rowText).length >= 2 || undefined,
+        identicalTextAmbiguous: (identicalTextCounts.get(rowText) ?? 0) >= 2 || undefined,
       };
       changes.push(change);
       linkTargets.push({ outcomeId: row.id, change });

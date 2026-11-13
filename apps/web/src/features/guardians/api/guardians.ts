@@ -1,3 +1,9 @@
+/**
+ * Tầng gọi API thuần của bề mặt phụ huynh: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
+ * Gồm các con đang liên kết với chính người dùng, tổng quan và kết quả đã công bố của một con, tuỳ chọn tần suất digest, và danh sách/tạo/thu hồi liên kết giám hộ cho bề mặt quản lý.
+ * Tầng `queries/` của feature bọc các hàm này thành queryOptions, đột biến và clientLoader.
+ */
+
 import type {
   GuardianDigestFrequency, GuardianDigestPreferenceView, GuardianStudentOverviewView, GuardianStudentResultsView,
 } from '@giaokhoa/contracts';
@@ -58,7 +64,7 @@ export function fetchGuardianDigestPreference(studentId: string) {
 export function updateGuardianDigestPreference(studentId: string, frequency: GuardianDigestFrequency) {
   return apiJson<GuardianDigestPreferenceView>(
     `/api/v1/guardian/students/${studentId}/digest-preference`,
-    { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frequency }) },
+    { method: 'PUT', body: JSON.stringify({ frequency }) },
   );
 }
 
@@ -80,7 +86,6 @@ export function fetchGuardianLinks() {
 export function createGuardianLink(draft: CreateGuardianLinkDraft) {
   return apiJson<GuardianLinkView>('/api/v1/guardian-links', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(draft),
   });
 }

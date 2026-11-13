@@ -8,7 +8,12 @@ import type { QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
 import type { CopyExamMatrixDto, CreateMatrixContributionDto, RejectMatrixContributionDto } from './dto/quiz.dto';
 import { QuizRepository, type ExamMatrixCellRow, type ExamMatrixContributionRow, type ExamMatrixRow } from '@giaokhoa/db/repositories/quiz';
 import { QuizService } from './quiz.service';
-import { isMatrixContentSignatureConflict, matrixContentSignature } from './matrix-content-signature';
+import {
+  isMatrixContentSignatureConflict,
+  matrixContentSignature,
+  MATRIX_DUPLICATE_CONTENT_CODE,
+  MATRIX_DUPLICATE_CONTENT_MESSAGE,
+} from './matrix-content-signature';
 
 /**
  * Dòng ghi công của một ma trận (theo đúng khuôn AttributionView của câu hỏi): ma trận nguồn đã copy, bank nguồn, tác giả gốc và hai bộ đếm dùng thật — số lượt được copy đi và số version đề đã sinh từ ma trận này.
@@ -171,7 +176,7 @@ export class MatrixBanksService {
       });
     } catch (err) {
       if (isMatrixContentSignatureConflict(err)) {
-        throw new ConflictException({ message: 'A matrix with identical content already exists in the target bank', code: 'quiz.matrix_duplicate_content' });
+        throw new ConflictException({ message: MATRIX_DUPLICATE_CONTENT_MESSAGE, code: MATRIX_DUPLICATE_CONTENT_CODE });
       }
       throw err;
     }
@@ -246,9 +251,10 @@ export class MatrixBanksService {
     const isAdmin = await this.evaluator.isSiteAdmin(actorId);
     const rows = await this.repo.listMatricesByBank(bank.id);
     const visible = rows.filter((r) => r.status === 'ready' || r.createdBy === actorId || caps.manage || isAdmin);
-    const out: ExamMatrixView[] = [];
-    for (const row of visible) out.push(await this.quiz.viewMatrixRow(row));
-    return out;
+    // Mỗi view nạp ô của ma trận đó (một lần đọc mỗi ma trận — chưa có
+    // phương thức đọc ô theo lô ở repo nên chạy song song thay vì nối
+    // tiếp: thời gian chờ bằng lần đọc chậm nhất thay vì tổng).
+    return Promise.all(visible.map((row) => this.quiz.viewMatrixRow(row)));
   }
 
   // --- copy mẫu → ma trận làm việc ----------------------------------------------

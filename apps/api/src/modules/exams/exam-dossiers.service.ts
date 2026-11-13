@@ -104,7 +104,14 @@ export class ExamDossiersService {
   }
 
   private async dossierView(row: ExamDossierRow): Promise<ExamDossierView> {
-    const paper = await this.repo.getPaper(row.examId);
+    // Bốn lần đọc độc lập của một view chạy song song thay vì nối tiếp
+    // (tên đề cần bài thi nên vẫn đọc sau; xem dưới).
+    const [paper, matrixInfo, reviews, boardRequired] = await Promise.all([
+      this.repo.getPaper(row.examId),
+      row.matrixId ? this.repo.getMatrixInfo(row.matrixId) : Promise.resolve(undefined),
+      this.repo.listDossierReviews(row.id),
+      this.boardApprovalRequired(row),
+    ]);
     let examName: string | null = null;
     if (paper) {
       const version = row.examVersionId
@@ -112,8 +119,6 @@ export class ExamDossiersService {
         : await this.papers.currentVersion(paper).catch(() => undefined);
       examName = version?.name ?? null;
     }
-    const matrixInfo = row.matrixId ? await this.repo.getMatrixInfo(row.matrixId) : undefined;
-    const reviews = await this.repo.listDossierReviews(row.id);
     const names = await this.banks.displayNames([row.proposerId, ...reviews.map((r) => r.reviewerId)]);
     return {
       id: row.id,
@@ -131,7 +136,7 @@ export class ExamDossiersService {
       matrixName: matrixInfo?.name ?? null,
       matrixVersion: row.matrixVersion,
       matrixVersionId: row.matrixVersionId,
-      boardApprovalRequired: await this.boardApprovalRequired(row),
+      boardApprovalRequired: boardRequired,
       resultExamId: row.resultExamId,
       reviews: reviews.map((r) => ({
         id: r.id,
@@ -189,17 +194,16 @@ export class ExamDossiersService {
     const canModerate = await this.evaluator.hasCapability(actorId, EXAM_CAPABILITIES.moderate, bank.contextId);
     const all = await this.repo.listDossiersForBank(bank.id);
     const rows = canModerate ? all : all.filter((r) => r.proposerId === actorId);
-    const views: ExamDossierView[] = [];
-    for (const row of rows) views.push(await this.dossierView(row));
-    return views;
+    // Mỗi view nạp bài thi/ma trận/đánh giá của hồ sơ đó — chưa có
+    // phương thức đọc theo lô ở repo nên chạy song song thay vì nối tiếp.
+    return Promise.all(rows.map((row) => this.dossierView(row)));
   }
 
   /** Mọi bộ hồ sơ của chính người dùng (theo dõi kết quả duyệt + lý do từ chối xuyên bank). */
   async listMyDossiers(actorId: string): Promise<ExamDossierView[]> {
     const rows = await this.repo.listDossiersByProposer(actorId);
-    const views: ExamDossierView[] = [];
-    for (const row of rows) views.push(await this.dossierView(row));
-    return views;
+    // Như listBankDossiers: mỗi view chạy song song thay vì nối tiếp.
+    return Promise.all(rows.map((row) => this.dossierView(row)));
   }
 
   /**

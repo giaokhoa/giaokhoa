@@ -2,7 +2,9 @@ import { Kysely, PostgresDialect } from 'kysely';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CentreDb, CentreDB } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { createTestKysely } from '../test-support/create-test-kysely';
 import { runInTestPlatformContext, TestTenantPool } from '../test-support/tenant-context';
 import { QuizRepository, type ExamAttemptRow, type ExamPinRow } from './quiz';
@@ -20,15 +22,12 @@ import { QuizRepository, type ExamAttemptRow, type ExamPinRow } from './quiz';
  * - Tăng bộ đếm ma trận giữ dạng biểu thức SQL nguyên tử (điểm nóng
  *   R-G3-1): SQL thực thi của `bumpMatrixCopyCount` chứa đúng biểu thức `"exam_matrices"."copy_count" + 1`, cấm đọc-cộng-ghi.
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DATABASE = 'giaokhoa_db_g3_quiz';
 const TEST_ROLE = 'giaokhoa_db_g3_quiz';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g3_quiz_pw';
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ACTOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';
 const USER_A = '01a19887-6b35-7760-8e64-a5960bfd0801';
 const USER_B = '01a19887-6b35-7760-8e64-a5960bfd0802';
@@ -57,7 +56,7 @@ function platform<T>(fn: () => Promise<T>): Promise<T> {
 async function seedParents(): Promise<void> {
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g3-quiz', name: 'Trung tâm G3 Quiz', kind: 'centre' })
+    .values({ slug: 'g3-quiz', name: 'Trung tâm G3 Quiz', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   tenantId = tenant.id;
@@ -216,7 +215,7 @@ afterAll(async () => {
 describe('repository quiz trên Kysely — đối chiếu hành vi', () => {
   it('insertPin ghi mảng variants jsonb cấp trên cùng và getPin đọc lại nguyên vẹn; id sinh UUIDv7', async () => {
     const pin = await platform(() => seedPin({ name: 'Đợt thi G3' }));
-    expect(pin.id).toMatch(UUIDV7_PATTERN);
+    expect(pin.id).toMatch(UUIDV7_RE);
     expect(pin.variants).toEqual([{ code: 'A', seed: 11 }, { code: 'B', seed: 22 }]);
     expect(pin.createdAt).toBeInstanceOf(Date);
     const read = await platform(() => repo.getPin(pin.id));
@@ -471,7 +470,7 @@ describe('repository quiz trên Kysely — đối chiếu hành vi', () => {
     expect(rows[0]!.regrade.questionId).toBe(questionId);
   });
 
-  it('feedback + sự kiện lượt làm + vết cập nhật version ghi/đọc tròn trịa', async () => {
+  it('phản hồi ghim, sự kiện lượt làm và vết cập nhật version: ghi rồi đọc lại đúng một dòng và đúng dữ kiện', async () => {
     const pin = await platform(() => seedPin());
     const feedback = await platform(() =>
       repo.insertFeedback({ pinId: pin.id, minPercent: 50, maxPercent: 100, feedback: 'Làm tốt' }),

@@ -126,8 +126,7 @@ export class CentreIdentityService {
       throw new ForbiddenException({ message: 'Centre is not active', code: 'space.not_active' });
     }
     try {
-      // Chuẩn bị đủ cả hai facade như ở SpaceContextGuard: ngữ cảnh chạy trong kho của trung tâm có thể chạm module đã chuyển Kysely, mà facade Kysely chưa chuẩn bị thì fail-closed theo hợp đồng dùng chung `dedicatedSlugs`.
-      await this.spaceDb.getKyselyForSpace(slug);
+      // Chỉ cần chuẩn bị MỘT lần: `getKyselyForSpace` phân giải lại target và chuẩn bị lại handle ở mỗi lần gọi, nên lần gọi thứ hai không thêm facade nào — chỉ có một facade Kysely ở đây, và mọi điểm gọi khác (SpaceContextGuard, Better Auth mount, gói chương trình) cũng chỉ gọi một lần.
       await this.spaceDb.getKyselyForSpace(slug);
     } catch (err) {
       throw this.mapRoutingError(err);

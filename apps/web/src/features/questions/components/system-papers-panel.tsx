@@ -10,7 +10,7 @@ import { Label } from '@giaokhoa/ui/components/label';
 
 import { useBankExams, useCopyExamPaper, useReviewExamPaperContribution } from '../queries/questions';
 import type { BankLite, DossierSpecLite, ExamContributionLite } from '../types/questions';
-import { dossierStatusKey, withApiReason } from '../utils/shared';
+import { bankScopeKey, dossierStatusKey, withApiReason } from '../utils/shared';
 
 /** Props của panel đề chung. */
 export interface SystemPapersPanelProps {
@@ -109,7 +109,7 @@ export function SystemPapersPanel({
           <option value="">—</option>
           {sharedExamBanks.map((bank) => (
             <option key={bank.id} value={bank.id}>
-              {bank.name} ({t(`bankScope${bank.scope[0]!.toUpperCase()}${bank.scope.slice(1)}`)})
+              {bank.name} ({t(bankScopeKey(bank.scope))})
             </option>
           ))}
         </select>

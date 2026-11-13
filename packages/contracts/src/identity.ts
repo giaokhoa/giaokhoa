@@ -94,10 +94,10 @@ export const createRoleSchema = z.strictObject({
 export type CreateRole = z.infer<typeof createRoleSchema>;
 
 /** Payload sửa role (mọi trường đều tuỳ chọn). */
-export const updateRoleSchema = z.strictObject({
-  name: z.string().optional(),
-  description: z.string().optional(),
-});
+export const updateRoleSchema = createRoleSchema
+  .omit({ shortName: true, archetype: true })
+  .partial()
+  .extend({ name: z.string().optional() });
 export type UpdateRole = z.infer<typeof updateRoleSchema>;
 
 /** Payload gán role cho người dùng trong một context. */
@@ -234,13 +234,10 @@ export const createUserSchema = z.strictObject({
 export type CreateUser = z.infer<typeof createUserSchema>;
 
 /** Payload sửa người dùng (mọi trường đều tuỳ chọn). */
-export const updateUserSchema = z.strictObject({
-  email: z.email().optional(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  password: z.string().optional(),
-  customFields: z.record(z.string(), z.string()).optional(),
-});
+export const updateUserSchema = createUserSchema
+  .omit({ username: true, forcePasswordChange: true })
+  .partial()
+  .extend({ password: z.string().optional() });
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 
 /**

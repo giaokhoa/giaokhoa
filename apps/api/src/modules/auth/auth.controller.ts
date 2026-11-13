@@ -17,27 +17,28 @@ import { RequireCapability } from '../../common/require-capability.decorator';
 import { UsersService } from '../users/users.service';
 import { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, refreshTokenSchema, type ChangePasswordDto, type LoginAsDto, type LoginDto, type MfaTotpCodeDto, type MfaTotpSetupDto, type MfaVerifyDto, type RefreshDto } from './dto/auth.dto';
 import { AuthService, type PasswordLoginOutcome, type CurrentSessionRefs } from './auth.service';
+import { cookieValueOf } from './session.service';
 import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
 import { BetterAuthService } from './better-auth/better-auth.service';
 
 
 export const SESSION_COOKIE = 'giaokhoa_session';
 
+/** Đọc id phiên web từ cookie phiên của request (dùng chung `cookieValueOf` của module auth). */
 function sessionCookieOf(req: Request): string | undefined {
-  const header = req.headers.cookie;
-  if (!header) return undefined;
-  for (const part of header.split(';')) {
-    const [k, ...rest] = part.trim().split('=');
-    if (k === SESSION_COOKIE) return decodeURIComponent(rest.join('='));
-  }
-  return undefined;
+  return cookieValueOf(req, SESSION_COOKIE);
+}
+
+/** Dựng đáp ứng challenge MFA dùng chung cho mọi luồng đăng nhập: chỉ trả challenge, không kèm token nào. */
+function mfaChallengeResponse(outcome: { user: { id: string; username: string }; challengeToken: string }) {
+  return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
 }
 
 /** Dựng đáp ứng đăng nhập từ kết quả bước mật khẩu: chặn MFA thì chỉ trả challenge, không kèm token nào. */
 function loginResponse(outcome: PasswordLoginOutcome) {
   const { user } = outcome;
   if (outcome.mfaRequired) {
-    return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: user.id, username: user.username } };
+    return mfaChallengeResponse(outcome);
   }
   return { user: { id: user.id, username: user.username, forcePasswordChange: user.forcePasswordChange }, ...outcome.tokens };
 }
@@ -59,7 +60,7 @@ export class AuthController {
   @UseGuards(AuthGuard('local'))
   @Post('login')
   /**
-   * POST /auth/token — đăng nhập, trả cặp access/refresh token.
+   * POST /auth/login — đăng nhập qua chiến lược local (passport), trả cặp token.
    */
   async login(@Req() req: Request & { user: { id: string; username: string } }, @Body({ schema: loginSchema }) _dto: LoginDto) {
     const user = await this.users.getUser(req.user.id);
@@ -70,7 +71,7 @@ export class AuthController {
   @Public()
   @Post('token')
   /**
-   * POST /auth/login — đăng nhập qua chiến lược local (passport), trả cặp token.
+   * POST /auth/token — đăng nhập, trả cặp access/refresh token.
    */
   async tokenLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request) {
     return loginResponse(await this.auth.login(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']));
@@ -125,8 +126,7 @@ export class AuthController {
   // --- đăng nhập quản trị platform (issue #584) ---------------------------
   /**
    * Bề mặt đăng nhập quản trị platform, TÁCH khỏi bề mặt đăng nhập nghiệp vụ: chỉ tài khoản quản trị platform mới qua được; token trả ra mang audience `platform`, CHỈ dùng được cho route vận hành mang `@PlatformRoute()` (hiện là control plane) và không gọi được API nghiệp vụ — ngược lại token nghiệp vụ cũng không gọi được route vận hành. Bề mặt này sống ở địa chỉ gốc; đăng nhập tại địa chỉ kho riêng tra tài khoản trong kho đó nên quản trị platform ở kho chung không đăng nhập được tại đó. User bật MFA thì dừng ở challenge của luồng platform.
-   */
-  /**
+   *
    * Khi bật #8: chỉ Host gốc được dùng cổng vận hành, mọi credential
    * đều tra kho chung. Khi CHƯA bật #8: tương thích #587 — Host
    * trung tâm vẫn tra credential của chính kho trung tâm trước khi
@@ -156,10 +156,10 @@ export class AuthController {
   @Post('platform/login')
   async platformLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request) {
     const outcome = await this.inPlatformLoginContext(req, () =>
-      this.auth.platformLogin(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']),
+      this.auth.platformLogin(dto.username, dto.password, clientIpOf(req)),
     );
     if (outcome.mfaRequired) {
-      return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
+      return mfaChallengeResponse(outcome);
     }
     return { user: { id: outcome.user.id, username: outcome.user.username, forcePasswordChange: outcome.user.forcePasswordChange }, accessToken: outcome.accessToken, expiresIn: outcome.expiresIn };
   }
@@ -173,7 +173,7 @@ export class AuthController {
   @Post('platform/mfa/verify')
   async platformMfaVerify(@Body({ schema: mfaVerifySchema }) dto: MfaVerifyDto, @Req() req: Request) {
     const { user, accessToken, expiresIn } = await this.inPlatformLoginContext(req, () =>
-      this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']),
+      this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req)),
     );
     return { user: { id: user.id, username: user.username, forcePasswordChange: user.forcePasswordChange }, accessToken, expiresIn };
   }
@@ -197,7 +197,7 @@ export class AuthController {
     this.assertRootSupportHost(req);
     const outcome = await this.auth.supportLogin(dto.username, dto.password, clientIpOf(req));
     if (outcome.mfaRequired) {
-      return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
+      return mfaChallengeResponse(outcome);
     }
     return { user: { id: outcome.user.id, username: outcome.user.username }, accessToken: outcome.accessToken, expiresIn: outcome.expiresIn };
   }
@@ -302,7 +302,7 @@ export class AuthController {
   async sessionLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const outcome = await this.auth.sessionLogin(dto.username, dto.password, sessionCookieOf(req), clientIpOf(req), req.headers['user-agent']);
     if (outcome.mfaRequired) {
-      return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
+      return mfaChallengeResponse(outcome);
     }
     res.cookie(SESSION_COOKIE, outcome.sessionId, { httpOnly: true, sameSite: 'lax', path: '/' });
     return { user: { id: outcome.user.id, username: outcome.user.username, forcePasswordChange: outcome.user.forcePasswordChange }, sessionId: outcome.sessionId };
@@ -338,7 +338,7 @@ export class AuthController {
     return { loggedOut: true };
   }
 
-  /** Better Auth uses session.id for current identity; legacy JWT uses refresh family id. */
+  /** Better Auth dùng session.id làm danh tính hiện tại; JWT cũ dùng id của refresh family. */
   private currentSessionRefs(actor: AuthenticatedUser, req: Request): CurrentSessionRefs {
     const viaBA = Boolean((req as Request & { [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean })[AUTHENTICATED_VIA_BETTER_AUTH]);
     return {

@@ -18,6 +18,7 @@ import { basename, join } from 'node:path';
 import { Client } from 'pg';
 import { quoteIdentifier } from '../control-plane/control-plane-provision';
 import {
+  COMPACT_TIMESTAMP_LENGTH,
   newFleetRunId,
   parseBackupFileName,
   pickRestoreCandidate,
@@ -115,7 +116,7 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
     }
 
     const plainPath = join(backupDir, `.restore-${runId}.dump`);
-    const tempDatabase = `giaokhoa_restore_test_${space.slug.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${runId.replace(/\D/g, '').slice(0, 14)}`;
+    const tempDatabase = `giaokhoa_restore_test_${space.slug.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${runId.replace(/\D/g, '').slice(0, COMPACT_TIMESTAMP_LENGTH)}`;
     writeFileSync(plainPath, plain);
     const admin = new Client({ connectionString: retargetUrl(adminUrl, 'postgres') });
     // Cờ mở kết nối thật: các thao tác dọn trên client quản trị ở

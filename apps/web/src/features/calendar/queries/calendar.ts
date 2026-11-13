@@ -1,9 +1,17 @@
+/**
+ * Tầng dữ liệu TanStack Query của feature calendar: các hook đọc/ghi bọc tầng api/calendar.
+ * Hook đọc sự kiện theo khoảng ngày, đăng ký lịch ngoài và token xuất lịch; các mutation
+ * tạo/xoá sự kiện, thêm/nhập đăng ký làm mới mọi truy vấn lịch, còn đặt nhắc thì không,
+ * và tạo/thu hồi token ghi thẳng kết quả vào cache.
+ */
+
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
   createCalendarEvent, createCalendarExportToken, createCalendarSubscription, deleteCalendarEvent,
   fetchCalendarEvents, fetchCalendarExportToken, fetchCalendarSubscriptions, importCalendarSubscription,
   remindCalendarEvent, revokeCalendarExportToken,
+  type CreateCalendarEventBody,
 } from '../api/calendar';
 import { queryKeys } from './keys';
 
@@ -49,7 +57,7 @@ function useInvalidateCalendar() {
 export function useCreateCalendarEvent() {
   const invalidate = useInvalidateCalendar();
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) => createCalendarEvent(body),
+    mutationFn: (body: CreateCalendarEventBody) => createCalendarEvent(body),
     onSuccess: invalidate,
   });
 }

@@ -27,10 +27,11 @@ import {
   useCourseCardPrefs,
   type CourseCardPrefView,
 } from '#lib/course-cards';
+import { appKeyMeta } from '#lib/route-meta';
+import { CourseCardPrefEditor } from '../components/course-card-pref-editor';
 
 /** Map pref rỗng dùng chung khi query pref chưa có dữ liệu (tránh tạo Map mới mỗi lần render). */
 const EMPTY_CARD_PREFS = new Map<string, CourseCardPrefView>();
-import { CourseCardPrefEditor } from '../components/course-card-pref-editor';
 
 /**
  * Cây danh mục + danh sách khoá học cho mọi người dùng. Khu quản trị danh mục (tạo/đổi tên/xoá danh mục) và form tạo khoá học chỉ render khi `usePermissions().canAdminister` — quyền quản trị cấp hệ thống; API vẫn thực thi capability thật phía server cho từng thao tác ghi. Xoá danh mục luôn hỏi xác nhận, và lỗi phía server (ví dụ danh mục còn khoá học hoặc danh mục con) được hiển thị bằng thông điệp thân thiện.
@@ -334,7 +335,6 @@ export default CoursesPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navCourses');
 }

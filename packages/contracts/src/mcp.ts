@@ -127,8 +127,7 @@ export const mcpGetQuestionOutputSchema = questionViewSchema;
 /**
  * Tool `submit_contribution` (lát MCP-2 của issue #110, scope OAuth `giaokhoa.banks.contribute`): đề xuất đưa các câu CỦA CHÍNH chủ token (đã `ready`) vào một bank chung (tổ/trường/khoá) qua cơ chế đóng góp QB-4 hiện hữu — server tạo `question_bank_contributions` ở trạng thái `pending`, người có `question:moderate` tại bank đích duyệt thì câu mới vào bank đích. AI KHÔNG ghi thẳng được vào bank chung ở bất kỳ scope nào (ranh giới ghi cứng, hồ sơ research Phần 3.2). `idempotencyKey` bắt buộc như mọi write tool (đặc tả 2026-07-28):
  * phát lại cùng key + cùng payload trả kết quả cũ, không tạo đề xuất trùng; cùng key khác payload là lỗi `question.idempotency_conflict`. Từ issue #228 tool mở đối xứng cho đề và ma trận (cùng scope `giaokhoa.banks.contribute`, không thêm scope mới): đề đi vào đường đóng góp duy nhất của đề (`exam_contributions`, mode 'new'), ma trận vào hàng chờ đóng góp ma trận — cả hai đều qua đúng cổng chủ sở hữu + trạng thái + đích chung của từng đường như phía câu hỏi.
- */
-/**
+ *
  * Đầu vào `submit_contribution` — từ đợt đồng bộ cơ chế ngân hàng
  * (issue #228), tool mở đối xứng cho cả ba thực thể ngân hàng: ngoài
  * `questionIds` (câu hỏi), client có thể gửi `examIds` (đề — vào đường đóng góp duy nhất của đề, mode 'new') và/hoặc `matrixIds`

@@ -2,7 +2,7 @@ import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createControlPlaneKysely, type ControlPlaneDb } from '@giaokhoa/db/control-plane';
 import { Pool } from 'pg';
-import { databaseConnectionFromEnv } from '../config/env';
+import { databaseConnectionFromEnv, toPoolConfig } from '../config/env';
 
 /**
  * Kết nối tới database CONTROL PLANE (issue #580) — database riêng trên cùng cụm Postgres với kho nghiệp vụ, role kết nối riêng, biến môi trường riêng (`CONTROL_PLANE_DATABASE_URL`).
@@ -36,7 +36,7 @@ export class ControlPlaneConnection implements OnModuleDestroy {
       return;
     }
     const connection = databaseConnectionFromEnv(url, config.get<boolean>('DATABASE_SSL') ?? false);
-    const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
+    const poolConfig = toPoolConfig(connection);
     const poolMax = config.get<number>('CONTROL_PLANE_POOL_MAX');
     this.pool = new Pool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
     this.kysely = createControlPlaneKysely(this.pool);

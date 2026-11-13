@@ -1,3 +1,11 @@
+/**
+ * Trang Tin nhắn (master–detail): khung trái là danh sách hội thoại/tab/cây nhóm,
+ * khung phải là `ChatPanel` (luồng tin + composer + panel thông tin). Trang lắp sáu
+ * hook — danh sách, hội thoại đang mở, danh bạ, dữ kiện panel thành viên, thao tác
+ * nhóm và realtime — rồi luồn dữ kiện/handler xuống hai khung; deep-link
+ * `?conversation=` mở đúng hội thoại kể cả khi nó chưa nằm trong danh sách đã tải.
+ */
+
 import { useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import '#config/i18n';
@@ -18,6 +26,7 @@ import { useGroupActions } from '../hooks/use-group-actions';
 import { useMessageModeration } from '../hooks/use-message-moderation';
 import { useMemberPanelData } from '../hooks/use-member-panel-data';
 import type { ContactRelationship, ConversationView } from '../types/types';
+import { CONVERSATION_TYPE_GROUP } from '../types/types';
 
 /**
  * Tin nhắn: danh sách cuộc trò chuyện với số chưa đọc, luồng tin nhắn và việc gửi. Tin nhắn hiển thị/gửi theo mô hình mới (issue #33): seq đơn điệu theo conversation là mốc phân trang/đồng bộ; gửi LẠC QUAN với clientMessageId (server chống trùng — thử lại không nhân đôi); tin mới/đã đọc đến qua WebSocket (sự kiện được server phân phối từ outbox), huy hiệu chưa đọc cập nhật theo sự kiện thay vì tải lại toàn bộ; mất nối thì khi nối lại trang xin phần thiếu theo seq. Trang còn quản lý chặn liên lạc: chặn/bỏ chặn người đối thoại trong cuộc trò chuyện đang mở và xem danh sách đã chặn
@@ -206,7 +215,7 @@ export function MessagesPage() {
    */
   const handleSidebarTabChange = (tab: string) => {
     list.setSidebarTab(tab);
-    if (tab === 'groups' && activeHook.active && activeHook.active.type !== 2) {
+    if (tab === 'groups' && activeHook.active && activeHook.active.type !== CONVERSATION_TYPE_GROUP) {
       activeHook.closeConversation();
     }
   };
@@ -216,6 +225,7 @@ export function MessagesPage() {
    */
   const handleSelfPresenceChange = (presence: SelfPresenceChoice) => {
     setSelfPresence(presence);
+    // Nạp lại nền sau khi trở lại trực tuyến — xem ghi chú ở use-messages-realtime: lỗi nạp lại tự hiện qua trạng thái lỗi của query danh sách.
     if (presence === 'online') void list.reload().catch(() => undefined);
   };
 
@@ -342,7 +352,8 @@ export function MessagesPage() {
             replyTarget={composer.replyTarget}
             onStartReply={(m) => composer.setReplyTargets((prev) => ({ ...prev, [m.conversationId]: m }))}
             onCancelReply={() => {
-              if (activeHook.active) composer.setReplyTargets((prev) => ({ ...prev, [activeHook.active!.id]: null }));
+              const activeId = activeHook.active?.id;
+              if (activeId) composer.setReplyTargets((prev) => ({ ...prev, [activeId]: null }));
             }}
             onJumpToQuote={(quote) => void search.jumpToQuotedMessage(quote)}
             highlightedMessageId={search.highlightedMessageId}

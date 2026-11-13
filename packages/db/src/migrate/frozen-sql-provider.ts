@@ -62,6 +62,7 @@ export class FrozenSqlProvider implements MigrationProvider {
   constructor(private readonly migrationsDir: string) {}
 
   async getMigrations(): Promise<Record<string, Migration>> {
+    // Đọc file đồng bộ có chủ ý (S31): provider liệt kê và đọc các file SQL cục bộ nhỏ MỘT lần lúc khởi động migrate — không có I/O song song để hưởng lợi từ `node:fs/promises`, và `listMigrationNames` vốn là hàm đồng bộ; chỉ `async` ở đây là để thoả interface `MigrationProvider`.
     const migrations: Record<string, Migration> = {};
     for (const name of listMigrationNames(this.migrationsDir)) {
       const filePath = join(this.migrationsDir, name, 'migration.sql');

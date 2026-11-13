@@ -13,7 +13,7 @@ function ipToBytes(ip: string): number[] | null {
   if (kind === 6) {
     let addr = ip.toLowerCase();
     const mapped = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return mapped[1]!.split('.').map((p) => Number.parseInt(p, 10));
+    if (mapped) return mapped[1]!.split('.').map((p) => Number.parseInt(p, 10)); // Bất biến: nhóm bắt (\d+\.\d+\.\d+\.\d+) của regex luôn khớp khi mapped khác null.
     const zoneIdx = addr.indexOf('%');
     if (zoneIdx >= 0) addr = addr.slice(0, zoneIdx);
     const [head, tail] = addr.split('::');
@@ -25,7 +25,7 @@ function ipToBytes(ip: string): number[] | null {
       for (const p of parts) {
         if (p.includes('.')) {
           const v4 = p.split('.').map((x) => Number.parseInt(x, 10));
-          out.push(((v4[0]! << 8) | v4[1]!), ((v4[2]! << 8) | v4[3]!));
+          out.push(((v4[0]! << 8) | v4[1]!), ((v4[2]! << 8) | v4[3]!)); // Bất biến: p là IPv4 hợp lệ (đã qua isIP) nên split('.') có đúng 4 phần.
         } else {
           out.push(Number.parseInt(p, 16));
         }

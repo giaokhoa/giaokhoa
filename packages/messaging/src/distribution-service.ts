@@ -116,6 +116,36 @@ export function createMessagingDistributionService(deps: {
   }
 
   /**
+   * Cổng chặn cặp 1–1 dùng chung cho mọi đường phân phối realtime (tin mới, xoá mềm, thu hồi/xoá cứng, biên đã-đọc) — thay cho bốn bản sao của cùng một khối kiểm tra trước đây: lấy conversation → chỉ cặp 1–1 (`type === 1`, đúng 2 thành viên) mới xét chặn → tra danh sách chặn của một phía, fail-closed.
+   *
+   * Trả về cả quyết định nén lẫn conversation đã đọc, để phía gọi lấy `tenantId` từ đó mà không phải đọc lại conversation lần nữa. Fail-closed giữ nguyên kỷ luật của {@link blockedCounterpartIdsFailClosed}: không tra được danh sách chặn, hoặc không phân giải được cặp (`userId`/`counterpartId` thiếu), thì nén toàn bộ lượt phân phối.
+   *
+   * CHỈ chặn phát, KHÔNG đẩy socket khỏi room (tiếp quản PR #94): membership của room là trạng thái bền theo kết nối — socket bị đẩy ra không tự nối lại khi bỏ chặn nên presence sau bỏ chặn mất vĩnh viễn; mọi đường phát vào room đều đã có cổng ở thời điểm phát nên chặn phát là đủ.
+   *
+   * Lưu ý về đường biên đã-đọc: trước đây khi không tìm được phía còn lại (`other` undefined) thì cổng chặn bị bỏ qua và biên vẫn phát; nay helper nén theo kỷ luật fail-closed. Trường hợp đó không xảy ra được với dữ kiện thật — hai dòng thành viên không thể cùng một user (khoá chính của bảng thành viên) — nên không đổi hành vi với dữ kiện thật, chỉ siết kỷ luật ở trường hợp không xác minh được.
+   */
+  async function checkBlockedDirectPair(
+    conversationId: string,
+    memberIds: string[],
+    userId: string | undefined,
+    counterpartId: string | undefined,
+  ): Promise<{
+    /** `true` khi lượt phân phối phải nén: cặp 1–1 đang chặn, hoặc không xác minh được quan hệ chặn. */
+    suppressed: boolean;
+    /** Conversation đã đọc (có thể `undefined` khi đọc lỗi) — phía gọi lấy `tenantId` từ đây. */
+    conversation: Awaited<ReturnType<MessagingDistributionStore['getConversation']>>;
+  }> {
+    const conversation = await store.getConversation(conversationId).catch(() => undefined);
+    if (conversation?.type !== 1 || memberIds.length !== 2) return { suppressed: false, conversation };
+    // Fail-closed: không phân giải được cặp thì coi như không xác minh được quan hệ chặn — nén.
+    if (userId === undefined || counterpartId === undefined) return { suppressed: true, conversation };
+    // Cổng chặn fail-closed: không tra được danh sách chặn thì nén luôn lượt phát này.
+    const blocked = await blockedCounterpartIdsFailClosed(userId);
+    if (blocked === null || blocked.includes(counterpartId)) return { suppressed: true, conversation };
+    return { suppressed: false, conversation };
+  }
+
+  /**
    * Cặp 1–1 đang có quan hệ chặn thì MỌI sự kiện vòng đời (thu hồi,
    * xoá cứng) đều bị nén im lặng như ở {@link distributeMessageDeleted}:
    * không phát gì. Trả true khi sự kiện đã bị nén (caller dừng phân
@@ -125,17 +155,8 @@ export function createMessagingDistributionService(deps: {
    * đã có cổng ở thời điểm phát nên chặn phát là đủ.
    */
   async function suppressIfBlockedDirectPair(conversationId: string, memberIds: string[]): Promise<boolean> {
-    const conversation = await store.getConversation(conversationId).catch(() => undefined);
-    if (conversation?.type !== 1 || memberIds.length !== 2) return false;
-    const first = memberIds[0];
-    const second = memberIds[1];
-    if (first === undefined || second === undefined) return true;
-    // Fail-closed: không tra được danh sách chặn thì coi như phải
-    // nén (trả true) — không xác minh được quan hệ chặn thì không phát.
-    const blocked = await blockedCounterpartIdsFailClosed(first);
-    if (blocked === null) return true;
-    if (!blocked.includes(second)) return false;
-    return true;
+    const { suppressed } = await checkBlockedDirectPair(conversationId, memberIds, memberIds[0], memberIds[1]);
+    return suppressed;
   }
 
   /** Phát `conversation.invalidate` tới room riêng của TỪNG thành viên: cache danh sách của họ phải tải lại. */
@@ -151,32 +172,14 @@ export function createMessagingDistributionService(deps: {
    * (client cập nhật danh sách/huy hiệu không cần tải lại).
    */
   async function distributeNewMessage(messageRow: MessageRow, memberIds: string[]): Promise<void> {
-    // Cùng cổng chặn với distributeMessageDeleted (việc nối tiếp #33,
-    // vòng 3 PR #94): tin gửi sát trước lúc chặn, outbox tiêu thụ
-    // muộn sau khi chặn, không được lộ sang phía bị chặn — kể cả
-    // conversation.updated vào userRoom (kèm nội dung tin cuối), dù
-    // message.new vào room hội thoại đã bị chặn ở tầng gateway.
-    // Hội thoại nhóm không bị chạm.
-    // CHỈ chặn phát, KHÔNG đẩy socket khỏi room (tiếp quản PR #94):
-    // membership của room là trạng thái bền theo kết nối — socket bị
-    // đẩy ra không tự nối lại khi bỏ chặn (handshake chỉ nối lúc
-    // connect; join/sync từ chối room đang chặn), nên presence sau
-    // bỏ chặn (phát tới room) mất vĩnh viễn cho tới khi nối lại.
-    // Mọi đường phát vào room đều đã có cổng ở thời điểm phát nên
-    // chặn phát là đủ; eviction chỉ dành cho gỡ thành viên thật
-    // (đồng bộ group trong messaging.service.ts).
-    const conversation = await store.getConversation(messageRow.conversationId).catch(() => undefined);
-    if (conversation?.type === 1 && memberIds.length === 2) {
-      const first = memberIds[0];
-      const second = memberIds[1];
-      if (first === undefined || second === undefined) return;
-      // Cổng chặn fail-closed: không tra được danh sách chặn thì
-      // nén luôn lượt phát này (xem blockedCounterpartIdsFailClosed).
-      const blocked = await blockedCounterpartIdsFailClosed(first);
-      if (blocked === null || blocked.includes(second)) {
-        return;
-      }
-    }
+    // Cổng chặn cặp 1–1 (việc nối tiếp #33, vòng 3 PR #94): tin gửi sát trước lúc chặn, outbox tiêu thụ muộn sau khi chặn, không được lộ sang phía bị chặn — kể cả `conversation.updated` vào userRoom (kèm nội dung tin cuối), dù `message.new` vào room hội thoại đã bị chặn ở tầng gateway. Hội thoại nhóm không bị chạm. Chi tiết kỷ luật fail-closed xem {@link checkBlockedDirectPair}.
+    const { suppressed, conversation } = await checkBlockedDirectPair(
+      messageRow.conversationId,
+      memberIds,
+      memberIds[0],
+      memberIds[1],
+    );
+    if (suppressed) return;
     const tenantId = conversation?.tenantId ?? null;
     // Khối trích dẫn (lát M3) dựng MỘT lần cho cả room theo luật
     // người xem thường — payload message.new/conversation.updated
@@ -208,32 +211,20 @@ export function createMessagingDistributionService(deps: {
    * dung (phía học sinh phải gỡ tin khỏi khung và không được nhận lại
    * nội dung qua kênh này) — kèm `conversation.updated` cho từng thành
    * viên với tin cuối CÒN HIỂN THỊ được (tin đã xoá không bao giờ là
-   * tin cuối ở phía client) và số chưa đọc đã trừ tin đã xoá.
+   * tin cuối ở phía client) và số chưa đọc đã trừ tin đã xoá, và BẮT
+   * BUỘC `conversation.invalidate` tới từng thành viên để cache danh
+   * sách bị vô hiệu — kể cả khi không còn tin hiển thị (lúc đó không
+   * có `conversation.updated` nào được phát).
    */
   async function distributeMessageDeleted(messageRow: MessageRow, memberIds: string[]): Promise<void> {
-    // Lớp phòng thủ thứ hai (việc nối tiếp #33, siết sau PR #94
-    // vòng 1): đường xoá chính đã 404 trong lúc chặn nên outbox
-    // `message_deleted` không sinh mới, nhưng một sự kiện tới muộn
-    // (xoá trước khi chặn, outbox tiêu thụ sau khi chặn — hoặc xoá
-    // bởi người kiểm duyệt ngoài cặp chặn) vẫn không được lộ tới
-    // cặp đang chặn: không phát gì cả.
-    // CHỈ chặn phát, KHÔNG đẩy socket khỏi room (tiếp quản PR #94):
-    // lý do như cổng distributeNewMessage — socket bị đẩy ra không
-    // tự nối lại khi bỏ chặn nên presence sau bỏ chặn sẽ mất; mọi
-    // đường phát vào room đều đã có cổng ở thời điểm phát nên
-    // chặn phát là đủ. Hội thoại nhóm không bị chạm.
-    const conversation = await store.getConversation(messageRow.conversationId).catch(() => undefined);
-    if (conversation?.type === 1 && memberIds.length === 2) {
-      const first = memberIds[0];
-      const second = memberIds[1];
-      if (first === undefined || second === undefined) return;
-      // Cổng chặn fail-closed như ở distributeNewMessage: không tra
-      // được danh sách chặn thì nén luôn lượt phát này.
-      const blocked = await blockedCounterpartIdsFailClosed(first);
-      if (blocked === null || blocked.includes(second)) {
-        return;
-      }
-    }
+    // Lớp phòng thủ thứ hai (việc nối tiếp #33, siết sau PR #94 vòng 1): đường xoá chính đã 404 trong lúc chặn nên outbox `message_deleted` không sinh mới, nhưng một sự kiện tới muộn (xoá trước khi chặn, outbox tiêu thụ sau khi chặn — hoặc xoá bởi người kiểm duyệt ngoài cặp chặn) vẫn không được lộ tới cặp đang chặn: không phát gì cả. Chi tiết kỷ luật fail-closed xem {@link checkBlockedDirectPair}.
+    const { suppressed, conversation } = await checkBlockedDirectPair(
+      messageRow.conversationId,
+      memberIds,
+      memberIds[0],
+      memberIds[1],
+    );
+    if (suppressed) return;
     const tenantId = conversation?.tenantId ?? null;
     await evictNonMemberSockets(tenantId, messageRow.conversationId, memberIds);
     const deletedPayload: RealtimeMessageDeletedPayload = {
@@ -246,15 +237,18 @@ export function createMessagingDistributionService(deps: {
     // Tin cuối còn hiển thị: cửa sổ đọc mặc định của bề mặt đọc đã lọc
     // tin đã xoá — lấy đúng 1 tin mới nhất còn sống làm xem trước mới.
     const [lastVisible] = await store.listMessages(messageRow.conversationId, { limit: 1 }).catch(() => []);
-    if (!lastVisible) return;
-    const wire = toWireMessage(lastVisible);
-    await Promise.all(memberIds.map(async (memberId) => {
-      const unreadCount = await store.countUnreadForConversation(messageRow.conversationId, memberId).catch(() => 0);
-      const payload: RealtimeConversationUpdatedPayload = {
-        conversationId: messageRow.conversationId, message: wire, unreadCount,
-      };
-      await emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
-    }));
+    if (lastVisible) {
+      const wire = toWireMessage(lastVisible);
+      await Promise.all(memberIds.map(async (memberId) => {
+        const unreadCount = await store.countUnreadForConversation(messageRow.conversationId, memberId).catch(() => 0);
+        const payload: RealtimeConversationUpdatedPayload = {
+          conversationId: messageRow.conversationId, message: wire, unreadCount,
+        };
+        await emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
+      }));
+    }
+    // `conversation.invalidate` bắt buộc kèm mọi sự kiện xoá của vòng đời tin nhắn (xem TSDoc của `MESSAGING_SOCKET_EVENTS.conversationInvalidate`): kể cả khi không còn tin hiển thị — lúc đó client không nhận được `conversation.updated` nên chỉ có invalidate mới khiến cache danh sách (tin cuối/số chưa đọc) tải lại. Phát sau `message.deleted` trong mọi trường hợp, giống `distributeMessageRecalled`/`distributeMessageRemoved`.
+    await emitConversationInvalidate(tenantId, messageRow.conversationId, memberIds);
   }
 
   /**
@@ -352,27 +346,16 @@ export function createMessagingDistributionService(deps: {
 
   /** Phân phối biên đã-đọc của một thành viên vào room của conversation. */
   async function distributeReadReceipt(payload: RealtimeMessageReadPayload): Promise<void> {
-    // Cùng cổng chặn với distributeNewMessage/distributeMessageDeleted
-    // (việc nối tiếp #33, siết sau PR #94 vòng đánh giá lại): biên
-    // đã-đọc ghi outbox TRƯỚC khi chặn, consumer tiêu thụ SAU khi chặn,
-    // không được lộ trạng thái đã-đọc 1–1 sang phía bị chặn — kể cả khi
-    // socket phía đó vẫn nằm trong room (không còn eviction ở hai cổng
-    // kia). Hội thoại nhóm không bị chạm.
-    // CHỈ chặn phát, KHÔNG đẩy socket khỏi room: lý do như hai cổng
-    // kia — socket bị đẩy ra không tự nối lại khi bỏ chặn.
-    const conversation = await store.getConversation(payload.conversationId).catch(() => undefined);
+    // Cổng chặn cặp 1–1 (việc nối tiếp #33, siết sau PR #94 vòng đánh giá lại): biên đã-đọc ghi outbox TRƯỚC khi chặn, consumer tiêu thụ SAU khi chặn, không được lộ trạng thái đã-đọc 1–1 sang phía bị chặn — kể cả khi socket phía đó vẫn nằm trong room (không còn eviction ở hai cổng kia). Hội thoại nhóm không bị chạm. Chi tiết kỷ luật fail-closed xem {@link checkBlockedDirectPair}.
     const memberIds = await store.listMembers(payload.conversationId).catch(() => null);
-    if (conversation?.type === 1 && memberIds?.length === 2) {
-      const other = memberIds.find((id) => id !== payload.userId);
-      if (other) {
-        // Cổng chặn fail-closed như các đường phân phối còn lại:
-        // không tra được danh sách chặn thì nén biên đã-đọc này.
-        const blocked = await blockedCounterpartIdsFailClosed(payload.userId);
-        if (blocked === null || blocked.includes(other)) {
-          return;
-        }
-      }
-    }
+    const other = memberIds?.length === 2 ? memberIds.find((id) => id !== payload.userId) : undefined;
+    const { suppressed, conversation } = await checkBlockedDirectPair(
+      payload.conversationId,
+      memberIds ?? [],
+      payload.userId,
+      other,
+    );
+    if (suppressed) return;
     // Cùng kỷ luật F1: rà soát room theo membership hiện tại trước
     // khi phát — thành viên đã bị gỡ không nhận biên đã-đọc nữa. Đọc
     // membership lỗi thì vẫn phát như cũ (realtime là đường phụ).

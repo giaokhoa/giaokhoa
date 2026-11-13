@@ -27,11 +27,7 @@ export const createSubjectSchema = z.strictObject({
 export type CreateSubject = z.infer<typeof createSubjectSchema>;
 
 /** Payload sửa môn học; context neo quyền không đổi qua API này. */
-export const updateSubjectSchema = z.strictObject({
-  name: z.string().min(1).optional(),
-  slug: z.string().min(1).optional(),
-  position: positionSchema.optional(),
-});
+export const updateSubjectSchema = createSubjectSchema.omit({ contextId: true }).partial();
 export type UpdateSubject = z.infer<typeof updateSubjectSchema>;
 
 /** Payload tạo chương trình của một môn ở một khối (1–12); mỗi cặp môn + khối chỉ có một chương trình. */
@@ -42,9 +38,7 @@ export const createCurriculumSchema = z.strictObject({
 export type CreateCurriculum = z.infer<typeof createCurriculumSchema>;
 
 /** Payload sửa chương trình; chỉ khối là đổi được (đổi môn = tạo chương trình khác). */
-export const updateCurriculumSchema = z.strictObject({
-  grade: z.number().int().min(1).max(12).optional(),
-});
+export const updateCurriculumSchema = createCurriculumSchema.omit({ subjectId: true }).partial();
 export type UpdateCurriculum = z.infer<typeof updateCurriculumSchema>;
 
 /**
@@ -62,14 +56,7 @@ export const createCurriculumNodeSchema = z.strictObject({
 export type CreateCurriculumNode = z.infer<typeof createCurriculumNodeSchema>;
 
 /** Payload sửa node; parentId đặt tường minh (null = đưa lên node gốc). */
-export const updateCurriculumNodeSchema = z.strictObject({
-  parentId: uuidIdSchema.nullable().optional(),
-  title: z.string().min(1).optional(),
-  kind: curriculumNodeKindSchema.optional(),
-  position: positionSchema.optional(),
-  durationPeriods: durationPeriodsSchema.optional(),
-  durationPercent: durationPercentSchema.optional(),
-});
+export const updateCurriculumNodeSchema = createCurriculumNodeSchema.omit({ curriculumId: true }).partial();
 export type UpdateCurriculumNode = z.infer<typeof updateCurriculumNodeSchema>;
 
 /**
@@ -90,13 +77,7 @@ export const createLearningOutcomeSchema = z.strictObject({
 export type CreateLearningOutcome = z.infer<typeof createLearningOutcomeSchema>;
 
 /** Payload sửa yêu cầu cần đạt. */
-export const updateLearningOutcomeSchema = z.strictObject({
-  content: z.string().min(1).optional(),
-  position: positionSchema.optional(),
-  sourceKind: outcomeSourceKindSchema.optional(),
-  sourceRef: z.string().min(1).nullable().optional(),
-  derivedFromId: uuidIdSchema.nullable().optional(),
-});
+export const updateLearningOutcomeSchema = createLearningOutcomeSchema.omit({ nodeId: true }).partial();
 export type UpdateLearningOutcome = z.infer<typeof updateLearningOutcomeSchema>;
 
 /**

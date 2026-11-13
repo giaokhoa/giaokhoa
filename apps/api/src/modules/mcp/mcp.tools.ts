@@ -162,6 +162,83 @@ async function auditCall(deps: McpToolDeps, actor: McpActor, tool: string, detai
 }
 
 /**
+ * Lỗi "không tìm thấy" của tầng service (HttpException 404, hoặc mã kết
+ * thúc bằng `_not_found`) — chỉ những lỗi này mới được dịch thành "không
+ * tồn tại" ở biên MCP để không lộ thông tin; lỗi hạ tầng khác phải ném
+ * lại (hoặc dịch bằng errorShape ở kết quả từng mục) để filter xử lý
+ * 500 thay vì bị che thành 404.
+ */
+function isNotFoundError(error: unknown): boolean {
+  if (!(error instanceof HttpException)) return false;
+  if (error.getStatus() === 404) return true;
+  const res = error.getResponse();
+  if (typeof res === 'object' && res !== null) {
+    const code = (res as { code?: unknown }).code;
+    return typeof code === 'string' && code.endsWith('_not_found');
+  }
+  return false;
+}
+
+/** Thông điệp lỗi TF-A dùng chung (3 chỗ: lõi tạo ×2, nhóm ngữ liệu ×1) — sai hình mệnh đề thì lỗi ngay, không tự đoán giá trị. */
+const TF_A_BAD_ANSWER_MESSAGE = 'truefalse (TF-A) questions take a stem plus exactly four statements, each with a true/false value';
+
+/** Thông điệp xung đột idempotency dùng chung — chỉ khác đuôi `what` theo tool (question/submission/group/publish run). */
+function idempotencyConflictMessage(what: string): string {
+  return `This idempotencyKey was already used with a different payload. Use a new key for a different ${what}.`;
+}
+
+type IdempotencyOutcome<T> =
+  | { kind: 'fresh'; requestHash: string }
+  | { kind: 'replay'; stored: T }
+  | { kind: 'conflict' };
+
+/**
+ * Khuôn idempotency dùng chung (S6): tìm bản ghi → so requestHash →
+ * fresh (chưa từng chạy, trả hash để caller store sau khi ghi) /
+ * replay (trả response đã lưu) / conflict (đã ghi audit, caller trả
+ * lỗi `question.idempotency_conflict` với `idempotencyConflictMessage`).
+ * Biến thể stimuli của batch giữ khuôn riêng vì nó chỉ lưu map byRef.
+ */
+async function checkIdempotency<T>(
+  deps: McpToolDeps,
+  actor: McpActor,
+  tool: string,
+  key: string,
+  hashInput: unknown,
+  auditDetails: Record<string, unknown>,
+): Promise<IdempotencyOutcome<T>> {
+  const requestHash = mcpRequestHash(tool, hashInput);
+  const existing = await deps.idempotency.find(actor.userId, key);
+  if (!existing) return { kind: 'fresh', requestHash };
+  if (existing.requestHash !== requestHash) {
+    await auditCall(deps, actor, tool, { result: 'idempotency_conflict', ...auditDetails });
+    return { kind: 'conflict' };
+  }
+  return { kind: 'replay', stored: existing.responseJson as unknown as T };
+}
+
+/**
+ * Lớp 3 dùng chung (S7): chạy các lần quét nội dung caller truyền vào
+ * rồi trả vi phạm đầu tiên (đã ghi audit) — caller dịch thành
+ * `errResult('question.invalid_content', first.message, first.fieldPath)`;
+ * null khi sạch. Gộp cả 6 chỗ quét (tạo đơn, đóng góp, batch, nhóm ngữ
+ * liệu, soi trùng, tìm YCCĐ) về một khuôn.
+ */
+async function scanContentOrReject(
+  deps: McpToolDeps,
+  actor: McpActor,
+  tool: string,
+  scan: (violations: ContentViolation[]) => void,
+): Promise<ContentViolation | null> {
+  const violations: ContentViolation[] = [];
+  scan(violations);
+  if (violations.length === 0) return null;
+  const first = violations[0]!; // Bất biến: đã kiểm tra violations.length > 0.
+  await auditCall(deps, actor, tool, { result: 'invalid_content', fieldPath: first.fieldPath });
+  return first;
+}
+
+/**
  * Dịch câu đúng/sai chùm TF-A ở biên MCP sang hình payload tạo của
  * REST (lát P5, điểm quyết D-1): đầu vào MCP là thân câu (chuỗi thuần)
  * + đúng 4 mệnh đề, mỗi mệnh đề `{text, correct}` với `correct` là giá
@@ -277,7 +354,9 @@ async function gatePersonalBankWrite(
   let bank: BankRow;
   try {
     bank = await deps.banks.getBankOrThrow(bankId);
-  } catch {
+  } catch (error) {
+    // Chỉ lỗi "không tồn tại" mới dịch thành bank_not_found — lỗi hạ tầng (DB...) ném lại để filter xử lý 500, không che thành 404.
+    if (!isNotFoundError(error)) throw error;
     return { kind: 'error', code: 'question.bank_not_found', message: `Question bank ${bankId} not found`, fieldPath: '/bankId' };
   }
   if (bank.scope !== 'personal' || bank.ownerId !== actor.userId || bank.bankKind !== 'question') {
@@ -287,7 +366,9 @@ async function gatePersonalBankWrite(
   let category: CategoryRow;
   try {
     category = await deps.questions.getCategory(categoryId);
-  } catch {
+  } catch (error) {
+    // Như trên: chỉ 404 mới thành category_not_found; lỗi hạ tầng ném lại.
+    if (!isNotFoundError(error)) throw error;
     return { kind: 'error', code: 'question.category_not_found', message: `Category ${categoryId} not found`, fieldPath: '/categoryId' };
   }
   if (!(await deps.banks.categoryBelongsToBank(category, bank))) {
@@ -319,6 +400,27 @@ interface DraftItemPayload {
   options?: McpCreateQuestionInput['options'];
 }
 
+/**
+ * Khóa của DraftItemPayload — pickDraftItem chỉ lấy đúng các trường này
+ * từ object caller truyền vào (payload tạo còn mang bankId/idempotencyKey
+ * không thuộc danh tính câu). Thêm trường mới vào DraftItemPayload thì
+ * thêm vào đây: khóa biên dịch bên dưới báo lỗi nếu hai bên lệch nhau,
+ * để dữ liệu không lặng lẽ bị rớt.
+ */
+const DRAFT_ITEM_KEYS = ['qtype', 'questionText', 'generalFeedback', 'guidance', 'defaultMark', 'penalty', 'stimulusId', 'answers', 'options'] as const;
+type DraftItemKey = (typeof DRAFT_ITEM_KEYS)[number];
+type AssertDraftItemKeysComplete = [keyof DraftItemPayload] extends [DraftItemKey]
+  ? ([DraftItemKey] extends [keyof DraftItemPayload] ? true : never)
+  : never;
+const _assertDraftItemKeysComplete: AssertDraftItemKeysComplete = true;
+
+/** Chỉ lấy các trường nội dung câu từ object caller truyền vào (loại field thừa như bankId/idempotencyKey). */
+function pickDraftItem(source: DraftItemPayload): DraftItemPayload {
+  const item = {} as Record<DraftItemKey, unknown>;
+  for (const key of DRAFT_ITEM_KEYS) item[key] = source[key];
+  return item as DraftItemPayload;
+}
+
 type CreateCoreOutcome =
   | { kind: 'ok'; response: McpCreateQuestionOutput; replayed: boolean }
   | { kind: 'error'; code: string; message: string; fieldPath?: string };
@@ -340,34 +442,23 @@ async function createDraftQuestionCore(
   // Chỉ các trường nội dung câu tham gia băm idempotency (caller có
   // thể truyền object rộng hơn — vd payload create_question còn mang
   // bankId/idempotencyKey — các trường đó không thuộc danh tính câu).
-  const item: DraftItemPayload = {
-    qtype: opts.item.qtype,
-    questionText: opts.item.questionText,
-    generalFeedback: opts.item.generalFeedback,
-    guidance: opts.item.guidance,
-    defaultMark: opts.item.defaultMark,
-    penalty: opts.item.penalty,
-    stimulusId: opts.item.stimulusId,
-    answers: opts.item.answers,
-    options: opts.item.options,
-  };
+  const item = pickDraftItem(opts.item);
 
   // ── Lớp 5a: idempotency ────────────────────────────────────────
-  const requestHash = mcpRequestHash(tool, { bankId: bank.id, categoryId, ...item });
-  const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
-  if (existing) {
-    if (existing.requestHash !== requestHash) {
-      await auditCall(deps, actor, tool, { result: 'idempotency_conflict', bankId: bank.id });
-      return {
-        kind: 'error',
-        code: 'question.idempotency_conflict',
-        message: 'This idempotencyKey was already used with a different payload. Use a new key for a different question.',
-      };
-    }
-    const stored = existing.responseJson as unknown as McpCreateQuestionOutput;
+  const idem = await checkIdempotency<McpCreateQuestionOutput>(deps, actor, tool, idempotencyKey, { bankId: bank.id, categoryId, ...item }, { bankId: bank.id });
+  if (idem.kind === 'conflict') {
+    return {
+      kind: 'error',
+      code: 'question.idempotency_conflict',
+      message: idempotencyConflictMessage('question'),
+    };
+  }
+  if (idem.kind === 'replay') {
+    const stored = idem.stored;
     await auditCall(deps, actor, tool, { result: 'idempotent_replay', bankId: bank.id, questionId: stored.questionId ?? stored.existingQuestionId });
     return { kind: 'ok', response: stored, replayed: true };
   }
+  const requestHash = idem.requestHash;
 
   // ── Dịch TF-A ở biên (thân + 4 mệnh đề → tài liệu + solution) ─
   // Sai hình thì lỗi ngay tại đây, trước khi băm chống trùng.
@@ -378,7 +469,7 @@ async function createDraftQuestionCore(
       return {
         kind: 'error',
         code: 'question.bad_answer_data',
-        message: 'truefalse (TF-A) questions take a stem plus exactly four statements, each with a true/false value',
+        message: TF_A_BAD_ANSWER_MESSAGE,
         fieldPath: '/answers',
       };
     }
@@ -393,7 +484,7 @@ async function createDraftQuestionCore(
     return {
       kind: 'error',
       code: 'question.bad_answer_data',
-      message: 'truefalse (TF-A) questions take a stem plus exactly four statements, each with a true/false value',
+      message: TF_A_BAD_ANSWER_MESSAGE,
       fieldPath: '/answers',
     };
   }
@@ -480,8 +571,57 @@ async function createDraftQuestionCore(
   return { kind: 'ok', response, replayed: false };
 }
 
+type ContributionItemResult = { status: 'pending' | 'failed'; contributionId: string | null; code: string | null; message: string | null };
+
+/**
+ * Một mục đóng góp trong submit_contribution (S8): ba vòng lặp
+ * questions/exams/matrices cùng khuôn — lấy chủ sở hữu (null = không
+ * tồn tại) → kiểm chính chủ → propose → kết quả từng mục. Lỗi hạ tầng
+ * ở bước lấy chủ sở hữu KHÔNG dịch thành not_found mà giữ mã thật qua
+ * errorShape; chỉ 404 (hoặc null) mới là "không tồn tại".
+ */
+async function proposeContributionItem(
+  deps: McpToolDeps,
+  actor: McpActor,
+  spec: {
+    id: string;
+    label: string;
+    notFoundCode: string;
+    notOwnCode: string;
+    notOwnMessage: string;
+    /** Chủ sở hữu của mục; null = mục không tồn tại. */
+    fetchOwner: () => Promise<string | null>;
+    propose: () => Promise<{ id: string }>;
+  },
+): Promise<ContributionItemResult> {
+  let createdBy: string | null;
+  try {
+    createdBy = await spec.fetchOwner();
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      const shape = errorShape(error);
+      return { status: 'failed', contributionId: null, code: shape.code, message: shape.message };
+    }
+    return { status: 'failed', contributionId: null, code: spec.notFoundCode, message: `${spec.label} ${spec.id} not found` };
+  }
+  if (createdBy === null) {
+    return { status: 'failed', contributionId: null, code: spec.notFoundCode, message: `${spec.label} ${spec.id} not found` };
+  }
+  if (createdBy !== actor.userId) {
+    return { status: 'failed', contributionId: null, code: spec.notOwnCode, message: spec.notOwnMessage };
+  }
+  try {
+    const contribution = await spec.propose();
+    return { status: 'pending', contributionId: contribution.id, code: null, message: null };
+  } catch (error) {
+    const { code, message } = errorShape(error);
+    return { status: 'failed', contributionId: null, code, message };
+  }
+}
+
 /** Đăng ký các tool MCP lên một McpServer vừa dựng cho đúng một actor (mỗi request một server). */
-export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
+/** Liệt kê các bank câu hỏi giáo viên được dùng (personal/team/school) kèm capability và default category. */
+function registerListMyBanksTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'list_my_banks',
     {
@@ -510,7 +650,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       return okResult(out, `Found ${out.banks.length} question bank(s) you can use.`);
     },
   );
+}
 
+/** Liệt kê category (kèm số câu) của một bank câu hỏi. */
+function registerListCategoriesTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'list_categories',
     {
@@ -526,7 +669,8 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       let bank;
       try {
         bank = await deps.banks.getBankOrThrow(bankId);
-      } catch {
+      } catch (error) {
+        if (!isNotFoundError(error)) throw error;
         return errResult('question.bank_not_found', `Question bank ${bankId} not found`, '/bankId');
       }
       try {
@@ -537,21 +681,29 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         return errResult(code, message, '/bankId');
       }
       const all = await deps.questions.listCategories();
-      const categories: { id: string; name: string; parentId: string | null; questionCount: number }[] = [];
-      for (const cat of all) {
-        if (await deps.banks.categoryBelongsToBank(cat, bank)) {
-          // Chỉ cần SỐ câu trong category: đi qua facade service
-          // (listQuestionIdsInCategory) thay vì repository — ranh giới
-          // đóng gói của QuestionsModule (issue #138, mục 8.1 của #134).
-          const questionIds = await deps.questions.listQuestionIdsInCategory(cat.id);
-          categories.push({ id: cat.id, name: cat.name, parentId: cat.parent ?? null, questionCount: questionIds.length });
-        }
-      }
+      // Các category đọc độc lập nên chạy song song (Promise.all giữ
+      // đúng thứ tự danh sách); lỗi ở một category vẫn làm hỏng cả
+      // tool như trước.
+      const categories = (
+        await Promise.all(
+          all.map(async (cat) => {
+            if (!(await deps.banks.categoryBelongsToBank(cat, bank))) return null;
+            // Chỉ cần SỐ câu trong category: đi qua facade service
+            // (listQuestionIdsInCategory) thay vì repository — ranh giới
+            // đóng gói của QuestionsModule (issue #138, mục 8.1 của #134).
+            const questionIds = await deps.questions.listQuestionIdsInCategory(cat.id);
+            return { id: cat.id, name: cat.name, parentId: cat.parent ?? null, questionCount: questionIds.length };
+          }),
+        )
+      ).filter((c): c is { id: string; name: string; parentId: string | null; questionCount: number } => c !== null);
       await auditCall(deps, actor, 'list_categories', { result: 'ok', bankId, count: categories.length });
       return okResult({ bankId, categories }, `Bank has ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'}.`);
     },
   );
+}
 
+/** Tạo MỘT câu draft trong bank cá nhân của chính chủ (lớp 3 → cổng bank → lõi tạo dùng chung). */
+function registerCreateQuestionTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'create_question',
     {
@@ -565,13 +717,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const args = rawArgs as McpCreateQuestionInput;
 
       // ── Lớp 3: nội dung (quét ký tự cấm → chuẩn hoá NFC) ──────────
-      const violations: ContentViolation[] = [];
-      scanContent(args, violations, '', new Set(['/bankId', '/categoryId', '/stimulusId', '/idempotencyKey']));
-      if (violations.length > 0) {
-        const first = violations[0]!;
-        await auditCall(deps, actor, 'create_question', { result: 'invalid_content', fieldPath: first.fieldPath });
-        return errResult('question.invalid_content', first.message, first.fieldPath);
-      }
+      const violation = await scanContentOrReject(deps, actor, 'create_question', (violations) => {
+        scanContent(args, violations, '', new Set(['/bankId', '/categoryId', '/stimulusId', '/idempotencyKey']));
+      });
+      if (violation) return errResult('question.invalid_content', violation.message, violation.fieldPath);
       const clean = normalizeContentStrings(args);
       if (!clean.questionText.trim()) return errResult('question.invalid_content', 'Question text must not be blank', '/questionText');
 
@@ -603,7 +752,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
+/** Lấy một câu hỏi theo id bằng projection chuẩn — chỉ câu giáo viên được phép xem. */
+function registerGetQuestionTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'get_question',
     {
@@ -621,7 +773,7 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         const projected = mcpGetQuestionOutputSchema.parse(view);
         await auditCall(deps, actor, 'get_question', { result: 'ok', questionId });
         // Câu hỏi không có trường tên — tóm tắt bằng trích đoạn nội dung.
-        const excerpt = extractRichTextPlainText(view.latestVersion.questionText as never).replace(/\s+/g, ' ').slice(0, 120);
+        const excerpt = extractRichTextPlainText(view.latestVersion.questionText as RichTextDocument).replace(/\s+/g, ' ').slice(0, 120);
         return okResult(projected as unknown as Record<string, unknown>, `Question (${view.question.qtype}): ${excerpt}.`);
       } catch (error) {
         const { code, message } = errorShape(error);
@@ -630,7 +782,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       }
     },
   );
+}
 
+/** Đề xuất câu/đề/ma trận của chính chủ vào bank dùng chung để kiểm duyệt (kết quả từng mục). */
+function registerSubmitContributionTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'submit_contribution',
     {
@@ -644,13 +799,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const args = rawArgs as McpSubmitContributionInput;
 
       // ── Lớp 3: nội dung (ghi chú đóng góp — quét ký tự cấm → NFC) ──
-      const violations: ContentViolation[] = [];
-      scanContent(args, violations, '', new Set(['/targetBankId', '/idempotencyKey']));
-      if (violations.length > 0) {
-        const first = violations[0]!;
-        await auditCall(deps, actor, 'submit_contribution', { result: 'invalid_content', fieldPath: first.fieldPath });
-        return errResult('question.invalid_content', first.message, first.fieldPath);
-      }
+      const violation = await scanContentOrReject(deps, actor, 'submit_contribution', (violations) => {
+        scanContent(args, violations, '', new Set(['/targetBankId', '/idempotencyKey']));
+      });
+      if (violation) return errResult('question.invalid_content', violation.message, violation.fieldPath);
       const clean = normalizeContentStrings(args);
       const { idempotencyKey, targetBankId } = clean;
       // Ba danh sách đối xứng ba thực thể ngân hàng (issue #228):
@@ -674,24 +826,20 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       // trùng, quyền share — do proposeContribution giữ như REST). ──
       try {
         await deps.banks.getBankOrThrow(targetBankId);
-      } catch {
+      } catch (error) {
+        if (!isNotFoundError(error)) throw error;
         await auditCall(deps, actor, 'submit_contribution', { result: 'bank_not_found', bankId: targetBankId });
         return errResult('question.bank_not_found', `Question bank ${targetBankId} not found`, '/targetBankId');
       }
 
       // ── Idempotency (cùng khuôn create_question / đặc tả 2026-07-28)
       const { idempotencyKey: _key, ...hashPayload } = clean;
-      const requestHash = mcpRequestHash('submit_contribution', hashPayload);
-      const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
-      if (existing) {
-        if (existing.requestHash !== requestHash) {
-          await auditCall(deps, actor, 'submit_contribution', { result: 'idempotency_conflict', bankId: targetBankId });
-          return errResult(
-            'question.idempotency_conflict',
-            'This idempotencyKey was already used with a different payload. Use a new key for a different submission.',
-          );
-        }
-        const stored = existing.responseJson as unknown as McpSubmitContributionOutput;
+      const idem = await checkIdempotency<McpSubmitContributionOutput>(deps, actor, 'submit_contribution', idempotencyKey, hashPayload, { bankId: targetBankId });
+      if (idem.kind === 'conflict') {
+        return errResult('question.idempotency_conflict', idempotencyConflictMessage('submission'));
+      }
+      if (idem.kind === 'replay') {
+        const stored = idem.stored;
         await auditCall(deps, actor, 'submit_contribution', { result: 'idempotent_replay', bankId: targetBankId });
         // Bản ghi cũ (trước đợt mở đối xứng) chưa có hai mảng
         // examResults/matrixResults — bù rỗng cho khớp hình dạng
@@ -701,6 +849,7 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
           'Idempotent replay: this submission was already processed; returning the original result.',
         );
       }
+      const requestHash = idem.requestHash;
 
       // ── Từng câu: cổng chủ sở hữu ở biên MCP (câu phải của chính chủ
       // token), rồi ĐÚNG đường QB-4 — proposeContribution tự kiểm
@@ -710,28 +859,16 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       for (const questionId of questionIds) {
         // Qua facade QuestionsService (sau tái cấu trúc module #138):
         // câu không tồn tại → service ném question.not_found.
-        let createdBy: string | null;
-        try {
-          createdBy = (await deps.questions.getQuestion(questionId)).question.createdBy;
-        } catch {
-          results.push({ questionId, status: 'failed', contributionId: null, code: 'question.not_found', message: `Question ${questionId} not found` });
-          continue;
-        }
-        if (createdBy !== actor.userId) {
-          results.push({
-            questionId, status: 'failed', contributionId: null,
-            code: 'question.contribution_source_not_own',
-            message: 'Only your own questions can be submitted as a contribution',
-          });
-          continue;
-        }
-        try {
-          const contribution = await deps.banks.proposeContribution(actor.userId, targetBankId, { questionId, note });
-          results.push({ questionId, status: 'pending', contributionId: contribution.id, code: null, message: null });
-        } catch (error) {
-          const { code, message } = errorShape(error);
-          results.push({ questionId, status: 'failed', contributionId: null, code, message });
-        }
+        const r = await proposeContributionItem(deps, actor, {
+          id: questionId,
+          label: 'Question',
+          notFoundCode: 'question.not_found',
+          notOwnCode: 'question.contribution_source_not_own',
+          notOwnMessage: 'Only your own questions can be submitted as a contribution',
+          fetchOwner: async () => (await deps.questions.getQuestion(questionId)).question.createdBy,
+          propose: async () => deps.banks.proposeContribution(actor.userId, targetBankId, { questionId, note }),
+        });
+        results.push({ questionId, status: r.status, contributionId: r.contributionId, code: r.code, message: r.message });
       }
 
       // ── Từng ĐỀ: cùng khuôn cổng chủ sở hữu, rồi vào ĐƯỜNG ĐÓNG
@@ -740,28 +877,16 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       // bank đề dùng chung, chống trùng trong bank đích. ───────────
       const examResults: McpSubmitContributionOutput['examResults'] = [];
       for (const examId of examIds) {
-        let createdBy: string | null;
-        try {
-          createdBy = (await deps.exams.getPaperOrThrow(examId)).createdBy;
-        } catch {
-          examResults.push({ examId, status: 'failed', contributionId: null, code: 'exam.not_found', message: `Paper ${examId} not found` });
-          continue;
-        }
-        if (createdBy !== actor.userId) {
-          examResults.push({
-            examId, status: 'failed', contributionId: null,
-            code: 'exam.contribution_source_not_own',
-            message: 'Only your own papers can be submitted as a contribution',
-          });
-          continue;
-        }
-        try {
-          const contribution = await deps.exams.proposeContribution(actor.userId, targetBankId, { examId, note });
-          examResults.push({ examId, status: 'pending', contributionId: contribution.id, code: null, message: null });
-        } catch (error) {
-          const { code, message } = errorShape(error);
-          examResults.push({ examId, status: 'failed', contributionId: null, code, message });
-        }
+        const r = await proposeContributionItem(deps, actor, {
+          id: examId,
+          label: 'Paper',
+          notFoundCode: 'exam.not_found',
+          notOwnCode: 'exam.contribution_source_not_own',
+          notOwnMessage: 'Only your own papers can be submitted as a contribution',
+          fetchOwner: async () => (await deps.exams.getPaperOrThrow(examId)).createdBy,
+          propose: async () => deps.exams.proposeContribution(actor.userId, targetBankId, { examId, note }),
+        });
+        examResults.push({ examId, status: r.status, contributionId: r.contributionId, code: r.code, message: r.message });
       }
 
       // ── Từng MA TRẬN: cùng khuôn cổng chủ sở hữu, rồi vào hàng
@@ -771,26 +896,16 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       // đích. ────────────────────────────────────────────────────────
       const matrixResults: McpSubmitContributionOutput['matrixResults'] = [];
       for (const matrixId of matrixIds) {
-        const matrix = await deps.matrixBanks.findMatrixById(matrixId);
-        if (!matrix) {
-          matrixResults.push({ matrixId, status: 'failed', contributionId: null, code: 'quiz.matrix_not_found', message: `Matrix ${matrixId} not found` });
-          continue;
-        }
-        if (matrix.createdBy !== actor.userId) {
-          matrixResults.push({
-            matrixId, status: 'failed', contributionId: null,
-            code: 'quiz.matrix_contribution_source_not_own',
-            message: 'Only your own matrices can be submitted as a contribution',
-          });
-          continue;
-        }
-        try {
-          const view = await deps.matrixBanks.proposeContribution(actor.userId, matrixId, { targetBankId, note });
-          matrixResults.push({ matrixId, status: 'pending', contributionId: view.id, code: null, message: null });
-        } catch (error) {
-          const { code, message } = errorShape(error);
-          matrixResults.push({ matrixId, status: 'failed', contributionId: null, code, message });
-        }
+        const r = await proposeContributionItem(deps, actor, {
+          id: matrixId,
+          label: 'Matrix',
+          notFoundCode: 'quiz.matrix_not_found',
+          notOwnCode: 'quiz.matrix_contribution_source_not_own',
+          notOwnMessage: 'Only your own matrices can be submitted as a contribution',
+          fetchOwner: async () => (await deps.matrixBanks.findMatrixById(matrixId))?.createdBy ?? null,
+          propose: async () => deps.matrixBanks.proposeContribution(actor.userId, matrixId, { targetBankId, note }),
+        });
+        matrixResults.push({ matrixId, status: r.status, contributionId: r.contributionId, code: r.code, message: r.message });
       }
 
       const total = results.length + examResults.length + matrixResults.length;
@@ -820,9 +935,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
-  // ══ Lát MCP-1 (issue #163) ═══════════════════════════════════════
-
+/** Tạo NHIỀU câu draft trong bank cá nhân trong một lần gọi (kết quả từng item; ngữ liệu khai chung có idempotency riêng). */
+function registerCreateQuestionsBatchTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'create_questions_batch',
     {
@@ -837,22 +953,19 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
 
       // ── Lớp 3: quét nội dung theo TỪNG item/ngữ liệu (đường dẫn
       // fieldPath giữ nguyên chỉ số thật trong payload gốc). ───────
-      const violations: ContentViolation[] = [];
-      (args.stimuli ?? []).forEach((stimulus, index) => {
-        scanContent(stimulus, violations, `/stimuli/${index}`, new Set([`/stimuli/${index}/ref`]));
+      const violation = await scanContentOrReject(deps, actor, 'create_questions_batch', (violations) => {
+        (args.stimuli ?? []).forEach((stimulus, index) => {
+          scanContent(stimulus, violations, `/stimuli/${index}`, new Set([`/stimuli/${index}/ref`]));
+        });
+        args.items.forEach((item, index) => {
+          scanContent(item, violations, `/items/${index}`, new Set([
+            `/items/${index}/clientItemId`,
+            `/items/${index}/stimulusId`,
+            `/items/${index}/stimulusRef`,
+          ]));
+        });
       });
-      args.items.forEach((item, index) => {
-        scanContent(item, violations, `/items/${index}`, new Set([
-          `/items/${index}/clientItemId`,
-          `/items/${index}/stimulusId`,
-          `/items/${index}/stimulusRef`,
-        ]));
-      });
-      if (violations.length > 0) {
-        const first = violations[0]!;
-        await auditCall(deps, actor, 'create_questions_batch', { result: 'invalid_content', fieldPath: first.fieldPath });
-        return errResult('question.invalid_content', first.message, first.fieldPath);
-      }
+      if (violation) return errResult('question.invalid_content', violation.message, violation.fieldPath);
       const clean = normalizeContentStrings(args);
       const { bankId, categoryId, idempotencyKey } = clean;
 
@@ -910,35 +1023,37 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
 
       // ── Từng item qua lõi tạo (idempotency suy từ khoá lô) ──────
       const results: McpBatchItemResult[] = [];
+      // Đặt ngoài vòng lặp: closure dựng kết quả failed cho một item — không cần tạo lại mỗi lần lặp.
+      const failedItem = (item: McpCreateQuestionsBatchInput['items'][number]) => (code: string, message: string, fieldPath?: string): McpBatchItemResult => ({
+        clientItemId: item.clientItemId,
+        status: 'failed',
+        questionId: null,
+        existingQuestionId: null,
+        entryId: null,
+        version: null,
+        questionStatus: null,
+        duplicate: 'none',
+        nearDuplicateOf: null,
+        reviewUrl: null,
+        code,
+        message,
+        fieldPath: fieldPath ?? null,
+      });
       for (const item of clean.items) {
-        const failedItem = (code: string, message: string, fieldPath?: string): McpBatchItemResult => ({
-          clientItemId: item.clientItemId,
-          status: 'failed',
-          questionId: null,
-          existingQuestionId: null,
-          entryId: null,
-          version: null,
-          questionStatus: null,
-          duplicate: 'none',
-          nearDuplicateOf: null,
-          reviewUrl: null,
-          code,
-          message,
-          fieldPath: fieldPath ?? null,
-        });
+        const failed = failedItem(item);
         if (!item.questionText.trim()) {
-          results.push(failedItem('question.invalid_content', 'Question text must not be blank', '/questionText'));
+          results.push(failed('question.invalid_content', 'Question text must not be blank', '/questionText'));
           continue;
         }
         if (item.stimulusId && item.stimulusRef) {
-          results.push(failedItem('question.stimulus_ref_conflict', 'Use either stimulusId or stimulusRef for an item, not both', '/stimulusRef'));
+          results.push(failed('question.stimulus_ref_conflict', 'Use either stimulusId or stimulusRef for an item, not both', '/stimulusRef'));
           continue;
         }
         let stimulusId = item.stimulusId;
         if (item.stimulusRef) {
           stimulusId = stimulusIdByRef.get(item.stimulusRef);
           if (!stimulusId) {
-            results.push(failedItem('question.stimulus_unavailable', `Stimulus ref "${item.stimulusRef}" was not created in this batch`, '/stimulusRef'));
+            results.push(failed('question.stimulus_unavailable', `Stimulus ref "${item.stimulusRef}" was not created in this batch`, '/stimulusRef'));
             continue;
           }
         }
@@ -950,7 +1065,7 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
           idempotencyKey: `${idempotencyKey}:${item.clientItemId}`,
         });
         if (outcome.kind === 'error') {
-          results.push(failedItem(outcome.code, outcome.message, outcome.fieldPath));
+          results.push(failed(outcome.code, outcome.message, outcome.fieldPath));
           continue;
         }
         const r = outcome.response;
@@ -994,7 +1109,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
+/** Tạo MỘT ngữ liệu + nhóm câu gắn nó trong bank cá nhân, nguyên tử trong một giao dịch. */
+function registerCreateStimulusWithQuestionsTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'create_stimulus_with_questions',
     {
@@ -1008,13 +1126,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const args = rawArgs as McpCreateStimulusWithQuestionsInput;
 
       // ── Lớp 3: nội dung ──────────────────────────────────────────
-      const violations: ContentViolation[] = [];
-      scanContent(args, violations, '', new Set(['/bankId', '/categoryId', '/idempotencyKey']));
-      if (violations.length > 0) {
-        const first = violations[0]!;
-        await auditCall(deps, actor, 'create_stimulus_with_questions', { result: 'invalid_content', fieldPath: first.fieldPath });
-        return errResult('question.invalid_content', first.message, first.fieldPath);
-      }
+      const violation = await scanContentOrReject(deps, actor, 'create_stimulus_with_questions', (violations) => {
+        scanContent(args, violations, '', new Set(['/bankId', '/categoryId', '/idempotencyKey']));
+      });
+      if (violation) return errResult('question.invalid_content', violation.message, violation.fieldPath);
       const clean = normalizeContentStrings(args);
       const { bankId, categoryId, idempotencyKey } = clean;
       if (!clean.stimulusContent.trim()) {
@@ -1032,20 +1147,16 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
 
       // ── Idempotency của cả nhóm ──────────────────────────────────
       const { idempotencyKey: _key, ...hashPayload } = clean;
-      const requestHash = mcpRequestHash('create_stimulus_with_questions', hashPayload);
-      const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
-      if (existing) {
-        if (existing.requestHash !== requestHash) {
-          await auditCall(deps, actor, 'create_stimulus_with_questions', { result: 'idempotency_conflict', bankId });
-          return errResult(
-            'question.idempotency_conflict',
-            'This idempotencyKey was already used with a different payload. Use a new key for a different group.',
-          );
-        }
-        const stored = existing.responseJson as unknown as { stimulusId: string; results: McpCreateQuestionOutput[]; created: number };
+      const idem = await checkIdempotency<{ stimulusId: string; results: McpCreateQuestionOutput[]; created: number }>(deps, actor, 'create_stimulus_with_questions', idempotencyKey, hashPayload, { bankId });
+      if (idem.kind === 'conflict') {
+        return errResult('question.idempotency_conflict', idempotencyConflictMessage('group'));
+      }
+      if (idem.kind === 'replay') {
+        const stored = idem.stored;
         await auditCall(deps, actor, 'create_stimulus_with_questions', { result: 'idempotent_replay', bankId });
         return okResult({ ...stored }, 'Idempotent replay: this group was already created; returning the original result.');
       }
+      const requestHash = idem.requestHash;
 
       // ── Kiểm trước TOÀN BỘ nhóm (truefalse + trùng exact) trước
       // khi ghi bất cứ thứ gì — nguyên tử bắt đầu từ biên MCP. ──────
@@ -1057,7 +1168,7 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         if (!dupInput) {
           return errResult(
             'question.bad_answer_data',
-            'truefalse (TF-A) questions take a stem plus exactly four statements, each with a true/false value',
+            TF_A_BAD_ANSWER_MESSAGE,
             `/questions/${index}/answers`,
           );
         }
@@ -1148,7 +1259,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
+/** Xuất bản các câu draft của chính chủ trong bank cá nhân sang ready (kết quả từng câu). */
+function registerPublishQuestionsTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'publish_questions',
     {
@@ -1169,20 +1283,16 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const { questionIds, idempotencyKey } = args;
 
       // ── Idempotency của cả lượt publish ──────────────────────────
-      const requestHash = mcpRequestHash('publish_questions', { questionIds });
-      const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
-      if (existing) {
-        if (existing.requestHash !== requestHash) {
-          await auditCall(deps, actor, 'publish_questions', { result: 'idempotency_conflict' });
-          return errResult(
-            'question.idempotency_conflict',
-            'This idempotencyKey was already used with a different payload. Use a new key for a different publish run.',
-          );
-        }
-        const stored = existing.responseJson as unknown as McpPublishQuestionsOutput;
+      const idem = await checkIdempotency<McpPublishQuestionsOutput>(deps, actor, 'publish_questions', idempotencyKey, { questionIds }, {});
+      if (idem.kind === 'conflict') {
+        return errResult('question.idempotency_conflict', idempotencyConflictMessage('publish run'));
+      }
+      if (idem.kind === 'replay') {
+        const stored = idem.stored;
         await auditCall(deps, actor, 'publish_questions', { result: 'idempotent_replay' });
         return okResult({ ...stored }, 'Idempotent replay: this publish run was already processed; returning the original result.');
       }
+      const requestHash = idem.requestHash;
 
       // ── Từng câu: của chính chủ + trong bank cá nhân của chủ +
       // đang draft → setQuestionStatus('ready') như đường web. ─────
@@ -1191,7 +1301,13 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         let view;
         try {
           view = await deps.questions.getQuestion(questionId);
-        } catch {
+        } catch (error) {
+          // Chỉ 404 mới là "không tồn tại"; lỗi hạ tầng giữ mã thật trong kết quả từng mục.
+          if (!isNotFoundError(error)) {
+            const shape = errorShape(error);
+            results.push({ questionId, status: 'failed', code: shape.code, message: shape.message });
+            continue;
+          }
           results.push({ questionId, status: 'failed', code: 'question.not_found', message: `Question ${questionId} not found` });
           continue;
         }
@@ -1203,7 +1319,13 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         try {
           const category = await deps.questions.getCategory(view.question.category);
           bank = await deps.banks.findBankForCategory(category);
-        } catch {
+        } catch (error) {
+          // Chỉ 404 mới coi bank như không tồn tại; lỗi hạ tầng giữ mã thật trong kết quả từng mục.
+          if (!isNotFoundError(error)) {
+            const shape = errorShape(error);
+            results.push({ questionId, status: 'failed', code: shape.code, message: shape.message });
+            continue;
+          }
           bank = null;
         }
         if (!bank || bank.scope !== 'personal' || bank.ownerId !== actor.userId || bank.bankKind !== 'question') {
@@ -1252,7 +1374,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
+/** Tìm câu hỏi trong một bank theo đoạn văn bản (chỉ metadata). */
+function registerSearchQuestionsTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'search_questions',
     {
@@ -1269,7 +1394,8 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       let bank: BankRow;
       try {
         bank = await deps.banks.getBankOrThrow(bankId);
-      } catch {
+      } catch (error) {
+        if (!isNotFoundError(error)) throw error;
         return errResult('question.bank_not_found', `Question bank ${bankId} not found`, '/bankId');
       }
       try {
@@ -1282,35 +1408,43 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const needle = normalizeContentStrings(args.query).trim().toLowerCase();
       if (!needle) return errResult('question.invalid_content', 'Search query must not be blank', '/query');
       const limit = args.limit ?? 20;
-      const matches: {
-        id: string; qtype: string; status: string;
-        categoryId: string; categoryName: string; mine: boolean;
-      }[] = [];
       const all = await deps.questions.listCategories();
-      for (const cat of all) {
-        if (!(await deps.banks.categoryBelongsToBank(cat, bank))) continue;
-        let views;
-        try {
-          views = await deps.questions.listQuestionsForViewer(actor.userId, cat.id);
-        } catch {
-          continue; // Category không đọc được → vắng khỏi kết quả như không tồn tại.
-        }
-        for (const view of views) {
-          if (args.qtype && view.question.qtype !== args.qtype) continue;
-          // Câu hỏi không có trường tên — chỉ soi trong thân câu.
-          const plainText = extractRichTextPlainText(view.latestVersion.questionText as never);
-          const haystack = plainText.normalize('NFC').toLowerCase();
-          if (!haystack.includes(needle)) continue;
-          matches.push({
-            id: view.question.id,
-            qtype: view.question.qtype,
-            status: view.entry.status,
-            categoryId: cat.id,
-            categoryName: cat.name,
-            mine: view.question.createdBy === actor.userId,
-          });
-        }
-      }
+      // Các category đọc độc lập nên chạy song song (Promise.all giữ
+      // đúng thứ tự category và thứ tự câu trong mỗi category).
+      const perCategory = await Promise.all(
+        all.map(async (cat) => {
+          if (!(await deps.banks.categoryBelongsToBank(cat, bank))) return [];
+          let views;
+          try {
+            views = await deps.questions.listQuestionsForViewer(actor.userId, cat.id);
+          } catch (error) {
+            // Chỉ category không đọc được (404) mới vắng khỏi kết quả như không tồn tại; lỗi hạ tầng ném lại.
+            if (!isNotFoundError(error)) throw error;
+            return [];
+          }
+          const found: {
+            id: string; qtype: string; status: string;
+            categoryId: string; categoryName: string; mine: boolean;
+          }[] = [];
+          for (const view of views) {
+            if (args.qtype && view.question.qtype !== args.qtype) continue;
+            // Câu hỏi không có trường tên — chỉ soi trong thân câu.
+            const plainText = extractRichTextPlainText(view.latestVersion.questionText as RichTextDocument);
+            const haystack = plainText.normalize('NFC').toLowerCase();
+            if (!haystack.includes(needle)) continue;
+            found.push({
+              id: view.question.id,
+              qtype: view.question.qtype,
+              status: view.entry.status,
+              categoryId: cat.id,
+              categoryName: cat.name,
+              mine: view.question.createdBy === actor.userId,
+            });
+          }
+          return found;
+        }),
+      );
+      const matches = perCategory.flat();
       const truncated = matches.length > limit;
       const questions = matches.slice(0, limit);
       await auditCall(deps, actor, 'search_questions', { result: 'ok', bankId, count: questions.length, truncated });
@@ -1322,7 +1456,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
+/** Soi trùng ứng viên với một bank bằng cơ chế băm QB-4, không ghi gì. */
+function registerCheckDuplicatesTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'check_duplicates',
     {
@@ -1337,21 +1474,19 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const args = rawArgs as McpCheckDuplicatesInput;
       const { bankId } = args;
 
-      const violations: ContentViolation[] = [];
-      args.items.forEach((item, index) => {
-        scanContent(item, violations, `/items/${index}`, new Set([`/items/${index}/clientItemId`]));
+      const violation = await scanContentOrReject(deps, actor, 'check_duplicates', (violations) => {
+        args.items.forEach((item, index) => {
+          scanContent(item, violations, `/items/${index}`, new Set([`/items/${index}/clientItemId`]));
+        });
       });
-      if (violations.length > 0) {
-        const first = violations[0]!;
-        await auditCall(deps, actor, 'check_duplicates', { result: 'invalid_content', fieldPath: first.fieldPath });
-        return errResult('question.invalid_content', first.message, first.fieldPath);
-      }
+      if (violation) return errResult('question.invalid_content', violation.message, violation.fieldPath);
       const clean = normalizeContentStrings(args);
 
       let bank: BankRow;
       try {
         bank = await deps.banks.getBankOrThrow(bankId);
-      } catch {
+      } catch (error) {
+        if (!isNotFoundError(error)) throw error;
         return errResult('question.bank_not_found', `Question bank ${bankId} not found`, '/bankId');
       }
       try {
@@ -1388,7 +1523,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       );
     },
   );
+}
 
+/** Tìm YCCĐ chính thức theo từ khóa để neo câu hỏi vào YCCĐ thật. */
+function registerSearchCurriculumOutcomesTool(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'search_curriculum_outcomes',
     {
@@ -1401,13 +1539,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     },
     async (rawArgs) => {
       const args = rawArgs as { query: string; subjectId?: string; gradeLevel?: number; limit?: number };
-      const violations: ContentViolation[] = [];
-      scanContent({ query: args.query }, violations, '', new Set());
-      if (violations.length > 0) {
-        const first = violations[0]!;
-        await auditCall(deps, actor, 'search_curriculum_outcomes', { result: 'invalid_content', fieldPath: first.fieldPath });
-        return errResult('question.invalid_content', first.message, first.fieldPath);
-      }
+      const violation = await scanContentOrReject(deps, actor, 'search_curriculum_outcomes', (violations) => {
+        scanContent({ query: args.query }, violations, '', new Set());
+      });
+      if (violation) return errResult('question.invalid_content', violation.message, violation.fieldPath);
       const query = normalizeContentStrings(args.query).trim();
       if (!query) return errResult('question.invalid_content', 'Search query must not be blank', '/query');
       try {
@@ -1431,4 +1566,21 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       }
     },
   );
+}
+
+/** Đăng ký các tool MCP lên một McpServer vừa dựng cho đúng một actor (mỗi request một server). */
+export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
+  registerListMyBanksTool(server, actor, deps);
+  registerListCategoriesTool(server, actor, deps);
+  registerCreateQuestionTool(server, actor, deps);
+  registerGetQuestionTool(server, actor, deps);
+  registerSubmitContributionTool(server, actor, deps);
+
+  // ══ Lát MCP-1 (issue #163) ═══════════════════════════════════════
+  registerCreateQuestionsBatchTool(server, actor, deps);
+  registerCreateStimulusWithQuestionsTool(server, actor, deps);
+  registerPublishQuestionsTool(server, actor, deps);
+  registerSearchQuestionsTool(server, actor, deps);
+  registerCheckDuplicatesTool(server, actor, deps);
+  registerSearchCurriculumOutcomesTool(server, actor, deps);
 }

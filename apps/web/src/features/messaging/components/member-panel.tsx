@@ -1,3 +1,11 @@
+/**
+ * Panel thành viên của hội thoại nhóm (lát MSG-T4): hai nhóm trình bày theo loại
+ * conversation — teacher/student ở lớp/khoá, admin/member ở nhóm tự do — kèm menu hành
+ * động trên từng thành viên (nhắn riêng, kết bạn, chặn/bỏ chặn, xem hồ sơ, gỡ khỏi
+ * nhóm tự do) và sheet hồ sơ rút gọn. Gói `useMemberProfile` giữ thành viên đang xem
+ * để menu trong panel và menu trên avatar dòng tin cùng mở một sheet.
+ */
+
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Ban, Check, Info, MessageCircle, Trash, UserPlus, X } from 'lucide-react';
@@ -9,7 +17,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@giaokhoa/ui/components/sheet';
 import { useTranslation } from 'react-i18next';
 import type { ConversationView, MemberPanelContext, MemberPanelEntry } from '../types/types';
-import { CHAT_MENU_CONTENT_CLASS, CHAT_MENU_ITEM_CLASS, initialsOf } from '../utils/utils';
+import { CHAT_MENU_CONTENT_CLASS, CHAT_MENU_ITEM_CLASS, initialsOf, PRESENCE_DOT_CLASS } from '../utils/utils';
 
 /**
  * Panel THÀNH VIÊN + menu trên avatar/tên của khung chat nhóm (lát
@@ -173,6 +181,22 @@ interface MemberActionMenuProps {
  * @param props - Thành viên đích, ngữ cảnh và các sự kiện lên trang/khung chat.
  * @returns Menu thả xuống bọc phần tử kích hoạt được truyền vào.
  */
+/** Tiền tố đường dẫn roster theo ngữ cảnh có cấu trúc (nhóm tự do không có roster). */
+const ROSTER_PATH_PREFIX: Record<'class' | 'course', string> = {
+  class: '/classes',
+  course: '/courses',
+};
+
+/**
+ * Khoá i18n cho nhãn loại ngữ cảnh của panel thành viên: lớp / nhóm con
+ * trong khoá (subgroup) / khoá / nhóm tự do.
+ */
+function memberTypeLabelKey(context: MemberPanelContext): string {
+  if (context.kind === 'class') return 'memberTypeClass';
+  if (context.kind === 'free') return 'memberTypeFree';
+  return context.subgroup ? 'memberTypeGroup' : 'memberTypeCourse';
+}
+
 export function MemberActionMenu({
   entry, myId, context, canManage, hasDirectConversation, children, triggerClassName,
   triggerLabel, onMessageMember, onSendContactRequest, onRespondContactRequest,
@@ -187,12 +211,16 @@ export function MemberActionMenu({
   /** Nhánh cho phép nhắn riêng ngay — xem TSDoc của component; chặn thắng tất cả. */
   const canMessageNow = !blocked && !isSelf
     && (entry.relationship === 'contact' || entry.canDirectMessage || hasDirectConversation);
+  /** Các điều kiện hiển thị mục menu (đặt tên thay vì lặp boolean soup ở JSX). */
+  const canAddContact = !isSelf && !blockedByMe && entry.relationship === 'none'
+    && !entry.canDirectMessage && !hasDirectConversation;
+  const hasIncomingRequest = !isSelf && !blockedByMe && entry.relationship === 'pending_incoming';
+  const hasOutgoingRequest = !isSelf && !blockedByMe && entry.relationship === 'pending_outgoing';
+  const canBlock = !isSelf && !blockedByMe && !blocked;
+  const canUnblock = !isSelf && blockedByMe;
+  const canRemoveFromFreeGroup = canManage && context.kind === 'free' && !isSelf && !entry.isCreator;
   /** Đường về màn roster của ngữ cảnh — chỉ nhóm cấu trúc mới có. */
-  const rosterHref = context.kind === 'class'
-    ? `/classes/${context.id}`
-    : context.kind === 'course'
-      ? `/courses/${context.id}`
-      : null;
+  const rosterHref = context.kind === 'free' ? null : `${ROSTER_PATH_PREFIX[context.kind]}/${context.id}`;
 
   // Bị chặn hai chiều mà KHÔNG phải do tôi chặn: dòng thành viên
   // không mang menu nào cả — giữ đúng luật "liên hệ đã chặn ẩn
@@ -217,13 +245,13 @@ export function MemberActionMenu({
             {t('directMessageAction')}
           </DropdownMenuItem>
         ) : null}
-        {!isSelf && !blockedByMe && entry.relationship === 'none' && !entry.canDirectMessage && !hasDirectConversation ? (
+        {canAddContact ? (
           <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => onSendContactRequest(entry.userId)}>
             <UserPlus aria-hidden />
             {t('addContact')}
           </DropdownMenuItem>
         ) : null}
-        {!isSelf && !blockedByMe && entry.relationship === 'pending_incoming' ? (
+        {hasIncomingRequest ? (
           <>
             <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => onRespondContactRequest(entry.userId, 'accept')}>
               <Check aria-hidden />
@@ -235,7 +263,7 @@ export function MemberActionMenu({
             </DropdownMenuItem>
           </>
         ) : null}
-        {!isSelf && !blockedByMe && entry.relationship === 'pending_outgoing' ? (
+        {hasOutgoingRequest ? (
           <DropdownMenuItem disabled className={CHAT_MENU_ITEM_CLASS}>
             {t('memberRequestPending')}
           </DropdownMenuItem>
@@ -244,13 +272,13 @@ export function MemberActionMenu({
           <Info aria-hidden />
           {t('memberViewProfile')}
         </DropdownMenuItem>
-        {!isSelf && !blockedByMe && !blocked && onBlockContact ? (
+        {canBlock && onBlockContact ? (
           <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => onBlockContact(entry.userId)}>
             <Ban aria-hidden />
             {t('blockContact')}
           </DropdownMenuItem>
         ) : null}
-        {!isSelf && blockedByMe && onUnblockContact ? (
+        {canUnblock && onUnblockContact ? (
           <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => onUnblockContact(entry.userId)}>
             <Ban aria-hidden />
             {t('unblockContact')}
@@ -261,7 +289,7 @@ export function MemberActionMenu({
             {context.kind === 'class' ? t('memberManageClassRoster') : t('memberManageCourseRoster')}
           </DropdownMenuItem>
         ) : null}
-        {canManage && context.kind === 'free' && !isSelf && !entry.isCreator ? (
+        {canRemoveFromFreeGroup ? (
           <DropdownMenuItem variant="destructive" className={CHAT_MENU_ITEM_CLASS} onClick={() => onRemoveMember(entry.userId)}>
             <Trash aria-hidden />
             {t('memberRemoveFromGroup')}
@@ -309,7 +337,7 @@ export function MemberProfileSheet({ entry, contextName, online, onClose }: Memb
                   <AvatarFallback>{initialsOf(entry.displayName)}</AvatarFallback>
                 </Avatar>
                 {online ? (
-                  <span className="absolute right-0 bottom-0 size-2.5 rounded-full bg-green-500 ring-2 ring-background" />
+                  <span className={`absolute right-0 bottom-0 size-2.5 rounded-full ${PRESENCE_DOT_CLASS.online} ring-2 ring-background`} />
                 ) : null}
               </span>
               <div className="min-w-0">
@@ -394,11 +422,7 @@ export function MemberPanel({
 }: MemberPanelProps) {
   const { t } = useTranslation('app');
   const { context, entries, failed, notice } = bundle;
-  const typeLabel = context.kind === 'class'
-    ? t('memberTypeClass')
-    : context.kind === 'course'
-      ? (context.subgroup ? t('memberTypeGroup') : t('memberTypeCourse'))
-      : t('memberTypeFree');
+  const typeLabel = t(memberTypeLabelKey(context));
   /** Hai nhóm trình bày theo loại conversation (xem TSDoc của component). */
   const primaryRoles: MemberPanelEntry['role'][] = context.kind === 'free' ? ['admin'] : ['teacher'];
   const secondaryRoles: MemberPanelEntry['role'][] = context.kind === 'free' ? ['member'] : ['student'];
@@ -433,7 +457,7 @@ export function MemberPanel({
               <AvatarFallback>{initialsOf(entry.displayName)}</AvatarFallback>
             </Avatar>
             {online ? (
-              <span className="absolute right-0 bottom-0 size-2.5 rounded-full bg-green-500 ring-2 ring-background" />
+              <span className={`absolute right-0 bottom-0 size-2.5 rounded-full ${PRESENCE_DOT_CLASS.online} ring-2 ring-background`} />
             ) : null}
           </span>
           {/*

@@ -1,3 +1,5 @@
+import { MCP_TOOL_REGISTRY } from './mcp-tool-registry';
+
 /**
  * Rate limit tối thiểu của MCP-0 (hồ sơ research Phần 3.3): đếm theo
  * (giáo viên, nhóm tool) trong cửa sổ một giờ, giữ trong tiến trình
@@ -20,15 +22,14 @@ export class McpRateLimiter {
     private readonly limits: Record<McpRateBucket, number> = { read: 300, create: 120, publish: 10 },
   ) {}
 
+  /**
+   * Xô rate-limit của một tool theo đăng ký duy nhất (`MCP_TOOL_REGISTRY`):
+   * publish đổi trạng thái phát hành (draft → ready) nên có xô riêng siết
+   * nhất (hồ sơ 3.3: 10 lần/giờ); mọi tool ghi còn lại dùng xô 'create';
+   * tool không có trong đăng ký — kể cả tên lạ — rơi về xô 'read'.
+   */
   static bucketForTool(toolName: string | undefined): McpRateBucket {
-    // Publish đổi trạng thái phát hành (draft → ready) nên có xô riêng siết nhất (hồ sơ 3.3: 10 lần/giờ). Mọi tool GHI còn lại dùng xô 'create' (submit_contribution gộp nhiều câu trong một call vẫn tính theo lượt gọi, phần số câu do cổng nghiệp vụ QB-4 + idempotency giữ; riêng batch của MCP-1 tính theo SỐ ITEM qua tham số cost ở mount).
-    if (toolName === 'publish_questions') return 'publish';
-    return toolName === 'create_question' ||
-      toolName === 'create_questions_batch' ||
-      toolName === 'create_stimulus_with_questions' ||
-      toolName === 'submit_contribution'
-      ? 'create'
-      : 'read';
+    return (toolName ? MCP_TOOL_REGISTRY[toolName]?.bucket : undefined) ?? 'read';
   }
 
   /**
@@ -37,7 +38,10 @@ export class McpRateLimiter {
   check(userId: string, bucket: McpRateBucket, now = Date.now(), cost = 1): McpRateDecision {
     const key = `${userId}:${bucket}`;
     const limit = this.limits[bucket];
-    const units = Math.max(1, Math.floor(cost) || 1);
+    // Ít nhất 1 đơn vị cho mỗi lượt gọi; cost không phải số hữu hạn
+    // (NaN) thì tính 1 — `Math.max` một mình không chặn được NaN
+    // (`Math.max(1, NaN)` ra NaN, làm hỏng mọi phép so sánh sau đó).
+    const units = Number.isFinite(cost) ? Math.max(1, Math.floor(cost)) : 1;
     // Dọn entry hết hạn trước khi quyết định: Map chỉ còn giữ các khoá
     // đang trong cửa sổ hiệu lực, không phình theo tổng số client từng
     // gọi tới (issue #485). Việc dọn không đổi bất kỳ quyết định nào —

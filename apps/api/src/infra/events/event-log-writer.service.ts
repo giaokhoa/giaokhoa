@@ -13,6 +13,7 @@ export interface OutboxRowLike {
   occurredAt: Date;
 }
 
+/** Mức context của khoá học trong bảng `context` của Moodle (`CONTEXT_COURSE = 50`) — dùng để tra context khoá học từ courseId. */
 const COURSE_CONTEXT_LEVEL = 50;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -102,7 +103,8 @@ export class EventLogWriter {
         outboxSeq: row.seq,
       };
       // Cột `payload` jsonb đi qua serialize tường minh kèm `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db` (driver `pg` hiểu MẢNG cấp cao nhất là mảng PostgreSQL nếu ghi thẳng).
-      await (await this.handle())
+      const db = await this.handle();
+      await db
         .insertInto('event_log')
         .values({
           event_type: row.type,
@@ -130,7 +132,8 @@ export class EventLogWriter {
   /** Tra cứu context khoá học chỉ đọc; context vắng thì cột để null (payload vẫn mang courseId). */
   private async courseContextId(courseId: string): Promise<string | null> {
     if (!UUID_RE.test(courseId)) return null;
-    const rows = await (await this.handle())
+    const db = await this.handle();
+    const rows = await db
       .selectFrom('context')
       .select('id')
       .where('context_level', '=', COURSE_CONTEXT_LEVEL)

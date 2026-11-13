@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
 import { CohortMaterializationSurface } from '@giaokhoa/enrol';
@@ -54,6 +54,7 @@ export type EnrolMethod = (typeof ENROL_METHODS)[number];
  * (chỉ rút khi user không còn dữ liệu liên quan — bài nộp/điểm — theo truy vấn dữ liệu liên quan dùng chung ở tầng dữ liệu, khớp hành vi Moodle).
  */
 export class EnrolService implements OnModuleInit {
+  private readonly logger = new Logger(EnrolService.name);
   /**
    * Bề mặt vật chất hoá cohort dùng chung (`@giaokhoa/enrol`): funnel ghi danh lõi, đường gỡ ghi danh lõi và hai điểm vào vật chất hoá theo sự kiện thành viên cohort sống ở tầng dữ liệu dùng chung để tiến trình khác (worker) gọi được cùng một định nghĩa. Service này dựng bề mặt bằng tay cầm Kysely đã định tuyến của API (D5 #657 — cùng handle `routedKysely` mà repository enrol dùng), bộ điều hợp outbox Kysely của API (xem dưới) và cổng ngữ cảnh platform của API, rồi dịch lỗi của bề mặt (mang mã kỹ thuật) về exception HTTP mang cùng mã và thông điệp như trước khi trích xuất. Phần thuộc về tiến trình API ở lại đây: kiểm capability của người thao tác, tin nhắn chào mừng, và các đường quản trị instance.
    */
@@ -289,9 +290,9 @@ export class EnrolService implements OnModuleInit {
   }
 
   // --- ghi danh / huỷ ghi danh ----------------------------------------------------------
-  /** Đường ghi danh lõi (cũng dùng cho đồng bộ cohort). Cấp role của instance tại context khoá học qua facade Access. */
   /**
    * Ghi danh nội bộ không kiểm capability (dùng cho cohort sync và thanh toán đã xác nhận).
+   * Đường ghi danh lõi (cũng dùng cho đồng bộ cohort): cấp role của instance tại context khoá học qua facade Access.
    *
    * Toàn bộ funnel sống ở bề mặt vật chất hoá dùng chung
    * (`CohortMaterializationSurface.enrolUserInternal` của
@@ -357,8 +358,10 @@ export class EnrolService implements OnModuleInit {
         // Sự kiện gắn khoá rõ ràng: áp ghi đè tắt tiếng theo khoá (NB-4).
         courseId: instance.courseId,
       });
-    } catch {
-      /* Tin nhắn chào mừng không được phép làm hỏng ghi danh đã thành công. */
+    } catch (err) {
+      // Tin nhắn chào mừng không được phép làm hỏng ghi danh đã thành công —
+      // nhưng lỗi gửi cũng không được chìm im lặng: ghi vết để vận hành thấy khi provider mail/notification hỏng kéo dài.
+      this.logger.warn(`Failed to send welcome message (instance ${instance.id}, user ${userId}): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -411,7 +414,12 @@ export class EnrolService implements OnModuleInit {
     }
     const ue = await this.enrolUserInternal(instance, userId, userId);
     if (matchedGroup) {
-      await this.groups.addMemberInternal(matchedGroup.id, userId, 'enrol_self', instance.id).catch(() => undefined);
+      // Xếp nhóm theo khoá là hiệu ứng phụ của tự ghi danh: xếp nhóm lỗi
+      // không làm hỏng ghi danh đã thành công — nhưng phải ghi vết để
+      // vận hành thấy user ghi danh xong mà lặng lẽ không vào nhóm.
+      await this.groups.addMemberInternal(matchedGroup.id, userId, 'enrol_self', instance.id).catch((err) => {
+        this.logger.warn(`Failed to add self-enrolled user ${userId} to group ${matchedGroup.id} (instance ${instance.id}): ${err instanceof Error ? err.message : String(err)}`);
+      });
     }
     return ue;
   }
@@ -437,9 +445,9 @@ export class EnrolService implements OnModuleInit {
     return this.unenrolInternal(instance, userId, userId);
   }
 
-  /** Kích hoạt ghi danh sau thanh toán thành công — chỉ PaymentsModule gọi sau webhook đã xác thực/idempotent. */
   /**
-   * Kích hoạt ghi danh sau khi thanh toán PayPal được xác nhận.
+   * Kích hoạt ghi danh sau khi thanh toán SePay/VietQR được xác nhận — chỉ PaymentsModule gọi
+   * sau webhook đã xác thực/idempotent (PaymentsService.handleWebhook + verifyPaymentAgainstServerTarget).
    */
   async activatePaidEnrol(instanceId: string, userId: string): Promise<UserEnrolmentRow> {
     const instance = await this.getInstance(instanceId);
@@ -507,16 +515,13 @@ export class EnrolService implements OnModuleInit {
   }
 
   /**
-   * Unenrol: gỡ gán role do ghi danh cấp và phát
+   * Rút ghi danh (kiểm capability): gỡ gán role do ghi danh cấp và phát
    * user_unenrolled. Dòng UE bị rút MỀM (status=2) khi user
    * có dữ liệu liên quan (completion/điểm) trong khoá học — quyết
    * định theo truy vấn dữ liệu liên quan dùng chung ở tầng dữ
    * liệu; khi không có dữ liệu thì dòng bị xoá cứng, đúng sự phân
    * chia của Moodle giữa dữ liệu tham gia hiển thị (được giữ) và
    * tham gia vô hình (bị dọn).
-   */
-  /**
-   * Rút ghi danh (kiểm capability).
    */
   async unenrolUser(actorId: string, instanceId: string, userId: string): Promise<{ withdrawn: boolean }> {
     const instance = await this.getInstance(instanceId);
@@ -541,12 +546,10 @@ export class EnrolService implements OnModuleInit {
 
   // --- truy vấn ---------------------------------------------------------------------
   /**
+   * User có ghi danh đang hiệu lực và trong cửa sổ thời gian hay không.
    * Kiểm tra enrol THE (is_enrolled của Moodle): chỉ ghi danh, không bao giờ là capability.
    * onlyActive còn yêu cầu status=ACTIVE và thời điểm hiện tại trong
    * [timeStart, timeEnd]. Một bản ghi ở BẤT KỲ instance đang bật nào của khoá học đều tính.
-   */
-  /**
-   * User có ghi danh đang hiệu lực và trong cửa sổ thời gian hay không.
    */
   async isEnrolled(courseId: string, userId: string, opts?: { onlyActive?: boolean; capability?: string }): Promise<boolean> {
     const instances = await this.repo.listInstances(courseId);
@@ -612,9 +615,9 @@ export class EnrolService implements OnModuleInit {
     return this.repo.getUserEnrolment(instanceId, userId);
   }
 
-  /** Quét hết hạn (cùng logic processor enrol-expiry của worker chạy trên schema dùng chung). Trả các id đã chuyển. */
   /**
    * Xử lý các ghi danh quá hạn (worker enrol-expiry gọi): đình chỉ/rút theo cấu hình instance.
+   * Quét hết hạn (cùng logic processor enrol-expiry của worker chạy trên schema dùng chung). Trả các id đã chuyển.
    */
   async expireEnrolments(now = new Date()): Promise<string[]> {
     const expired = await this.repo.listExpiredActive(now);

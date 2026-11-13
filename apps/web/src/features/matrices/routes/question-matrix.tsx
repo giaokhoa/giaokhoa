@@ -1,5 +1,12 @@
+/**
+ * Màn tạo/sửa ma trận trong bank ma trận cá nhân của giáo viên: `MatrixNewPage` tạo ma trận mới, `MatrixEditPage` sửa thông tin chung, thêm/xoá ô và xem khả dụng kho câu theo ô.
+ * Dữ liệu vào qua các queryOptions của `queries/matrix` (chi tiết ma trận là query chính; cây chương trình và khả dụng là query phụ), thao tác ghi qua các đột biến cùng module, thành công thì invalidate để trang nạp lại trạng thái mới.
+ * Mục bản đặc tả ở cuối trang sửa chỉ trình bày view model do API suy ra từ các ô của ma trận và xuất file; không có thao tác nhập/sửa đặc tả.
+ */
+
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { SELECT_CLASS } from '#utils/form-classes';
+import { useNavigate, useParams } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Checkbox } from '@giaokhoa/ui/components/checkbox';
@@ -12,9 +19,12 @@ import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { downloadMatrixSpecification } from '../api/matrix';
+import { NoPersonalBankPage } from '../components/no-personal-bank-page';
+import { useAutoSelectCurriculum } from '../hooks/use-auto-select-curriculum';
+import { firstCourseId, levelLabelKey, qtypeLabelKey } from '../utils/matrix-helpers';
 import { useAddMatrixCell, useCreateMatrix, useCurriculaBySubject, useCurriculumTree, useDeleteMatrixCell, useMatrixAvailability, useMatrixBanks, useMatrixDetail, useMatrixSpecification, useUpdateMatrix } from '../queries/matrix';
 import { useCurriculumSubjects } from '#lib/curriculum';
-import type { SpecificationOutcomeLite } from '../types/matrix';
+import type { MatrixStatus, SpecificationOutcomeLite } from '../types/matrix';
 import { useCourseList } from '#features/courses/queries/course-new';
 import { usePermissions } from '#lib/permissions';
 import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiReason } from '#features/questions/utils/shared';
@@ -24,12 +34,11 @@ import type { CurriculumTreeNode } from '#features/questions/utils/shared';
  * Màn tạo/sửa MA TRẬN trong ngân hàng ma trận (MB-1, issue #111) — chuẩn §9: tạo mới và sửa là MÀN RIÊNG, danh sách (collapse "Ma trận của tôi" ở trang ngân hàng) chỉ có nút Thêm mới và Sửa/Xoá tại dòng. Ma trận tạo từ đây luôn thuộc bank ma trận CÁ NHÂN của giáo viên
  * (bank_id gửi kèm; API gác quyền phụ trách tại chính bank đó).
  *
- * Flow tổng thể của file: route module prefetch dữ liệu nền qua các queryOptions của `lib/matrix-data.ts` → trang đọc lại bằng cùng khoá qua hooks (chi tiết ma trận là query chính; cây chương trình + khả dụng kho câu là query phụ) → form sửa gửi qua các mutation của cùng module dữ liệu, mutation thành công thì invalidate để trang nạp lại trạng thái mới.
+ * Flow tổng thể của file: route module prefetch dữ liệu nền qua các queryOptions của `features/matrices/queries/matrix` → trang đọc lại bằng cùng khoá qua hooks (chi tiết ma trận là query chính; cây chương trình + khả dụng kho câu là query phụ) → form sửa gửi qua các mutation của cùng module dữ liệu, mutation thành công thì invalidate để trang nạp lại trạng thái mới.
  *
  * Mục BẢN ĐẶC TẢ (SPEC-1, issue #233) ở cuối trang sửa: dữ liệu vào là view model đặc tả do API SUY RA từ các ô của ma trận → trang chỉ trình bày (bảng phẳng một dòng = một ô, cột YCCĐ lấy từ ĐVK của ô) và xuất file qua endpoint export sẵn có; trang KHÔNG có thao tác nhập/sửa đặc tả vì đặc tả không phải dữ liệu nhập riêng.
  */
 
-const SELECT_CLASS = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
 
 /** Bung cây chương trình thành danh sách ĐƠN VỊ KIẾN THỨC (node) cho bộ chọn ô ma trận — ô neo ĐVK, không neo YCCĐ (issue #249). Nhãn kèm thụt cấp theo độ sâu để phân biệt chủ đề/bài. */
 function flattenNodes(nodes: CurriculumTreeNode[], depth = 0): { id: string; title: string }[] {
@@ -59,6 +68,11 @@ function outcomeCodePrefix(outcome: SpecificationOutcomeLite): string | null {
   return outcome.code;
 }
 
+/** Trạng thái ma trận từ giá trị select — chỉ ba giá trị hợp đồng; giá trị lạ rơi về nháp. */
+function matrixStatusOf(value: string): MatrixStatus {
+  return value === 'ready' || value === 'hidden' ? value : 'draft';
+}
+
 /** Màn tạo ma trận mới trong bank ma trận cá nhân (route /matrices/new). */
 export function MatrixNewPage() {
   const { t } = useTranslation('app');
@@ -78,7 +92,7 @@ export function MatrixNewPage() {
   // Danh sách khoá phải về trước mới gọi, để tránh lượt gọi không kèm
   // khoá rồi nhận lỗi trước khi khoá kịp về.
   const coursesQuery = useCourseList();
-  const forCourseId = coursesQuery.data?.[0]?.id;
+  const forCourseId = firstCourseId(coursesQuery.data);
   const subjects = useCurriculumSubjects(canLoad && coursesQuery.data !== undefined, forCourseId).data ?? [];
   const [name, setName] = useState('');
   const [subjectId, setSubjectId] = useState('');
@@ -88,24 +102,12 @@ export function MatrixNewPage() {
   const [includeAdvanced, setIncludeAdvanced] = useState(false);
   const [totalScore, setTotalScore] = useState('10');
   const [isTemplate, setIsTemplate] = useState(false);
-  const [status, setStatus] = useState('draft');
+  const [status, setStatus] = useState<MatrixStatus>('draft');
   const [message, setMessage] = useState<string | null>(null);
 
   // Đổi môn: giữ lựa chọn chương trình nếu còn thuộc môn mới, không
-  // thì tự chọn chương trình đầu (đúng nhịp effect thủ công trước đây).
-  const [previousCurriculumScope, setPreviousCurriculumScope] = useState({
-    subjectId: '',
-    curricula: undefined as typeof curriculaQuery.data,
-  });
-  if (previousCurriculumScope.subjectId !== subjectId || previousCurriculumScope.curricula !== curriculaQuery.data) {
-    setPreviousCurriculumScope({ subjectId, curricula: curriculaQuery.data });
-    if (!subjectId) {
-      setCurriculumId('');
-    } else if (curriculaQuery.data) {
-      const rows = curriculaQuery.data;
-      setCurriculumId((prev) => (rows.some((c) => c.id === prev) ? prev : (rows[0]?.id ?? '')));
-    }
-  }
+  // thì tự chọn chương trình đầu (xem `useAutoSelectCurriculum`).
+  useAutoSelectCurriculum({ subjectId, curricula: curriculaQuery.data, setCurriculumId });
 
   const createMutation = useCreateMatrix();
 
@@ -132,22 +134,7 @@ export function MatrixNewPage() {
     );
   }
   if (!perms.canUseQuestionBank || !personalBankId) {
-    return (
-      <PageShell width="medium">
-        <PageHeader title={t('matrixCreate')} />
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('myMatrixBank')}</CardTitle>
-            <CardDescription>{t('matrixNoPersonalBank')}</CardDescription>
-          </CardHeader>
-        </Card>
-        <p>
-          <Link to="/matrices" className="text-sm underline">
-            {t('backToQuestionBankList')}
-          </Link>
-        </p>
-      </PageShell>
-    );
+    return <NoPersonalBankPage title={t('matrixCreate')} />;
   }
 
   return (
@@ -206,7 +193,7 @@ export function MatrixNewPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="matrix-status">{t('matrixStatus')}</FieldLabel>
-                <select id="matrix-status" className={SELECT_CLASS} value={status} onChange={(e) => setStatus(e.target.value)}>
+                <select id="matrix-status" className={SELECT_CLASS} value={status} onChange={(e) => setStatus(matrixStatusOf(e.target.value))}>
                   <option value="draft">{t('matrixStatusDraft')}</option>
                   <option value="ready">{t('matrixStatusReady')}</option>
                 </select>
@@ -249,7 +236,7 @@ export function MatrixEditPage() {
   const availability = useMatrixAvailability(matrixId, canLoad && !!matrix).data ?? null;
   const [message, setMessage] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [status, setStatus] = useState('draft');
+  const [status, setStatus] = useState<MatrixStatus>('draft');
   const [isTemplate, setIsTemplate] = useState(false);
   // Checkbox Vận dụng cao (I-3, issue #233): màn tạo đã có checkbox
   // này từ trước; màn sửa bổ sung cùng một điều khiển thay cho mọi
@@ -411,7 +398,7 @@ export function MatrixEditPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="edit-matrix-status">{t('matrixStatus')}</FieldLabel>
-                <select id="edit-matrix-status" className={SELECT_CLASS} value={status} onChange={(e) => setStatus(e.target.value)}>
+                <select id="edit-matrix-status" className={SELECT_CLASS} value={status} onChange={(e) => setStatus(matrixStatusOf(e.target.value))}>
                   <option value="draft">{t('matrixStatusDraft')}</option>
                   <option value="ready">{t('matrixStatusReady')}</option>
                   <option value="hidden">{t('matrixStatusHidden')}</option>
@@ -457,8 +444,8 @@ export function MatrixEditPage() {
                     <li key={cell.id} className="flex flex-wrap items-center gap-2">
                       <span className="min-w-0 flex-1 text-sm">
                         {nodeLabel(cell.curriculumNodeId)} ·{' '}
-                        {t(LEVEL_LABEL_KEYS[cell.cognitiveLevel as (typeof COGNITIVE_LEVELS)[number]] ?? 'levelBiet')} ·{' '}
-                        {t(QTYPE_LABEL_KEYS[cell.qtype as (typeof QTYPES)[number]] ?? 'qtypeMultichoice')} ·{' '}
+                        {t(levelLabelKey(cell.cognitiveLevel))} ·{' '}
+                        {t(qtypeLabelKey(cell.qtype))} ·{' '}
                         {cell.questionCount} × {cell.cellScore}
                         {av ? (
                           <span className="block text-xs text-muted-foreground">
@@ -618,10 +605,10 @@ export function MatrixEditPage() {
                                     )}
                                   </td>
                                   <td className="p-2">
-                                    {t(LEVEL_LABEL_KEYS[cell.cognitiveLevel as (typeof COGNITIVE_LEVELS)[number]] ?? 'levelBiet')}
+                                    {t(levelLabelKey(cell.cognitiveLevel))}
                                   </td>
                                   <td className="p-2">
-                                    {t(QTYPE_LABEL_KEYS[cell.qtype as (typeof QTYPES)[number]] ?? 'qtypeMultichoice')}
+                                    {t(qtypeLabelKey(cell.qtype))}
                                   </td>
                                   {/* Số câu theo đúng cách đếm của bản xuất: câu Đúng–Sai chùm tính 4 ý. */}
                                   <td className="p-2">{cell.qtype === 'truefalse' ? cell.questionCount * 4 : cell.questionCount}</td>

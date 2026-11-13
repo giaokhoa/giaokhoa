@@ -27,6 +27,40 @@ import { MathEditorPanel, type MathNodeKind } from './math-editor-panel.js';
 import { validateMathLatex } from './math.js';
 
 /**
+ * Trình soạn thảo rich text dùng chung cho mọi nơi cần nhập nội dung
+ * giàu trong Giáo khoa, dựng trên Tiptap với bộ extension của hợp đồng
+ * (`plainTextExtensions`); các editor chuyên biệt (trắc nghiệm,
+ * đúng/sai chùm) thay bộ extension qua prop `extensions` và dùng lại
+ * toàn bộ vỏ này.
+ *
+ * Flow tổng thể của file này (tài liệu vào là `RichTextDocument` của
+ * hợp đồng hoặc tài liệu theo hình dạng của bộ extension riêng, tài
+ * liệu ra là tài liệu JSON qua `onChange` ở dạng đem-lưu):
+ *
+ * 1. Tài liệu nạp vào được bảo đảm có paragraph viết tiếp ở cuối khi
+ *    kết thúc bằng block nguyên tử (`ensureTerminalContinuation`), rồi
+ *    dựng thành editor Tiptap (`useEditor`) với lịch sử hoàn tác/làm
+ *    lại, xử lý dán/kéo-thả ảnh qua `onRequestImage` và mở panel công
+ *    thức khi nhấp đúp vào một công thức có sẵn.
+ * 2. Người soạn tương tác qua MỘT thanh công cụ duy nhất cho editor
+ *    đang active: toolbar chỉ hiện khi editor được focus, portal vào
+ *    slot ở header trang (`#editor-toolbar-slot`) nếu trang có slot,
+ *    không có thì neo sticky ngay trên editor; mất focus thì ẩn.
+ *    Toolbar lo bật/tắt mark, danh sách, hoàn tác/làm lại, mở panel
+ *    công thức (`MathEditorPanel`) và chèn ảnh.
+ * 3. Mỗi thay đổi phát qua `onChange` ở dạng đem-lưu
+ *    (`contentForSave`: dọn paragraph tiếp nối rỗng ở cuối tài liệu);
+ *    khi `value` do cha quản lý đổi từ bên ngoài, nội dung được đồng
+ *    bộ vào editor chỉ khi thật khác nội dung hiện tại để tránh vòng
+ *    lặp con trỏ.
+ *
+ * Bất biến: mọi nút/định dạng phía soạn đều có đường hiển thị tương
+ * ứng ở phía xem (`RichTextView`); tài liệu phát ra luôn đúng lát hợp
+ * đồng (hoặc đúng hình dạng của bộ extension riêng khi editor chuyên
+ * biệt truyền `extensions`).
+ */
+
+/**
  * Tài liệu rỗng dùng khi chưa có nội dung: một `doc` chứa đúng một paragraph rỗng — khớp `emptyRichTextDocument` của `@giaokhoa/contracts`.
  */
 const EMPTY_DOCUMENT: RichTextDocument = {

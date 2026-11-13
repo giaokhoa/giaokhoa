@@ -1,6 +1,7 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import type { AssignAnnotationView, AssignSubmissionFileView } from '@giaokhoa/contracts';
 import { useTranslation } from 'react-i18next';
+import { ASSIGN_KIND_LABEL_KEYS } from '../utils/shared';
 
 export const ANNOTATION_KINDS = ['correct', 'incorrect', 'note', 'highlight', 'frame', 'draw'] as const;
 export type AnnotationKind = (typeof ANNOTATION_KINDS)[number];
@@ -96,7 +97,7 @@ export function SubmissionFileView({
           <ul className="mt-1 list-disc pl-5 text-sm">
             {own.map((a) => (
               <li key={a.id}>
-                {t(`assignKind_${a.kind}`)}
+                {t(ASSIGN_KIND_LABEL_KEYS[a.kind])}
                 {a.text ? `: ${a.text}` : ''}
               </li>
             ))}
@@ -141,7 +142,7 @@ export function SubmissionFileView({
           return (
             <span
               key={a.id}
-              title={a.text ?? t(`assignKind_${a.kind}`)}
+              title={a.text ?? t(ASSIGN_KIND_LABEL_KEYS[a.kind])}
               className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xs font-bold ${mark.className} ${sized ? 'h-[10%] w-[16%] rounded-sm' : 'h-6 w-6'}`}
               style={{ left: `${a.x}%`, top: `${a.y}%` }}
             >

@@ -1,5 +1,4 @@
-import { Extension, mergeAttributes, Node, type JSONContent } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { mergeAttributes, Node, type JSONContent } from '@tiptap/core';
 import {
   TRUE_FALSE_STATEMENT_COUNT,
   getTrueFalseStatements,
@@ -7,6 +6,15 @@ import {
   type RichTextDocument,
 } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
+import {
+  completeItemList,
+  createEmptyItemListDocument,
+  createItemUniqueIdExtension,
+  emptyParagraph,
+  itemFromBlocks,
+  newItemId,
+  splitItemListDocument,
+} from './item-list.js';
 
 /**
  * Tài liệu phía soạn của câu đúng/sai chùm (TF-A) — port theo mô hình
@@ -70,25 +78,17 @@ export interface TrueFalseDocumentJson {
 }
 
 /**
- * Sinh định danh cho một mệnh đề mới. Cùng kỷ luật với `newChoiceId`:
- * `crypto.randomUUID` của nền tảng; môi trường thiếu API đó thì rơi
- * về bộ đếm + thời gian — id chỉ cần duy nhất và ổn định trong vòng
- * đời của version.
+ * Sinh định danh cho một mệnh đề mới — dùng chung {@link newItemId}
+ * với tiền tố `statement` (xem `item-list.ts`). Cùng kỷ luật với
+ * `newChoiceId`: `crypto.randomUUID` của nền tảng; môi trường thiếu
+ * API đó thì rơi về bộ đếm + thời gian — id chỉ cần duy nhất và ổn
+ * định trong vòng đời của version.
  *
  * @returns Chuỗi định danh mới cho mệnh đề.
  */
-let fallbackIdCounter = 0;
 export function newStatementId(): string {
-  const cryptoRef = globalThis.crypto as Crypto | undefined;
-  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
-    return cryptoRef.randomUUID();
-  }
-  fallbackIdCounter += 1;
-  return `statement-${Date.now().toString(36)}-${fallbackIdCounter}`;
+  return newItemId('statement');
 }
-
-/** Một paragraph rỗng — block đệm chuẩn của tài liệu soạn. */
-const emptyParagraph = (): JSONContent => ({ type: 'paragraph' });
 
 /**
  * Node gốc của tài liệu đúng/sai: thay node `doc` mặc định của Tiptap
@@ -143,40 +143,15 @@ export const Statement = Node.create({
  * `attrs.id`: sau mỗi transaction, statement nào thiếu id (vừa được
  * tạo khi người soạn tách/gộp đoạn, hoặc tài liệu nạp vào chưa có)
  * được gán một id mới bằng `setNodeMarkup` trong một transaction nối
- * tiếp. Cùng cơ chế với `ChoiceUniqueId` của trắc nghiệm: id phải nằm
- * TRONG tài liệu vì đáp án bám theo nó qua mọi thao tác soạn.
+ * tiếp — dùng chung factory `createItemUniqueIdExtension` của
+ * `item-list.ts` với node type `statement`. Cùng cơ chế với
+ * `ChoiceUniqueId` của trắc nghiệm: id phải nằm TRONG tài liệu vì đáp
+ * án bám theo nó qua mọi thao tác soạn.
  */
-export const StatementUniqueId = Extension.create({
+export const StatementUniqueId = createItemUniqueIdExtension({
   name: 'statementUniqueId',
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('statementUniqueId'),
-        appendTransaction: (_transactions, _oldState, newState) => {
-          const missing: { pos: number }[] = [];
-          newState.doc.descendants((node, pos) => {
-            if (node.type.name === STATEMENT_NODE_TYPE && typeof node.attrs.id !== 'string') {
-              missing.push({ pos });
-            }
-            return true;
-          });
-          if (missing.length === 0) {
-            return null;
-          }
-          const tr = newState.tr;
-          // Gán id từ cuối tài liệu ngược về đầu để vị trí đã ghi
-          // không bị lệch bởi các lần setNodeMarkup trước đó.
-          for (const { pos } of [...missing].reverse()) {
-            const node = tr.doc.nodeAt(pos);
-            if (node && node.type.name === STATEMENT_NODE_TYPE) {
-              tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: newStatementId() });
-            }
-          }
-          return tr;
-        },
-      }),
-    ];
-  },
+  itemNodeType: STATEMENT_NODE_TYPE,
+  newId: newStatementId,
 });
 
 /**
@@ -209,18 +184,13 @@ export function splitTrueFalseDocument(content: TrueFalseDocumentJson): {
   stem: JSONContent;
   statements: TrueFalseStatementJson[];
 } {
-  const nodes = content.content ?? [];
-  const listIndex = nodes.findIndex((node) => node.type === STATEMENT_LIST_NODE_TYPE);
-  if (listIndex < 0) {
-    return { stem: content, statements: [] };
-  }
-  const list = nodes[listIndex];
-  return {
-    stem: { ...content, content: nodes.filter((_, index) => index !== listIndex) },
-    statements: (list?.content ?? []).filter(
-      (statement): statement is TrueFalseStatementJson => statement.type === STATEMENT_NODE_TYPE,
-    ),
-  };
+  const { body, items } = splitItemListDocument(content, {
+    listNodeType: STATEMENT_LIST_NODE_TYPE,
+    itemNodeType: STATEMENT_NODE_TYPE,
+    isItem: (statement): statement is TrueFalseStatementJson =>
+      statement.type === STATEMENT_NODE_TYPE,
+  });
+  return { stem: body, statements: items };
 }
 
 /**
@@ -234,22 +204,6 @@ export function getTrueFalseStatementIds(content: TrueFalseDocumentJson): string
 }
 
 /**
- * Dựng một mệnh đề từ nội dung block cho trước.
- *
- * @param id - Định danh của mệnh đề.
- * @param blocks - Các block rich text của nội dung mệnh đề; rỗng thì
- *   đệm một paragraph rỗng để mệnh đề luôn mở soạn được.
- * @returns Node statement hoàn chỉnh cho tài liệu.
- */
-function statementFromBlocks(id: string, blocks: readonly JSONContent[] | undefined): TrueFalseStatementJson {
-  return {
-    type: STATEMENT_NODE_TYPE,
-    attrs: { id },
-    content: blocks && blocks.length > 0 ? [...blocks] : [emptyParagraph()],
-  };
-}
-
-/**
  * Tài liệu đúng/sai rỗng cho một câu mới: một paragraph thân câu +
  * danh sách đúng {@link TRUE_FALSE_STATEMENT_COUNT} mệnh đề rỗng, mỗi
  * mệnh đề có id mới (chưa có đáp án Đ/S — người soạn chọn ở bước sau).
@@ -257,18 +211,12 @@ function statementFromBlocks(id: string, blocks: readonly JSONContent[] | undefi
  * @returns Tài liệu đúng/sai rỗng.
  */
 export function createEmptyTrueFalseDocument(): TrueFalseDocumentJson {
-  return {
-    type: 'doc',
-    content: [
-      emptyParagraph(),
-      {
-        type: STATEMENT_LIST_NODE_TYPE,
-        content: Array.from({ length: TRUE_FALSE_STATEMENT_COUNT }, () =>
-          statementFromBlocks(newStatementId(), undefined),
-        ),
-      },
-    ],
-  };
+  return createEmptyItemListDocument({
+    listNodeType: STATEMENT_LIST_NODE_TYPE,
+    itemNodeType: STATEMENT_NODE_TYPE,
+    itemCount: TRUE_FALSE_STATEMENT_COUNT,
+    newId: newStatementId,
+  });
 }
 
 /**
@@ -289,12 +237,17 @@ export function composeTrueFalseDocument(
 ): TrueFalseDocumentJson {
   const source = (questionText?.content ?? []) as JSONContent[];
   const { stem, statements } = splitTrueFalseDocument({ type: 'doc', content: source });
-  const normalised = statements
-    .slice(0, TRUE_FALSE_STATEMENT_COUNT)
-    .map((statement) => statementFromBlocks(statement.attrs.id, statement.content));
-  while (normalised.length < TRUE_FALSE_STATEMENT_COUNT) {
-    normalised.push(statementFromBlocks(newStatementId(), undefined));
-  }
+  const normalised = completeItemList(
+    statements.map((statement) =>
+      itemFromBlocks(
+        STATEMENT_NODE_TYPE,
+        statement.attrs.id,
+        statement.content,
+      ),
+    ),
+    TRUE_FALSE_STATEMENT_COUNT,
+    () => itemFromBlocks(STATEMENT_NODE_TYPE, newStatementId(), undefined),
+  );
   const stemBlocks = stem.content ?? [];
   return {
     type: 'doc',

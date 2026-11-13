@@ -15,12 +15,11 @@ import { sql as kyselySql } from 'kysely';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
 import { ReportsRepository } from './reports';
+import { CONTEXT_LEVEL_SYSTEM } from './dashboard';
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g648_reports';
 
@@ -58,7 +57,7 @@ beforeAll(async () => {
 
   // role_assignments.context_id có khoá ngoại tới bảng context:
   // gieo một context hệ thống tối thiểu trước khi gán vai.
-  await db.insertInto('context').values({ id: CONTEXT_ID, context_level: 10, depth: 1, path: '/1' }).execute();
+  await db.insertInto('context').values({ id: CONTEXT_ID, context_level: CONTEXT_LEVEL_SYSTEM, depth: 1, path: '/1' }).execute();
   await db.insertInto('role').values([
     { id: ROLE_TEACHER, short_name: 'teacher' },
     { id: ROLE_MANAGER, short_name: 'manager' },

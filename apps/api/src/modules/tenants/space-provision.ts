@@ -83,20 +83,12 @@ async function main(): Promise<void> {
       databasePassword: optional(args, 'database-password'),
       actorId: required(args, 'actor-id'),
     });
+    // Spread toàn bộ kết quả thay cho liệt kê tay từng trường: thêm trường vào `SpaceProvisionResult` thì đầu ra
+    // tự có trường đó, không phải sửa hai nơi. `inviteExpiresAt` chuyển tường minh sang chuỗi ISO (hoặc `null`)
+    // để giữ đúng hình dạng đầu ra như trước.
     console.log(`PROVISION_RESULT ${JSON.stringify({
-      slug: result.slug,
-      spaceId: result.spaceId,
-      databaseName: result.databaseName,
-      connectionRole: result.connectionRole,
-      secretEnvVar: result.secretEnvVar,
-      tenantId: result.tenantId,
-      adminUserId: result.adminUserId,
-      inviteToken: result.inviteToken,
+      ...result,
       inviteExpiresAt: result.inviteExpiresAt?.toISOString() ?? null,
-      passwordWasGenerated: result.passwordWasGenerated,
-      generatedPassword: result.generatedPassword,
-      status: result.status,
-      steps: result.steps,
     })}`);
     if (result.status === 'active') {
       console.log(`Next operator step (NOT automated): add ${result.secretEnvVar} (the centre database URL) to the deployment environment, otherwise the app tier cannot resolve this centre.`);

@@ -14,7 +14,7 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
-import type { Insertable, Updateable } from 'kysely';
+import type {InsertObject, UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
@@ -175,8 +175,8 @@ const CALENDAR_EXPORT_TOKEN_COLUMNS = [
  * (snake_case), LOẠI mọi trường mang `undefined`: trường vắng mặt
  * phải để default của database quyết định, không được biên dịch thành tham số `null` (quy tắc T-4 trong sổ tay của package).
  */
-function calendarEventInsertValues(values: NewCalendarEvent): Insertable<CentreDB['calendar_events']> {
-  const row: Insertable<CentreDB['calendar_events']> = {
+function calendarEventInsertValues(values: NewCalendarEvent): InsertObject<CentreDB, 'calendar_events'> {
+  const row: InsertObject<CentreDB, 'calendar_events'> = {
     name: values.name,
     time_start: values.timeStart,
   };
@@ -207,8 +207,8 @@ function calendarEventInsertValues(values: NewCalendarEvent): Insertable<CentreD
  * (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa
  * trường nào thì chỉ trường đó đổi (quy tắc T-4).
  */
-function calendarEventUpdateSet(patch: Partial<CalendarEventRow>): Updateable<CentreDB['calendar_events']> {
-  const set: Updateable<CentreDB['calendar_events']> = {};
+function calendarEventUpdateSet(patch: Partial<CalendarEventRow>): UpdateObject<CentreDB, 'calendar_events'> {
+  const set: UpdateObject<CentreDB, 'calendar_events'> = {};
   if (patch.id !== undefined) set.id = patch.id;
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
@@ -237,8 +237,8 @@ function calendarEventUpdateSet(patch: Partial<CalendarEventRow>): Updateable<Ce
  */
 function calendarSubscriptionInsertValues(
   values: NewCalendarSubscription,
-): Insertable<CentreDB['calendar_subscriptions']> {
-  const row: Insertable<CentreDB['calendar_subscriptions']> = { name: values.name };
+): InsertObject<CentreDB, 'calendar_subscriptions'> {
+  const row: InsertObject<CentreDB, 'calendar_subscriptions'> = { name: values.name };
   if (values.id !== undefined) row.id = values.id;
   if (values.url !== undefined) row.url = values.url;
   if (values.icsData !== undefined) row.ics_data = values.icsData;
@@ -273,12 +273,11 @@ export class CalendarRepository {
 
   /** Chèn sự kiện. */
   async insertEvent(values: NewCalendarEvent, db: RepoDb = this.db()): Promise<CalendarEventRow> {
-    const rows = await db
+    return db
       .insertInto('calendar_events')
       .values(calendarEventInsertValues(values))
       .returning(CALENDAR_EVENT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy sự kiện theo id. */
@@ -351,12 +350,11 @@ export class CalendarRepository {
     values: NewCalendarSubscription,
     db: RepoDb = this.db(),
   ): Promise<CalendarSubscriptionRow> {
-    const rows = await db
+    return db
       .insertInto('calendar_subscriptions')
       .values(calendarSubscriptionInsertValues(values))
       .returning(CALENDAR_SUBSCRIPTION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy subscription theo id. */
@@ -414,15 +412,14 @@ export class CalendarRepository {
    * Tạo mới hoặc thay thế token xuất lịch của user (một user một token): ghi đè hash cũ khiến URL xuất cũ chết ngay khi đổi token, và đặt lại `last_access` về null tường minh vì token mới chưa từng được dùng.
    */
   async upsertExportToken(userId: string, tokenHash: string, db: RepoDb = this.db()): Promise<CalendarExportTokenRow> {
-    const rows = await db
+    return db
       .insertInto('calendar_export_tokens')
       .values({ user_id: userId, token_hash: tokenHash })
       .onConflict((oc) =>
         oc.column('user_id').doUpdateSet({ token_hash: tokenHash, updated_at: new Date(), last_access: null }),
       )
       .returning(CALENDAR_EXPORT_TOKEN_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /**

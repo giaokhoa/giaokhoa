@@ -37,9 +37,15 @@ export function OutcomeForm({ nodeId, initial, backTo }: { nodeId: string; initi
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    // Ô `type="number"` để trống cho Number('') === 0 nên kiểm tra rỗng/NaN trước khi gửi, thay vì gửi 0 lặng lẽ.
+    const positionValue = Number(position);
+    if (position.trim() === '' || !Number.isFinite(positionValue)) {
+      setError(t('curriculumInvalidNumber'));
+      return;
+    }
     const payload = {
       content,
-      position: Number(position),
+      position: positionValue,
       sourceKind,
       sourceRef: sourceRef === '' ? null : sourceRef,
       derivedFromId: derivedFromId === '' ? null : derivedFromId,

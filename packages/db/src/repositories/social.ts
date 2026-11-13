@@ -7,7 +7,7 @@
  *
  * Lưu ý giao dịch: không service nào của cụm này mở giao dịch qua repository (kiểm kê ở thân PR của issue #647) — phương thức `transaction` vẫn có mặt theo khuôn chung để phía gọi tương lai ghép thao tác khi cần, và mọi phương thức nhận handle tuỳ chọn làm tham số cuối như các repository đã chuyển đổi khác.
  */
-import type { Insertable } from 'kysely';
+import type {InsertObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
@@ -182,6 +182,9 @@ const TAG_COLLECTION_COLUMNS = [
   'custom_url as customUrl',
 ] as const;
 
+/** Tên bộ sưu tập thẻ mặc định (S21): cùng một chuỗi dùng cả khi tìm và khi tạo mới trong `ensureDefaultCollection`. */
+const DEFAULT_COLLECTION_NAME = 'Default collection';
+
 /** Danh sách cột tường minh có bí danh camelCase cho bảng thẻ. */
 const TAG_COLUMNS = [
   'id',
@@ -255,8 +258,8 @@ const NOTE_COLUMNS = [
 ] as const;
 
 /** Ánh xạ dữ kiện ghi thẻ (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function tagInsertValues(values: NewTag): Insertable<CentreDB['tag']> {
-  const row: Insertable<CentreDB['tag']> = { name: values.name, raw_name: values.rawName };
+function tagInsertValues(values: NewTag): InsertObject<CentreDB, 'tag'> {
+  const row: InsertObject<CentreDB, 'tag'> = { name: values.name, raw_name: values.rawName };
   if (values.id !== undefined) row.id = values.id;
   if (values.userId !== undefined) row.user_id = values.userId;
   if (values.tagCollId !== undefined) row.tag_coll_id = values.tagCollId;
@@ -267,8 +270,8 @@ function tagInsertValues(values: NewTag): Insertable<CentreDB['tag']> {
 }
 
 /** Ánh xạ dữ kiện gắn thẻ (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function tagInstanceInsertValues(values: NewTagInstance): Insertable<CentreDB['tag_instance']> {
-  const row: Insertable<CentreDB['tag_instance']> = {
+function tagInstanceInsertValues(values: NewTagInstance): InsertObject<CentreDB, 'tag_instance'> {
+  const row: InsertObject<CentreDB, 'tag_instance'> = {
     tag_id: values.tagId,
     component: values.component,
     item_type: values.itemType,
@@ -284,8 +287,8 @@ function tagInstanceInsertValues(values: NewTagInstance): Insertable<CentreDB['t
 }
 
 /** Ánh xạ dữ kiện ghi bình luận (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function commentInsertValues(values: NewComment): Insertable<CentreDB['comments']> {
-  const row: Insertable<CentreDB['comments']> = {
+function commentInsertValues(values: NewComment): InsertObject<CentreDB, 'comments'> {
+  const row: InsertObject<CentreDB, 'comments'> = {
     context_id: values.contextId,
     component: values.component,
     comment_area: values.commentArea,
@@ -301,8 +304,8 @@ function commentInsertValues(values: NewComment): Insertable<CentreDB['comments'
 }
 
 /** Ánh xạ dữ kiện ghi đánh giá (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function ratingInsertValues(values: NewRating): Insertable<CentreDB['rating']> {
-  const row: Insertable<CentreDB['rating']> = {
+function ratingInsertValues(values: NewRating): InsertObject<CentreDB, 'rating'> {
+  const row: InsertObject<CentreDB, 'rating'> = {
     context_id: values.contextId,
     component: values.component,
     rating_area: values.ratingArea,
@@ -318,8 +321,8 @@ function ratingInsertValues(values: NewRating): Insertable<CentreDB['rating']> {
 }
 
 /** Ánh xạ dữ kiện ghi ghi chú (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
-function noteInsertValues(values: NewNote): Insertable<CentreDB['notes']> {
-  const row: Insertable<CentreDB['notes']> = { user_id: values.userId, created_by: values.createdBy };
+function noteInsertValues(values: NewNote): InsertObject<CentreDB, 'notes'> {
+  const row: InsertObject<CentreDB, 'notes'> = { user_id: values.userId, created_by: values.createdBy };
   if (values.id !== undefined) row.id = values.id;
   if (values.courseId !== undefined) row.course_id = values.courseId;
   if (values.content !== undefined) row.content = values.content;
@@ -355,16 +358,16 @@ export class SocialRepository {
     const existing = await db
       .selectFrom('tag_collection')
       .select(TAG_COLLECTION_COLUMNS)
-      .where('name', '=', 'Default collection')
+      .where('name', '=', DEFAULT_COLLECTION_NAME)
       .limit(1)
       .executeTakeFirst();
     if (existing) return existing.id;
-    const rows = await db
+    const row = await db
       .insertInto('tag_collection')
-      .values({ name: 'Default collection', is_standard: true })
+      .values({ name: DEFAULT_COLLECTION_NAME, is_standard: true })
       .returning(TAG_COLLECTION_COLUMNS)
-      .execute();
-    return rows[0]!.id;
+      .executeTakeFirstOrThrow();
+    return row.id;
   }
 
   /** Liệt kê bộ sưu tập thẻ, theo id tăng dần. */
@@ -385,8 +388,8 @@ export class SocialRepository {
 
   /** Chèn thẻ (chính thức hoặc cá nhân). */
   async insertTag(values: NewTag, db: RepoDb = this.db()): Promise<TagRow> {
-    const rows = await db.insertInto('tag').values(tagInsertValues(values)).returning(TAG_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('tag').values(tagInsertValues(values)).returning(TAG_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy thẻ theo id. */
@@ -486,12 +489,12 @@ export class SocialRepository {
 
   /** Chèn bình luận. */
   async insertComment(values: NewComment, db: RepoDb = this.db()): Promise<CommentRow> {
-    const rows = await db
+    const row = await db
       .insertInto('comments')
       .values(commentInsertValues(values))
       .returning(COMMENT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy bình luận theo id. */
@@ -530,7 +533,7 @@ export class SocialRepository {
    * Ghi/cập nhật đánh giá của một user cho một item: trùng khoá tự nhiên năm cột thì cập nhật điểm, thang và mốc sửa thay vì tạo dòng thứ hai.
    */
   async upsertRating(values: NewRating, db: RepoDb = this.db()): Promise<RatingRow> {
-    const rows = await db
+    const row = await db
       .insertInto('rating')
       .values(ratingInsertValues(values))
       .onConflict((oc) =>
@@ -539,8 +542,8 @@ export class SocialRepository {
           .doUpdateSet({ rating: values.rating, scale_id: values.scaleId, updated_at: new Date() }),
       )
       .returning(RATING_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Đánh giá của một item, theo id tăng dần. */
@@ -566,8 +569,8 @@ export class SocialRepository {
 
   /** Chèn ghi chú khoá học. */
   async insertNote(values: NewNote, db: RepoDb = this.db()): Promise<NoteRow> {
-    const rows = await db.insertInto('notes').values(noteInsertValues(values)).returning(NOTE_COLUMNS).execute();
-    return rows[0]!;
+    const row = await db.insertInto('notes').values(noteInsertValues(values)).returning(NOTE_COLUMNS).executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy ghi chú theo id. */

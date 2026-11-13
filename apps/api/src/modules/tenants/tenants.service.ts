@@ -31,15 +31,74 @@ import type {
   UpdateTenantDto,
 } from './dto/tenants.dto';
 
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
+/**
+ * Độ dài slug tối đa — khớp `createTenantSchema` trong `@giaokhoa/contracts` (max 80):
+ * mẫu gồm 1 ký tự đầu + tối đa 78 ký tự giữa + 1 ký tự cuối, nên độ dài slug là 3–80 ký tự.
+ */
+const SLUG_MAX_LENGTH = 80;
+const SLUG_RE = new RegExp(
+  `^[a-z0-9][a-z0-9-]{1,${SLUG_MAX_LENGTH - 2}}[a-z0-9]$`,
+);
+
+/**
+ * Ép một chuỗi `kind`/`status` đọc từ database về đúng enum của hợp đồng (`Tenant`/`TenantMembership`/`MyTenant`):
+ * dòng trong database lưu dạng chuỗi tự do nên phải kiểm tra tường minh từng giá trị — giá trị lạ là dữ kiện hỏng,
+ * ném lỗi rõ thay vì ép kiểu lặng lẽ rồi trả ra ngoài hợp đồng.
+ */
+function tenantKindOf(value: string): TenantDto['kind'] {
+  switch (value) {
+    case 'school':
+    case 'center':
+    case 'platform':
+      return value;
+    default:
+      throw new Error(`Unknown tenant kind: ${value}`);
+  }
+}
+
+function tenantStatusOf(value: string): TenantDto['status'] {
+  switch (value) {
+    case 'active':
+    case 'suspended':
+    case 'archived':
+      return value;
+    default:
+      throw new Error(`Unknown tenant status: ${value}`);
+  }
+}
+
+function membershipStatusOf(value: string): TenantMembershipDto['status'] {
+  switch (value) {
+    case 'active':
+    case 'suspended':
+    case 'ended':
+      return value;
+    default:
+      throw new Error(`Unknown membership status: ${value}`);
+  }
+}
+
+/**
+ * Lỗi định tuyến "lành" khi phân giải đích kho: slug chưa đăng ký (`space_not_found`) hoặc tầng định tuyến chưa
+ * cấu hình (`not_configured`) — hai mã này được đối xử như "không có kho riêng" ở cả hai điểm phân giải
+ * (`spaceTargetForTenant` rơi về kho chung, `tenantRowForTargetResolution` rơi xuống tra kho chung); mọi lỗi
+ * phân giải còn lại (bí mật/role lệch sổ) là lỗi cấu hình và phải ném ra nguyên trạng — fail-closed.
+ */
+function isBenignSpaceRoutingError(err: unknown): err is SpaceRoutingError {
+  return (
+    err instanceof SpaceRoutingError &&
+    (err.code === 'space_routing.space_not_found' ||
+      err.code === 'space_routing.not_configured')
+  );
+}
 
 export function toTenantDto(row: TenantRow): TenantDto {
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    kind: row.kind as TenantDto['kind'],
-    status: row.status as TenantDto['status'],
+    kind: tenantKindOf(row.kind),
+    status: tenantStatusOf(row.status),
     plan: row.plan,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -51,7 +110,7 @@ export function toMembershipDto(row: TenantMembershipRow): TenantMembershipDto {
     id: row.id,
     tenantId: row.tenantId,
     userId: row.userId,
-    status: row.status as TenantMembershipDto['status'],
+    status: membershipStatusOf(row.status),
     joinedAt: row.joinedAt.toISOString(),
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
   };
@@ -105,6 +164,15 @@ export class TenantsService {
   // --- tenant-zero + hàm hỗ trợ seed ------------------------------------------
 
   /**
+   * Request có đang ở kho học tập công cộng hay không — ngữ cảnh hiện tại mang slug của kho đó.
+   * Dùng chung cho các đường tiền-đăng-nhập phải giữ slug công cộng khi bọc ngữ cảnh platform,
+   * nếu không truy vấn rơi về kho chung và tenant-zero của kho vận hành bị dùng nhầm làm GUC.
+   */
+  private isPublicLearningStore(): boolean {
+    return tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+  }
+
+  /**
    * Tenant-zero (Trang chính); ném lỗi khi chưa được gieo — bootstrap seed luôn tạo trước mọi request.
    *
    * HOTFIX #196: tra cứu này là đường HỆ THỐNG (đăng nhập/guard chạy trước khi có ngữ cảnh tenant) nên phải chạy trong ngữ cảnh platform tường minh — ngoài ngữ cảnh, RLS fail-closed giấu sạch bảng tenants và mọi request tiền-đăng-nhập chết `tenant.platform_missing` dù seed đã gieo (chỉ lộ khi app chạy bằng role thường, test superuser mù).
@@ -113,7 +181,7 @@ export class TenantsService {
     // Tenant nền của site học tập nằm tại kho công cộng, KHÔNG
     // phải tenant-zero ở kho nhân sự vận hành. Giữ slug trong ALS
     // khi vào ngữ cảnh platform để truy vấn không rơi về kho chung.
-    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    const publicStore = this.isPublicLearningStore();
     return tenantAls.run(
       { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
       () => this.platformTenantInContext(),
@@ -121,7 +189,7 @@ export class TenantsService {
   }
 
   private async platformTenantInContext(): Promise<TenantRow> {
-    const slug = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG
+    const slug = this.isPublicLearningStore()
       ? PUBLIC_LEARNING_SLUG
       : PLATFORM_TENANT_SLUG;
     const zero = await this.repo.getTenantBySlug(slug);
@@ -380,11 +448,7 @@ export class TenantsService {
       const target = await this.spaceDb.resolveTarget(row.slug);
       return { slug: row.slug, dedicated: target.mode === 'dedicated' };
     } catch (err) {
-      if (
-        !contextSlug &&
-        err instanceof SpaceRoutingError &&
-        (err.code === 'space_routing.space_not_found' || err.code === 'space_routing.not_configured')
-      ) {
+      if (!contextSlug && isBenignSpaceRoutingError(err)) {
         return { slug: row.slug, dedicated: false };
       }
       throw err;
@@ -430,10 +494,7 @@ export class TenantsService {
         );
         if (inContextSpace) return inContextSpace;
       } catch (err) {
-        if (
-          !(err instanceof SpaceRoutingError) ||
-          (err.code !== 'space_routing.space_not_found' && err.code !== 'space_routing.not_configured')
-        ) {
+        if (!isBenignSpaceRoutingError(err)) {
           throw err;
         }
       }
@@ -587,6 +648,21 @@ export class TenantsService {
   }
 
   /**
+   * Điểm chặn SLOT GÓI TRUNG TÂM (issue #189 — đặc tả slot đã duyệt): một người đã giữ vai trò giảng dạy trong cây
+   * context của tenant mà membership chuyển sang `active` thì được đếm thành một slot ngay — chặn khi tenant đã chạm
+   * hạn mức hiệu lực. Chỉ gọi khi việc chuyển trạng thái làm tăng số slot (membership chưa active, tài khoản đang
+   * hoạt động); các chuyển trạng thái khác không đổi số đếm nên không gọi.
+   */
+  private async assertTenantSlotForTeachingMember(
+    tenantId: string,
+    userId: string,
+  ): Promise<void> {
+    if (await this.planLimits.userHoldsTeachingRoleInTenant(tenantId, userId)) {
+      await this.planLimits.assertTenantSlotForNewTeacher(tenantId, userId);
+    }
+  }
+
+  /**
    * Thêm thành viên trong đúng kho sở hữu tenant. Bọc platform ở
    * ngoài khung định tuyến giữ nguyên spaceSlug của Host (giống
    * đường listMembers), tránh đọc/ghi membership nhầm kho chung.
@@ -613,9 +689,7 @@ export class TenantsService {
     // chỉ tài khoản và kích hoạt lại membership).
     const existingMembership = await this.repo.getMembership(tenantId, user.id);
     if (existingMembership?.status !== 'active' && !user.suspended && !user.deleted) {
-      if (await this.planLimits.userHoldsTeachingRoleInTenant(tenantId, user.id)) {
-        await this.planLimits.assertTenantSlotForNewTeacher(tenantId, user.id);
-      }
+      await this.assertTenantSlotForTeachingMember(tenantId, user.id);
     }
     const row = await this.ensureActiveMembership(tenantId, user.id);
     await this.outbox.enqueueStandalone({
@@ -658,14 +732,15 @@ export class TenantsService {
     if (status === 'active' && existing.status !== 'active') {
       const user = await this.users.getUser(userId);
       if (!user.suspended && !user.deleted) {
-        if (await this.planLimits.userHoldsTeachingRoleInTenant(tenantId, userId)) {
-          await this.planLimits.assertTenantSlotForNewTeacher(tenantId, userId);
-        }
+        await this.assertTenantSlotForTeachingMember(tenantId, userId);
       }
     }
+    // Một mốc thời gian duy nhất cho `endedAt`: giá trị trả về phải khớp đúng giá trị đã lưu (hai `new Date()` riêng
+    // có thể lệch nhau vài mili-giây).
+    const endedAt = status === 'ended' ? new Date() : null;
     await this.repo.updateMembership(existing.id, {
       status,
-      endedAt: status === 'ended' ? new Date() : null,
+      endedAt,
     });
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
     await this.contexts.markContextDirty(tenantCtx.id);
@@ -675,7 +750,7 @@ export class TenantsService {
       payload: { tenantId, userId, status, actorId },
       tenantId,
     });
-    return toMembershipDto({ ...existing, status, endedAt: status === 'ended' ? new Date() : null });
+    return toMembershipDto({ ...existing, status, endedAt });
   }
 
   async listMembers(actorId: string, tenantId: string): Promise<TenantMembershipDto[]> {
@@ -744,34 +819,14 @@ export class TenantsService {
     });
   }
 
-  private async createTenantUserInSpace(
-    actorId: string,
-    slug: string,
+  /**
+   * Tạo người dùng trong kho hiện tại (kho chung hay kho riêng của tenant đích — nơi gọi đã chọn đúng kho trước khi
+   * gọi xuống đây) rồi gắn membership active nội bộ của kho đó; đáp ứng là `TenantUserView`, không chứa băm mật khẩu.
+   */
+  private async createTenantUserWithMembership(
+    tenantId: string,
     dto: CreateTenantUserDto,
   ): Promise<TenantUserView> {
-    const spaceTenant = await this.getTenantInSpace(slug);
-    if (!spaceTenant) {
-      throw new NotFoundException({ message: `Tenant ${slug} is not ready in its own store`, code: 'tenant.not_found' });
-    }
-    const view = await this.spaceDb.withSpaceKysely(slug, async () => {
-      await this.assertTenantManager(actorId, spaceTenant.id);
-      const user = await this.users.createUser({
-        username: dto.username,
-        email: dto.email,
-        password: dto.password,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        forcePasswordChange: dto.forcePasswordChange,
-        customFields: dto.customFields,
-      });
-      await this.ensureActiveMembership(spaceTenant.id, user.id);
-      return toTenantUserView(user);
-    });
-    return view;
-  }
-
-  private async createTenantUserInContext(actorId: string, tenantId: string, dto: CreateTenantUserDto): Promise<TenantUserView> {
-    await this.assertTenantManager(actorId, tenantId);
     const user = await this.users.createUser({
       username: dto.username,
       email: dto.email,
@@ -783,6 +838,27 @@ export class TenantsService {
     });
     await this.ensureActiveMembership(tenantId, user.id);
     return toTenantUserView(user);
+  }
+
+  private async createTenantUserInSpace(
+    actorId: string,
+    slug: string,
+    dto: CreateTenantUserDto,
+  ): Promise<TenantUserView> {
+    const spaceTenant = await this.getTenantInSpace(slug);
+    if (!spaceTenant) {
+      throw new NotFoundException({ message: `Tenant ${slug} is not ready in its own store`, code: 'tenant.not_found' });
+    }
+    const view = await this.spaceDb.withSpaceKysely(slug, async () => {
+      await this.assertTenantManager(actorId, spaceTenant.id);
+      return this.createTenantUserWithMembership(spaceTenant.id, dto);
+    });
+    return view;
+  }
+
+  private async createTenantUserInContext(actorId: string, tenantId: string, dto: CreateTenantUserDto): Promise<TenantUserView> {
+    await this.assertTenantManager(actorId, tenantId);
+    return this.createTenantUserWithMembership(tenantId, dto);
   }
 
   /**
@@ -832,7 +908,7 @@ export class TenantsService {
       id: tenant.id,
       slug: tenant.slug,
       name: tenant.name,
-      kind: tenant.kind as MyTenant['kind'],
+      kind: tenantKindOf(tenant.kind),
       active: true,
     }];
     return rows;
@@ -849,7 +925,7 @@ export class TenantsService {
   async resolveDefaultTenant(userId: string): Promise<TenantRow> {
     // Đường tiền-đăng-nhập: phân giải tenant mặc định phải thấy membership
     // của user ở mọi tenant — chạy trong ngữ cảnh platform như platformTenant.
-    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    const publicStore = this.isPublicLearningStore();
     return tenantAls.run(
       { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
       () => this.resolveDefaultTenantInContext(userId),
@@ -859,12 +935,23 @@ export class TenantsService {
   private async resolveDefaultTenantInContext(userId: string): Promise<TenantRow> {
     const zero = await this.platformTenant();
     const memberships = (await this.repo.listMembershipsForUser(userId)).filter((m) => m.status === 'active');
+    // Một truy vấn duy nhất thay cho một truy vấn mỗi membership (N+1): bảng tenants nhỏ nên nạp toàn bộ rồi lọc
+    // trong bộ nhớ theo đúng thứ tự membership (`listMembershipsForUser` đã xếp theo `joined_at` — thứ tự này
+    // quyết định tenant "gia nhập sớm nhất" ở dưới). Không dùng `WHERE id = ANY($1)` trực tiếp vì điểm đọc
+    // tenants phải qua repository (không thêm method mới vào `@giaokhoa/db` trong đợt này) và thứ tự trả về
+    // của `IN` không giữ được thứ tự gia nhập.
+    const tenantsById = new Map(
+      (await this.repo.listTenants()).map((tenant) => [tenant.id, tenant]),
+    );
     const tenants: TenantRow[] = [];
     for (const m of memberships) {
-      const tenant = await this.repo.getTenant(m.tenantId);
+      const tenant = tenantsById.get(m.tenantId);
       if (tenant && tenant.status === 'active') tenants.push(tenant);
     }
-    if (tenants.length === 1) return tenants[0]!;
+    if (tenants.length === 1) {
+      const only = tenants.at(0);
+      if (only) return only;
+    }
     if (tenants.length > 1) {
       if (await this.evaluator.isSiteAdmin(userId)) return zero;
       const nonPlatform = tenants.find((t) => t.kind !== 'platform');
@@ -882,7 +969,7 @@ export class TenantsService {
   async resolveSwitchTarget(userId: string, tenantId: string): Promise<TenantRow> {
     // Kiểm chứng đích chuyển tenant là đường hệ thống xuyên tenant — chạy
     // trong ngữ cảnh platform như platformTenant.
-    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    const publicStore = this.isPublicLearningStore();
     return tenantAls.run(
       { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
       () => this.resolveSwitchTargetInContext(userId, tenantId),

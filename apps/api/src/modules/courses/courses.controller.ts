@@ -1,10 +1,14 @@
 import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
 import { CoursesService, type CategoryDeleteMode } from './courses.service';
 import { applyCurriculumFrameSchema, copyCourseContentSchema, createCourseCategorySchema, createCourseModuleSchema, createCourseSchema, createCourseSectionSchema, duplicateCourseSchema, reorderCourseModulesSchema, reorderCourseSectionsSchema, updateCourseCategorySchema, updateCourseModuleSchema, updateCourseSchema, updateCourseSectionSchema, type ApplyFrameDto, type CopyContentDto, type CreateCategoryDto, type CreateCmDto, type CreateCourseDto, type CreateSectionDto, type DuplicateCourseDto, type ReorderModulesDto, type ReorderSectionsDto, type UpdateCategoryDto, type UpdateCmDto, type UpdateCourseDto, type UpdateSectionDto, applyBookFrameSchema, type ApplyBookFrameDto } from './dto/courses.dto';
+
+/** Query `mode` của xoá category: chỉ nhận hai mode hợp lệ, giá trị khác bị pipe validation chuẩn từ chối bằng 400 (thay cho kiểm tra tay + Forbidden 403 trước đây). */
+const categoryDeleteModeQuerySchema = z.enum(['moveup', 'recursive']).optional();
 
 @ApiTags('courses')
 @Controller({ path: 'courses', version: '1' })
@@ -48,12 +52,8 @@ export class CoursesController {
   /**
    * DELETE /courses/categories/:id — xoá category.
    */
-  async deleteCategory(@Param('id', { schema: uuidIdSchema }) id: string, @Query('mode') mode: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
-    const parsed = mode === undefined ? undefined : (mode as CategoryDeleteMode);
-    if (parsed !== undefined && parsed !== 'moveup' && parsed !== 'recursive') {
-      throw new ForbiddenException({ message: `Unknown category delete mode ${mode} (expected moveup|recursive)`, code: 'course.category_bad_mode' });
-    }
-    return this.courses.deleteCategory(actor.id, id, parsed);
+  async deleteCategory(@Param('id', { schema: uuidIdSchema }) id: string, @Query('mode', { schema: categoryDeleteModeQuerySchema }) mode: CategoryDeleteMode | undefined, @CurrentUser() actor: AuthenticatedUser) {
+    return this.courses.deleteCategory(actor.id, id, mode);
   }
 
   // --- courses ----------------------------------------------------------------

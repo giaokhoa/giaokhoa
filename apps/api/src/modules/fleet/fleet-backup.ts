@@ -15,7 +15,9 @@ import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import {
   dumpDatabaseToFile,
+  ERROR_DETAIL_MAX_LENGTH,
   isBackupOverdue,
+  MS_PER_DAY,
   newFleetRunId,
   parseBackupFileName,
   parsePositiveInt,
@@ -61,7 +63,7 @@ function pruneSpaceBackupDir(dir: string, retentionDays: number, now: Date): num
     .filter((name) => parseBackupFileName(name) !== null)
     .map((name) => ({ name, mtime: statSync(join(dir, name)).mtime }))
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-  const cutoff = now.getTime() - retentionDays * 86_400_000;
+  const cutoff = now.getTime() - retentionDays * MS_PER_DAY;
   let removed = 0;
   for (const [index, file] of files.entries()) {
     if (index === 0) continue;
@@ -108,7 +110,7 @@ export async function runFleetBackup(options: FleetBackupOptions = {}): Promise<
         log(`[${space.slug}] backup written: ${basename(stored.path)}`);
         results.push({ slug: space.slug, status: 'success', file: stored.path });
       } catch (error) {
-        const detail = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+        const detail = (error instanceof Error ? error.message : String(error)).slice(0, ERROR_DETAIL_MAX_LENGTH);
         await writer.recordBackupOutcome(space.id, 'failed', at);
         log(`[${space.slug}] backup FAILED: ${detail}`);
         results.push({ slug: space.slug, status: 'failed', detail });
@@ -136,7 +138,7 @@ export async function runFleetBackup(options: FleetBackupOptions = {}): Promise<
       log(`[${CONTROL_PLANE_BACKUP_SLUG}] backup written: ${basename(stored.path)}`);
       results.push({ slug: CONTROL_PLANE_BACKUP_SLUG, status: 'success', file: stored.path });
     } catch (error) {
-      const detail = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+      const detail = (error instanceof Error ? error.message : String(error)).slice(0, ERROR_DETAIL_MAX_LENGTH);
       log(`[${CONTROL_PLANE_BACKUP_SLUG}] backup FAILED: ${detail}`);
       results.push({ slug: CONTROL_PLANE_BACKUP_SLUG, status: 'failed', detail });
     }

@@ -138,21 +138,21 @@ export class MessagingService {
   // --- cụm tuỳ chọn + phát thông báo (MessagingNotificationsService) ---
 
   /**
-   * Chính sách phát của ADMIN ở cấp site cho một provider (NB-7, Uỷ quyền cho MessagingNotificationsService.isProviderEnabledBySitePolicy — đặc tả luồng đầy đủ nằm tại method đích.
+   * Chính sách phát của ADMIN ở cấp site cho một provider (NB-7, issue #174). Uỷ quyền cho MessagingNotificationsService.isProviderEnabledBySitePolicy — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async isProviderEnabledBySitePolicy(provider: MessageProviderDefinition): Promise<boolean> {
     return this.notifications.isProviderEnabledBySitePolicy(provider);
   }
 
   /**
-   * User có được toàn bộ bề mặt tuỳ chọn theo loại (v2) hay chỉ bề Uỷ quyền cho MessagingNotificationsService.hasFullNotificationPreferences — đặc tả luồng đầy đủ nằm tại method đích.
+   * User có được toàn bộ bề mặt tuỳ chọn theo loại (v2) hay chỉ bề mặt tối thiểu của học sinh. Uỷ quyền cho MessagingNotificationsService.hasFullNotificationPreferences — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async hasFullNotificationPreferences(userId: string): Promise<boolean> {
     return this.notifications.hasFullNotificationPreferences(userId);
   }
 
   /**
-   * Tập CONTEXT VAI thật của user cho tầng phân chia tuỳ chọn thông Uỷ quyền cho MessagingNotificationsService.resolvePreferenceAudiences — đặc tả luồng đầy đủ nằm tại method đích.
+   * Tập CONTEXT VAI thật của user cho tầng phân chia tuỳ chọn thông báo theo audience. Uỷ quyền cho MessagingNotificationsService.resolvePreferenceAudiences — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async resolvePreferenceAudiences(userId: string): Promise<Set<NotificationAudience>> {
     return this.notifications.resolvePreferenceAudiences(userId);
@@ -166,14 +166,14 @@ export class MessagingService {
   }
 
   /**
-   * Giá trị tuỳ chọn v2 HIỆU LỰC của một provider cho một user: khoá Uỷ quyền cho MessagingNotificationsService.resolveNotificationPreference — đặc tả luồng đầy đủ nằm tại method đích.
+   * Giá trị tuỳ chọn v2 HIỆU LỰC của một provider cho một user: khoá v2 đã đặt thì dùng thẳng, chưa có thì suy từ dữ liệu cũ. Uỷ quyền cho MessagingNotificationsService.resolveNotificationPreference — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async resolveNotificationPreference(userId: string, provider: MessageProviderDefinition): Promise<{ popupEnabled: boolean; emailFrequency: EmailFrequency | null }> {
     return this.notifications.resolveNotificationPreference(userId, provider);
   }
 
   /**
-   * Tuỳ chọn notification v2 của user: một dòng cho mỗi provider đã Uỷ quyền cho MessagingNotificationsService.getPreferences — đặc tả luồng đầy đủ nằm tại method đích.
+   * Tuỳ chọn notification v2 của user: một dòng cho mỗi provider đã đăng ký. Uỷ quyền cho MessagingNotificationsService.getPreferences — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async getPreferences(userId: string): Promise<NotificationPreferenceView[]> {
     return this.notifications.getPreferences(userId);
@@ -187,6 +187,7 @@ export class MessagingService {
   }
 
   /**
+   * Chế độ ghi đè hiệu lực của một khoá cho một user: khoá `notif.course.<id>` đã đặt là 'mute' thì mute, còn lại 'all'.
    * Uỷ quyền cho MessagingNotificationsService.getCourseOverrideMode — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async getCourseOverrideMode(userId: string, courseId: string): Promise<NotificationCourseOverrideMode> {
@@ -194,14 +195,14 @@ export class MessagingService {
   }
 
   /**
-   * Ghi đè theo khoá của user (NB-4): một dòng cho MỖI khoá người Uỷ quyền cho MessagingNotificationsService.listCourseNotificationOverrides — đặc tả luồng đầy đủ nằm tại method đích.
+   * Ghi đè theo khoá của user (NB-4): một dòng cho MỖI khoá người dùng thuộc về. Uỷ quyền cho MessagingNotificationsService.listCourseNotificationOverrides — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listCourseNotificationOverrides(userId: string): Promise<NotificationCourseOverrideView[]> {
     return this.notifications.listCourseNotificationOverrides(userId);
   }
 
   /**
-   * Đặt ghi đè cho MỘT khoá ('all' | 'mute') — hiệu lực ngay ở lần Uỷ quyền cho MessagingNotificationsService.setCourseNotificationOverride — đặc tả luồng đầy đủ nằm tại method đích.
+   * Đặt ghi đè cho MỘT khoá ('all' | 'mute') — hiệu lực ngay ở lần phát kế tiếp. Uỷ quyền cho MessagingNotificationsService.setCourseNotificationOverride — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async setCourseNotificationOverride(
     userId: string,
@@ -242,34 +243,35 @@ export class MessagingService {
   }
 
   /**
-   * Trung tâm thông báo v2 (issue #51) — danh sách GỘP theo Uỷ quyền cho MessagingNotificationsService.listNotificationGroups — đặc tả luồng đầy đủ nằm tại method đích.
+   * Trung tâm thông báo v2 (issue #51) — danh sách GỘP theo (loại × nguồn × ngày). Uỷ quyền cho MessagingNotificationsService.listNotificationGroups — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listNotificationGroups(userId: string, query: ListNotificationGroupsQueryDto): Promise<NotificationGroupPage> {
     return this.notifications.listNotificationGroups(userId, query);
   }
 
   /**
-   * Trung tâm v2 — danh sách PHẲNG phân trang con trỏ: bộ lọc Uỷ quyền cho MessagingNotificationsService.listNotificationItems — đặc tả luồng đầy đủ nằm tại method đích.
+   * Trung tâm v2 — danh sách PHẲNG phân trang con trỏ: bộ lọc (loại × nguồn × ngày) mở chi tiết đúng một dòng gộp. Uỷ quyền cho MessagingNotificationsService.listNotificationItems — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listNotificationItems(userId: string, query: ListNotificationItemsQueryDto): Promise<NotificationItemPage> {
     return this.notifications.listNotificationItems(userId, query);
   }
 
   /**
-   * Trung tâm v2 — đánh dấu đã đọc HÀNG LOẠT theo khoá gộp Uỷ quyền cho MessagingNotificationsService.markNotificationGroupRead — đặc tả luồng đầy đủ nằm tại method đích.
+   * Trung tâm v2 — đánh dấu đã đọc HÀNG LOẠT theo khoá gộp (loại × nguồn × ngày). Uỷ quyền cho MessagingNotificationsService.markNotificationGroupRead — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async markNotificationGroupRead(userId: string, dto: ReadNotificationGroupDto): Promise<{ marked: number }> {
     return this.notifications.markNotificationGroupRead(userId, dto);
   }
 
   /**
-   * Trung tâm v2 — xoá MỘT thông báo của chính mình; thông báo của Uỷ quyền cho MessagingNotificationsService.deleteNotification — đặc tả luồng đầy đủ nằm tại method đích.
+   * Trung tâm v2 — xoá MỘT thông báo của chính mình; thông báo của người khác được coi như không tồn tại (404, không lộ tồn tại). Uỷ quyền cho MessagingNotificationsService.deleteNotification — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async deleteNotification(userId: string, notificationId: string): Promise<{ deleted: boolean }> {
     return this.notifications.deleteNotification(userId, notificationId);
   }
 
   /**
+   * Trung tâm v2 — dọn mọi thông báo ĐÃ ĐỌC của mình.
    * Uỷ quyền cho MessagingNotificationsService.clearReadNotifications — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async clearReadNotifications(userId: string): Promise<{ deleted: number }> {
@@ -301,7 +303,7 @@ export class MessagingService {
   }
 
   /**
-   * Stream SSE số thông báo chưa đọc của chính user: snapshot số hiện Uỷ quyền cho MessagingNotificationsService.unreadCountStream — đặc tả luồng đầy đủ nằm tại method đích.
+   * Stream SSE số thông báo chưa đọc của chính user: snapshot số hiện tại ngay khi nối, rồi đẩy mỗi thay đổi. Uỷ quyền cho MessagingNotificationsService.unreadCountStream — đặc tả luồng đầy đủ nằm tại method đích.
    */
   unreadCountStream(userId: string): Observable<MessageEvent> {
     return this.notifications.unreadCountStream(userId);
@@ -317,14 +319,14 @@ export class MessagingService {
   // --- cụm liên hệ/chặn (MessagingContactsService) ---
 
   /**
-   * Gửi yêu cầu kết bạn tới một user. Đã là liên hệ thì trả trạng thái Uỷ quyền cho MessagingContactsService.requestContact — đặc tả luồng đầy đủ nằm tại method đích.
+   * Gửi yêu cầu kết bạn tới một user. Đã là liên hệ thì trả trạng thái accepted (idempotent); đã có yêu cầu chiều ngược đang chờ thì chấp nhận luôn yêu cầu đó. Uỷ quyền cho MessagingContactsService.requestContact — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async requestContact(userId: string, contactId: string): Promise<{ status: 'pending' | 'accepted'; contacts: string[] }> {
     return this.contacts.requestContact(userId, contactId);
   }
 
   /**
-   * Các yêu cầu kết bạn của tôi: `incoming` là yêu cầu người khác gửi Uỷ quyền cho MessagingContactsService.listContactRequests — đặc tả luồng đầy đủ nằm tại method đích.
+   * Các yêu cầu kết bạn của tôi: `incoming` là yêu cầu người khác gửi tới chờ tôi duyệt, `outgoing` là yêu cầu tôi đã gửi đang chờ. Uỷ quyền cho MessagingContactsService.listContactRequests — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listContactRequests(userId: string): Promise<{
     incoming: { userId: string; createdAt: Date; displayName: string; username: string }[];
@@ -334,28 +336,28 @@ export class MessagingService {
   }
 
   /**
-   * Tóm tắt hiển thị (tên + username) cho một tập user id — các Uỷ quyền cho MessagingContactsService.profilesFor — đặc tả luồng đầy đủ nằm tại method đích.
+   * Tóm tắt hiển thị (tên + username) cho một tập user id — các response danh sách của messaging trả kèm để client hiện TÊN thay cho UUID thô. Uỷ quyền cho MessagingContactsService.profilesFor — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async profilesFor(userIds: string[]): Promise<Record<string, PersonSummaryView>> {
     return this.contacts.profilesFor(userIds);
   }
 
   /**
-   * Chấp nhận yêu cầu kết bạn TỪ requesterId: quan hệ hình thành ở cả Uỷ quyền cho MessagingContactsService.acceptContactRequest — đặc tả luồng đầy đủ nằm tại method đích.
+   * Chấp nhận yêu cầu kết bạn TỪ requesterId: quan hệ hình thành ở cả hai chiều, yêu cầu rời hàng chờ. Uỷ quyền cho MessagingContactsService.acceptContactRequest — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async acceptContactRequest(userId: string, requesterId: string): Promise<{ contacts: string[] }> {
     return this.contacts.acceptContactRequest(userId, requesterId);
   }
 
   /**
-   * Từ chối yêu cầu kết bạn TỪ requesterId: yêu cầu biến mất, quan hệ Uỷ quyền cho MessagingContactsService.declineContactRequest — đặc tả luồng đầy đủ nằm tại method đích.
+   * Từ chối yêu cầu kết bạn TỪ requesterId: yêu cầu biến mất, quan hệ không hình thành. Uỷ quyền cho MessagingContactsService.declineContactRequest — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async declineContactRequest(userId: string, requesterId: string): Promise<{ declined: boolean }> {
     return this.contacts.declineContactRequest(userId, requesterId);
   }
 
   /**
-   * Gỡ một liên hệ đã duyệt: quan hệ mất ở CẢ hai phía (cổng liên lạc Uỷ quyền cho MessagingContactsService.removeContact — đặc tả luồng đầy đủ nằm tại method đích.
+   * Gỡ một liên hệ đã duyệt: quan hệ mất ở CẢ hai phía (cổng liên lạc đóng lại cho cả hai chiều). Uỷ quyền cho MessagingContactsService.removeContact — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async removeContact(userId: string, contactId: string): Promise<{ contacts: string[] }> {
     return this.contacts.removeContact(userId, contactId);
@@ -378,14 +380,14 @@ export class MessagingService {
   // --- cụm cây nhóm/roster (MessagingGroupTreeService) ---
 
   /**
-   * Các khoá mà người dùng thuộc về (ghi danh hiệu lực ∪ gán vai tại Uỷ quyền cho MessagingGroupTreeService.listMyMessagingCourses — đặc tả luồng đầy đủ nằm tại method đích.
+   * Các khoá mà người dùng thuộc về (ghi danh hiệu lực ∪ gán vai tại context khoá) — bước chọn khoá của luồng tìm bạn mới. Uỷ quyền cho MessagingGroupTreeService.listMyMessagingCourses — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listMyMessagingCourses(actorId: string): Promise<MessagingCourseView[]> {
     return this.groupTree.listMyMessagingCourses(actorId);
   }
 
   /**
-   * CÂY NHÓM của chính người gọi (lát MSG-T1, issue #33 — thiết kế Uỷ quyền cho MessagingGroupTreeService.getGroupTree — đặc tả luồng đầy đủ nằm tại method đích. Cờ `canCreateFreeGroup` của cây do facade tính tại đây bằng ĐÚNG cổng tạo nhóm tự do của cụm hội thoại
+   * CÂY NHÓM của chính người gọi (lát MSG-T1, issue #33 — thiết kế cấu trúc nhắn tin). Uỷ quyền cho MessagingGroupTreeService.getGroupTree — đặc tả luồng đầy đủ nằm tại method đích. Cờ `canCreateFreeGroup` của cây do facade tính tại đây bằng ĐÚNG cổng tạo nhóm tự do của cụm hội thoại
    * (MessagingConversationsService.canCreateFreeGroup) cho tenant
    * hiện hành, để nút tạo nhóm phía web khớp tuyệt đối với cổng API.
    */
@@ -395,7 +397,7 @@ export class MessagingService {
   }
 
   /**
-   * Một trang roster thành viên của một khoá — đường khám phá bạn bè Uỷ quyền cho MessagingGroupTreeService.listCourseRoster — đặc tả luồng đầy đủ nằm tại method đích.
+   * Một trang roster thành viên của một khoá — đường khám phá bạn bè duy nhất sau khi gỡ tìm người theo tên. Uỷ quyền cho MessagingGroupTreeService.listCourseRoster — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listCourseRoster(actorId: string, courseId: string, query: { limit?: number; cursor?: string }): Promise<{
     members: CourseRosterMemberView[];
@@ -405,7 +407,7 @@ export class MessagingService {
   }
 
   /**
-   * Một trang roster thành viên của một LỚP — bản cấp lớp của roster Uỷ quyền cho MessagingGroupTreeService.listClassRoster — đặc tả luồng đầy đủ nằm tại method đích.
+   * Một trang roster thành viên của một LỚP — bản cấp lớp của roster khoá. Uỷ quyền cho MessagingGroupTreeService.listClassRoster — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listClassRoster(actorId: string, classId: string, query: { limit?: number; cursor?: string }): Promise<{
     members: ClassRosterMemberView[];
@@ -449,49 +451,49 @@ export class MessagingService {
   // --- cụm hội thoại (MessagingConversationsService) ---
 
   /**
-   * Tạo conversation (nhóm hoặc 1-1; 1-1 đã tồn tại thì dùng lại). Tạo MỚI Uỷ quyền cho MessagingConversationsService.createConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Tạo conversation (nhóm hoặc 1-1; 1-1 đã tồn tại thì dùng lại). Tạo MỚI conversation 1-1 phải qua cổng liên lạc. Uỷ quyền cho MessagingConversationsService.createConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async createConversation(actorId: string, input: { type?: number; memberIds: string[]; name?: string }): Promise<ConversationRow & { members: string[] }> {
     return this.conversations.createConversation(actorId, input);
   }
 
   /**
-   * Tạo (hoặc lấy lại) conversation của một course group: component Uỷ quyền cho MessagingConversationsService.createGroupConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Tạo (hoặc lấy lại) conversation của một course group: component 'core_group', itemType 'groups', itemId = group id. Uỷ quyền cho MessagingConversationsService.createGroupConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async createGroupConversation(actorId: string, input: { groupId: string; name?: string }): Promise<ConversationRow & { members: string[] }> {
     return this.conversations.createGroupConversation(actorId, input);
   }
 
   /**
-   * Mở (ensure) conversation của CHÍNH khoá — chat toàn lớp: component Uỷ quyền cho MessagingConversationsService.ensureCourseConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Mở (ensure) conversation của CHÍNH khoá — chat toàn lớp: component 'core_course', itemType 'course', itemId = course id. Uỷ quyền cho MessagingConversationsService.ensureCourseConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async ensureCourseConversation(actorId: string, courseId: string): Promise<ConversationRow & { members: string[] }> {
     return this.conversations.ensureCourseConversation(actorId, courseId);
   }
 
   /**
-   * Mở (ensure) conversation của CHÍNH lớp — chat cấp lớp: component Uỷ quyền cho MessagingConversationsService.ensureClassConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Mở (ensure) conversation của CHÍNH lớp — chat cấp lớp: component 'core_class', itemType 'class', itemId = class id. Uỷ quyền cho MessagingConversationsService.ensureClassConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async ensureClassConversation(actorId: string, classId: string): Promise<ConversationRow & { members: string[] }> {
     return this.conversations.ensureClassConversation(actorId, classId);
   }
 
   /**
-   * Bật/tắt chat của một conversation (Lớp B — chốt "nhóm lớp mặc Uỷ quyền cho MessagingConversationsService.updateConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Bật/tắt chat của một conversation (Lớp B — chốt "nhóm lớp mặc định chat hai chiều, giáo viên tắt được"). Uỷ quyền cho MessagingConversationsService.updateConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async updateConversation(actorId: string, conversationId: string, input: { enabled: boolean }): Promise<ConversationRow & { members: string[] }> {
     return this.conversations.updateConversation(actorId, conversationId, input);
   }
 
   /**
-   * Gỡ một thành viên khỏi NHÓM TỰ DO (lát MSG-T4, issue #33 — hành Uỷ quyền cho MessagingConversationsService.removeConversationMember — đặc tả luồng đầy đủ nằm tại method đích.
+   * Gỡ một thành viên khỏi NHÓM TỰ DO (lát MSG-T4, issue #33 — hành động quản trị trong panel thành viên của khung chat). Uỷ quyền cho MessagingConversationsService.removeConversationMember — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async removeConversationMember(actorId: string, conversationId: string, targetUserId: string): Promise<ConversationRow & { members: string[] }> {
     return this.conversations.removeConversationMember(actorId, conversationId, targetUserId);
   }
 
   /**
-   * Đặt trạng thái cá nhân của CHÍNH thành viên trên một conversation Uỷ quyền cho MessagingConversationsService.updateConversationState — đặc tả luồng đầy đủ nằm tại method đích.
+   * Đặt trạng thái cá nhân của CHÍNH thành viên trên một conversation (lát M5, issue #240): ghim / lưu trữ / tắt tiếng — ba cờ độc lập, chỉ trường có mặt mới đổi. Uỷ quyền cho MessagingConversationsService.updateConversationState — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async updateConversationState(
     userId: string,
@@ -502,7 +504,7 @@ export class MessagingService {
   }
 
   /**
-   * Conversation của user kèm số chưa đọc, tin cuối và mốc đã đọc của Uỷ quyền cho MessagingConversationsService.listConversations — đặc tả luồng đầy đủ nằm tại method đích.
+   * Conversation của user kèm số chưa đọc, tin cuối và mốc đã đọc của chính user. Uỷ quyền cho MessagingConversationsService.listConversations — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listConversations(userId: string, opts: { archivedOnly?: boolean } = {}): Promise<(ConversationRow & {
     members: string[]; unread: number; lastReadSeq: number; lastMessage: MessageRow | null;
@@ -513,7 +515,7 @@ export class MessagingService {
   }
 
   /**
-   * Chi tiết conversation + một cửa sổ tin nhắn mới nhất theo cursor Uỷ quyền cho MessagingConversationsService.getConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Chi tiết conversation + một cửa sổ tin nhắn mới nhất theo cursor seq. Uỷ quyền cho MessagingConversationsService.getConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async getConversation(userId: string, conversationId: string, opts: { limit?: number } = {}): Promise<ConversationRow & {
     members: string[]; messages: MessageWithQuoteRow[]; hasMoreBefore: boolean;
@@ -527,7 +529,7 @@ export class MessagingService {
   // --- cụm tin nhắn/kiểm duyệt (MessagingMessagesService) ---
 
   /**
-   * Một cửa sổ tin theo cursor seq của conversation (tải lịch sử cũ Uỷ quyền cho MessagingMessagesService.listConversationMessages — đặc tả luồng đầy đủ nằm tại method đích.
+   * Một cửa sổ tin theo cursor seq của conversation (tải lịch sử cũ hơn). Uỷ quyền cho MessagingMessagesService.listConversationMessages — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listConversationMessages(userId: string, conversationId: string, query: {
     beforeSeq?: number; afterSeq?: number; limit?: number;
@@ -546,63 +548,63 @@ export class MessagingService {
   }
 
   /**
-   * Gửi một message user-tới-user. Luật phân phối (report §2#12): mọi thành viên khác Uỷ quyền cho MessagingMessagesService.sendMessage — đặc tả luồng đầy đủ nằm tại method đích.
+   * Gửi một message user-tới-user. Luật phân phối (report §2#12): mọi thành viên khác phải liên lạc được — không bị suspended, và không được đã chặn người gửi. Uỷ quyền cho MessagingMessagesService.sendMessage — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async sendMessage(actorId: string, conversationId: string, input: { text: string; subject?: string; clientMessageId?: string; replyToMessageId?: string }): Promise<MessageWithQuoteRow> {
     return this.messages.sendMessage(actorId, conversationId, input);
   }
 
   /**
-   * Sửa tin nhắn vẫn bị từ chối (chính sách đã chốt chỉ nới XOÁ, theo Uỷ quyền cho MessagingMessagesService.updateMessage — đặc tả luồng đầy đủ nằm tại method đích.
+   * Sửa tin nhắn vẫn bị từ chối (chính sách đã chốt chỉ nới XOÁ, theo mô hình xoá mềm có truy vết — sửa nội dung tin đã gửi không nằm trong chính sách). Uỷ quyền cho MessagingMessagesService.updateMessage — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async updateMessage(): Promise<never> {
     return this.messages.updateMessage();
   }
 
   /**
-   * Lớp (a) — XOÁ-PHÍA-MÌNH: tác giả ẩn tin của chính mình khỏi tầm Uỷ quyền cho MessagingMessagesService.deleteMessage — đặc tả luồng đầy đủ nằm tại method đích.
+   * Lớp (a) — XOÁ-PHÍA-MÌNH: tác giả ẩn tin của chính mình khỏi tầm nhìn của mình, mọi lúc. Uỷ quyền cho MessagingMessagesService.deleteMessage — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async deleteMessage(actorId: string, messageId: string): Promise<MessageRow> {
     return this.messages.deleteMessage(actorId, messageId);
   }
 
   /**
-   * Lớp (b) — THU HỒI cho mọi người: chỉ tác giả, chỉ trong cửa sổ Uỷ quyền cho MessagingMessagesService.recallMessage — đặc tả luồng đầy đủ nằm tại method đích.
+   * Lớp (b) — THU HỒI cho mọi người: chỉ tác giả, chỉ trong cửa sổ cấu hình kể từ lúc gửi. Uỷ quyền cho MessagingMessagesService.recallMessage — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async recallMessage(actorId: string, messageId: string): Promise<MessageRow> {
     return this.messages.recallMessage(actorId, messageId);
   }
 
   /**
-   * Lớp (c) — XOÁ CỨNG một tin: chỉ moderator có `moderation:manage` Uỷ quyền cho MessagingMessagesService.hardDeleteMessage — đặc tả luồng đầy đủ nằm tại method đích.
+   * Lớp (c) — XOÁ CỨNG một tin: chỉ moderator có `moderation:manage` trong phạm vi, lý do bắt buộc, không giới hạn thời gian. Uỷ quyền cho MessagingMessagesService.hardDeleteMessage — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async hardDeleteMessage(actorId: string, messageId: string, input: { reason: string }): Promise<{ deleted: true; messageId: string; conversationId: string }> {
     return this.messages.hardDeleteMessage(actorId, messageId, input);
   }
 
   /**
-   * Lớp (c) — GỠ HÀNG LOẠT: cùng cổng thẩm quyền và lý do bắt buộc Uỷ quyền cho MessagingMessagesService.bulkRemoveMessages — đặc tả luồng đầy đủ nằm tại method đích.
+   * Lớp (c) — GỠ HÀNG LOẠT: cùng cổng thẩm quyền và lý do bắt buộc như xoá cứng một tin. Uỷ quyền cho MessagingMessagesService.bulkRemoveMessages — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async bulkRemoveMessages(actorId: string, input: { messageIds: string[]; reason: string }): Promise<{ removed: number; messageIds: string[] }> {
     return this.messages.bulkRemoveMessages(actorId, input);
   }
 
   /**
-   * Báo cáo một conversation: chỉ THÀNH VIÊN của conversation báo cáo Uỷ quyền cho MessagingMessagesService.reportConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Báo cáo một conversation: chỉ THÀNH VIÊN của conversation báo cáo được. Uỷ quyền cho MessagingMessagesService.reportConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async reportConversation(actorId: string, conversationId: string, reason?: string): Promise<ReportRow> {
     return this.messages.reportConversation(actorId, conversationId, reason);
   }
 
   /**
-   * Hàng đợi báo cáo TRONG THẨM QUYỀN của người gọi: quản trị viên Uỷ quyền cho MessagingMessagesService.listReports — đặc tả luồng đầy đủ nằm tại method đích.
+   * Hàng đợi báo cáo TRONG THẨM QUYỀN của người gọi: quản trị viên thấy tất cả; giáo viên chỉ thấy báo cáo của các conversation thuộc khoá mình phụ trách. Uỷ quyền cho MessagingMessagesService.listReports — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async listReports(actorId: string): Promise<ReportRow[]> {
     return this.messages.listReports(actorId);
   }
 
   /**
-   * Xem lại nội dung của ĐÚNG conversation bị báo cáo — đường truy vết Uỷ quyền cho MessagingMessagesService.getReportConversation — đặc tả luồng đầy đủ nằm tại method đích.
+   * Xem lại nội dung của ĐÚNG conversation bị báo cáo — đường truy vết có thẩm quyền của Lớp B. Uỷ quyền cho MessagingMessagesService.getReportConversation — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async getReportConversation(actorId: string, reportId: string): Promise<{
     report: ReportRow;
@@ -612,14 +614,14 @@ export class MessagingService {
   }
 
   /**
-   * Đổi trạng thái xử lý của một báo cáo (open/resolved/dismissed) — Uỷ quyền cho MessagingMessagesService.updateReportStatus — đặc tả luồng đầy đủ nằm tại method đích.
+   * Đổi trạng thái xử lý của một báo cáo (open/resolved/dismissed) — cùng phạm vi thẩm quyền với đường xem lại nội dung. Uỷ quyền cho MessagingMessagesService.updateReportStatus — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async updateReportStatus(actorId: string, reportId: string, status: string): Promise<ReportRow> {
     return this.messages.updateReportStatus(actorId, reportId, status);
   }
 
   /**
-   * Đánh dấu đã đọc conversation: chỉ nâng mốc đã đọc của CHÍNH user Uỷ quyền cho MessagingMessagesService.markConversationRead — đặc tả luồng đầy đủ nằm tại method đích.
+   * Đánh dấu đã đọc conversation: chỉ nâng mốc đã đọc của CHÍNH user này. Uỷ quyền cho MessagingMessagesService.markConversationRead — đặc tả luồng đầy đủ nằm tại method đích.
    */
   async markConversationRead(userId: string, conversationId: string): Promise<{ marked: number; lastReadSeq: number }> {
     return this.messages.markConversationRead(userId, conversationId);

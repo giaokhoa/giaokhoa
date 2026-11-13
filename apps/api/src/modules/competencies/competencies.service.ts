@@ -11,13 +11,52 @@ import { MessagingService } from '../messaging/messaging.service';
 import { UsersService } from '../users/users.service';
 import {
   CompetenciesRepository, type CompetencyRow, type EvidenceRow, type FrameworkRow,
-  type PlanRow, type TemplateRow, type UsercompRow,
+  type PlanReviewRow, type PlanRow, type TemplateRow, type UsercompRow,
 } from '@giaokhoa/db/repositories/competencies';
 
 export const PLAN_STATUS = { DRAFT: 0, ACTIVE: 1, WAITING_FOR_REVIEW: 2, IN_REVIEW: 3, COMPLETE: 4 } as const;
 export const USERCOMP_REVIEW = { NONE: 0, WAITING: 1, IN_REVIEW: 2 } as const;
 export const RULE_OUTCOMES = ['complete', 'attach-evidence', 'nothing'] as const;
 export type RuleOutcome = (typeof RULE_OUTCOMES)[number];
+
+/** Hành động chuyển trạng thái của learning plan (đầu vào của `planTransition`). */
+export type PlanTransitionAction = 'activate' | 'request-review' | 'cancel-review' | 'start-review' | 'stop-review' | 'approve' | 'unapprove' | 'complete';
+
+/** Một dòng trong bảng chuyển trạng thái plan: trạng thái nguồn cho phép, trạng thái đích và cổng gác. */
+interface PlanTransitionDef {
+  /** Trạng thái nguồn cho phép; ngoài danh sách này thì chuyển đổi bị từ chối 400. */
+  from: readonly number[];
+  /** Trạng thái đích sau khi chuyển. */
+  to: number;
+  /** Capability phải có khi không thuộc diện chủ plan tự làm. */
+  capability: 'competency:planmanage' | 'competency:usercompetencyreview';
+  /** Đúng khi chủ plan được tự thực hiện mà không cần capability (chỉ các action quản lý plan). */
+  ownerMayAct: boolean;
+  /** Thông báo lỗi khi trạng thái nguồn không cho phép. */
+  message: string;
+}
+
+/** Bảng chuyển trạng thái của learning plan (P2): mỗi action một dòng, thay cho switch lặp guard theo từng case. */
+const PLAN_TRANSITIONS: Record<PlanTransitionAction, PlanTransitionDef> = {
+  activate: { from: [PLAN_STATUS.DRAFT], to: PLAN_STATUS.ACTIVE, capability: 'competency:planmanage', ownerMayAct: true, message: 'Only a draft plan can be activated' },
+  'request-review': { from: [PLAN_STATUS.ACTIVE], to: PLAN_STATUS.WAITING_FOR_REVIEW, capability: 'competency:planmanage', ownerMayAct: true, message: 'Only an active plan can be sent for review' },
+  'cancel-review': { from: [PLAN_STATUS.WAITING_FOR_REVIEW], to: PLAN_STATUS.ACTIVE, capability: 'competency:planmanage', ownerMayAct: true, message: 'Only a plan waiting for review can cancel the request' },
+  'start-review': { from: [PLAN_STATUS.WAITING_FOR_REVIEW], to: PLAN_STATUS.IN_REVIEW, capability: 'competency:usercompetencyreview', ownerMayAct: false, message: 'Review can only start for a plan waiting for review' },
+  'stop-review': { from: [PLAN_STATUS.IN_REVIEW], to: PLAN_STATUS.ACTIVE, capability: 'competency:usercompetencyreview', ownerMayAct: false, message: 'Only a plan in review can stop review' },
+  // Review đã duyệt đưa plan trở lại active (approve_plan của Moodle).
+  approve: { from: [PLAN_STATUS.IN_REVIEW], to: PLAN_STATUS.ACTIVE, capability: 'competency:usercompetencyreview', ownerMayAct: false, message: 'Only a plan in review can be approved' },
+  unapprove: { from: [PLAN_STATUS.ACTIVE], to: PLAN_STATUS.IN_REVIEW, capability: 'competency:usercompetencyreview', ownerMayAct: false, message: 'Only an active (previously approved) plan can be unapproved' },
+  complete: { from: [PLAN_STATUS.ACTIVE, PLAN_STATUS.IN_REVIEW], to: PLAN_STATUS.COMPLETE, capability: 'competency:planmanage', ownerMayAct: true, message: 'Only an active plan can be completed' },
+};
+
+/** Các action chuyển trạng thái plan ghi actor làm reviewer của plan. */
+const PLAN_SETS_REVIEWER_ACTIONS: readonly PlanTransitionAction[] = ['start-review', 'approve', 'unapprove'];
+
+/** Một competency trong chi tiết plan kèm vị thế của user trên competency đó. */
+export interface PlanCompetencyView { competency: CompetencyRow; usercomp: UsercompRow | null }
+
+/** Chi tiết plan kèm trạng thái từng competency và lịch sử duyệt của plan. */
+export interface PlanReviewView { plan: PlanRow; competencies: PlanCompetencyView[]; reviews: PlanReviewRow[] }
 
 export interface ScaleConfiguration { values: string[]; proficient: number[] }
 
@@ -50,6 +89,33 @@ export function parseRuleConfig(raw: unknown): CompetencyRulePointsConfig | null
     entries.push({ competencyId: e.competencyId, points: e.points as number, required: e.required });
   }
   return { pointsRequired: cfg.pointsRequired as number, entries };
+}
+
+/**
+ * Kiểm tra phần chung của một rule points: entries không trùng nhau, mỗi entry chỉ
+ * tham chiếu một competency CON TRỰC TIẾP (nằm trong `childIds`), ít nhất một entry,
+ * và ngưỡng `pointsRequired` phải với tới được bằng tổng điểm các con. Dùng chung cho
+ * `setCompetencyRule` (rule đặt trực tiếp) và `validateFrameworkExport` (rule trong
+ * tài liệu import) để hai đường không lệch nhau. `invalid` ném lỗi 400 với mã của
+ * đường gọi; các kiểm tra riêng của từng đường (tự tham chiếu, điểm >= 0, ngưỡng
+ * >= 1, khoá chưa biết) vẫn nằm ở đường đó.
+ */
+function validateCompetencyRule(
+  pointsRequired: number,
+  entries: readonly { competencyId: string; points: number }[],
+  childIds: ReadonlySet<string>,
+  invalid: (message: string) => never,
+): void {
+  const seen = new Set<string>();
+  let total = 0;
+  for (const entry of entries) {
+    if (seen.has(entry.competencyId)) invalid('The rule lists the same competency twice');
+    seen.add(entry.competencyId);
+    if (!childIds.has(entry.competencyId)) invalid('Rule points can only come from direct children of the competency');
+    total += entry.points;
+  }
+  if (!seen.size) invalid('A points rule needs at least one child competency');
+  if (pointsRequired > total) invalid('The points required exceed the total points the children can contribute');
 }
 
 /** Hình dạng tài liệu export framework (khớp `frameworkExportSchema` ở @giaokhoa/contracts). */
@@ -102,8 +168,7 @@ export class CompetenciesService implements OnModuleInit {
     this.completion.registerCourseCompletionHook(async ({ courseId, userId }) => {
       await this.applyCourseCompletion(courseId, userId);
     });
-    this.completion.registerCmCompletionHook(async ({ cmId, courseId, userId }) => {
-      void courseId;
+    this.completion.registerCmCompletionHook(async ({ cmId, userId }) => {
       await this.applyCmCompletion(cmId, userId);
     });
   }
@@ -151,8 +216,7 @@ export class CompetenciesService implements OnModuleInit {
    */
   async createCompetency(actorId: string, frameworkId: string, input: { shortName: string; idNumber?: string; description?: string; parentId?: string }): Promise<CompetencyRow> {
     await this.requireManage(actorId);
-    const framework = await this.getFramework(frameworkId);
-    void framework;
+    await this.getFramework(frameworkId);
     let parent: CompetencyRow | undefined;
     if (input.parentId) {
       parent = await this.getCompetency(input.parentId);
@@ -165,7 +229,7 @@ export class CompetenciesService implements OnModuleInit {
     });
     const path = parent ? `${parent.path}/${created.id}` : `/${created.id}`;
     await this.repo.updateCompetency(created.id, { path });
-    return (await this.repo.getCompetency(created.id))!;
+    return this.getCompetency(created.id);
   }
   /**
    * Lấy competency; ném competencies.not_found khi vắng.
@@ -204,13 +268,18 @@ export class CompetenciesService implements OnModuleInit {
    * với đường ghi setCompetencyRule) hoặc
    * `competency:usercompetencyreview` tại system mới xem; đường nội bộ
    * (đánh giá rule khi chấm) vẫn gọi getCompetencyRule không gác.
+   * Competency không thuộc framework trên đường dẫn thì 404.
    */
-  async getCompetencyRuleFor(actorId: string, competencyId: string) {
+  async getCompetencyRuleFor(actorId: string, frameworkId: string, competencyId: string) {
     const sys = await this.systemCtx();
     const canView = (await this.evaluator.hasCapability(actorId, 'competency:competencymanage', sys))
       || (await this.evaluator.hasCapability(actorId, 'competency:usercompetencyreview', sys));
     if (!canView) {
       throw new ForbiddenException({ message: 'You cannot view competency rule configuration', code: 'competency.rule_forbidden' });
+    }
+    const competency = await this.getCompetency(competencyId);
+    if (competency.frameworkId !== frameworkId) {
+      throw new NotFoundException({ message: `Competency ${competencyId} not found in framework ${frameworkId}`, code: 'competency.not_found' });
     }
     return this.getCompetencyRule(competencyId);
   }
@@ -223,25 +292,17 @@ export class CompetenciesService implements OnModuleInit {
    */
   async setCompetencyRule(actorId: string, competencyId: string, input: { outcome: string; pointsRequired: number; entries: CompetencyRulePointsEntry[] }): Promise<{ competencyId: string; type: string | null; outcome: string; config: CompetencyRulePointsConfig | null }> {
     await this.requireManage(actorId);
-    const parent = await this.getCompetency(competencyId);
-    void parent;
+    await this.getCompetency(competencyId);
     const invalid = (msg: string): never => { throw new BadRequestException({ message: msg, code: 'competency.rule_invalid' }); };
     const outcome = this.assertOutcome(input.outcome === 'nothing' ? 'nothing' : input.outcome);
     if (!Number.isInteger(input.pointsRequired) || input.pointsRequired < 1) invalid('The points required must be at least 1');
     const children = await this.repo.listChildren(competencyId);
     const childIds = new Set(children.map((c) => c.id));
-    const seen = new Set<string>();
-    let total = 0;
     for (const entry of input.entries) {
       if (entry.competencyId === competencyId) invalid('A competency cannot contribute points to its own rule');
-      if (seen.has(entry.competencyId)) invalid('The rule lists the same competency twice');
-      seen.add(entry.competencyId);
-      if (!childIds.has(entry.competencyId)) invalid('Rule points can only come from direct children of the competency');
       if (!Number.isInteger(entry.points) || entry.points < 0) invalid('Rule points must be a non-negative integer');
-      total += entry.points;
     }
-    if (!seen.size) invalid('A points rule needs at least one child competency');
-    if (input.pointsRequired > total) invalid('The points required exceed the total points the children can contribute');
+    validateCompetencyRule(input.pointsRequired, input.entries, childIds, invalid);
     const config: CompetencyRulePointsConfig = { pointsRequired: input.pointsRequired, entries: input.entries };
     await this.repo.updateCompetency(competencyId, { ruleType: 'points', ruleConfig: config, ruleOutcome: outcome });
     return this.getCompetencyRule(competencyId);
@@ -359,18 +420,16 @@ export class CompetenciesService implements OnModuleInit {
         if (!byKey.has(c.parentKey)) invalid(`Unknown parent key ${c.parentKey}`);
       }
       if (c.rule) {
-        const seen = new Set<string>();
-        let total = 0;
         for (const entry of c.rule.entries) {
-          const target = byKey.get(entry.competencyKey);
-          if (!target) invalid(`Rule references unknown competency key ${entry.competencyKey}`);
-          if (target!.parentKey !== c.key) invalid('Rule points can only come from direct children of the competency');
-          if (seen.has(entry.competencyKey)) invalid('The rule lists the same competency twice');
-          seen.add(entry.competencyKey);
-          total += entry.points;
+          if (!byKey.has(entry.competencyKey)) invalid(`Rule references unknown competency key ${entry.competencyKey}`);
         }
-        if (!seen.size) invalid('A points rule needs at least one child competency');
-        if (c.rule.pointsRequired > total) invalid('The points required exceed the total points the children can contribute');
+        const childIds = new Set(doc.competencies.filter((d) => d.parentKey === c.key).map((d) => d.key));
+        validateCompetencyRule(
+          c.rule.pointsRequired,
+          c.rule.entries.map((e) => ({ competencyId: e.competencyKey, points: e.points })),
+          childIds,
+          invalid,
+        );
       }
     }
   }
@@ -544,9 +603,8 @@ export class CompetenciesService implements OnModuleInit {
     return this.repo.listUsercompsForUser(userId);
   }
 
-  /** Facade cho BadgesModule: user này có đạt chuẩn competency này không (bất kỳ scope nào)? */
   /**
-   * User đã đạt chuẩn competency hay chưa.
+   * Facade cho BadgesModule: user này có đạt chuẩn competency này không (bất kỳ scope nào)?
    */
   async isProficient(userId: string, competencyId: string): Promise<boolean> {
     const rows = await this.repo.listUsercompsForUser(userId);
@@ -567,36 +625,31 @@ export class CompetenciesService implements OnModuleInit {
   }
 
   /**
-   * Gắn evidence vào competency của một user (oracle: api_test
-   * test_add_evidence_*). Một điểm trên evidence là INDEX CỦA SCALE: nó đặt
-   * proficiency theo scale của framework — nhưng chỉ khi actor được chấm
-   * (capability review, hoặc đường manager của plan/khoá học). Evidence do
-   * chính người học nộp được ghi MÀ KHÔNG có hiệu lực proficiency
+   * Thêm bằng chứng cho usercomp (có thể đồng thời gửi duyệt). Gắn evidence vào
+   * competency của một user (oracle: api_test test_add_evidence_*). Một điểm trên
+   * evidence là INDEX CỦA SCALE: nó đặt proficiency theo scale của framework — nhưng
+   * chỉ khi actor được chấm (capability review, hoặc đường manager của plan/khoá học).
+   * Evidence do chính người học nộp được ghi MÀ KHÔNG có hiệu lực proficiency
    * trừ khi sendForReview chuyển nó vào workflow review.
-   */
-  /**
-   * Thêm bằng chứng cho usercomp (có thể đồng thời gửi duyệt).
    */
   async addEvidence(actorId: string, input: {
     userId: string; competencyId: string; planId?: string; courseId?: string;
     description: string; url?: string; grade?: number; note?: string; sendForReview?: boolean;
   }): Promise<{ usercomp: UsercompRow; evidence: EvidenceRow }> {
-    const competencyRow = await this.getCompetency(input.competencyId);
-    void competencyRow;
+    await this.getCompetency(input.competencyId);
     await this.users.getUser(input.userId);
-    if (input.grade !== undefined) await this.validateGrade(input.competencyId, input.grade);
+    // validateGrade trả về framework của competency để dùng lại ở dưới thay vì gọi getFramework hai lần.
+    const framework = input.grade !== undefined ? await this.validateGrade(input.competencyId, input.grade) : null;
     const canRate = await this.evaluator.hasCapability(actorId, 'competency:usercompetencyreview', await this.systemCtx());
     const usercomp = await this.getOrCreateUsercomp(input.userId, input.competencyId, { planId: input.planId, courseId: input.courseId });
-    let evidence!: EvidenceRow;
-    await this.repo.transaction(async (tx) => {
-      evidence = await this.repo.insertEvidence({
+    const evidence = await this.repo.transaction(async (tx) => {
+      const inserted = await this.repo.insertEvidence({
         userCompetencyId: usercomp.id, actionUserId: actorId, action: 'evidence',
         description: input.description, url: input.url ?? null,
         grade: input.grade ?? null, note: input.note ?? '',
         contextId: await this.systemCtx(),
       }, tx);
-      if (input.grade !== undefined && canRate) {
-        const framework = await this.getFramework(competencyRow.frameworkId);
+      if (input.grade !== undefined && canRate && framework) {
         await this.repo.updateUsercomp(usercomp.id, {
           grade: input.grade, proficiency: isProficientGrade(framework, input.grade),
         }, tx);
@@ -611,15 +664,13 @@ export class CompetenciesService implements OnModuleInit {
       }
       await this.outbox.enqueueKysely(tx, {
         aggregate: 'competency', type: 'competency_evidence_added',
-        payload: { userId: input.userId, competencyId: input.competencyId, evidenceId: evidence.id },
+        payload: { userId: input.userId, competencyId: input.competencyId, evidenceId: inserted.id },
       });
+      return inserted;
     });
     // Evidence kèm grade của người có quyền chấm đã đặt proficiency ⇒ đánh giá rule của cha.
-    if (input.grade !== undefined && canRate) {
-      const framework = await this.getFramework(competencyRow.frameworkId);
-      if (isProficientGrade(framework, input.grade)) {
-        await this.evaluateParentRule(input.userId, input.competencyId, { planId: input.planId, courseId: input.courseId });
-      }
+    if (input.grade !== undefined && canRate && framework && isProficientGrade(framework, input.grade)) {
+      await this.evaluateParentRule(input.userId, input.competencyId, { planId: input.planId, courseId: input.courseId });
     }
     return { usercomp: await this.getUsercomp(usercomp.id), evidence };
   }
@@ -641,63 +692,93 @@ export class CompetenciesService implements OnModuleInit {
 
   // --- workflow review usercomp ---------------------------------------------------------
 
+  /**
+   * Gửi usercomp đi duyệt: chính chủ tự gửi được, người khác cần `competency:planmanage`.
+   * Chỉ gửi được khi chưa có vòng duyệt nào đang chạy.
+   */
+  private async requestUsercompReviewTransition(usercomp: UsercompRow, actorId: string, systemCtx: string, note?: string): Promise<void> {
+    if (actorId !== usercomp.userId) {
+      await this.evaluator.requireCapability(actorId, 'competency:planmanage', systemCtx);
+    }
+    if (usercomp.status !== USERCOMP_REVIEW.NONE) {
+      throw new BadRequestException({ message: 'A review is already in progress for this competency', code: 'competency.review_in_progress' });
+    }
+    await this.repo.updateUsercomp(usercomp.id, { status: USERCOMP_REVIEW.WAITING });
+    await this.repo.insertEvidence({ userCompetencyId: usercomp.id, actionUserId: actorId, action: 'review_requested', description: 'Review requested', note: note ?? '' });
+  }
+
+  /**
+   * Reviewer bắt đầu duyệt usercomp đang chờ duyệt; ghi reviewer vào bản ghi.
+   */
+  private async startUsercompReviewTransition(usercomp: UsercompRow, actorId: string, note?: string): Promise<void> {
+    if (usercomp.status !== USERCOMP_REVIEW.WAITING) {
+      throw new BadRequestException({ message: 'Review can only start from waitingforreview', code: 'competency.review_not_waiting' });
+    }
+    await this.repo.updateUsercomp(usercomp.id, { status: USERCOMP_REVIEW.IN_REVIEW, reviewerId: actorId });
+    await this.repo.insertEvidence({ userCompetencyId: usercomp.id, actionUserId: actorId, action: 'review_started', description: 'Review started', note: note ?? '' });
+  }
+
+  /**
+   * Reviewer duyệt đạt usercomp đang duyệt (hoặc đang chờ): đặt proficiency theo thang
+   * của framework rồi đánh giá rule points của competency cha khi đạt chuẩn.
+   */
+  private async approveUsercompReviewTransition(usercomp: UsercompRow, actorId: string, opts?: { grade?: number; note?: string }): Promise<void> {
+    if (usercomp.status !== USERCOMP_REVIEW.IN_REVIEW && usercomp.status !== USERCOMP_REVIEW.WAITING) {
+      throw new BadRequestException({ message: 'Only a competency in review can be approved', code: 'competency.review_not_in_review' });
+    }
+    if (opts?.grade !== undefined) await this.validateGrade(usercomp.competencyId, opts.grade);
+    const competencyRow = await this.getCompetency(usercomp.competencyId);
+    const framework = await this.getFramework(competencyRow.frameworkId);
+    const scale = parseScale(framework);
+    const grade = opts?.grade ?? scale.proficient[0];
+    if (grade === undefined) throw new BadRequestException({ message: 'The framework scale has no proficient value to approve with', code: 'competency.scale_no_proficient' });
+    await this.repo.updateUsercomp(usercomp.id, {
+      status: USERCOMP_REVIEW.NONE, grade, proficiency: isProficientGrade(framework, grade), reviewerId: actorId,
+    });
+    await this.repo.insertEvidence({
+      userCompetencyId: usercomp.id, actionUserId: actorId, action: 'review_approved',
+      description: 'Review approved', grade, note: opts?.note ?? '',
+    });
+    await this.emitter.emitAsync('competency_proficiency_changed', { userId: usercomp.userId, competencyId: usercomp.competencyId });
+    await this.outbox.enqueueStandalone({
+      aggregate: 'competency', type: 'competency_proficiency_changed',
+      payload: { userId: usercomp.userId, competencyId: usercomp.competencyId, proficient: true },
+    });
+    // Con vừa đạt proficiency ⇒ đánh giá rule points của cha (cùng đường Moodle dùng khi duyệt).
+    if (isProficientGrade(framework, grade)) {
+      await this.evaluateParentRule(usercomp.userId, usercomp.competencyId, { planId: usercomp.planId ?? undefined, courseId: usercomp.courseId ?? undefined });
+    }
+  }
+
+  /**
+   * Reviewer từ chối usercomp đang duyệt (hoặc đang chờ): vòng duyệt đóng, proficiency không đổi.
+   */
+  private async rejectUsercompReviewTransition(usercomp: UsercompRow, actorId: string, note?: string): Promise<void> {
+    if (usercomp.status !== USERCOMP_REVIEW.IN_REVIEW && usercomp.status !== USERCOMP_REVIEW.WAITING) {
+      throw new BadRequestException({ message: 'Only a competency in review can be rejected', code: 'competency.review_not_in_review' });
+    }
+    await this.repo.updateUsercomp(usercomp.id, { status: USERCOMP_REVIEW.NONE, reviewerId: actorId });
+    await this.repo.insertEvidence({
+      userCompetencyId: usercomp.id, actionUserId: actorId, action: 'review_rejected',
+      description: 'Review rejected', note: note ?? '',
+    });
+  }
+
+  /**
+   * Chuyển trạng thái review của một usercomp: nhánh `request` do chính chủ (hoặc người
+   * có `competency:planmanage`) thực hiện, các nhánh còn lại cần capability review.
+   */
   private async transitionUsercompReview(actorId: string, usercompId: string, action: 'request' | 'start' | 'approve' | 'reject',
     opts?: { grade?: number; note?: string }): Promise<UsercompRow> {
     const usercomp = await this.getUsercomp(usercompId);
     const systemCtx = await this.systemCtx();
     if (action === 'request') {
-      if (actorId !== usercomp.userId) {
-        await this.evaluator.requireCapability(actorId, 'competency:planmanage', systemCtx);
-      }
-      if (usercomp.status !== USERCOMP_REVIEW.NONE) {
-        throw new BadRequestException({ message: 'A review is already in progress for this competency', code: 'competency.review_in_progress' });
-      }
-      await this.repo.updateUsercomp(usercompId, { status: USERCOMP_REVIEW.WAITING });
-      await this.repo.insertEvidence({ userCompetencyId: usercompId, actionUserId: actorId, action: 'review_requested', description: 'Review requested', note: opts?.note ?? '' });
+      await this.requestUsercompReviewTransition(usercomp, actorId, systemCtx, opts?.note);
     } else {
       await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', systemCtx);
-      if (action === 'start') {
-        if (usercomp.status !== USERCOMP_REVIEW.WAITING) {
-          throw new BadRequestException({ message: 'Review can only start from waitingforreview', code: 'competency.review_not_waiting' });
-        }
-        await this.repo.updateUsercomp(usercompId, { status: USERCOMP_REVIEW.IN_REVIEW, reviewerId: actorId });
-        await this.repo.insertEvidence({ userCompetencyId: usercompId, actionUserId: actorId, action: 'review_started', description: 'Review started', note: opts?.note ?? '' });
-      } else if (action === 'approve') {
-        if (usercomp.status !== USERCOMP_REVIEW.IN_REVIEW && usercomp.status !== USERCOMP_REVIEW.WAITING) {
-          throw new BadRequestException({ message: 'Only a competency in review can be approved', code: 'competency.review_not_in_review' });
-        }
-        if (opts?.grade !== undefined) await this.validateGrade(usercomp.competencyId, opts.grade);
-        const competencyRow = await this.getCompetency(usercomp.competencyId);
-        const framework = await this.getFramework(competencyRow.frameworkId);
-        const scale = parseScale(framework);
-        const grade = opts?.grade ?? scale.proficient[0];
-        if (grade === undefined) throw new BadRequestException({ message: 'The framework scale has no proficient value to approve with', code: 'competency.scale_no_proficient' });
-        await this.repo.updateUsercomp(usercompId, {
-          status: USERCOMP_REVIEW.NONE, grade, proficiency: isProficientGrade(framework, grade), reviewerId: actorId,
-        });
-        await this.repo.insertEvidence({
-          userCompetencyId: usercompId, actionUserId: actorId, action: 'review_approved',
-          description: 'Review approved', grade, note: opts?.note ?? '',
-        });
-        await this.emitter.emitAsync('competency_proficiency_changed', { userId: usercomp.userId, competencyId: usercomp.competencyId });
-        await this.outbox.enqueueStandalone({
-          aggregate: 'competency', type: 'competency_proficiency_changed',
-          payload: { userId: usercomp.userId, competencyId: usercomp.competencyId, proficient: true },
-        });
-        // Con vừa đạt proficiency ⇒ đánh giá rule points của cha (cùng đường Moodle dùng khi duyệt).
-        if (isProficientGrade(framework, grade)) {
-          await this.evaluateParentRule(usercomp.userId, usercomp.competencyId, { planId: usercomp.planId ?? undefined, courseId: usercomp.courseId ?? undefined });
-        }
-      } else {
-        if (usercomp.status !== USERCOMP_REVIEW.IN_REVIEW && usercomp.status !== USERCOMP_REVIEW.WAITING) {
-          throw new BadRequestException({ message: 'Only a competency in review can be rejected', code: 'competency.review_not_in_review' });
-        }
-        await this.repo.updateUsercomp(usercompId, { status: USERCOMP_REVIEW.NONE, reviewerId: actorId });
-        await this.repo.insertEvidence({
-          userCompetencyId: usercompId, actionUserId: actorId, action: 'review_rejected',
-          description: 'Review rejected', note: opts?.note ?? '',
-        });
-      }
+      if (action === 'start') await this.startUsercompReviewTransition(usercomp, actorId, opts?.note);
+      else if (action === 'approve') await this.approveUsercompReviewTransition(usercomp, actorId, opts);
+      else await this.rejectUsercompReviewTransition(usercomp, actorId, opts?.note);
     }
     return this.getUsercomp(usercompId);
   }
@@ -727,9 +808,9 @@ export class CompetenciesService implements OnModuleInit {
     return this.transitionUsercompReview(actorId, usercompId, 'reject', { note });
   }
 
-  /** Chấm trực tiếp bởi một reviewer (oracle: test_add_evidence_complete / grade_competency_in_course). */
   /**
-   * Chấm trực tiếp proficiency cho usercomp bởi người có capability.
+   * Chấm trực tiếp proficiency cho usercomp bởi một reviewer (oracle:
+   * test_add_evidence_complete / grade_competency_in_course).
    */
   async gradeUsercomp(actorId: string, input: { userId: string; competencyId: string; planId?: string; courseId?: string; grade: number; note?: string }): Promise<UsercompRow> {
     await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', await this.systemCtx());
@@ -749,9 +830,9 @@ export class CompetenciesService implements OnModuleInit {
 
   // --- rule outcome dẫn động bởi completion (hook đã đăng ký) --------------------------------
 
-  /** Hoàn thành khoá học ⇒ áp ruleOutcome của từng competency đã liên kết trong scope COURSE. */
   /**
-   * Hook hoàn thành khoá học: cấp proficiency cho competency liên kết có quy tắc tự động.
+   * Hook hoàn thành khoá học: áp ruleOutcome của từng competency đã liên kết trong
+   * scope COURSE — cấp proficiency cho competency liên kết có quy tắc tự động.
    */
   async applyCourseCompletion(courseId: string, userId: string): Promise<void> {
     const links = await this.repo.listCourseLinks(courseId);
@@ -760,13 +841,17 @@ export class CompetenciesService implements OnModuleInit {
       await this.applyOutcome(userId, link.competencyId, { courseId }, link.ruleOutcome as RuleOutcome, `Course ${courseId} completed`);
     }
   }
-  /** Hoàn thành hoạt động ⇒ áp ruleOutcome của từng competency đã liên kết trong scope COURSE của khoá học chứa cm. */
   /**
-   * Hook hoàn thành cm: cấp proficiency cho competency liên kết với module.
+   * Hook hoàn thành cm: áp ruleOutcome của từng competency đã liên kết trong scope
+   * COURSE của khoá học chứa cm — cấp proficiency cho competency liên kết với module.
    */
   async applyCmCompletion(cmId: string, userId: string): Promise<void> {
     const links = await this.repo.listModuleLinks(cmId);
     if (!links.length) return;
+    // Nuốt lỗi tra cứu cm là có chủ đích: liên kết module có thể tồn tại sau khi cm
+    // đã bị xoá; khi đó ruleOutcome vẫn được áp với courseId undefined (scope không
+    // gắn khoá học) thay vì bỏ qua toàn bộ liên kết. Chỉ bước tra cứu này được nuốt —
+    // mọi lỗi ghi trong applyOutcome phía dưới vẫn ném ra ngoài.
     const cm = await this.courses.getCm(cmId).catch(() => undefined);
     for (const link of links) {
       if (link.ruleOutcome === 'nothing') continue;
@@ -851,9 +936,9 @@ export class CompetenciesService implements OnModuleInit {
     return { templateId, cohorts: await this.repo.listTemplateCohorts(templateId) };
   }
 
-  /** Sinh plan cho mọi thành viên của mọi cohort đã liên kết (idempotent theo user+template). */
   /**
-   * Sinh plan cho mọi thành viên cohort của template (bỏ qua user đã có plan từ template này).
+   * Sinh plan cho mọi thành viên của mọi cohort đã liên kết (idempotent theo
+   * user+template): bỏ qua user đã có plan từ template này.
    */
   async createPlansFromTemplate(actorId: string, templateId: string): Promise<{ created: number; plans: PlanRow[] }> {
     await this.requireManage(actorId);
@@ -862,10 +947,10 @@ export class CompetenciesService implements OnModuleInit {
     const plans: PlanRow[] = [];
     for (const cohortId of cohortIds) {
       const members = await this.groups.listCohortMembers(cohortId);
-      for (const member of members) {
-        const plan = await this.createPlanFromTemplate(template, member.userId);
-        if (plan) plans.push(plan);
-      }
+      // Mỗi member là một user khác nhau trong cohort nên sinh plan song song được;
+      // vòng ngoài vẫn đi từng cohort để không tạo trùng khi một user thuộc nhiều cohort.
+      const created = await Promise.all(members.map((member) => this.createPlanFromTemplate(template, member.userId)));
+      plans.push(...created.filter((plan): plan is PlanRow => plan !== null));
     }
     return { created: plans.length, plans };
   }
@@ -902,7 +987,8 @@ export class CompetenciesService implements OnModuleInit {
     if (input.templateId) {
       const template = await this.getTemplate(input.templateId);
       const created = await this.createPlanFromTemplate(template, userId);
-      const plan = created ?? (await this.repo.findPlanFromTemplate(userId, template.id))!;
+      const plan = created ?? await this.repo.findPlanFromTemplate(userId, template.id);
+      if (!plan) throw new NotFoundException({ message: `Learning plan from template ${template.id} not found`, code: 'competency.plan_not_found' });
       return { ...plan, competencies: await this.repo.listPlanCompetencyIds(plan.id) };
     }
     const plan = await this.repo.insertPlan({
@@ -915,7 +1001,7 @@ export class CompetenciesService implements OnModuleInit {
   /**
    * Chi tiết plan kèm trạng thái từng competency.
    */
-  async getPlanView(actorId: string, planId: string): Promise<{ plan: PlanRow; competencies: { competency: CompetencyRow; usercomp: UsercompRow | null }[]; reviews: unknown }> {
+  async getPlanView(actorId: string, planId: string): Promise<PlanReviewView> {
     const plan = await this.repo.getPlan(planId);
     if (!plan) throw new NotFoundException({ message: `Learning plan ${planId} not found`, code: 'competency.plan_not_found' });
     if (plan.userId !== actorId) {
@@ -925,7 +1011,7 @@ export class CompetenciesService implements OnModuleInit {
       ? (await this.repo.listTemplateCompetencies(plan.templateId)).map((c) => c.id)
       : await this.repo.listPlanCompetencyIds(planId);
     const usercomps = await this.repo.listUsercompsForPlan(planId, plan.userId);
-    const competencies = [];
+    const competencies: PlanCompetencyView[] = [];
     for (const id of ids) {
       competencies.push({
         competency: await this.getCompetency(id),
@@ -945,56 +1031,25 @@ export class CompetenciesService implements OnModuleInit {
     return this.repo.listPlansForUser(userId);
   }
 
-  private async planTransition(actorId: string, planId: string, action: 'activate' | 'request-review' | 'cancel-review' | 'start-review' | 'stop-review' | 'approve' | 'unapprove' | 'complete',
+  /**
+   * Chuyển trạng thái của một plan theo bảng `PLAN_TRANSITIONS`: gác capability theo
+   * action (chủ plan tự làm được ở các action quản lý plan; action duyệt luôn cần
+   * capability review), kiểm tra trạng thái nguồn, rồi ghi lịch sử duyệt + outbox.
+   */
+  private async planTransition(actorId: string, planId: string, action: PlanTransitionAction,
     note?: string): Promise<PlanRow> {
     const plan = await this.repo.getPlan(planId);
     if (!plan) throw new NotFoundException({ message: `Learning plan ${planId} not found`, code: 'competency.plan_not_found' });
     const from = plan.status;
     const bad = (msg: string): never => { throw new BadRequestException({ message: msg, code: 'competency.plan_bad_transition' }); };
-    let to = from;
-    switch (action) {
-      case 'activate':
-        if (plan.userId !== actorId) await this.evaluator.requireCapability(actorId, 'competency:planmanage', await this.systemCtx());
-        if (from !== PLAN_STATUS.DRAFT) bad('Only a draft plan can be activated');
-        to = PLAN_STATUS.ACTIVE;
-        break;
-      case 'request-review':
-        if (plan.userId !== actorId) await this.evaluator.requireCapability(actorId, 'competency:planmanage', await this.systemCtx());
-        if (from !== PLAN_STATUS.ACTIVE) bad('Only an active plan can be sent for review');
-        to = PLAN_STATUS.WAITING_FOR_REVIEW;
-        break;
-      case 'cancel-review':
-        if (plan.userId !== actorId) await this.evaluator.requireCapability(actorId, 'competency:planmanage', await this.systemCtx());
-        if (from !== PLAN_STATUS.WAITING_FOR_REVIEW) bad('Only a plan waiting for review can cancel the request');
-        to = PLAN_STATUS.ACTIVE;
-        break;
-      case 'start-review':
-        await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', await this.systemCtx());
-        if (from !== PLAN_STATUS.WAITING_FOR_REVIEW) bad('Review can only start for a plan waiting for review');
-        to = PLAN_STATUS.IN_REVIEW;
-        break;
-      case 'stop-review':
-        await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', await this.systemCtx());
-        if (from !== PLAN_STATUS.IN_REVIEW) bad('Only a plan in review can stop review');
-        to = PLAN_STATUS.ACTIVE;
-        break;
-      case 'approve':
-        await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', await this.systemCtx());
-        if (from !== PLAN_STATUS.IN_REVIEW) bad('Only a plan in review can be approved');
-        to = PLAN_STATUS.ACTIVE; // review đã duyệt đưa plan trở lại active (approve_plan của Moodle)
-        break;
-      case 'unapprove':
-        await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', await this.systemCtx());
-        if (from !== PLAN_STATUS.ACTIVE) bad('Only an active (previously approved) plan can be unapproved');
-        to = PLAN_STATUS.IN_REVIEW;
-        break;
-      case 'complete':
-        if (plan.userId !== actorId) await this.evaluator.requireCapability(actorId, 'competency:planmanage', await this.systemCtx());
-        if (from !== PLAN_STATUS.ACTIVE && from !== PLAN_STATUS.IN_REVIEW) bad('Only an active plan can be completed');
-        to = PLAN_STATUS.COMPLETE;
-        break;
-    }
-    await this.repo.updatePlan(planId, { status: to, reviewerId: ['start-review', 'approve', 'unapprove'].includes(action) ? actorId : plan.reviewerId });
+    const def = PLAN_TRANSITIONS[action];
+    // Action quản lý plan: chủ plan tự làm được, người khác cần capability planmanage.
+    // Action duyệt: luôn cần capability review, kể cả chủ plan (chủ plan không tự duyệt).
+    const needsCapability = !def.ownerMayAct || plan.userId !== actorId;
+    if (needsCapability) await this.evaluator.requireCapability(actorId, def.capability, await this.systemCtx());
+    if (!def.from.includes(from)) bad(def.message);
+    const to = def.to;
+    await this.repo.updatePlan(planId, { status: to, reviewerId: PLAN_SETS_REVIEWER_ACTIONS.includes(action) ? actorId : plan.reviewerId });
     await this.repo.insertPlanReview({ planId: planId, actorId: actorId, action, statusFrom: from, statusTo: to, note: note ?? '' });
     if (action === 'request-review' && plan.reviewerId) {
       await this.messaging.notify(plan.reviewerId, 'competency_review_requested', {
@@ -1010,10 +1065,12 @@ export class CompetenciesService implements OnModuleInit {
       }).catch(() => undefined);
     }
     await this.outbox.enqueueStandalone({
-      aggregate: 'competency', type: `competency_plan_${action.replace('-', '_')}`,
+      aggregate: 'competency', type: `competency_plan_${action.replaceAll('-', '_')}`,
       payload: { planId, userId: plan.userId, from, to },
     });
-    return (await this.repo.getPlan(planId))!;
+    const updated = await this.repo.getPlan(planId);
+    if (!updated) throw new NotFoundException({ message: `Learning plan ${planId} not found`, code: 'competency.plan_not_found' });
+    return updated;
   }
 
   /**
@@ -1049,9 +1106,9 @@ export class CompetenciesService implements OnModuleInit {
    */
   async completePlan(actorId: string, planId: string): Promise<PlanRow> { return this.planTransition(actorId, planId, 'complete'); }
 
-  /** Cổng cấm import: chủ plan không được review plan của chính mình. */
   /**
-   * Chặn tự duyệt: reviewer phải khác chủ plan/usercomp.
+   * Chặn tự duyệt: reviewer phải khác chủ plan/usercomp (chủ plan không được
+   * review plan của chính mình).
    */
   async assertNotSelfReview(actorId: string, userId: string): Promise<void> {
     if (actorId === userId) throw new ForbiddenException({ message: 'You cannot review your own competencies', code: 'competency.self_review' });

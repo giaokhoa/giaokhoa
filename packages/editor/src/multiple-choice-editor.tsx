@@ -1,10 +1,8 @@
-import { useEffect, useId, useState, useMemo } from 'react';
-import { createEditorControlStore } from './editor-control-store.js';
-import { Decoration, Extension, type WidgetDecoration } from '@tiptap/core';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { useId } from 'react';
 import type { RichTextDocument } from '@giaokhoa/contracts';
 import { RichTextEditor } from './rich-text-editor.js';
 import type { RichTextImagePick } from './rich-text-editor.js';
+import { createAnswerDecoration, useAnswerEditorExtensions } from './item-list.js';
 import {
   CHOICE_LIST_NODE_TYPE,
   CHOICE_NODE_TYPE,
@@ -46,99 +44,49 @@ interface CorrectChoiceControl {
 }
 
 /**
- * Các id choice theo thứ tự trong tài liệu hiện tại của editor.
+ * Dựng radio đáp án đúng cho một lựa chọn: radio đọc lựa chọn hiện
+ * tại từ điều khiển tại lúc tạo widget nên không cần dựng lại
+ * decoration khi đáp án đúng đổi — bản thân các radio trong cùng một
+ * nhóm tự loại trừ nhau theo hành vi gốc của trình duyệt khi người
+ * soạn bấm chọn.
  *
- * @param doc - Tài liệu ProseMirror hiện tại.
- * @returns Mảng id của các node choice thuộc `choiceList` chốt đuôi.
+ * @param choiceId - Id của lựa chọn mà widget gắn vào.
+ * @param getControl - Hàm đọc điều khiển radio mới nhất.
+ * @returns Mảng phần tử con của widget (một radio).
  */
-function getChoiceIds(doc: ProseMirrorNode): string[] {
-  const choiceList = doc.lastChild;
-  if (choiceList?.type.name !== CHOICE_LIST_NODE_TYPE) {
-    return [];
-  }
-  const ids: string[] = [];
-  choiceList.forEach((choice) => {
-    if (choice.type.name === CHOICE_NODE_TYPE && typeof choice.attrs.id === 'string') {
-      ids.push(choice.attrs.id);
+function buildCorrectChoiceWidget(
+  choiceId: string,
+  getControl: () => CorrectChoiceControl,
+): HTMLElement[] {
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = getControl().groupName;
+  input.className = 'giaokhoa-choice__correct-input';
+  input.setAttribute('aria-label', 'Đặt làm đáp án đúng');
+  input.checked = getControl().correctChoiceId === choiceId;
+  input.addEventListener('change', () => {
+    if (input.checked) {
+      getControl().onCorrectChoiceChange(choiceId);
     }
   });
-  return ids;
-}
-
-/** Hai danh sách id có giống hệt nhau (cả phần tử lẫn thứ tự) không. */
-function sameIds(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((id, index) => id === right[index]);
+  return [input];
 }
 
 /**
- * Decoration hiển thị radio đáp án đúng bên cạnh lựa chọn mà không thay đổi nội dung tài liệu.
- *
- * Decoration chỉ dựng lại khi TẬP id choice thay đổi (choice mới sinh
- * id, choice bị xoá, thứ tự đổi) — lựa chọn hiện tại được đọc từ
- * `controlRef` tại lúc tạo widget nên không cần dựng lại khi đáp án
- * đúng đổi: bản thân các radio trong cùng một nhóm tự loại trừ nhau
- * theo hành vi gốc của trình duyệt khi người soạn bấm chọn.
- *
- * @param controlRef - Ref giữ điều khiển radio mới nhất.
- * @returns Extension Tiptap mang decoration radio.
+ * Decoration hiển thị radio đáp án đúng bên cạnh lựa chọn mà không thay
+ * đổi nội dung tài liệu — dùng chung factory `createAnswerDecoration`
+ * của `item-list.ts` với node type `choice` (decoration chỉ dựng lại
+ * khi tập id choice thay đổi).
  */
-function createCorrectChoiceDecoration(getControl: () => CorrectChoiceControl) {
-  return Extension.create({
+const createCorrectChoiceDecoration =
+  createAnswerDecoration<CorrectChoiceControl>({
     name: 'correctChoiceDecoration',
-
-    addDecorations() {
-      return {
-        shouldUpdate: ({ oldState, newState }) =>
-          !sameIds(getChoiceIds(oldState.doc), getChoiceIds(newState.doc)),
-        create: ({ state }) => {
-          const widgets: WidgetDecoration[] = [];
-
-          state.doc.descendants((node, pos) => {
-            if (node.type.name !== CHOICE_NODE_TYPE) {
-              return;
-            }
-            const choiceId = node.attrs.id;
-            if (typeof choiceId !== 'string') {
-              return;
-            }
-            widgets.push(
-              Decoration.Widget(
-                pos + 1,
-                () => {
-                  const wrapper = document.createElement('span');
-                  wrapper.className = 'giaokhoa-choice__correct';
-
-                  const input = document.createElement('input');
-                  input.type = 'radio';
-                  input.name = getControl().groupName;
-                  input.className = 'giaokhoa-choice__correct-input';
-                  input.setAttribute('aria-label', 'Đặt làm đáp án đúng');
-                  input.checked = getControl().correctChoiceId === choiceId;
-                  input.addEventListener('change', () => {
-                    if (input.checked) {
-                      getControl().onCorrectChoiceChange(choiceId);
-                    }
-                  });
-
-                  wrapper.append(input);
-                  return wrapper;
-                },
-                {
-                  key: `correct-choice-${choiceId}`,
-                  side: -1,
-                  ignoreSelection: true,
-                  stopEvent: () => true,
-                },
-              ),
-            );
-          });
-
-          return widgets;
-        },
-      };
-    },
+    listNodeType: CHOICE_LIST_NODE_TYPE,
+    itemNodeType: CHOICE_NODE_TYPE,
+    widgetKeyPrefix: 'correct-choice',
+    wrapperClassName: 'giaokhoa-choice__correct',
+    buildWidget: buildCorrectChoiceWidget,
   });
-}
 
 /**
  * Thuộc tính của {@link MultipleChoiceEditor}.
@@ -182,15 +130,11 @@ export function MultipleChoiceEditor({
   onRequestImage,
 }: MultipleChoiceEditorProps) {
   const groupName = useId();
-  const [control] = useState(() => createEditorControlStore({ groupName, correctChoiceId, onCorrectChoiceChange }));
-  useEffect(() => {
-    control.update({ groupName, correctChoiceId, onCorrectChoiceChange });
-  }, [control, groupName, correctChoiceId, onCorrectChoiceChange]);
-
-  const extensions = useMemo(
-    () => [...multipleChoiceExtensions, createCorrectChoiceDecoration(control.get)],
-    [control.get],
-  );
+  const extensions = useAnswerEditorExtensions({
+    baseExtensions: multipleChoiceExtensions,
+    createDecoration: createCorrectChoiceDecoration,
+    controlValue: { groupName, correctChoiceId, onCorrectChoiceChange },
+  });
 
   return (
     <RichTextEditor

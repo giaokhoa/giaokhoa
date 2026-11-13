@@ -14,6 +14,8 @@ export const queryKeys = {
   bankExams: (bankId: string) => ['exam-banks', bankId, 'exams'] as const,
   bankExamContributions: (bankId: string) => ['exam-banks', bankId, 'contributions'] as const,
   bankDossiers: (bankId: string) => ['exam-banks', bankId, 'dossiers'] as const,
+  /** Tiền tố gốc của mọi danh sách thuộc bank đề (đề, đóng góp đề, bộ hồ sơ theo bank). */
+  examBanksRoot: ['exam-banks'] as const,
   myDossiers: ['exams', 'dossiers', 'mine'] as const,
   questionCurriculumLinks: (questionId: string) => ['questions', questionId, 'curriculum-links'] as const,
   examDossierSpec: (dossierId: string) => ['exams', 'dossiers', dossierId, 'specification'] as const,

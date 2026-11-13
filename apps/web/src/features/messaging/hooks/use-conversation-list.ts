@@ -3,7 +3,7 @@
  * issue #223, lát 1; chuyển sang cache TanStack ở CN-13, issue
  * #493): danh sách chính, tập đã lưu của server, cây nhóm và khoá
  * của tôi đều là dữ kiện máy chủ — chúng sống trong CACHE của TanStack Query
- * qua các options của `lib/messaging-data` và hook này chỉ ĐĂNG KÝ
+ * qua các options của `features/messaging/queries/messaging` và hook này chỉ ĐĂNG KÝ
  * (useQuery) rồi suy ra giá trị hiển thị; state cục bộ chỉ còn tab
  * khung trái, bản đồ tên hiển thị (dữ kiện suy ra, không có
  * endpoint riêng) và lỗi của thao tác đổi trạng thái. Đột biến
@@ -101,10 +101,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
    */
   const [sidebarTab, setSidebarTabState] = useState<string>(() => readStoredMessagesTab());
 
-  /**
-   * Số conversation chưa đọc — SUY RA từ danh sách trong cache (mỗi mục mang unread của chính user). Đi kèm là `recountUnread` cho kênh realtime gọi mỗi khi có sự kiện đổi số chưa đọc: số của trang tự khớp vì cùng suy từ cache, còn huy hiệu Tin nhắn của sidebar đọc truy vấn riêng nên phải làm mới bằng invalidate để server vẫn là nguồn số đếm cuối cùng (lát M1, issue #204). Danh sách ở đây là danh sách chính (chưa lưu trữ) nên tổng này không gồm hội thoại đã lưu trữ — khớp luật số đếm của tab Tất cả / Chưa đọc (issue #623).
-   */
-  const unread = useMemo(() => conversations.filter((c) => (c.unread ?? 0) > 0).length, [conversations]);
   const recountUnread = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.messageUnreadCount });
   }, [queryClient]);
@@ -184,16 +180,11 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     [queryClient],
   );
 
-  // Thao tác ghi của trang qua các đột biến của lib/messaging-data:
+  // Thao tác ghi của trang qua các đột biến của features/messaging/queries/messaging:
   // đột biến tự invalidate/vá đúng khoá trong cache khi thành công
   // (xem tầng dữ kiện), hook này chỉ còn bắt lỗi để hiện thông báo.
   const conversationStateMutation = useSetConversationState();
   const markReadMutation = useMarkConversationRead();
-
-  /** Nạp cây nhóm cho tab Nhóm (lát MSG-T3): invalidate để query đang đăng ký nạp lại; lỗi thì giữ cây gần nhất trong cache. */
-  const loadGroupTree = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingGroupTree });
-  }, [queryClient]);
 
   /** Đổi tab khung trái (lát MSG-T3): cập nhật state + lưu bền để lần quay lại vẫn gặp tab này. */
   const setSidebarTab = useCallback((value: string) => {
@@ -205,15 +196,17 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
    * Nạp lại toàn bộ dữ kiện khung trái + danh bạ: invalidate đồng loạt các khoá danh sách/cây/khoá/danh bạ — mọi query của khung trái đều đang đăng ký nên nạp lại ngay. Lời gọi chờ các lần nạp lại đang hoạt động settle như nhịp nạp đầy đủ trước đây.
    */
   const reload = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingConversations }),
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingArchivedConversations }),
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingGroupTree }),
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingCourses }),
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingContacts }),
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingContactRequests }),
-      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingBlockedContacts }),
-    ]);
+    await Promise.all(
+      [
+        messagingQueryKeys.messagingConversations,
+        messagingQueryKeys.messagingArchivedConversations,
+        messagingQueryKeys.messagingGroupTree,
+        messagingQueryKeys.messagingCourses,
+        messagingQueryKeys.messagingContacts,
+        messagingQueryKeys.messagingContactRequests,
+        messagingQueryKeys.messagingBlockedContacts,
+      ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    );
   }, [queryClient]);
 
   /**
@@ -258,7 +251,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     setArchivedConversations,
     stateError,
     listLoaded,
-    unread,
     error,
     people,
     myCourses,
@@ -271,7 +263,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     recountUnread,
     mergePeople,
     nameOf,
-    loadGroupTree,
     reload,
     updateConversationState,
     markRead,

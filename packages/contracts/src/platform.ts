@@ -234,10 +234,10 @@ export const createBackupSchema = z.strictObject({
 }).superRefine((v, ctx) => {
   const scope = v.scope ?? 'course';
   if (scope === 'course' && !v.courseId) {
-    ctx.addIssue({ code: 'custom', path: ['courseId'], message: 'A course backup requires courseId' });
+    ctx.addIssue({ code: 'custom', path: ['courseId'], message: 'Sao lưu khoá học bắt buộc có courseId' });
   }
   if (scope === 'site' && v.courseId) {
-    ctx.addIssue({ code: 'custom', path: ['courseId'], message: 'A site backup must not carry a courseId' });
+    ctx.addIssue({ code: 'custom', path: ['courseId'], message: 'Sao lưu site không được mang courseId' });
   }
 });
 export type CreateBackup = z.infer<typeof createBackupSchema>;
@@ -576,14 +576,14 @@ export const createCouponSchema = z.strictObject({
     ctx.addIssue({
       code: 'custom',
       path: ['discountValue'],
-      message: 'Percent discount value must be between 1 and 99',
+      message: 'Giá trị giảm theo phần trăm phải nằm trong khoảng 1–99',
     });
   }
   if (input.startsAt && input.endsAt && new Date(input.startsAt).getTime() >= new Date(input.endsAt).getTime()) {
     ctx.addIssue({
       code: 'custom',
       path: ['endsAt'],
-      message: 'Coupon endsAt must be after startsAt',
+      message: 'Coupon endsAt phải sau startsAt',
     });
   }
 });

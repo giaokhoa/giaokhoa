@@ -34,6 +34,20 @@ function migrationsDirFor(store: TestStoreKind): string {
 }
 
 /** Thay tên database trong một connection string, giữ nguyên phần còn lại. */
+
+/**
+ * Phân giải URL quản trị cho spec tích hợp (S12): ưu tiên
+ * `GIAOKHOA_DB_TEST_ADMIN_URL`, nếu không có thì suy từ `DATABASE_URL`
+ * (đổi tên database thành `postgres`); không có cả hai thì trả
+ * `undefined` để spec báo lỗi rõ ràng thay vì âm thầm nối cụm mặc định.
+ */
+export function resolveTestAdminUrl(): string | undefined {
+  return (
+    process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
+    (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined)
+  );
+}
+
 export function withDatabase(connectionString: string, database: string): string {
   const url = new URL(connectionString);
   url.pathname = `/${database}`;

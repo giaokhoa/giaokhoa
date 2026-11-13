@@ -4,10 +4,12 @@ import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { CollapsibleSection } from '#components/collapsible-section';
 import { SettingsShell } from '../components/settings-shell';
+import { useSavingKeys } from '../hooks/use-saving-keys';
 import '#config/i18n';
 import { preferenceKey } from '#features/notifications/utils/notifications';
 import { useMessagePreferences, useNotificationCourseOverrides, useSetMessagePreference, useSetNotificationCourseOverride } from '#features/notifications/queries/notifications';
 import type { EmailFrequency, NotificationCourseOverrideView, NotificationGroupFilter, NotificationPreferenceView } from '#features/notifications/types/notifications';
+import { appKeyMeta } from '#lib/route-meta';
 
 /** Ba nhóm provider của registry (NB-2) theo đúng thứ tự trình bày đã chốt. */
 const GROUP_ORDER: NotificationGroupFilter[] = ['learning', 'people', 'system'];
@@ -29,17 +31,37 @@ interface GroupSummary {
   customized: boolean;
 }
 
+/** Trạng thái popup gộp của một nhóm: đồng nhất thì hiện giá trị đó, lệch nhau thì 'mixed', không còn dòng nào chỉnh được thì null. */
+function summarizePopupState(changeable: NotificationPreferenceView[]): GroupSummary['popupState'] {
+  if (changeable.length === 0) return null;
+  const popupValues = new Set(changeable.map((r) => r.popupEnabled));
+  if (popupValues.size > 1) return 'mixed';
+  const first = changeable.at(0);
+  return first ? first.popupEnabled : null;
+}
+
+/** Trạng thái email gộp của một nhóm: cùng quy ước như popup, chỉ tính trên các dòng có kênh email. */
+function summarizeEmailState(changeable: NotificationPreferenceView[]): GroupSummary['emailState'] {
+  const emailValues = new Set<EmailFrequency>();
+  for (const row of changeable) {
+    if (row.emailFrequency !== null) emailValues.add(row.emailFrequency);
+  }
+  if (emailValues.size === 0) return null;
+  if (emailValues.size > 1) return 'mixed';
+  const first = emailValues.values().next().value;
+  return first ?? null;
+}
+
+/** Chuyển giá trị thô của `<select>` tần suất email thành `EmailFrequency`; giá trị lạ (kể cả option 'mixed' đã vô hiệu hoá) trả null để lời gọi bị bỏ qua thay vì ép kiểu. */
+function parseEmailFrequency(value: string): EmailFrequency | null {
+  return value === 'immediate' || value === 'daily' || value === 'off' ? value : null;
+}
+
 /** Gộp trạng thái một nhóm từ các dòng tuỳ chọn thật API trả về (không có trạng thái nhóm lưu riêng ở đâu cả). */
 function summarizeGroup(group: NotificationGroupFilter, rows: NotificationPreferenceView[]): GroupSummary {
   const changeable = rows.filter((r) => r.siteEnabled);
-  const popupValues = new Set(changeable.map((r) => r.popupEnabled));
-  const popupState: GroupSummary['popupState'] =
-    changeable.length === 0 ? null : popupValues.size > 1 ? 'mixed' : changeable[0]!.popupEnabled;
-  const emailValues = new Set(
-    changeable.filter((r) => r.emailFrequency !== null).map((r) => r.emailFrequency as EmailFrequency),
-  );
-  const emailState: GroupSummary['emailState'] =
-    emailValues.size === 0 ? null : emailValues.size > 1 ? 'mixed' : [...emailValues][0]!;
+  const popupState = summarizePopupState(changeable);
+  const emailState = summarizeEmailState(changeable);
   return {
     group,
     rows,
@@ -67,9 +89,9 @@ function summarizeGroup(group: NotificationGroupFilter, rows: NotificationPrefer
  */
 export function SettingsNotificationsPage() {
   const { t, i18n } = useTranslation('app');
-  const [savingPrefs, setSavingPrefs] = useState<ReadonlySet<string>>(new Set());
-  const [savingGroups, setSavingGroups] = useState<ReadonlySet<string>>(new Set());
-  const [savingOverrides, setSavingOverrides] = useState<ReadonlySet<string>>(new Set());
+  const savingPrefs = useSavingKeys();
+  const savingGroups = useSavingKeys();
+  const savingOverrides = useSavingKeys();
   const [prefError, setPrefError] = useState<string | null>(null);
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -106,7 +128,7 @@ export function SettingsNotificationsPage() {
     const key = `${preferenceKey(row)}|${field}`;
     if (savingPrefs.has(key)) return;
     setPrefError(null);
-    setSavingPrefs((prev) => new Set(prev).add(key));
+    savingPrefs.mark(key);
     // Cập nhật lạc quan + hoàn lại khi lỗi nằm trong mutation ở
     // features/notifications/queries/notifications; ở đây chỉ lo cờ đang-lưu và lỗi riêng
     // của khu vực tuỳ chọn.
@@ -114,12 +136,7 @@ export function SettingsNotificationsPage() {
       { provider: row.provider, patch },
       {
         onError: () => setPrefError(t('preferenceSaveFailed')),
-        onSettled: () =>
-          setSavingPrefs((prev) => {
-            const next = new Set(prev);
-            next.delete(key);
-            return next;
-          }),
+        onSettled: () => savingPrefs.unmark(key),
       },
     );
   }
@@ -133,41 +150,42 @@ export function SettingsNotificationsPage() {
   }
 
   /**
-   * Ghi một thay đổi THEO NHÓM (lớp 1): fan-out thành PUT cho từng
-   * provider còn chỉnh được trong nhóm mà giá trị hiện tại khác giá
-   * trị đích — chạy TUẦN TỰ để mỗi mutation lạc quan ở lib chụp đúng
-   * trạng thái cache trước nó, tránh các bản chụp chồng nhau ghi đè
-   * khi hoàn lại. Loại bắt buộc P2 không bao giờ bị tắt popup qua
-   * đường nhóm (bật thì vô hại vì chúng vốn luôn bật); loại admin đã
-   * tắt ở cấp site bị bỏ qua hẳn — server không phát chúng nữa nên
-   * ghi tuỳ chọn cho chúng là vô nghĩa.
+   * Chạy một lần ghi THEO NHÓM (lớp 1) với cờ đang-lưu + lỗi chung của khu vực tuỳ chọn: ghi đồng loạt qua API hiện có (PUT từng provider trong nhóm) — chạy TUẦN TỰ để mỗi mutation lạc quan ở lib chụp đúng trạng thái cache trước nó, tránh các bản chụp chồng nhau ghi đè khi hoàn lại.
    */
-  async function saveGroup(summary: GroupSummary, field: 'popup' | 'email', target: boolean | EmailFrequency) {
+  async function runGroupSave(summary: GroupSummary, save: () => Promise<void>) {
     if (savingGroups.has(summary.group)) return;
     setPrefError(null);
-    setSavingGroups((prev) => new Set(prev).add(summary.group));
+    savingGroups.mark(summary.group);
     try {
-      for (const row of summary.changeable) {
-        if (field === 'popup') {
-          const targetPopup = target as boolean;
-          if (row.popupEnabled === targetPopup) continue;
-          if (!targetPopup && row.mandatoryInApp) continue;
-          await preferenceMutation.mutateAsync({ provider: row.provider, patch: { popupEnabled: targetPopup } });
-        } else {
-          const targetFrequency = target as EmailFrequency;
-          if (row.emailFrequency === null || row.emailFrequency === targetFrequency) continue;
-          await preferenceMutation.mutateAsync({ provider: row.provider, patch: { emailFrequency: targetFrequency } });
-        }
-      }
+      await save();
     } catch {
       setPrefError(t('preferenceSaveFailed'));
     } finally {
-      setSavingGroups((prev) => {
-        const next = new Set(prev);
-        next.delete(summary.group);
-        return next;
-      });
+      savingGroups.unmark(summary.group);
     }
+  }
+
+  /**
+   * Ghi công tắc popup THEO NHÓM (lớp 1): bỏ qua provider đã đúng giá trị đích; loại bắt buộc P2 không bao giờ bị tắt popup qua đường nhóm (bật thì vô hại vì chúng vốn luôn bật); loại admin đã tắt ở cấp site bị bỏ qua hẳn — server không phát chúng nữa nên ghi tuỳ chọn cho chúng là vô nghĩa.
+   */
+  async function saveGroupPopup(summary: GroupSummary, target: boolean) {
+    await runGroupSave(summary, async () => {
+      for (const row of summary.changeable) {
+        if (row.popupEnabled === target) continue;
+        if (!target && row.mandatoryInApp) continue;
+        await preferenceMutation.mutateAsync({ provider: row.provider, patch: { popupEnabled: target } });
+      }
+    });
+  }
+
+  /** Ghi tần suất email THEO NHÓM (lớp 1): bỏ qua provider không có kênh email hoặc đã đúng tần suất đích. */
+  async function saveGroupEmail(summary: GroupSummary, target: EmailFrequency) {
+    await runGroupSave(summary, async () => {
+      for (const row of summary.changeable) {
+        if (row.emailFrequency === null || row.emailFrequency === target) continue;
+        await preferenceMutation.mutateAsync({ provider: row.provider, patch: { emailFrequency: target } });
+      }
+    });
   }
 
   /**
@@ -178,17 +196,12 @@ export function SettingsNotificationsPage() {
   function toggleCourseMute(course: NotificationCourseOverrideView) {
     if (savingOverrides.has(course.courseId)) return;
     setOverrideError(null);
-    setSavingOverrides((prev) => new Set(prev).add(course.courseId));
+    savingOverrides.mark(course.courseId);
     overrideMutation.mutate(
       { courseId: course.courseId, mode: course.mode === 'mute' ? 'all' : 'mute' },
       {
         onError: () => setOverrideError(t('courseOverrideSaveFailed')),
-        onSettled: () =>
-          setSavingOverrides((prev) => {
-            const next = new Set(prev);
-            next.delete(course.courseId);
-            return next;
-          }),
+        onSettled: () => savingOverrides.unmark(course.courseId),
       },
     );
   }
@@ -237,7 +250,7 @@ export function SettingsNotificationsPage() {
                         // không tắt, đúng sự thật của dữ liệu.
                         if (el) el.indeterminate = summary.popupState === 'mixed';
                       }}
-                      onChange={(e) => void saveGroup(summary, 'popup', e.target.checked)}
+                      onChange={(e) => void saveGroupPopup(summary, e.target.checked)}
                     />
                     {t('prefInApp')}
                   </label>
@@ -248,7 +261,10 @@ export function SettingsNotificationsPage() {
                         aria-label={`${groupLabel[summary.group]} — ${t('prefEmail')}`}
                         value={summary.emailState}
                         disabled={emailSaving}
-                        onChange={(e) => void saveGroup(summary, 'email', e.target.value as EmailFrequency)}
+                        onChange={(e) => {
+                          const frequency = parseEmailFrequency(e.target.value);
+                          if (frequency !== null) void saveGroupEmail(summary, frequency);
+                        }}
                       >
                         {summary.emailState === 'mixed' ? (
                           <option value="mixed" disabled>
@@ -329,7 +345,10 @@ export function SettingsNotificationsPage() {
                             aria-label={`${text.label} — ${t('prefEmail')}`}
                             value={row.emailFrequency}
                             disabled={!row.siteEnabled || emailSaving}
-                            onChange={(e) => changeEmailFrequency(row, e.target.value as EmailFrequency)}
+                            onChange={(e) => {
+                              const frequency = parseEmailFrequency(e.target.value);
+                              if (frequency !== null) changeEmailFrequency(row, frequency);
+                            }}
                           >
                             <option value="immediate">{t('prefEmailImmediate')}</option>
                             <option value="daily">{t('prefEmailDaily')}</option>
@@ -398,7 +417,6 @@ export default SettingsNotificationsPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('settingsNotifications');
 }

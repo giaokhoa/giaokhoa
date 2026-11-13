@@ -1,3 +1,9 @@
+/**
+ * Sheet tạo nhóm tự do của màn Tin nhắn: người tạo nhập tên nhóm và chọn thành viên qua bộ chọn người theo ngữ cảnh (liên hệ đã kết bạn hoặc roster của một lớp/khoá của mình).
+ * Bấm Tạo nhóm thì sự kiện đi lên trang chứa để gọi API tạo hội thoại nhóm; lỗi tạo do trang chứa đặt vào `createError` và sheet giữ nguyên dữ liệu đã nhập để sửa tiếp.
+ * Mỗi lần sheet mở lại là một lượt tạo mới (tên và lựa chọn được xoá trắng); nút tạo bị khoá cho tới khi có tên nhóm và ít nhất một thành viên được chọn.
+ */
+
 import { useState } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Input } from '@giaokhoa/ui/components/input';
@@ -27,7 +33,7 @@ import type {
  *    roster của một lớp/khoá của mình — không có nguồn người nào
  *    khác (giữ quyết bỏ tìm người theo tên).
  * 2. Bấm Tạo nhóm → sự kiện đi lên trang chứa: trang gọi
- *    `POST /messages/conversations` với `type: 2` + tên + danh sách
+ *    `POST /messages/conversations` với `type: CONVERSATION_TYPE_GROUP` + tên + danh sách
  *    thành viên đã chọn; thành công thì trang đóng sheet, nạp lại
  *    cây nhóm, chuyển về tab Nhóm và mở ngay nhóm vừa tạo ở khung
  *    phải; lỗi (điển hình 403 khi người tạo không có vai staff) thì

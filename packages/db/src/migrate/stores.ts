@@ -41,6 +41,9 @@ export interface MigrationStore {
 }
 
 /** Bảng định nghĩa ba kho — nguồn sự thật duy nhất cho runner/hậu kiểm. */
+/** PostgreSQL mã hoá phiên bản thành `major * 10000 + minor` nên chia cho 10000 để lấy số major (S31). */
+const PG_VERSION_MAJOR_DIVISOR = 10_000;
+
 export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   centre: {
     migrationsDirName: 'centre',
@@ -63,7 +66,6 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
 };
 
 /** Các khoá kho hợp lệ — dùng để báo lỗi rõ khi CLI nhận tên kho lạ. */
-export const MIGRATION_STORE_KEYS = Object.keys(MIGRATION_STORES) as MigrationStoreKey[];
 
 /** Kiểm tra một chuỗi có phải khoá kho hợp lệ không (tránh lỗi gõ tên kho thành lỗi kết nối khó hiểu). */
 export function isMigrationStoreKey(value: string): value is MigrationStoreKey {
@@ -94,7 +96,7 @@ export const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS 
  */
 export async function installUuidv7Shim<DB>(db: Kysely<DB>): Promise<'installed' | 'skipped-pg18'> {
   const { rows } = await sql<{ server_version_num: string }>`SHOW server_version_num`.execute(db);
-  const major = Math.floor(Number(rows[0]?.server_version_num ?? '0') / 10000);
+  const major = Math.floor(Number(rows[0]?.server_version_num ?? '0') / PG_VERSION_MAJOR_DIVISOR);
   if (major >= 18) return 'skipped-pg18';
   await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`.execute(db);
   await sql.raw(UUIDV7_SHIM).execute(db);

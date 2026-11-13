@@ -28,7 +28,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '#lib/api';
-import { classConversationQueryOptions, conversationDetailQueryOptions, courseConversationQueryOptions, useCreateFreeGroup, useCreateGroupConversation, useRemoveConversationMember, useReportConversation, useSetConversationEnabled } from '../queries/messaging';
+import { classConversationQueryOptions, courseConversationQueryOptions, useCreateFreeGroup, useCreateGroupConversation, useRemoveConversationMember, useReportConversation, useSetConversationEnabled } from '../queries/messaging';
+import { openConversationById as openConversationByIdShared } from './open-conversation-by-id';
 import type { ConversationGroupTreeView, ConversationView } from '../types/types';
 
 export interface UseGroupActionsParams {
@@ -80,19 +81,19 @@ export function useGroupActions({
    * Mở một conversation ĐÃ có id (lát MSG-T3 — nút nhóm con/nhóm tự do/chat đã ensure của cây Nhóm): có sẵn trong một trong hai tập danh sách của trang (chính hoặc đã lưu) thì mở như cú bấm thường; chưa có thì lấy chi tiết theo id bằng đúng cơ chế deep-link rồi mở — server là nơi thực thi quyền thành viên, không phải thành viên thì bỏ qua êm.
    */
   async function openConversationById(conversationId: string) {
-    const found =
-      conversations.find((c) => c.id === conversationId) ?? archivedConversations.find((c) => c.id === conversationId);
-    if (found) {
-      await open(found);
-      return;
-    }
+    await openConversationByIdShared(queryClient, [conversations, archivedConversations], setConversations, open, conversationId);
+  }
+
+  /**
+   * Mở chat cấp cấu trúc (lớp/khoá) đã ensure qua endpoint của nó: ensure rồi mở ngay ở khung phải. Người ngoài phạm vi nhận 404 ở server thì giữ nguyên màn hiện tại.
+   */
+  async function openEnsuredChat(fetchConversation: () => Promise<ConversationView>) {
     try {
-      const detail = await queryClient.fetchQuery(conversationDetailQueryOptions(conversationId));
-      const { messages: _detailMessages, hasMoreBefore: _hasMore, memberReadMarkers: _markers, ...summary } = detail;
-      setConversations((prev) => (prev.some((c) => c.id === summary.id) ? prev : [summary, ...prev]));
-      await open(summary);
+      const conv = await fetchConversation();
+      await reload();
+      await open(conv);
     } catch {
-      // Không phải thành viên hoặc conversation không tồn tại: giữ nguyên màn hiện tại.
+      // Không thuộc phạm vi: giữ nguyên màn hiện tại.
     }
   }
 
@@ -100,26 +101,14 @@ export function useGroupActions({
    * Mở CHAT CẤP LỚP từ nút lớp của cây Nhóm (lát MSG-T3): ensure qua endpoint lớp của MSG-T2 rồi mở ngay ở khung phải — bấm dòng lớp là vào chat lớp, tối đa 2 thao tác tính từ màn Tin nhắn. Người ngoài lớp nhận 404 ở server thì giữ nguyên màn hiện tại.
    */
   async function openClassChat(classId: string) {
-    try {
-      const conv = await queryClient.fetchQuery(classConversationQueryOptions(classId));
-      await reload();
-      await open(conv);
-    } catch {
-      // Không thuộc lớp: giữ nguyên màn hiện tại.
-    }
+    await openEnsuredChat(() => queryClient.fetchQuery(classConversationQueryOptions(classId)));
   }
 
   /**
    * Mở CHAT CẤP KHOÁ từ nút khoá của cây Nhóm (lát MSG-T3): ensure qua endpoint khoá (đường đã có từ chat cấp khoá) rồi mở ngay ở khung phải, cùng kỷ luật 2 thao tác như chat lớp.
    */
   async function openCourseChat(courseId: string) {
-    try {
-      const conv = await queryClient.fetchQuery(courseConversationQueryOptions(courseId));
-      await reload();
-      await open(conv);
-    } catch {
-      // Không thuộc khoá: giữ nguyên màn hiện tại.
-    }
+    await openEnsuredChat(() => queryClient.fetchQuery(courseConversationQueryOptions(courseId)));
   }
 
   /**
@@ -190,13 +179,18 @@ export function useGroupActions({
     }
   }
 
-  /** Bật/tắt chat của cuộc trò chuyện đang mở (chỉ hiện khi canManage) — trạng thái mới do đột biến vá vào cache ở tầng dữ kiện. */
+  /** Bật/tắt chat của cuộc trò chuyện đang mở (chỉ hiện khi canManage) — trạng thái mới do đột biến vá vào cache ở tầng dữ kiện; lỗi thì hiện thông báo như các thao tác nhóm khác thay vì throw tới trang. */
   async function toggleActiveChat() {
     if (!active) return;
-    await conversationEnabledMutation.mutateAsync({
-      conversationId: active.id,
-      enabled: !(active.enabled ?? true),
-    });
+    setActionMessage(null);
+    try {
+      await conversationEnabledMutation.mutateAsync({
+        conversationId: active.id,
+        enabled: !(active.enabled ?? true),
+      });
+    } catch {
+      setActionMessage(t('conversationStateFailed'));
+    }
   }
 
   /** Xoá thông báo báo cáo/hành động khi mở conversation mới — phần đặt lại phía nhóm của trình bao `open` ở trang. */

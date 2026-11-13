@@ -10,6 +10,10 @@ import { SpaceDatabaseService } from '../../db/routing/space-database.service';
  * Các kiểm tra runtime có cấu trúc theo tinh thần Check API của Moodle:
  * mỗi phụ thuộc báo up/down độc lập; payload được kiểm chứng đối chiếu với contract dùng chung trước khi rời khỏi tiến trình.
  */
+
+/** Số lần thử lại tối đa cho một lệnh Redis của probe sức khoẻ (xem constructor). */
+const HEALTH_REDIS_MAX_RETRIES = 1;
+
 @Injectable()
 /**
  * Kiểm tra sức khoẻ hệ thống: SELECT 1 tới PostgreSQL và PING Redis, trả trạng thái tổng hợp cho /health.
@@ -23,7 +27,10 @@ export class HealthService implements OnModuleDestroy {
   ) {
     const redisUrl = config.getOrThrow<string>('REDIS_URL');
     this.redis = new Redis(redisUrl, {
-      maxRetriesPerRequest: 1,
+      // Chỉ thử lại một lần cho probe sức khoẻ: probe phải nhanh và
+      // fail-closed (Redis chết thì /health báo down ngay) thay vì
+      // chờ ioredis thử lại mặc định rồi mới kết luận.
+      maxRetriesPerRequest: HEALTH_REDIS_MAX_RETRIES,
       lazyConnect: true,
       ...redisTlsFromUrl(redisUrl),
     });
@@ -38,14 +45,17 @@ export class HealthService implements OnModuleDestroy {
   }
 
   /**
-   * Thực thi kiểm tra DB + Redis và dựng kết quả health.
+   * Thực thi kiểm tra DB + Redis và dựng kết quả health — hai probe độc
+   * lập nên chạy song song, không chờ nối tiếp nhau.
    */
   async check(): Promise<HealthStatus> {
-    const database = await this.probe(async () => {
-      await sql`select 1`.execute(this.spaceDb.routedKysely);
-      return true;
-    });
-    const redis = await this.probe(async () => (await this.redis.ping()) === 'PONG');
+    const [database, redis] = await Promise.all([
+      this.probe(async () => {
+        await sql`select 1`.execute(this.spaceDb.routedKysely);
+        return true;
+      }),
+      this.probe(async () => (await this.redis.ping()) === 'PONG'),
+    ]);
     return healthStatusSchema.parse({
       status: database === 'up' && redis === 'up' ? 'ok' : 'error',
       timestamp: new Date().toISOString(),

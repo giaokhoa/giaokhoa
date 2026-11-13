@@ -285,7 +285,7 @@ export class DeprecatedRouteAliasInterceptor implements NestInterceptor {
     const req = http.getRequest<{ url?: string; method?: string }>();
     const url = req?.url ?? '';
     // Chỉ khớp trên phần path: bỏ query string để log và regex không dính tham số truy vấn.
-    const path = url.split('?')[0] ?? url;
+    const path = url.split('?')[0];
     const match = DeprecatedRouteAliasInterceptor.aliasTable.find((entry) => entry.pattern.test(path));
     if (match) {
       const res = http.getResponse<{ setHeader?: (name: string, value: string) => void }>();

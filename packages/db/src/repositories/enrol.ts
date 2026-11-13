@@ -1,4 +1,5 @@
-import type { CentreDb, CentreTx } from '../client';
+import { type InsertObject, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /**
  * Kho dữ liệu ghi danh trên Kysely: quản lý phương thức ghi danh của khoá học và trạng thái ghi danh của từng người dùng.
@@ -144,71 +145,71 @@ const USER_ENROLMENT_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
 // ---------------------------------------------------------------------------
 
-function enrolInsertValues(v: NewEnrolInstance) {
+function enrolInsertValues(values: NewEnrolInstance): InsertObject<CentreDB, 'enrol'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    course_id: v.courseId,
-    enrol: v.enrol,
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.roleId !== undefined ? { role_id: v.roleId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.enrolPeriod !== undefined ? { enrol_period: v.enrolPeriod } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
-    ...(v.customInt1 !== undefined ? { custom_int1: v.customInt1 } : {}),
-    ...(v.customInt2 !== undefined ? { custom_int2: v.customInt2 } : {}),
-    ...(v.customText1 !== undefined ? { custom_text1: v.customText1 } : {}),
-    ...(v.cost !== undefined ? { cost: v.cost } : {}),
-    ...(v.currency !== undefined ? { currency: v.currency } : {}),
-    ...(v.paymentAccountId !== undefined ? { payment_account_id: v.paymentAccountId } : {}),
-    ...(v.sendWelcomeMessage !== undefined ? { send_welcome_message: v.sendWelcomeMessage } : {}),
-    ...(v.welcomeMessage !== undefined ? { welcome_message: v.welcomeMessage } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    course_id: values.courseId,
+    enrol: values.enrol,
+    ...(values.name !== undefined ? { name: values.name } : {}),
+    ...(values.roleId !== undefined ? { role_id: values.roleId } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.enrolPeriod !== undefined ? { enrol_period: values.enrolPeriod } : {}),
+    ...(values.timeStart !== undefined ? { time_start: values.timeStart } : {}),
+    ...(values.timeEnd !== undefined ? { time_end: values.timeEnd } : {}),
+    ...(values.enrolmentKey !== undefined ? { enrolment_key: values.enrolmentKey } : {}),
+    ...(values.customInt1 !== undefined ? { custom_int1: values.customInt1 } : {}),
+    ...(values.customInt2 !== undefined ? { custom_int2: values.customInt2 } : {}),
+    ...(values.customText1 !== undefined ? { custom_text1: values.customText1 } : {}),
+    ...(values.cost !== undefined ? { cost: values.cost } : {}),
+    ...(values.currency !== undefined ? { currency: values.currency } : {}),
+    ...(values.paymentAccountId !== undefined ? { payment_account_id: values.paymentAccountId } : {}),
+    ...(values.sendWelcomeMessage !== undefined ? { send_welcome_message: values.sendWelcomeMessage } : {}),
+    ...(values.welcomeMessage !== undefined ? { welcome_message: values.welcomeMessage } : {}),
   };
 }
 
-function enrolUpdateValues(v: Partial<NewEnrolInstance>) {
+function enrolUpdateSet(patch: Partial<NewEnrolInstance>): UpdateObject<CentreDB, 'enrol'> {
   return {
-    ...(v.courseId !== undefined ? { course_id: v.courseId } : {}),
-    ...(v.enrol !== undefined ? { enrol: v.enrol } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.roleId !== undefined ? { role_id: v.roleId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.enrolPeriod !== undefined ? { enrol_period: v.enrolPeriod } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
-    ...(v.customInt1 !== undefined ? { custom_int1: v.customInt1 } : {}),
-    ...(v.customInt2 !== undefined ? { custom_int2: v.customInt2 } : {}),
-    ...(v.customText1 !== undefined ? { custom_text1: v.customText1 } : {}),
-    ...(v.cost !== undefined ? { cost: v.cost } : {}),
-    ...(v.currency !== undefined ? { currency: v.currency } : {}),
-    ...(v.paymentAccountId !== undefined ? { payment_account_id: v.paymentAccountId } : {}),
-    ...(v.sendWelcomeMessage !== undefined ? { send_welcome_message: v.sendWelcomeMessage } : {}),
-    ...(v.welcomeMessage !== undefined ? { welcome_message: v.welcomeMessage } : {}),
+    ...(patch.courseId !== undefined ? { course_id: patch.courseId } : {}),
+    ...(patch.enrol !== undefined ? { enrol: patch.enrol } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.roleId !== undefined ? { role_id: patch.roleId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.enrolPeriod !== undefined ? { enrol_period: patch.enrolPeriod } : {}),
+    ...(patch.timeStart !== undefined ? { time_start: patch.timeStart } : {}),
+    ...(patch.timeEnd !== undefined ? { time_end: patch.timeEnd } : {}),
+    ...(patch.enrolmentKey !== undefined ? { enrolment_key: patch.enrolmentKey } : {}),
+    ...(patch.customInt1 !== undefined ? { custom_int1: patch.customInt1 } : {}),
+    ...(patch.customInt2 !== undefined ? { custom_int2: patch.customInt2 } : {}),
+    ...(patch.customText1 !== undefined ? { custom_text1: patch.customText1 } : {}),
+    ...(patch.cost !== undefined ? { cost: patch.cost } : {}),
+    ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+    ...(patch.paymentAccountId !== undefined ? { payment_account_id: patch.paymentAccountId } : {}),
+    ...(patch.sendWelcomeMessage !== undefined ? { send_welcome_message: patch.sendWelcomeMessage } : {}),
+    ...(patch.welcomeMessage !== undefined ? { welcome_message: patch.welcomeMessage } : {}),
   };
 }
 
-function userEnrolmentInsertValues(v: NewUserEnrolment) {
+function userEnrolmentInsertValues(values: NewUserEnrolment): InsertObject<CentreDB, 'user_enrolments'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    enrol_id: v.enrolId,
-    user_id: v.userId,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.modifierId !== undefined ? { modifier_id: v.modifierId } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    enrol_id: values.enrolId,
+    user_id: values.userId,
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.timeStart !== undefined ? { time_start: values.timeStart } : {}),
+    ...(values.timeEnd !== undefined ? { time_end: values.timeEnd } : {}),
+    ...(values.modifierId !== undefined ? { modifier_id: values.modifierId } : {}),
   };
 }
 
-function userEnrolmentUpdateValues(v: Partial<NewUserEnrolment>) {
+function userEnrolmentUpdateSet(patch: Partial<NewUserEnrolment>): UpdateObject<CentreDB, 'user_enrolments'> {
   return {
-    ...(v.enrolId !== undefined ? { enrol_id: v.enrolId } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.modifierId !== undefined ? { modifier_id: v.modifierId } : {}),
+    ...(patch.enrolId !== undefined ? { enrol_id: patch.enrolId } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.timeStart !== undefined ? { time_start: patch.timeStart } : {}),
+    ...(patch.timeEnd !== undefined ? { time_end: patch.timeEnd } : {}),
+    ...(patch.modifierId !== undefined ? { modifier_id: patch.modifierId } : {}),
   };
 }
 
@@ -218,52 +219,56 @@ function userEnrolmentUpdateValues(v: Partial<NewUserEnrolment>) {
 export class EnrolRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  private db(): EnrolDb {
+    return this.handle;
+  }
+
   /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: EnrolTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
   /** Chèn enrol instance. */
-  async insertInstance(v: NewEnrolInstance, db: EnrolDb = this.handle): Promise<EnrolRow> {
+  async insertInstance(v: NewEnrolInstance, db: EnrolDb = this.db()): Promise<EnrolRow> {
     return db
       .insertInto('enrol')
       .values(enrolInsertValues(v))
       .returning(ENROL_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<EnrolRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy instance theo id. */
-  async getInstance(id: string): Promise<EnrolRow | undefined> {
-    return this.handle
+  async getInstance(id: string, db: EnrolDb = this.db()): Promise<EnrolRow | undefined> {
+    return db
       .selectFrom('enrol')
       .select(ENROL_COLUMNS)
       .where('id', '=', id)
-      .executeTakeFirst() as Promise<EnrolRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Instance của một khoá học. */
-  async listInstances(courseId: string): Promise<EnrolRow[]> {
-    return this.handle
+  async listInstances(courseId: string, db: EnrolDb = this.db()): Promise<EnrolRow[]> {
+    return db
       .selectFrom('enrol')
       .select(ENROL_COLUMNS)
       .where('course_id', '=', courseId)
       .orderBy('id', 'asc')
-      .execute() as Promise<EnrolRow[]>;
+      .execute();
   }
 
   /** Instance theo phương thức (manual, self, cohort, paypal…). */
-  async listInstancesByMethod(method: string): Promise<EnrolRow[]> {
-    return this.handle
+  async listInstancesByMethod(method: string, db: EnrolDb = this.db()): Promise<EnrolRow[]> {
+    return db
       .selectFrom('enrol')
       .select(ENROL_COLUMNS)
       .where('enrol', '=', method)
       .orderBy('id', 'asc')
-      .execute() as Promise<EnrolRow[]>;
+      .execute();
   }
 
   /** Các instance đồng bộ cohort đang trỏ tới một cohort. */
-  async listCohortInstances(cohortId: string): Promise<EnrolRow[]> {
-    const rows = (await this.handle
+  async listCohortInstances(cohortId: string, db: EnrolDb = this.db()): Promise<EnrolRow[]> {
+    const rows = (await db
       .selectFrom('enrol')
       .select(ENROL_COLUMNS)
       .where('enrol', '=', 'cohort')
@@ -272,57 +277,57 @@ export class EnrolRepository {
   }
 
   /** Cập nhật instance. */
-  async updateInstance(id: string, v: Partial<NewEnrolInstance>): Promise<void> {
-    await this.handle
+  async updateInstance(id: string, v: Partial<NewEnrolInstance>, db: EnrolDb = this.db()): Promise<void> {
+    await db
       .updateTable('enrol')
-      .set({ ...enrolUpdateValues(v), updated_at: new Date() })
+      .set({ ...enrolUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá instance. */
-  async deleteInstance(id: string): Promise<void> {
-    await this.handle.deleteFrom('enrol').where('id', '=', id).execute();
+  async deleteInstance(id: string, db: EnrolDb = this.db()): Promise<void> {
+    await db.deleteFrom('enrol').where('id', '=', id).execute();
   }
 
   /** Chèn ghi danh của user. */
-  async insertUserEnrolment(v: NewUserEnrolment, db: EnrolDb = this.handle): Promise<UserEnrolmentRow> {
+  async insertUserEnrolment(v: NewUserEnrolment, db: EnrolDb = this.db()): Promise<UserEnrolmentRow> {
     return db
       .insertInto('user_enrolments')
       .values(userEnrolmentInsertValues(v))
       .returning(USER_ENROLMENT_COLUMNS)
-      .executeTakeFirstOrThrow() as Promise<UserEnrolmentRow>;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy ghi danh theo (instance, user). */
-  async getUserEnrolment(enrolId: string, userId: string): Promise<UserEnrolmentRow | undefined> {
-    return this.handle
+  async getUserEnrolment(enrolId: string, userId: string, db: EnrolDb = this.db()): Promise<UserEnrolmentRow | undefined> {
+    return db
       .selectFrom('user_enrolments')
       .select(USER_ENROLMENT_COLUMNS)
       .where('enrol_id', '=', enrolId)
       .where('user_id', '=', userId)
-      .executeTakeFirst() as Promise<UserEnrolmentRow | undefined>;
+      .executeTakeFirst();
   }
 
   /** Cập nhật ghi danh (trạng thái, thời hạn). */
-  async updateUserEnrolment(id: string, v: Partial<NewUserEnrolment>, db: EnrolDb = this.handle): Promise<void> {
+  async updateUserEnrolment(id: string, v: Partial<NewUserEnrolment>, db: EnrolDb = this.db()): Promise<void> {
     await db
       .updateTable('user_enrolments')
-      .set({ ...userEnrolmentUpdateValues(v), updated_at: new Date() })
+      .set({ ...userEnrolmentUpdateSet(v), updated_at: new Date() })
       .where('id', '=', id)
       .execute();
   }
 
   /** Xoá ghi danh. */
-  async deleteUserEnrolment(id: string): Promise<void> {
-    await this.handle.deleteFrom('user_enrolments').where('id', '=', id).execute();
+  async deleteUserEnrolment(id: string, db: EnrolDb = this.db()): Promise<void> {
+    await db.deleteFrom('user_enrolments').where('id', '=', id).execute();
   }
 
   /** Mọi ghi danh trong khoá học, kèm phương thức của instance sở hữu. */
-  async listUserEnrolmentsForCourse(courseId: string): Promise<(UserEnrolmentRow & { enrolMethod: string })[]> {
-    const instances = await this.listInstances(courseId);
+  async listUserEnrolmentsForCourse(courseId: string, db: EnrolDb = this.db()): Promise<(UserEnrolmentRow & { enrolMethod: string })[]> {
+    const instances = await this.listInstances(courseId, db);
     if (!instances.length) return [];
-    const rows = (await this.handle
+    const rows = (await db
       .selectFrom('user_enrolments')
       .select(USER_ENROLMENT_COLUMNS)
       .where('enrol_id', 'in', instances.map((i) => i.id))
@@ -332,26 +337,26 @@ export class EnrolRepository {
   }
 
   /** Mọi ghi danh của một user. */
-  async listUserEnrolmentsForUser(userId: string): Promise<UserEnrolmentRow[]> {
-    return this.handle
+  async listUserEnrolmentsForUser(userId: string, db: EnrolDb = this.db()): Promise<UserEnrolmentRow[]> {
+    return db
       .selectFrom('user_enrolments')
       .select(USER_ENROLMENT_COLUMNS)
       .where('user_id', '=', userId)
-      .execute() as Promise<UserEnrolmentRow[]>;
+      .execute();
   }
 
   /** Mọi ghi danh qua một instance — đầu vào của việc gán lại role khi instance đổi role. */
-  async listUserEnrolmentsForInstance(enrolId: string): Promise<UserEnrolmentRow[]> {
-    return this.handle
+  async listUserEnrolmentsForInstance(enrolId: string, db: EnrolDb = this.db()): Promise<UserEnrolmentRow[]> {
+    return db
       .selectFrom('user_enrolments')
       .select(USER_ENROLMENT_COLUMNS)
       .where('enrol_id', '=', enrolId)
-      .execute() as Promise<UserEnrolmentRow[]>;
+      .execute();
   }
 
   /** Các ghi danh đang hiệu lực nhưng đã quá hạn — đầu vào của tiến trình hết hạn. */
-  async listExpiredActive(now: Date): Promise<UserEnrolmentRow[]> {
-    const rows = (await this.handle
+  async listExpiredActive(now: Date, db: EnrolDb = this.db()): Promise<UserEnrolmentRow[]> {
+    const rows = (await db
       .selectFrom('user_enrolments')
       .select(USER_ENROLMENT_COLUMNS)
       .where('status', '=', 0)

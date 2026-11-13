@@ -212,7 +212,7 @@ export function useActiveConversation({
         old ? { ...old, messages: updater(old.messages) } : old,
       );
       queryClient.setQueriesData<{ messages: MessageView[]; hasMoreBefore: boolean }>(
-        { queryKey: ['messages', 'conversations', conversationId, 'messages'] },
+        { queryKey: queryKeys.messagingConversationMessages(conversationId) },
         (old) => (old ? { ...old, messages: updater(old.messages) } : old),
       );
       setLocalMessages((prev) =>

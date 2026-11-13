@@ -16,9 +16,10 @@
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
-import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import { type InsertObject, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type AnalyticsDb = CentreDb | CentreTx;
@@ -98,19 +99,6 @@ export interface NewInsight {
   createdAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng analytics_models (dùng cho cả select lẫn returning). */
 const MODEL_COLUMNS = [
   'id',
@@ -149,52 +137,54 @@ const INSIGHT_COLUMNS = [
 
 /** Ánh xạ dữ kiện ghi mô hình từ camelCase sang snake_case, loại `undefined` từng trường. */
 function modelInsertValues(values: NewModel): InsertObject<CentreDB, 'analytics_models'> {
-  const row: InsertObject<CentreDB, 'analytics_models'> = {
+  return {
     name: values.name,
     target: values.target,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.indicators !== undefined ? { indicators: jsonbValue(values.indicators) } : {}),
+    ...(values.enabled !== undefined ? { enabled: values.enabled } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.indicators !== undefined) row.indicators = jsonbValue(values.indicators);
-  if (values.enabled !== undefined) row.enabled = values.enabled;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi dự đoán từ camelCase sang snake_case, loại `undefined` từng trường. */
 function predictionInsertValues(values: NewPrediction): InsertObject<CentreDB, 'analytics_predictions'> {
-  const row: InsertObject<CentreDB, 'analytics_predictions'> = {
+  return {
     model_id: values.modelId,
     user_id: values.userId,
     context_id: values.contextId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.courseId !== undefined ? { course_id: values.courseId } : {}),
+    ...(values.score !== undefined ? { score: values.score } : {}),
+    ...(values.data !== undefined ? { data: jsonbValue(values.data) } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.score !== undefined) row.score = values.score;
-  if (values.data !== undefined) row.data = jsonbValue(values.data);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi insight từ camelCase sang snake_case, loại `undefined` từng trường. */
 function insightInsertValues(values: NewInsight): InsertObject<CentreDB, 'insights'> {
-  const row: InsertObject<CentreDB, 'insights'> = {
+  return {
     model_id: values.modelId,
     user_id: values.userId,
     recipient_id: values.recipientId,
     context_id: values.contextId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.predictionId !== undefined ? { prediction_id: values.predictionId } : {}),
+    ...(values.courseId !== undefined ? { course_id: values.courseId } : {}),
+    ...(values.heading !== undefined ? { heading: values.heading } : {}),
+    ...(values.data !== undefined ? { data: jsonbValue(values.data) } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.predictionId !== undefined) row.prediction_id = values.predictionId;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.heading !== undefined) row.heading = values.heading;
-  if (values.data !== undefined) row.data = jsonbValue(values.data);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Kho dữ liệu analytics_models / analytics_predictions / insights. */
 export class AnalyticsRepository {
   constructor(private readonly handle: CentreDb) {}
+
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): AnalyticsDb {
+    return this.handle;
+  }
 
   /** Handle Kysely của kho trung tâm mà repository đang giữ (tầng service dùng cho các truy vấn đọc phụ trợ của module). */
   get dbHandle(): CentreDb {
@@ -205,7 +195,7 @@ export class AnalyticsRepository {
    * Ghi một mô hình, trùng tên thì cập nhật target/indicators/enabled
    * theo dữ kiện mới (upsert theo cột unique `name`).
    */
-  async upsertModel(v: NewModel, db: AnalyticsDb = this.handle): Promise<ModelRow> {
+  async upsertModel(v: NewModel, db: AnalyticsDb = this.db()): Promise<ModelRow> {
     // Nhánh cập nhật khi trùng tên: target luôn lấy theo dữ kiện mới,
     // enabled mặc định true khi dữ kiện không nêu, indicators chỉ ghi
     // khi dữ kiện có mang (loại `undefined` tường minh theo luật T-4).
@@ -214,17 +204,16 @@ export class AnalyticsRepository {
       enabled: v.enabled ?? true,
     };
     if (v.indicators !== undefined) conflictSet.indicators = jsonbValue(v.indicators);
-    const rows = await db
+    return db
       .insertInto('analytics_models')
       .values(modelInsertValues(v))
       .onConflict((oc) => oc.column('name').doUpdateSet(conflictSet))
       .returning(MODEL_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy mô hình theo tên duy nhất. */
-  async getModelByName(name: string, db: AnalyticsDb = this.handle): Promise<ModelRow | undefined> {
+  async getModelByName(name: string, db: AnalyticsDb = this.db()): Promise<ModelRow | undefined> {
     return db
       .selectFrom('analytics_models')
       .select(MODEL_COLUMNS)
@@ -233,7 +222,7 @@ export class AnalyticsRepository {
   }
 
   /** Lấy mô hình theo id. */
-  async getModel(id: string, db: AnalyticsDb = this.handle): Promise<ModelRow | undefined> {
+  async getModel(id: string, db: AnalyticsDb = this.db()): Promise<ModelRow | undefined> {
     return db
       .selectFrom('analytics_models')
       .select(MODEL_COLUMNS)
@@ -242,42 +231,40 @@ export class AnalyticsRepository {
   }
 
   /** Liệt kê mọi mô hình. */
-  async listModels(db: AnalyticsDb = this.handle): Promise<ModelRow[]> {
+  async listModels(db: AnalyticsDb = this.db()): Promise<ModelRow[]> {
     return db.selectFrom('analytics_models').select(MODEL_COLUMNS).execute();
   }
 
   /** Ghi một dự đoán mới, trả dòng vừa ghi. */
-  async insertPrediction(v: NewPrediction, db: AnalyticsDb = this.handle): Promise<PredictionRow> {
-    const rows = await db
+  async insertPrediction(v: NewPrediction, db: AnalyticsDb = this.db()): Promise<PredictionRow> {
+    return db
       .insertInto('analytics_predictions')
       .values(predictionInsertValues(v))
       .returning(PREDICTION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Liệt kê mọi dự đoán. */
-  async listPredictions(db: AnalyticsDb = this.handle): Promise<PredictionRow[]> {
+  async listPredictions(db: AnalyticsDb = this.db()): Promise<PredictionRow[]> {
     return db.selectFrom('analytics_predictions').select(PREDICTION_COLUMNS).execute();
   }
 
   /** Ghi một insight mới, trả dòng vừa ghi. */
-  async insertInsight(v: NewInsight, db: AnalyticsDb = this.handle): Promise<InsightRow> {
-    const rows = await db
+  async insertInsight(v: NewInsight, db: AnalyticsDb = this.db()): Promise<InsightRow> {
+    return db
       .insertInto('insights')
       .values(insightInsertValues(v))
       .returning(INSIGHT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Liệt kê mọi insight. */
-  async listInsights(db: AnalyticsDb = this.handle): Promise<InsightRow[]> {
+  async listInsights(db: AnalyticsDb = this.db()): Promise<InsightRow[]> {
     return db.selectFrom('insights').select(INSIGHT_COLUMNS).execute();
   }
 
   /** Liệt kê insight theo người nhận. */
-  async listInsightsForRecipient(recipientId: string, db: AnalyticsDb = this.handle): Promise<InsightRow[]> {
+  async listInsightsForRecipient(recipientId: string, db: AnalyticsDb = this.db()): Promise<InsightRow[]> {
     return db
       .selectFrom('insights')
       .select(INSIGHT_COLUMNS)

@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
@@ -9,7 +9,7 @@ import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { RolesService } from '../access/roles.service';
 import { CompetenciesService } from '../competencies/competencies.service';
-import { CompletionService } from '../completion/completion.service';
+import { COMPLETION_COMPLETE, CompletionService } from '../completion/completion.service';
 import { CoursesService } from '../courses/courses.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { GroupsService } from '../groups/groups.service';
@@ -24,6 +24,19 @@ export const LEAF_TYPES = ['coursecompletion', 'activitycompletion', 'competency
 
 /** Các trường hồ sơ chuẩn mà lá `profile` đọc trực tiếp từ bản ghi user (ngoài ra lá nhận custom field theo shortName). */
 const PROFILE_STANDARD_FIELDS = ['username', 'email', 'firstName', 'lastName'] as const;
+
+/** Một ngày tính bằng mili-giây — dùng cho hạn huy hiệu tính theo ngày (expirePeriod). */
+const DAY_MS = 86400_000;
+
+/** Trích tham số chuỗi của lá tiêu chí: chỉ chuỗi mới tính là có, còn lại là chuỗi rỗng. */
+function stringParam(params: Record<string, unknown>, key: string): string {
+  return typeof params[key] === 'string' ? (params[key] as string) : '';
+}
+
+/** Loại lá tiêu chí trong cây đánh giá huy hiệu. */
+type LeafCriterionType = (typeof LEAF_TYPES)[number];
+/** Handler đánh giá một lá tiêu chí cho một user. */
+type LeafSatisfiedHandler = (params: Record<string, unknown>, leaf: CriteriaRow, userId: string) => Promise<boolean>;
 
 export interface CriteriaInput {
   method: number; // 1=ALL, 2=ANY trên các lá
@@ -49,6 +62,7 @@ export interface CriteriaInput {
  * (hoàn thành khoá học/cm, năng lực đạt) và theo yêu cầu; mỗi lần cấp sinh assertion có uniqueHash kiểm chứng được.
  */
 export class BadgesService implements OnModuleInit {
+  private readonly logger = new Logger(BadgesService.name);
   constructor(
     private readonly repo: BadgesRepository,
     private readonly contexts: ContextsService,
@@ -94,7 +108,11 @@ export class BadgesService implements OnModuleInit {
     await this.awardQueue.add('evaluate', { userId, trigger }, {
       jobId: `badge-award-${userId}-${trigger}-${Date.now()}`,
       attempts: 3, removeOnComplete: true,
-    }).catch(() => undefined);
+    }).catch((err) => {
+      // Job đánh giá huy hiệu enqueue lỗi thì không bao giờ chạy — ghi vết
+      // để vận hành thấy, không ném ngược vì đánh giá là hiệu ứng phụ.
+      this.logger.warn(`Failed to enqueue badge evaluation for user ${userId} (trigger ${trigger}): ${err instanceof Error ? err.message : String(err)}`);
+    });
   }
 
   private async systemCtx(): Promise<string> {
@@ -106,7 +124,7 @@ export class BadgesService implements OnModuleInit {
       : this.systemCtx();
   }
 
-  // --- CRUD badge -----------------------------------------------------------------
+  // --- quản lý badge -----------------------------------------------------------------
 
   /**
    * Tạo badge ở trạng thái inactive.
@@ -164,9 +182,9 @@ export class BadgesService implements OnModuleInit {
     return this.getBadge(id);
   }
 
-  /** Xoá kiểu Moodle = lưu trữ (badgeslib_test test_delete_badge): badge không bao giờ bị xoá cứng theo mặc định. */
   /**
-   * Lưu trữ badge (không cấp thêm).
+   * Lưu trữ badge (không cấp thêm). Xoá kiểu Moodle = lưu trữ
+   * (badgeslib_test test_delete_badge): badge không bao giờ bị xoá cứng theo mặc định.
    */
   async archiveBadge(actorId: string, id: string): Promise<BadgeRow> {
     const badgeRow = await this.getBadge(id);
@@ -207,9 +225,9 @@ export class BadgesService implements OnModuleInit {
     return { method: overall?.method ?? CRITERIA_AGGREGATION.ALL, criteria: rows.filter((r) => r.criteriaType !== 'overall') };
   }
 
-  /** Luật đóng băng (report §2#14): badge đang active và badge đã có award có tiêu chí bất biến. */
   /**
    * Chặn sửa tiêu chí khi badge đã kích hoạt/đã cấp (badges.criteria_frozen).
+   * Luật đóng băng (report §2#14): badge đang active và badge đã có award có tiêu chí bất biến.
    */
   async assertCriteriaEditable(badgeRow: BadgeRow): Promise<void> {
     if (badgeRow.status === BADGE_STATUS.ACTIVE || badgeRow.status === BADGE_STATUS.DISABLED) {
@@ -258,9 +276,9 @@ export class BadgesService implements OnModuleInit {
     return this.getCriteria(badgeId);
   }
 
-  /** Nhân bản = cách được phép để sửa một badge đã đóng băng (badge INACTIVE mới với tiêu chí sao chép). */
   /**
    * Nhân bản badge (kèm tiêu chí) để chỉnh sửa mà không đụng bản đang chạy.
+   * Nhân bản = cách được phép để sửa một badge đã đóng băng (badge INACTIVE mới với tiêu chí sao chép).
    */
   async duplicateBadge(actorId: string, badgeId: string): Promise<BadgeRow> {
     const source = await this.getBadge(badgeId);
@@ -318,83 +336,88 @@ export class BadgesService implements OnModuleInit {
 
   // --- đánh giá & cấp phát --------------------------------------------------------------
 
+  /**
+   * Bảng dispatch theo loại lá tiêu chí: mỗi loại lá là một handler nhận
+   * (params, leaf, userId). Loại lá chưa đăng ký ⇒ không đạt.
+   */
+  private readonly leafSatisfiedHandlers: Record<LeafCriterionType, LeafSatisfiedHandler> = {
+    coursecompletion: async (params, _leaf, userId) => {
+      const courseId = stringParam(params, 'courseId');
+      if (!courseId) return false;
+      const completion = await this.completion.getCourseCompletion(userId, courseId).catch(() => undefined);
+      if (completion?.status !== 'complete') return false;
+      // By-date (Moodle award_badge "course completion by-date"): khi lá
+      // khai `byDate`, chỉ tính khi thời điểm hoàn thành ≤ ngày cắt đó —
+      // hoàn thành sau ngày cắt thì KHÔNG đạt dù trạng thái là complete.
+      const byDate = typeof params.byDate === 'string' ? params.byDate : undefined;
+      if (byDate !== undefined) {
+        const cutoff = Date.parse(byDate);
+        if (Number.isNaN(cutoff) || !completion.timeCompleted) return false;
+        return completion.timeCompleted.getTime() <= cutoff;
+      }
+      return true;
+    },
+    cohort: async (params, _leaf, userId) => {
+      // Lá cohort (Moodle criteria_cohort): user phải thuộc cohort chỉ
+      // định; dạng `cohortIds` yêu cầu thuộc TẤT CẢ cohort liệt kê.
+      const single = stringParam(params, 'cohortId');
+      const ids = single
+        ? [single]
+        : Array.isArray(params.cohortIds) ? params.cohortIds.filter((i): i is string => typeof i === 'string') : [];
+      if (!ids.length) return false;
+      // Các lượt kiểm tra thành viên độc lập nhau nên chạy song song.
+      const memberFlags = await Promise.all(ids.map((cohortId) => this.groups.isCohortMember(cohortId, userId)));
+      return memberFlags.every(Boolean);
+    },
+    profile: async (params, _leaf, userId) => {
+      // Lá profile (Moodle criteria_profile): trường hồ sơ chuẩn hoặc
+      // custom field (theo shortName, scope core_user/user) đạt điều kiện —
+      // có `value` thì phải bằng đúng, không có thì trường phải được điền.
+      const field = stringParam(params, 'field');
+      if (!field) return false;
+      let actual: string | null | undefined;
+      if ((PROFILE_STANDARD_FIELDS as readonly string[]).includes(field)) {
+        const user = await this.users.getByIdOrUndefined(userId);
+        actual = user ? String(user[field as keyof typeof user] ?? '') : undefined;
+      } else {
+        const values = await this.customFields.getValuesForInstance(USER_COMPONENT, USER_AREA, userId).catch(() => []);
+        actual = values.find((v) => v.field.shortName === field)?.value;
+      }
+      if (actual === null || actual === undefined) return false;
+      return typeof params.value === 'string' ? actual === params.value : actual.trim() !== '';
+    },
+    activitycompletion: async (params, _leaf, userId) => {
+      const cmId = stringParam(params, 'cmId');
+      if (!cmId) return false;
+      const state = await this.completion.getCmCompletion(cmId, userId).catch(() => undefined);
+      return !!state && state.state >= COMPLETION_COMPLETE;
+    },
+    competency: async (params, _leaf, userId) => {
+      const competencyId = stringParam(params, 'competencyId');
+      if (!competencyId) return false;
+      return this.competencies.isProficient(userId, competencyId);
+    },
+    badge: async (params, _leaf, userId) => {
+      const otherBadgeId = stringParam(params, 'badgeId');
+      if (!otherBadgeId) return false;
+      const issued = await this.repo.findIssued(otherBadgeId, userId);
+      return !!issued && !issued.revoked;
+    },
+    manual: async (_params, leaf, userId) => {
+      const award = await this.repo.findManualAward(leaf.badgeId, userId);
+      return !!award;
+    },
+  };
+
+  /** Một lá tiêu chí có thoả cho user hay không — tra bảng dispatch theo loại lá. */
   private async leafSatisfied(leaf: CriteriaRow, userId: string): Promise<boolean> {
     const params = (leaf.params ?? {}) as Record<string, unknown>;
-    switch (leaf.criteriaType) {
-      case 'coursecompletion': {
-        const courseId = typeof params.courseId === 'string' ? params.courseId : '';
-        if (!courseId) return false;
-        const completion = await this.completion.getCourseCompletion(userId, courseId).catch(() => undefined);
-        if (completion?.status !== 'complete') return false;
-        // By-date (Moodle award_badge "course completion by-date"): khi lá
-        // khai `byDate`, chỉ tính khi thời điểm hoàn thành ≤ ngày cắt đó —
-        // hoàn thành sau ngày cắt thì KHÔNG đạt dù trạng thái là complete.
-        const byDate = typeof params.byDate === 'string' ? params.byDate : undefined;
-        if (byDate !== undefined) {
-          const cutoff = Date.parse(byDate);
-          if (Number.isNaN(cutoff) || !completion.timeCompleted) return false;
-          return completion.timeCompleted.getTime() <= cutoff;
-        }
-        return true;
-      }
-      case 'cohort': {
-        // Lá cohort (Moodle criteria_cohort): user phải thuộc cohort chỉ
-        // định; dạng `cohortIds` yêu cầu thuộc TẤT CẢ cohort liệt kê.
-        const ids = typeof params.cohortId === 'string'
-          ? [params.cohortId]
-          : Array.isArray(params.cohortIds) ? params.cohortIds.filter((i): i is string => typeof i === 'string') : [];
-        if (!ids.length) return false;
-        for (const cohortId of ids) {
-          if (!(await this.groups.isCohortMember(cohortId, userId))) return false;
-        }
-        return true;
-      }
-      case 'profile': {
-        // Lá profile (Moodle criteria_profile): trường hồ sơ chuẩn hoặc
-        // custom field (theo shortName, scope core_user/user) đạt điều kiện —
-        // có `value` thì phải bằng đúng, không có thì trường phải được điền.
-        const field = typeof params.field === 'string' ? params.field : '';
-        if (!field) return false;
-        let actual: string | null | undefined;
-        if ((PROFILE_STANDARD_FIELDS as readonly string[]).includes(field)) {
-          const user = await this.users.getByIdOrUndefined(userId);
-          actual = user ? String(user[field as keyof typeof user] ?? '') : undefined;
-        } else {
-          const values = await this.customFields.getValuesForInstance(USER_COMPONENT, USER_AREA, userId).catch(() => []);
-          actual = values.find((v) => v.field.shortName === field)?.value;
-        }
-        if (actual === null || actual === undefined) return false;
-        return typeof params.value === 'string' ? actual === params.value : actual.trim() !== '';
-      }
-      case 'activitycompletion': {
-        const cmId = typeof params.cmId === 'string' ? params.cmId : '';
-        if (!cmId) return false;
-        const state = await this.completion.getCmCompletion(cmId, userId).catch(() => undefined);
-        return !!state && state.state >= 1;
-      }
-      case 'competency': {
-        const competencyId = typeof params.competencyId === 'string' ? params.competencyId : '';
-        if (!competencyId) return false;
-        return this.competencies.isProficient(userId, competencyId);
-      }
-      case 'badge': {
-        const otherBadgeId = typeof params.badgeId === 'string' ? params.badgeId : '';
-        if (!otherBadgeId) return false;
-        const issued = await this.repo.findIssued(otherBadgeId, userId);
-        return !!issued && !issued.revoked;
-      }
-      case 'manual': {
-        const award = await this.repo.findManualAward(leaf.badgeId, userId);
-        return !!award;
-      }
-      default:
-        return false;
-    }
+    if (!(LEAF_TYPES as readonly string[]).includes(leaf.criteriaType)) return false;
+    return this.leafSatisfiedHandlers[leaf.criteriaType as LeafCriterionType](params, leaf, userId);
   }
 
-  /** Đánh giá cây tiêu chí của một badge cho một user. */
   /**
-   * Đánh giá một badge cho một user: đủ tiêu chí thì cấp.
+   * Đánh giá cây tiêu chí của một badge cho một user: đủ tiêu chí thì cấp.
    */
   async evaluateBadge(badgeId: string, userId: string): Promise<{ satisfied: boolean; method: number; leaves: { criteriaId: string; criteriaType: string; satisfied: boolean }[] }> {
     const { method, criteria } = await this.getCriteria(badgeId);
@@ -408,12 +431,8 @@ export class BadgesService implements OnModuleInit {
   }
 
   /**
-   * Cấp một badge: tạo assertion bất biến. Idempotent — một user
-   * giữ một badge cho trước tối đa một lần (lời gọi thứ hai
-   * trả assertion hiện có).
-   */
-  /**
-   * Cấp huy hiệu: tạo assertion với uniqueHash và gửi notification đã dịch cho người nhận.
+   * Cấp huy hiệu: tạo assertion bất biến với uniqueHash và gửi notification đã dịch cho người nhận.
+   * Idempotent — một user giữ một huy hiệu cho trước tối đa một assertion (lời gọi thứ hai trả assertion hiện có).
    *
    * Flow: kiểm tra chưa từng cấp (idempotent — một user giữ một huy hiệu
    * tối đa một assertion) → trong MỘT transaction: ghi assertion (snapshot
@@ -437,7 +456,7 @@ export class BadgesService implements OnModuleInit {
     if (existing) return existing;
     const { criteria } = await this.getCriteria(badgeId);
     const dateExpire = badgeRow.expireDate ?? (badgeRow.expirePeriod
-      ? new Date(Date.now() + badgeRow.expirePeriod * 86400_000) : null);
+      ? new Date(Date.now() + badgeRow.expirePeriod * DAY_MS) : null);
     const uniqueHash = createHash('sha256').update(`${badgeId}:${userId}:${randomUUID()}`).digest('hex');
     const issued = await this.repo.transaction(async (tx) => {
       const row = await this.repo.insertIssued({
@@ -495,9 +514,9 @@ export class BadgesService implements OnModuleInit {
     return this.evaluateUserBadges(userId);
   }
 
-  /** Đánh giá mọi badge ACTIVE cho một user và cấp những badge mới thoả. */
   /**
-   * Đánh giá mọi badge liên quan cho user (sau sự kiện hoàn thành).
+   * Đánh giá mọi badge liên quan cho user (sau sự kiện hoàn thành):
+   * đánh giá mọi badge ACTIVE cho một user và cấp những badge mới thoả.
    */
   async evaluateUserBadges(userId: string): Promise<{ evaluated: number; issued: string[] }> {
     const user = await this.users.getByIdOrUndefined(userId);
@@ -518,13 +537,11 @@ export class BadgesService implements OnModuleInit {
   // --- cấp thủ công --------------------------------------------------------------------------
 
   /**
-   * Cấp thủ công (oracle: badgeslib award_criteria_manual). Badge phải
+   * Cấp thủ công cho user bởi người có capability award.
+   * (oracle: badgeslib award_criteria_manual). Badge phải
    * khai một tiêu chí thủ công; nếu nó nêu một role, người cấp phải giữ
    * role đó tại context của badge. Việc cấp thoả lá thủ công;
    * badge chỉ được cấp nếu tổng hợp toàn thể sau đó đạt.
-   */
-  /**
-   * Cấp thủ công cho user bởi người có capability award.
    */
   async manualAward(actorId: string, badgeId: string, recipientId: string): Promise<{ award: unknown; issued: IssuedRow | null; evaluation: unknown }> {
     const badgeRow = await this.getBadge(badgeId);
@@ -583,9 +600,9 @@ export class BadgesService implements OnModuleInit {
     return row;
   }
 
-  /** Thu hồi: dòng assertion VẪN CÒN (đánh dấu đã thu hồi); chỉ hiển thị/hiệu lực của nó kết thúc. */
   /**
-   * Thu hồi một huy hiệu đã cấp.
+   * Thu hồi một huy hiệu đã cấp: dòng assertion VẪN CÒN (đánh dấu đã thu hồi);
+   * chỉ hiển thị/hiệu lực của nó kết thúc.
    */
   async revokeIssued(actorId: string, issuedId: string): Promise<IssuedRow> {
     const issued = await this.getIssued(issuedId);

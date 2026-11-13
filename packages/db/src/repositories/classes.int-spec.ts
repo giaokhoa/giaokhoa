@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
 import { ClassesRepository } from './classes';
 
 /**
@@ -21,9 +22,7 @@ import { ClassesRepository } from './classes';
  * - Hàng chờ tự báo danh: chèn, tra đang chờ, quyết định.
  */
 
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g645_classes';
 
@@ -47,13 +46,13 @@ beforeAll(async () => {
 
   const tenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g645-classes', name: 'Trung tâm spec G5 classes', kind: 'center' })
+    .values({ slug: 'g645-classes', name: 'Trung tâm spec G5 classes', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   tenantId = tenant.id;
   const otherTenant = await db
     .insertInto('tenants')
-    .values({ slug: 'g645-classes-other', name: 'Trung tâm khác spec G5 classes', kind: 'center' })
+    .values({ slug: 'g645-classes-other', name: 'Trung tâm khác spec G5 classes', kind: TEST_TENANT_KIND })
     .returning('id')
     .executeTakeFirstOrThrow();
   otherTenantId = otherTenant.id;

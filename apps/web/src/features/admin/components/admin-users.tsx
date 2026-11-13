@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { SectionCards } from '#components/section-cards';
 import { useAccessContexts, useAccessRoles } from '#lib/access';
+import { errorText } from '#lib/api';
+import { findSystemContext } from '#lib/permissions';
 import { formatDate } from '#utils/date-format';
 import '#config/i18n';
 import {
@@ -35,6 +37,7 @@ import {
   useUpdateAdminUser,
 } from '../queries/admin-users';
 import { roleHoldersQueryOptions, userAssignmentsQueryOptions } from '../queries/admin-roles';
+import { ADMIN_PAGE_SIZE_OPTIONS, isAdminPageSize } from './table-pagination';
 import { UserDeleteDialog } from './user-delete-dialog';
 import { DataTable, type DataColumn } from '#components/data-table';
 
@@ -60,9 +63,6 @@ function UserFormScreen({
     </PageShell>
   );
 }
-
-/** Các lựa chọn cỡ trang của bảng người dùng (hợp đồng đợt 1 chặn trần 100 phía server). */
-const USER_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 /** Giá trị bộ lọc trạng thái: chuỗi rỗng nghĩa là giữ mặc định của API (chỉ tài khoản chưa xoá). */
 type StatusFilterValue = '' | UserListStatus;
@@ -106,11 +106,11 @@ export function AdminUsersPage() {
 
   const suspendMutation = useToggleUserSuspended();
 
-  // Danh sách vai và cây context là hai query dùng chung của tầng access: vai trò làm lựa chọn cho bộ lọc và để phân giải tên vai ở cột Vai trò; ngữ cảnh hệ thống là dòng có cấp 10 trong cây.
+  // Danh sách vai và cây context là hai query dùng chung của tầng access: vai trò làm lựa chọn cho bộ lọc và để phân giải tên vai ở cột Vai trò; ngữ cảnh hệ thống là dòng có cấp hệ thống (CONTEXT_LEVEL.SYSTEM) trong cây.
   const rolesQuery = useAccessRoles();
   const contextsQuery = useAccessContexts();
   const roles = rolesQuery.data ?? [];
-  const systemContextId = contextsQuery.data?.find((c) => c.contextLevel === 10)?.id;
+  const systemContextId = findSystemContext(contextsQuery.data)?.id;
 
   // Ba truy vấn đếm theo trạng thái cho thẻ thống kê (điểm 1 của luồng): mỗi truy vấn đọc một dòng và lấy tổng server công bố.
   const activeStatQuery = useQuery(adminUserStatQueryOptions('active'));
@@ -205,8 +205,13 @@ export function AdminUsersPage() {
     }
   }
 
+  /** Khoá/mở khoá một người dùng: lỗi API thì hiện thông báo thay vì để promise bị reject không ai đón. */
   async function suspend(id: string, suspended: boolean) {
-    await suspendMutation.mutateAsync({ id, suspended });
+    try {
+      await suspendMutation.mutateAsync({ id, suspended });
+    } catch (err) {
+      setMessage(errorText(err, t('userSuspendFailed')));
+    }
   }
 
   /** Chữ cái đầu cho ảnh đại diện chữ viết tắt: chữ đầu của họ và tên, lùi về tên đăng nhập khi hồ sơ trống. */
@@ -465,11 +470,11 @@ export function AdminUsersPage() {
                   const next = Number(e.target.value);
                   setPagination({
                     pageIndex: 0,
-                    pageSize: USER_PAGE_SIZE_OPTIONS.includes(next as 10 | 25 | 50 | 100) ? next : 10,
+                    pageSize: isAdminPageSize(next) ? next : 10,
                   });
                 }}
               >
-                {USER_PAGE_SIZE_OPTIONS.map((n) => (
+                {ADMIN_PAGE_SIZE_OPTIONS.map((n) => (
                   <NativeSelectOption key={n} value={String(n)}>
                     {String(n)}
                   </NativeSelectOption>
@@ -547,8 +552,8 @@ export function AdminUserNewPage() {
     try {
       await createMutation.mutateAsync(draft);
       navigate('/admin/users');
-    } catch {
-      setError(t('userCreateFailed'));
+    } catch (err) {
+      setError(errorText(err, t('userCreateFailed')));
     }
   }
 
@@ -636,8 +641,8 @@ export function AdminUserEditPage() {
         },
       });
       navigate('/admin/users');
-    } catch {
-      setError(t('userUpdateFailed'));
+    } catch (err) {
+      setError(errorText(err, t('userUpdateFailed')));
     }
   }
 

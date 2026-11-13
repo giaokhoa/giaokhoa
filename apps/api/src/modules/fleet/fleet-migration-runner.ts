@@ -24,6 +24,7 @@ import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
 import {
   dumpDatabaseToFile,
+  ERROR_DETAIL_MAX_LENGTH,
   listMigrationFolders,
   newFleetRunId,
   orderSpacesIntoWaves,
@@ -67,7 +68,7 @@ export type FleetMigrationSummary = {
 /** Cắt ngắn chi tiết lỗi ghi vào nhật ký bước: đủ để chẩn đoán, không phình dòng jsonb. */
 function errorDetail(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 500);
+  return message.slice(0, ERROR_DETAIL_MAX_LENGTH);
 }
 
 /**

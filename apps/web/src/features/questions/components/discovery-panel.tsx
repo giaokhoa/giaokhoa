@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../queries/keys';
 import { questionDetailQueryOptions, questionDiscoveryQueryOptions, useBankQuestionContributions, useCopyQuestionToMyBank, useReviewQuestionContribution } from '../queries/questions';
 import type { BankLite, DiscoveryItemLite } from '../types/questions';
-import { plainText, QTYPE_LABEL_KEYS, QTYPES, questionExcerpt } from '../utils/shared';
+import { bankScopeKey, plainText, QTYPE_LABEL_KEYS, QTYPES, questionExcerpt } from '../utils/shared';
 
 /** Props của panel khám phá ngân hàng câu hỏi chung. */
 export interface DiscoveryPanelProps {
@@ -114,7 +114,7 @@ export function DiscoveryPanel({ sharedBanks, refreshBanks, setMessage }: Discov
             <option value="">{t('allSharedBanks')}</option>
             {sharedBanks.map((bank) => (
               <option key={bank.id} value={bank.id}>
-                {bank.name} ({t(`bankScope${bank.scope[0]!.toUpperCase()}${bank.scope.slice(1)}`)})
+                {bank.name} ({t(bankScopeKey(bank.scope))})
               </option>
             ))}
           </select>

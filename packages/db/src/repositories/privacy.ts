@@ -5,9 +5,10 @@
  *
  * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Các cột jsonb (`result`, `manifest`) khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`).
  */
-import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import { type InsertObject, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type PrivacyDb = CentreDb | CentreTx;
@@ -58,19 +59,6 @@ export interface NewExportFile {
   subsystem?: string;
   manifest?: unknown | null;
   createdAt?: Date;
-}
-
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
 }
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng privacy_requests. */
@@ -144,23 +132,27 @@ function exportFileInsertValues(values: NewExportFile): InsertObject<CentreDB, '
 export class PrivacyRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): PrivacyDb {
+    return this.handle;
+  }
+
   /** Handle Kysely của kho trung tâm mà repository đang giữ (tầng service dùng cho các provider xuất/xoá dữ liệu theo subsystem). */
   get dbHandle(): CentreDb {
     return this.handle;
   }
 
   /** Ghi một yêu cầu mới, trả dòng vừa ghi. */
-  async insertRequest(v: NewPrivacyRequest, db: PrivacyDb = this.handle): Promise<PrivacyRequestRow> {
-    const rows = await db
+  async insertRequest(v: NewPrivacyRequest, db: PrivacyDb = this.db()): Promise<PrivacyRequestRow> {
+    return db
       .insertInto('privacy_requests')
       .values(privacyRequestInsertValues(v))
       .returning(PRIVACY_REQUEST_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy yêu cầu theo id. */
-  async getRequest(id: string, db: PrivacyDb = this.handle): Promise<PrivacyRequestRow | undefined> {
+  async getRequest(id: string, db: PrivacyDb = this.db()): Promise<PrivacyRequestRow | undefined> {
     return db
       .selectFrom('privacy_requests')
       .select(PRIVACY_REQUEST_COLUMNS)
@@ -169,12 +161,12 @@ export class PrivacyRepository {
   }
 
   /** Liệt kê mọi yêu cầu. */
-  async listRequests(db: PrivacyDb = this.handle): Promise<PrivacyRequestRow[]> {
+  async listRequests(db: PrivacyDb = this.db()): Promise<PrivacyRequestRow[]> {
     return db.selectFrom('privacy_requests').select(PRIVACY_REQUEST_COLUMNS).execute();
   }
 
   /** Liệt kê yêu cầu của một chủ thể. */
-  async listRequestsForUser(userId: string, db: PrivacyDb = this.handle): Promise<PrivacyRequestRow[]> {
+  async listRequestsForUser(userId: string, db: PrivacyDb = this.db()): Promise<PrivacyRequestRow[]> {
     return db
       .selectFrom('privacy_requests')
       .select(PRIVACY_REQUEST_COLUMNS)
@@ -183,7 +175,7 @@ export class PrivacyRepository {
   }
 
   /** Cập nhật một yêu cầu theo bản vá từng phần; updatedAt luôn được làm mới tại thời điểm cập nhật. */
-  async updateRequest(id: string, v: Partial<NewPrivacyRequest>, db: PrivacyDb = this.handle): Promise<void> {
+  async updateRequest(id: string, v: Partial<NewPrivacyRequest>, db: PrivacyDb = this.db()): Promise<void> {
     await db
       .updateTable('privacy_requests')
       .set({ ...privacyRequestUpdateSet(v), updated_at: new Date() })
@@ -192,17 +184,16 @@ export class PrivacyRepository {
   }
 
   /** Ghi một tệp xuất mới, trả dòng vừa ghi. */
-  async insertExportFile(v: NewExportFile, db: PrivacyDb = this.handle): Promise<ExportFileRow> {
-    const rows = await db
+  async insertExportFile(v: NewExportFile, db: PrivacyDb = this.db()): Promise<ExportFileRow> {
+    return db
       .insertInto('privacy_export_files')
       .values(exportFileInsertValues(v))
       .returning(PRIVACY_EXPORT_FILE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Liệt kê các tệp xuất của một yêu cầu. */
-  async listExportFiles(requestId: string, db: PrivacyDb = this.handle): Promise<ExportFileRow[]> {
+  async listExportFiles(requestId: string, db: PrivacyDb = this.db()): Promise<ExportFileRow[]> {
     return db
       .selectFrom('privacy_export_files')
       .select(PRIVACY_EXPORT_FILE_COLUMNS)

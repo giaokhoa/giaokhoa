@@ -56,11 +56,9 @@ export interface VneduGrid {
 /** Số dòng tiêu đề phía trên dòng dữ liệu đầu tiên (tựa, thông tin, trống, 2 dòng đầu bảng). */
 export const VNEDU_DATA_START_ROW = 6;
 
-/** Làm tròn đến chữ số thập phân thứ nhất (Điều 5 TT22), khử nhiễu dấu phẩy động ở biên ,5. */
-export function roundToOneDecimal(value: number): number {
-  const rounded = Math.round((value + Number.EPSILON) * 10) / 10;
-  return rounded === 0 ? 0 : rounded;
-}
+/** Làm tròn đến chữ số thập phân thứ nhất (Điều 5 TT22), khử nhiễu dấu phẩy động ở biên ,5 — định nghĩa dùng chung ở `src/common/round.ts`, re-export tại đây để bề mặt import cũ không đổi. */
+import { roundToOneDecimal } from '../../common/round';
+export { roundToOneDecimal };
 
 /**
  * Quy đổi một finalGrade về thang 10 theo khoảng [gradeMin, gradeMax] của mục điểm rồi làm tròn 1 chữ số thập phân. Người gọi phải bảo đảm gradeMax > gradeMin (service kiểm tra khi validate ánh xạ).

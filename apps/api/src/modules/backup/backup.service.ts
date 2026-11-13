@@ -1,7 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { BackupRepository, type JobRow } from '@giaokhoa/db/repositories/backup';
 import { sql, type CentreDB, type RawBuilder, type Selectable } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
+import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { ContextsService } from '../access/contexts.service';
 import { RoleSeparationService } from '../access/role-separation.service';
 import { ENROL_ASSIGNMENT_COMPONENT, RolesService } from '../access/roles.service';
@@ -234,6 +235,7 @@ export function remapBadgeCriteriaParams(
  */
 @Injectable()
 export class BackupService {
+  private readonly logger = new Logger(BackupService.name);
   private readonly contributors: BackupContributor[] = [];
 
   constructor(
@@ -254,7 +256,22 @@ export class BackupService {
 
   private registerBuiltinContributors(): void {
     const db = this.repo.dbHandle;
-    // --- courses/sections/cm -------------------------------------------------
+    this.registerCourseContributors(db);
+    this.registerEnrolContributors(db);
+    this.registerGroupsContributors(db);
+    this.registerGradesContributors(db);
+    this.registerCompletionContributors(db);
+    this.registerFilesContributors(db);
+    this.registerQuestionBankContributors(db);
+    this.registerBadgesContributors(db);
+    this.registerCalendarContributors(db);
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho khoá học: course, section và course module.
+   */
+  private registerCourseContributors(db: BackupRepository['dbHandle']): void {
+    // --- khoá học/section/cm -------------------------------------------------
     this.registerContributor({
       name: 'courses',
       export: async (courseId) => {
@@ -287,7 +304,13 @@ export class BackupService {
         }
       },
     });
-    // --- enrol ---------------------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho ghi danh: enrol instance và user enrolment.
+   */
+  private registerEnrolContributors(db: BackupRepository['dbHandle']): void {
+    // --- ghi danh ---------------------------------------------------------------
     this.registerContributor({
       name: 'enrol',
       export: async (courseId, anonymize) => {
@@ -341,14 +364,27 @@ export class BackupService {
           if (ueRow) await mapping.map('user_enrolment', ue.id, ueRow.id);
           // Ghi danh khôi phục vẫn là gán do enrol cấp: mang truy vết của
           // instance MỚI ở khoá đích để unenrol sau này gỡ đúng dòng này
-          // (issue #157).
-          if (inst?.roleId) await this.roles.assignRole(ue.userId, inst.roleId, targetCtx, undefined, { component: ENROL_ASSIGNMENT_COMPONENT, itemId: newInstance }).catch(() => undefined);
+          // (issue #157). Gán vai lỗi không làm hỏng lượt restore — ghi vết
+          // để vận hành thấy ghi danh khôi phục thiếu vai.
+          if (inst?.roleId) {
+            try {
+              await this.roles.assignRole(ue.userId, inst.roleId, targetCtx, undefined, { component: ENROL_ASSIGNMENT_COMPONENT, itemId: newInstance });
+            } catch (err) {
+              this.logger.warn(`Failed to assign restored enrolment role for user ${ue.userId} (instance ${newInstance}): ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
         }
         if (skippedRoleConflicts > 0) return { detail: { skippedRoleConflictEnrolments: skippedRoleConflicts } };
         return undefined;
       },
     });
-    // --- groups ---------------------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho nhóm: group, thành viên, grouping và liên kết.
+   */
+  private registerGroupsContributors(db: BackupRepository['dbHandle']): void {
+    // --- nhóm ---------------------------------------------------------------
     this.registerContributor({
       name: 'groups',
       export: async (courseId) => {
@@ -388,7 +424,13 @@ export class BackupService {
         }
       },
     });
-    // --- grades ---------------------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho điểm: grade item và grade.
+   */
+  private registerGradesContributors(db: BackupRepository['dbHandle']): void {
+    // --- điểm ---------------------------------------------------------------
     this.registerContributor({
       name: 'grades',
       export: async (courseId, anonymize) => {
@@ -433,7 +475,13 @@ export class BackupService {
         }
       },
     });
-    // --- completion -------------------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho hoàn thành: cm completion, course completion, tiêu chí và cài đặt.
+   */
+  private registerCompletionContributors(db: BackupRepository['dbHandle']): void {
+    // --- hoàn thành -------------------------------------------------------------
     this.registerContributor({
       name: 'completion',
       export: async (courseId, anonymize) => {
@@ -498,16 +546,22 @@ export class BackupService {
         }
       },
     });
-    // --- files (theo contentHash) -------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho tệp (theo contentHash).
+   */
+  private registerFilesContributors(db: BackupRepository['dbHandle']): void {
+    // --- tệp (theo contentHash) -------------------------------------------------
     this.registerContributor({
       name: 'files',
       export: async (courseId) => {
         if (!courseId) return { files: [] };
-        const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
+        const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
         const cms = await db.selectFrom('course_modules').select(COURSE_MODULES_COLUMNS).where('course', '=', courseId).execute();
         const ctxIds: string[] = courseCtx ? [courseCtx.id] : [];
         for (const cm of cms) {
-          const ctx = await this.contexts.getByLevelInstance(70, cm.id);
+          const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.MODULE, cm.id);
           if (ctx) ctxIds.push(ctx.id);
         }
         if (!ctxIds.length) return { files: [] };
@@ -527,10 +581,10 @@ export class BackupService {
           // Context mới: cm context nếu item thuộc cm đã map, ngược lại course context mới.
           let newContextId = newCourseCtx;
           const oldCtx = await this.contexts.getContext(f.contextId).catch(() => undefined);
-          if (oldCtx?.contextLevel === 70) {
+          if (oldCtx?.contextLevel === CONTEXT_LEVELS.MODULE) {
             const newCm = oldCtx.instanceId ? mapping.get('cm', oldCtx.instanceId) : undefined;
             if (newCm) {
-              const ctx = await this.contexts.getByLevelInstance(70, newCm);
+              const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.MODULE, newCm);
               if (ctx) newContextId = ctx.id;
             }
           }
@@ -544,6 +598,12 @@ export class BackupService {
         }
       },
     });
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho ngân hàng câu hỏi (theo context).
+   */
+  private registerQuestionBankContributors(db: BackupRepository['dbHandle']): void {
     // --- ngân hàng câu hỏi ---------------------------------------------------------
     // Ngân hàng câu hỏi bám theo CONTEXT (bản model hiện hữu): category của
     // khoá nằm ở context của khoá (level 50), category mức site nằm ở context
@@ -555,7 +615,7 @@ export class BackupService {
       supportsSite: true,
       export: async (courseId) => {
         const ctxId = courseId
-          ? (await this.contexts.getByLevelInstance(50, courseId))?.id
+          ? (await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId))?.id
           : (await this.contexts.ensureSystemContext()).id;
         if (!ctxId) return { categories: [], questions: [], entries: [], versions: [], stimuli: [], answers: [], answerKeys: [], multichoiceOptions: [], truefalseOptions: [], shortanswerOptions: [], essayOptions: [] };
         const categories = await db.selectFrom('question_categories').select(QUESTION_CATEGORIES_COLUMNS).where('context_id', '=', ctxId).execute();
@@ -709,7 +769,13 @@ export class BackupService {
         }
       },
     });
-    // --- badges ------------------------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho huy hiệu và tiêu chí.
+   */
+  private registerBadgesContributors(db: BackupRepository['dbHandle']): void {
+    // --- huy hiệu ------------------------------------------------------------------
     // Định nghĩa badge của khoá (type=2) hoặc mức site (type=1) + toàn bộ
     // criteria; params của criteria được viết lại qua mapping (xem
     // remapBadgeCriteriaParams). KHÔNG export badge_issued (lượt đã cấp —
@@ -750,7 +816,13 @@ export class BackupService {
         }
       },
     });
-    // --- calendar ------------------------------------------------------------------
+  }
+
+  /**
+   * Đăng ký contributor sao lưu cho lịch: sự kiện và subscription.
+   */
+  private registerCalendarContributors(db: BackupRepository['dbHandle']): void {
+    // --- lịch ------------------------------------------------------------------
     // Sự kiện mức khoá (course + group; group được map qua contributor groups
     // chạy trước) và subscription của khoá; ở phạm vi site là sự kiện
     // eventType='site' + subscription mức site. Chuỗi lặp: repeatId /
@@ -906,6 +978,41 @@ export class BackupService {
   }
 
   /**
+   * Chạy mọi contributor cho một restore job — phần dùng chung của nhánh
+   * site và nhánh course: dựng mapping id cũ → mới, ghi step cho từng
+   * contributor rồi chạy `import` của nó, chốt job `completed`/`failed`.
+   * `targetId = null` là restore mức site; khác null là restore vào khoá
+   * đích đó (map thêm khoá nguồn → khoá đích; `clearTarget` thì xoá nội
+   * dung đích trước vòng contributor — chế độ `replace`).
+   */
+  private async runContributors(job: JobRow, archive: { contributors: Record<string, unknown> }, targetId: string | null, actorId: string, clearTarget = false): Promise<void> {
+    const mappingState = new Map<string, string>();
+    const mapping: RestoreMapping = {
+      map: async (itemType, oldId, newId) => {
+        mappingState.set(`${itemType}:${oldId}`, newId);
+        await this.repo.insertMapping({ jobId: job.id, itemType, oldId, newId });
+      },
+      get: (itemType, oldId) => mappingState.get(`${itemType}:${oldId}`),
+    };
+    if (targetId && job.courseId) await mapping.map('course', job.courseId, targetId);
+    try {
+      if (clearTarget && targetId) await this.clearCourseContent(targetId);
+      for (const c of this.contributors) {
+        const step = await this.repo.insertStep({ jobId: job.id, name: c.name, status: 'running' });
+        const data = archive.contributors[c.name];
+        const importResult = data !== undefined ? await c.import(targetId, data as never, mapping, actorId) : undefined;
+        await this.repo.updateStep(step.id, {
+          status: 'completed',
+          ...(importResult?.detail ? { detail: importResult.detail } : {}),
+        });
+      }
+      await this.repo.updateJob(job.id, { status: 'completed', timeFinished: new Date() });
+    } catch (e) {
+      await this.repo.updateJob(job.id, { status: 'failed', error: e instanceof Error ? e.message : String(e), timeFinished: new Date() });
+    }
+  }
+
+  /**
    * Tạo và chạy restore job với 3 chế độ tường minh. Backup mức SITE chỉ
    * khôi phục ở chế độ `new` (tạo dữ liệu mức site MỚI, không có khoá đích):
    * merge/replace/khoá đích đều bị từ chối vì không có course đích để gộp.
@@ -948,77 +1055,35 @@ export class BackupService {
       const job = await this.repo.insertJob({
         type: 'restore', scope: 'site', courseId: null, targetCourseId: null, mode, userId: actorId, status: 'running',
       });
-      const mappingState = new Map<string, string>();
-      const mapping: RestoreMapping = {
-        map: async (itemType, oldId, newId) => {
-          mappingState.set(`${itemType}:${oldId}`, newId);
-          await this.repo.insertMapping({ jobId: job.id, itemType, oldId, newId });
-        },
-        get: (itemType, oldId) => mappingState.get(`${itemType}:${oldId}`),
-      };
-      try {
-        for (const c of this.contributors) {
-          const step = await this.repo.insertStep({ jobId: job.id, name: c.name, status: 'running' });
-          const data = archive.contributors[c.name];
-          const importResult = data !== undefined ? await c.import(null, data as never, mapping, actorId) : undefined;
-          await this.repo.updateStep(step.id, {
-            status: 'completed',
-            ...(importResult?.detail ? { detail: importResult.detail } : {}),
-          });
-        }
-        await this.repo.updateJob(job.id, { status: 'completed', timeFinished: new Date() });
-      } catch (e) {
-        await this.repo.updateJob(job.id, { status: 'failed', error: e instanceof Error ? e.message : String(e), timeFinished: new Date() });
-      }
+      await this.runContributors(job, archive, null, actorId);
       return this.getJob(job.id);
     }
 
     if (!archive.course) {
       throw new BadRequestException({ message: 'Backup archive has no course payload', code: 'backup.not_completed' });
     }
-    if (mode !== 'new' && !targetCourseId) throw new BadRequestException({ message: `Restore mode ${mode} requires targetCourseId`, code: 'backup.target_required' });
-    if (mode === 'new' && targetCourseId) throw new BadRequestException({ message: 'Restore mode new must not pass targetCourseId', code: 'backup.target_forbidden' });
 
     let targetId: string;
     if (mode === 'new') {
+      if (targetCourseId) throw new BadRequestException({ message: 'Restore mode new must not pass targetCourseId', code: 'backup.target_forbidden' });
       await this.evaluator.requireCapability(actorId, 'backup:restorecourse', await this.courses.categoryContextId(archive.course.category));
       const created = await this.courses.createCourse(actorId, {
         fullName: archive.course.fullName, shortName: `${archive.course.shortName}-r${Date.now().toString(36)}`,
         category: archive.course.category, summary: archive.course.summary,
       });
       targetId = created.id;
-    } else {
-      targetId = targetCourseId!;
+    } else if (targetCourseId) {
+      // Nhánh else đã kiểm tra nên targetCourseId chắc chắn có — không dùng `!`.
+      targetId = targetCourseId;
       await this.evaluator.requireCapability(actorId, 'backup:restorecourse', await this.courses.courseContextId(targetId));
+    } else {
+      throw new BadRequestException({ message: `Restore mode ${mode} requires targetCourseId`, code: 'backup.target_required' });
     }
 
     const job = await this.repo.insertJob({
       type: 'restore', scope: 'course', courseId: backup.courseId, targetCourseId: targetId, mode, userId: actorId, status: 'running',
     });
-    const mappingState = new Map<string, string>();
-    const mapping: RestoreMapping = {
-      map: async (itemType, oldId, newId) => {
-        mappingState.set(`${itemType}:${oldId}`, newId);
-        await this.repo.insertMapping({ jobId: job.id, itemType, oldId, newId });
-      },
-      get: (itemType, oldId) => mappingState.get(`${itemType}:${oldId}`),
-    };
-    if (backup.courseId) await mapping.map('course', backup.courseId, targetId);
-    try {
-      if (mode === 'replace') await this.clearCourseContent(targetId);
-      for (const c of this.contributors) {
-        const step = await this.repo.insertStep({ jobId: job.id, name: c.name, status: 'running' });
-        const data = archive.contributors[c.name];
-        const importResult = data !== undefined ? await c.import(targetId, data as never, mapping, actorId) : undefined;
-        await this.repo.updateStep(step.id, {
-          status: 'completed',
-          ...(importResult?.detail ? { detail: importResult.detail } : {}),
-        });
-      }
-      await this.repo.updateJob(job.id, { status: 'completed', timeFinished: new Date() });
-    } catch (e) {
-      await this.repo.updateJob(job.id, { status: 'failed', error: e instanceof Error ? e.message : String(e), timeFinished: new Date() });
-    }
+    await this.runContributors(job, archive, targetId, actorId, mode === 'replace');
     return this.getJob(job.id);
   }
 
@@ -1034,7 +1099,7 @@ export class BackupService {
     await db.deleteFrom('badge').where('course_id', '=', courseId).execute();
     await db.deleteFrom('calendar_events').where('course_id', '=', courseId).execute();
     await db.deleteFrom('calendar_subscriptions').where('course_id', '=', courseId).execute();
-    const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
+    const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
     if (courseCtx) await db.deleteFrom('question_categories').where('context_id', '=', courseCtx.id).execute();
   }
 
@@ -1078,7 +1143,7 @@ export class BackupService {
       const items = await db.selectFrom('grade_items').select(GRADE_ITEMS_COLUMNS).where('course_id', '=', courseId).execute();
       const grades = items.length ? await db.selectFrom('grade_grades').select(GRADE_GRADES_COLUMNS).where('item_id', 'in', items.map((i) => i.id)).execute() : [];
       const cmComp = cms.length ? await db.selectFrom('course_modules_completion').select(COURSE_MODULES_COMPLETION_COLUMNS).where('course_module_id', 'in', cms.map((c) => c.id)).execute() : [];
-      const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
+      const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
       const qCats = courseCtx ? await db.selectFrom('question_categories').select(QUESTION_CATEGORIES_COLUMNS).where('context_id', '=', courseCtx.id).execute() : [];
       const qRows = qCats.length ? await db.selectFrom('question').select(QUESTION_COLUMNS).where('category', 'in', qCats.map((c) => c.id)).execute() : [];
       const qEntries = qCats.length ? await db.selectFrom('question_bank_entries').select(QUESTION_BANK_ENTRIES_COLUMNS).where('question_category_id', 'in', qCats.map((c) => c.id)).execute() : [];

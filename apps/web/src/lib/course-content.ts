@@ -1,6 +1,12 @@
+/**
+ * Tầng dữ liệu nội dung khoá dùng chung cho nhiều feature: trình dựng khoá, ngân hàng
+ * nội dung, đề thi và câu hỏi đều đọc cùng một query nội dung khoá qua đây thay vì
+ * mỗi feature tự gọi API. Query đọc lười theo khoá và dùng chung cache qua khoá factory.
+ */
+
 import type { CourseContent } from "@giaokhoa/contracts";
 import { queryOptions } from "@tanstack/react-query";
-import { apiJson } from "#lib/api";
+import { probe } from "#lib/api";
 import { queryKeys } from "#lib/query-keys";
 
 /**
@@ -13,11 +19,7 @@ import { queryKeys } from "#lib/query-keys";
 export async function fetchCourseContent(
   courseId: string,
 ): Promise<CourseContent | null> {
-  try {
-    return await apiJson<CourseContent>(`/api/v1/courses/${courseId}/content`);
-  } catch {
-    return null;
-  }
+  return probe<CourseContent>(`/api/v1/courses/${courseId}/content`);
 }
 
 /**

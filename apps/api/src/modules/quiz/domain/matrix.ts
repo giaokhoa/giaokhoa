@@ -1,6 +1,7 @@
 /**
  * Dữ liệu + quy tắc thuần của ma trận đề (Chặng 3, mục C.1/C.4 của hồ sơ thiết kế). Preset là DỮ LIỆU CẤU HÌNH chụp vào ma trận lúc tạo — không hard-code tỉ lệ vào logic kiểm tra: lệch tỉ lệ chỉ cảnh báo.
  */
+import { roundToOneDecimal } from '../../common/round';
 
 /** Thang Đ–S mặc định theo QĐ 764: 0/1/2/3/4 ý đúng → 0/10/25/50/100% điểm chùm. */
 export const TF_SCALE_QD764: number[] = [0, 10, 25, 50, 100];
@@ -32,7 +33,7 @@ export function isValidTfScale(scale: unknown): scale is number[] {
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 100) return false;
   }
   for (let i = 1; i < scale.length; i++) {
-    if (scale[i]! < scale[i - 1]!) return false;
+    if (scale[i]! < scale[i - 1]!) return false; // Bất biến: đã kiểm tra scale.length === 5, i chạy 1..4.
   }
   return scale[4] === 100;
 }
@@ -65,7 +66,7 @@ export function matrixWarnings(input: {
     return warnings;
   }
   if (Math.abs(totalCellScore - input.totalScore) > 0.001) {
-    warnings.push(`Tổng điểm các ô (${round1(totalCellScore)}) khác tổng điểm đích của ma trận (${round1(input.totalScore)}).`);
+    warnings.push(`Tổng điểm các ô (${roundToOneDecimal(totalCellScore)}) khác tổng điểm đích của ma trận (${roundToOneDecimal(input.totalScore)}).`);
   }
   const compare = (label: string, actual: Map<string, number>, target: Record<string, number> | null) => {
     if (!target) return;
@@ -74,7 +75,7 @@ export function matrixWarnings(input: {
       const a = actual.get(key) ?? 0;
       const t = target[key] ?? 0;
       if (Math.abs(a - t) > 0.5) {
-        warnings.push(`Tỉ lệ điểm theo ${label} "${key}": thực tế ${round1(a)}% so với mục tiêu ${round1(t)}%.`);
+        warnings.push(`Tỉ lệ điểm theo ${label} "${key}": thực tế ${roundToOneDecimal(a)}% so với mục tiêu ${roundToOneDecimal(t)}%.`);
       }
     }
   };
@@ -89,10 +90,6 @@ export function matrixWarnings(input: {
   compare('dạng câu', pctOf((c) => c.qtype), input.targetFormPercents);
   compare('mức', pctOf((c) => c.cognitiveLevel), input.targetLevelPercents);
   return warnings;
-}
-
-function round1(v: number): number {
-  return Math.round(v * 10) / 10;
 }
 
 /**

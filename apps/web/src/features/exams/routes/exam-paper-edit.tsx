@@ -1,11 +1,12 @@
 export { ExamPaperEditPage as default } from './exam-paper-editor';
 
 import { examPaperEditPageClientLoader } from '../queries/exam-paper';
+import type { Route } from './+types/exam-paper-edit';
 
 /**
  * clientLoader (F-01, rà soát #133): prefetch chi tiết đề + các lần ghim vào QueryClient singleton (đúng khoá factory) trước khi component mount; component vẫn đọc bằng useQuery cùng khoá và tự xử lý khi tải hỏng.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.paperId) {
     await examPaperEditPageClientLoader(params.paperId);
   }

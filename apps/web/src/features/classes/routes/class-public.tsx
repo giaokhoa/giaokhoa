@@ -1,19 +1,26 @@
+/**
+ * Trang công khai của lớp để mua gói học phí: loader phía server chỉ nạp bản chiếu
+ * công khai (tên, mô tả, chủ lớp, học phí) vào HTML đầu, còn trạng thái theo người
+ * gọi (isMember/canPurchase) nạp phía client. Chưa ghi danh thì bấm mua tạo payment
+ * class_fee rồi hiện mã VietQR; trang poll trạng thái payment và chỉ khi đối soát
+ * khớp mới báo đã vào lớp — trang không bao giờ tự ghi danh.
+ */
+
 import type { Route } from './+types/class-public';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { classPublicViewSchema, type ClassPublicView } from '@giaokhoa/contracts';
 import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
 import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ErrorAlert } from '#components/error-alert';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLoaderData, useParams } from 'react-router';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
-import { createClassFeePayment, fetchClassPublic, fetchPayment } from '../api/classes';
 import type { ClassFeePaymentView } from '../types/classes';
-import { queryKeys } from '../queries/keys';
+import { classPublicQueryOptions, useClassFeePaymentStatus, useClassPublic, useCreateClassFeePayment } from '../queries/classes';
 import { fetchApiJsonForRequest } from '#lib/server-api';
 
 /**
@@ -36,6 +43,33 @@ export type ClassPublicSummary = Pick<
 /** Dữ kiện loader của route trang lớp public trả về cho `meta()` và component bọc route. */
 export interface ClassPublicLoaderData {
   classPublic: ClassPublicSummary | null;
+}
+
+/**
+ * Thẻ thông tin công khai của lớp — vỏ Card + khối chủ lớp/mô tả
+ * dùng chung cho cả hai nhánh: nhánh chờ query (dữ kiện từ loader
+ * `initialPublic`) và nhánh chính (dữ kiện đầy đủ từ `pub`). Phần
+ * thân theo người gọi (học phí, nút mua, trạng thái thành viên,
+ * thanh toán) khác nhau nên truyền qua `children`.
+ *
+ * @param summary - Bản chiếu công khai: chủ lớp, mô tả, học phí.
+ * @param children - Nội dung thân theo trạng thái người gọi.
+ */
+function ClassPublicInfoCard({ summary, children }: { summary: ClassPublicSummary; children: ReactNode }) {
+  // Khoá của thẻ nằm ở namespace `app` như trang gọi (defaultNS của
+  // i18n là `platform`, dùng useTranslation() trần sẽ tra sai namespace).
+  const { t } = useTranslation('app');
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="text-muted-foreground">{t('classPublicOwner', { name: summary.ownerName })}</p>
+          {summary.description ? <p>{summary.description}</p> : null}
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  );
 }
 
 /**
@@ -118,11 +152,7 @@ export function ClassPublicPage({ initialPublic }: { initialPublic?: ClassPublic
   const [payment, setPayment] = useState<ClassFeePaymentView | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
 
-  const publicQuery = useQuery({
-    queryKey: queryKeys.classPublic(classId),
-    queryFn: () => fetchClassPublic(classId),
-    enabled: Boolean(classId),
-  });
+  const publicQuery = useClassPublic(classId);
 
   // Poll trạng thái payment sau khi tạo: khoảng poll tính theo
   // trạng thái MỚI NHẤT đã biết (đáp ứng poll gần nhất; chưa có thì
@@ -130,23 +160,21 @@ export function ClassPublicPage({ initialPublic }: { initialPublic?: ClassPublic
   // dừng hẳn. Bản cũ tính `enabled` theo object gốc trong state vốn
   // không bao giờ được cập nhật nên poll chạy vô thời hạn kể cả khi
   // payment đã `succeeded`.
-  const statusQuery = useQuery({
-    queryKey: queryKeys.payment(payment?.id ?? ''),
-    queryFn: () => fetchPayment(payment!.id),
-    enabled: Boolean(payment),
-    refetchInterval: (query) => ((query.state.data?.status ?? payment?.status) === 'pending' ? 3000 : false),
-  });
+  const statusQuery = useClassFeePaymentStatus(payment);
   const livePayment = statusQuery.data ?? payment;
   const succeeded = livePayment?.status === 'succeeded';
 
-  const buyMutation = useMutation({
-    mutationFn: () => createClassFeePayment(classId),
-    onSuccess: (created) => {
+  const buyMutation = useCreateClassFeePayment();
+
+  async function onBuy() {
+    try {
+      const created = await buyMutation.mutateAsync(classId);
       setPayError(null);
       setPayment(created);
-    },
-    onError: () => setPayError(t('classPublicPayFailed')),
-  });
+    } catch {
+      setPayError(t('classPublicPayFailed'));
+    }
+  }
 
   // Payment đã khớp mà gói công khai chưa ghi nhận thành viên: nạp
   // lại gói công khai đúng MỘT lần cho mỗi payment để chuyển sang
@@ -159,7 +187,7 @@ export function ClassPublicPage({ initialPublic }: { initialPublic?: ClassPublic
     if (!succeeded || !publicQuery.data || publicQuery.data.isMember) return;
     if (!payment || refreshedPaymentRef.current === payment.id) return;
     refreshedPaymentRef.current = payment.id;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.classPublic(classId) });
+    void queryClient.invalidateQueries({ queryKey: classPublicQueryOptions(classId).queryKey });
   }, [succeeded, publicQuery.data, payment, queryClient, classId]);
 
   const pub = publicQuery.data;
@@ -178,22 +206,16 @@ export function ClassPublicPage({ initialPublic }: { initialPublic?: ClassPublic
           // Khối này KHÔNG chứa trạng thái theo người gọi — nút mua,
           // trạng thái thành viên và thanh toán chỉ xuất hiện khi
           // query client trả dữ liệu đầy đủ ở nhánh dưới.
-          <Card>
-            <CardContent className="flex flex-col gap-4 pt-6">
-              <div className="flex flex-col gap-1 text-sm">
-                <p className="text-muted-foreground">{t('classPublicOwner', { name: initialPublic.ownerName })}</p>
-                {initialPublic.description ? <p>{initialPublic.description}</p> : null}
-              </div>
-              {initialPublic.feeEnabled ? (
-                <p className="text-base">
-                  {t('classPublicFeeLabel')}:{' '}
-                  <strong>
-                    {(initialPublic.feeCost ?? 0).toLocaleString(i18n.language)} {initialPublic.feeCurrency}
-                  </strong>
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
+          <ClassPublicInfoCard summary={initialPublic}>
+            {initialPublic.feeEnabled ? (
+              <p className="text-base">
+                {t('classPublicFeeLabel')}:{' '}
+                <strong>
+                  {(initialPublic.feeCost ?? 0).toLocaleString(i18n.language)} {initialPublic.feeCurrency}
+                </strong>
+              </p>
+            ) : null}
+          </ClassPublicInfoCard>
         ) : (
           <Skeleton className="h-64 w-full" />
         )
@@ -202,14 +224,9 @@ export function ClassPublicPage({ initialPublic }: { initialPublic?: ClassPublic
           {t('classPublicLoadFailed')}
         </ErrorAlert>
       ) : (
-        <Card>
+        <ClassPublicInfoCard summary={pub}>
           {/* Tên lớp chỉ hiện ở PageHeader phía trên — không lặp lại
               trong thẻ để trang có đúng một tiêu đề. */}
-          <CardContent className="flex flex-col gap-4 pt-6">
-            <div className="flex flex-col gap-1 text-sm">
-              <p className="text-muted-foreground">{t('classPublicOwner', { name: pub.ownerName })}</p>
-              {pub.description ? <p>{pub.description}</p> : null}
-            </div>
 
             {pub.isMember || succeeded ? (
               <div className="flex flex-col gap-3">
@@ -259,14 +276,13 @@ export function ClassPublicPage({ initialPublic }: { initialPublic?: ClassPublic
                   </ErrorAlert>
                 ) : null}
                 <div>
-                  <Button type="button" disabled={buyMutation.isPending} onClick={() => buyMutation.mutate()}>
+                  <Button type="button" disabled={buyMutation.isPending} onClick={() => void onBuy()}>
                     {t('classPublicBuy')}
                   </Button>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </ClassPublicInfoCard>
       )}
     </PageShell>
   );

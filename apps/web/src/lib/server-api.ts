@@ -31,8 +31,7 @@
  * có signal riêng (signal hủy của TanStack Query) thì hai signal được
  * gộp bằng `AbortSignal.any` — hủy bên nào cũng dừng lượt gọi.
  */
-import { problemDetailsSchema } from '@giaokhoa/contracts';
-import { ApiError } from '#lib/api';
+import { ApiError, parseProblem } from '#lib/api';
 
 /** Trần thời gian cho MỘT lượt gọi API nội bộ phía server (mili giây). */
 export const SSR_FETCH_TIMEOUT_MS = 10_000;
@@ -51,26 +50,6 @@ export function apiInternalBase(): string {
 function internalSignal(callerSignal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(SSR_FETCH_TIMEOUT_MS);
   return callerSignal ? AbortSignal.any([timeout, callerSignal]) : timeout;
-}
-
-/**
- * Dựng `ApiError` từ một đáp ứng HTTP lỗi của API nội bộ — cùng khuôn
- * với `parseProblem` phía client (`lib/api.ts`): thân đáp ứng parse
- * được bằng schema Problem Details thì dùng nguyên, không parse được
- * thì dựng Problem Details tối thiểu mang ĐÚNG status thật và mã
- * `http.unknown`. Điểm cốt yếu là status không bao giờ bị mất.
- *
- * @param res - Đáp ứng HTTP lỗi từ API nội bộ.
- * @returns ApiError mang status thật của đáp ứng.
- */
-async function toApiError(res: Response): Promise<ApiError> {
-  const body: unknown = await res.json().catch(() => null);
-  const parsed = problemDetailsSchema.safeParse(body);
-  return new ApiError(
-    parsed.success
-      ? parsed.data
-      : { type: 'about:blank', title: res.statusText, status: res.status, code: 'http.unknown' },
-  );
 }
 
 /** Gọi API nội bộ và parse JSON; mọi lỗi (mạng, status) đều trả null để loader suy biến mềm thay vì làm sập trang. */
@@ -105,7 +84,7 @@ export async function fetchApiJsonOrThrow(
     headers,
     signal: internalSignal(callerSignal),
   });
-  if (!res.ok) throw await toApiError(res);
+  if (!res.ok) throw await parseProblem(res);
   return await res.json();
 }
 

@@ -1,5 +1,5 @@
-import { sql } from 'kysely';
-import type { CentreDb, CentreTx } from '../client';
+import { sql, type InsertObject, type UpdateObject } from 'kysely';
+import type { CentreDb, CentreDB, CentreTx } from '../client';
 import type { EntryRow, QCategoryRow, QuestionBankRow, QuestionRow } from './questions';
 
 /**
@@ -150,47 +150,47 @@ const QUESTION_WITH_ENTRY_COLUMNS = [
 // Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
 // ---------------------------------------------------------------------------
 
-function bankInsertValues(v: NewQuestionBank) {
+function bankInsertValues(values: NewQuestionBank): InsertObject<CentreDB, 'question_banks'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    name: v.name,
-    ...(v.bankKind !== undefined ? { bank_kind: v.bankKind } : {}),
-    scope: v.scope,
-    ...(v.ownerId !== undefined ? { owner_id: v.ownerId } : {}),
-    ...(v.scopeRefId !== undefined ? { scope_ref_id: v.scopeRefId } : {}),
-    context_id: v.contextId,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    created_by: v.createdBy,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.tenantId !== undefined ? { tenant_id: values.tenantId } : {}),
+    name: values.name,
+    ...(values.bankKind !== undefined ? { bank_kind: values.bankKind } : {}),
+    scope: values.scope,
+    ...(values.ownerId !== undefined ? { owner_id: values.ownerId } : {}),
+    ...(values.scopeRefId !== undefined ? { scope_ref_id: values.scopeRefId } : {}),
+    context_id: values.contextId,
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    created_by: values.createdBy,
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
-function contributionInsertValues(v: NewContribution) {
+function contributionInsertValues(values: NewContribution): InsertObject<CentreDB, 'question_bank_contributions'> {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    target_bank_id: v.targetBankId,
-    question_id: v.questionId,
-    ...(v.targetQuestionId !== undefined ? { target_question_id: v.targetQuestionId } : {}),
-    proposer_id: v.proposerId,
-    ...(v.mode !== undefined ? { mode: v.mode } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.note !== undefined ? { note: v.note } : {}),
-    ...(v.contentHash !== undefined ? { content_hash: v.contentHash } : {}),
-    ...(v.nearDuplicateOf !== undefined ? { near_duplicate_of: v.nearDuplicateOf } : {}),
-    ...(v.reviewerId !== undefined ? { reviewer_id: v.reviewerId } : {}),
-    ...(v.rejectReason !== undefined ? { reject_reason: v.rejectReason } : {}),
-    ...(v.resultQuestionId !== undefined ? { result_question_id: v.resultQuestionId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    target_bank_id: values.targetBankId,
+    question_id: values.questionId,
+    ...(values.targetQuestionId !== undefined ? { target_question_id: values.targetQuestionId } : {}),
+    proposer_id: values.proposerId,
+    ...(values.mode !== undefined ? { mode: values.mode } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.contentHash !== undefined ? { content_hash: values.contentHash } : {}),
+    ...(values.nearDuplicateOf !== undefined ? { near_duplicate_of: values.nearDuplicateOf } : {}),
+    ...(values.reviewerId !== undefined ? { reviewer_id: values.reviewerId } : {}),
+    ...(values.rejectReason !== undefined ? { reject_reason: values.rejectReason } : {}),
+    ...(values.resultQuestionId !== undefined ? { result_question_id: values.resultQuestionId } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
 }
 
 /**
  * Ánh xạ patch của `question_bank_contributions`: mọi trường dòng có mặt trong patch (khác `undefined`) đều được ghi như bản cũ trải patch; `updated_at` luôn bị ghi đè bằng thời điểm cập nhật ở cuối, đúng thứ tự trải của bản cũ.
  */
-function contributionUpdateSet(patch: Partial<ContributionRow>) {
+function contributionUpdateSet(patch: Partial<ContributionRow>): UpdateObject<CentreDB, 'question_bank_contributions'> {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
     ...(patch.targetBankId !== undefined ? { target_bank_id: patch.targetBankId } : {}),
@@ -211,7 +211,7 @@ function contributionUpdateSet(patch: Partial<ContributionRow>) {
 }
 
 /** Ánh xạ patch của `question_bank_entries` — cùng quy ước trải patch + `updated_at` như trên. */
-function entryUpdateSet(patch: Partial<EntryRow>) {
+function entryUpdateSet(patch: Partial<EntryRow>): UpdateObject<CentreDB, 'question_bank_entries'> {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
     ...(patch.questionCategoryId !== undefined ? { question_category_id: patch.questionCategoryId } : {}),
@@ -233,8 +233,8 @@ function entryUpdateSet(patch: Partial<EntryRow>) {
 export class QuestionBanksRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Handle gốc của repository (điểm mở giao dịch + truy vấn ngoài giao dịch). */
-  db(): CentreDb {
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): CentreDb {
     return this.handle;
   }
 
@@ -246,8 +246,7 @@ export class QuestionBanksRepository {
   // --- banks -------------------------------------------------------------------
 
   /** Chèn bank mới (id do service cấp trước để dựng context trỏ về bank). */
-  async insertBank(v: NewQuestionBank, tx?: QuestionBanksDb): Promise<QuestionBankRow> {
-    const db = tx ?? this.handle;
+  async insertBank(v: NewQuestionBank, db: QuestionBanksDb = this.db()): Promise<QuestionBankRow> {
     return db
       .insertInto('question_banks')
       .values(bankInsertValues(v))
@@ -256,8 +255,7 @@ export class QuestionBanksRepository {
   }
 
   /** Bank theo id. */
-  async getBank(id: string, tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getBank(id: string, db: QuestionBanksDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -269,9 +267,8 @@ export class QuestionBanksRepository {
    * Nhiều bank theo tập id trong một truy vấn (DL-04, issue #489):
    * bản theo lô của `getBank` cho phép suy bank của nhiều category; thứ tự trả về không cam kết, caller tự tra theo id.
    */
-  async getBanksByIds(ids: string[], tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
+  async getBanksByIds(ids: string[], db: QuestionBanksDb = this.db()): Promise<QuestionBankRow[]> {
     if (!ids.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -284,9 +281,8 @@ export class QuestionBanksRepository {
    * (scope school + tenant + loại món), caller lấy dòng đầu tiên theo
    * từng tenant như đường đọc lẻ lấy dòng đầu tiên của truy vấn.
    */
-  async listSchoolBanksByTenantIds(tenantIds: string[], kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
+  async listSchoolBanksByTenantIds(tenantIds: string[], kind: BankKind = 'question', db: QuestionBanksDb = this.db()): Promise<QuestionBankRow[]> {
     if (!tenantIds.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -299,9 +295,8 @@ export class QuestionBanksRepository {
   /**
    * Bank theo (scope, scope_ref_id) cho NHIỀU đích trong một truy vấn (DL-04, issue #489): bản theo lô của `getBankByScopeRef`, dùng cho phép suy bank khoá từ context của nhiều category.
    */
-  async listBanksByScopeRefs(scope: string, scopeRefIds: string[], kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
+  async listBanksByScopeRefs(scope: string, scopeRefIds: string[], kind: BankKind = 'question', db: QuestionBanksDb = this.db()): Promise<QuestionBankRow[]> {
     if (!scopeRefIds.length) return [];
-    const db = tx ?? this.handle;
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -312,8 +307,7 @@ export class QuestionBanksRepository {
   }
 
   /** Mọi bank (danh sách nhỏ — tầng service lọc theo quyền của từng actor). */
-  async listBanks(tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
-    const db = tx ?? this.handle;
+  async listBanks(db: QuestionBanksDb = this.db()): Promise<QuestionBankRow[]> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -323,8 +317,7 @@ export class QuestionBanksRepository {
   }
 
   /** Bank cá nhân của một chủ sở hữu cho một loại món (duy nhất theo ràng buộc partial unique (owner, kind)). */
-  async getPersonalBank(ownerId: string, kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getPersonalBank(ownerId: string, kind: BankKind = 'question', db: QuestionBanksDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -335,8 +328,7 @@ export class QuestionBanksRepository {
   }
 
   /** Bank trường duy nhất của MỘT tenant cho một loại món (TENANT-0, #168). */
-  async getSchoolBank(tenantId: string, kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getSchoolBank(tenantId: string, kind: BankKind = 'question', db: QuestionBanksDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -347,8 +339,7 @@ export class QuestionBanksRepository {
   }
 
   /** Bank platform (Ngân hàng hệ thống) duy nhất cho một loại món — tenant_id NULL. */
-  async getPlatformBank(kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getPlatformBank(kind: BankKind = 'question', db: QuestionBanksDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -358,8 +349,7 @@ export class QuestionBanksRepository {
   }
 
   /** Tenant sở hữu một khoá học (điểm neo tenant cho bank khoá / đề / ma trận). */
-  async getCourseTenantId(courseId: string, tx?: QuestionBanksDb): Promise<string | undefined> {
-    const db = tx ?? this.handle;
+  async getCourseTenantId(courseId: string, db: QuestionBanksDb = this.db()): Promise<string | undefined> {
     const row = await db
       .selectFrom('course')
       .select('tenant_id as tenantId')
@@ -369,8 +359,7 @@ export class QuestionBanksRepository {
   }
 
   /** Bank theo (scope, scope_ref_id, kind) — bank tổ theo cohort, bank khoá theo course. */
-  async getBankByScopeRef(scope: string, scopeRefId: string, kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
-    const db = tx ?? this.handle;
+  async getBankByScopeRef(scope: string, scopeRefId: string, kind: BankKind = 'question', db: QuestionBanksDb = this.db()): Promise<QuestionBankRow | undefined> {
     return db
       .selectFrom('question_banks')
       .select(QUESTION_BANK_COLUMNS)
@@ -383,8 +372,7 @@ export class QuestionBanksRepository {
   // --- danh mục & câu hỏi của một bank -----------------------------------------
 
   /** Category thuộc bank (bank_id tường minh), thứ tự tạo. */
-  async listCategoriesOfBank(bankId: string, tx?: QuestionBanksDb): Promise<BankCategoryRow[]> {
-    const db = tx ?? this.handle;
+  async listCategoriesOfBank(bankId: string, db: QuestionBanksDb = this.db()): Promise<BankCategoryRow[]> {
     const rows = await db
       .selectFrom('question_categories')
       .select(BANK_CATEGORY_COLUMNS)
@@ -394,9 +382,8 @@ export class QuestionBanksRepository {
   }
 
   /** Mọi câu hỏi nằm trong các category cho trước, kèm entry (trạng thái + latestVersion). */
-  async listQuestionsWithEntryInCategories(categoryIds: string[], tx?: QuestionBanksDb): Promise<{ q: QuestionRow; entry: EntryRow }[]> {
+  async listQuestionsWithEntryInCategories(categoryIds: string[], db: QuestionBanksDb = this.db()): Promise<{ q: QuestionRow; entry: EntryRow }[]> {
     if (categoryIds.length === 0) return [];
-    const db = tx ?? this.handle;
     const rows = await db
       .selectFrom('question as q')
       .innerJoin('question_bank_entries as entry', 'entry.question_id', 'q.id')
@@ -429,10 +416,9 @@ export class QuestionBanksRepository {
   // --- signals -------------------------------------------------------------------
 
   /** Số slot đề đang tham chiếu từng câu hỏi (use_count — tín hiệu QB-4; slot nay nằm trên exam version). */
-  async countSlotsByQuestionIds(questionIds: string[], tx?: QuestionBanksDb): Promise<Map<string, number>> {
+  async countSlotsByQuestionIds(questionIds: string[], db: QuestionBanksDb = this.db()): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     if (questionIds.length === 0) return out;
-    const db = tx ?? this.handle;
     const rows = await db
       .selectFrom('exam_slots')
       .select(['question_id as questionId', sql<number>`count(*)::int`.as('n')])
@@ -446,8 +432,7 @@ export class QuestionBanksRepository {
   /**
    * Các version đề ĐANG CHỨA một câu hỏi (truy nguồn chiều ngược câu → đề): mỗi hàng là một exam version có slot trỏ tới câu — một đề có nhiều version chứa câu thì có nhiều hàng, để người soạn thấy đúng các bản đề bị ảnh hưởng khi sửa/rút câu.
    */
-  async listContainingExams(questionId: string, tx?: QuestionBanksDb): Promise<{ examId: string; examVersionId: string; version: number; name: string }[]> {
-    const db = tx ?? this.handle;
+  async listContainingExams(questionId: string, db: QuestionBanksDb = this.db()): Promise<{ examId: string; examVersionId: string; version: number; name: string }[]> {
     return db
       .selectFrom('exam_slots')
       .innerJoin('exam_versions', 'exam_versions.id', 'exam_slots.exam_version_id')
@@ -462,8 +447,7 @@ export class QuestionBanksRepository {
   }
 
   /** Các LẦN GHIM đang dùng một câu hỏi (distinct, qua exam version của pin) — phục vụ rút câu + cấm xoá vật lý. */
-  async listPinIdsUsingQuestion(questionId: string, tx?: QuestionBanksDb): Promise<string[]> {
-    const db = tx ?? this.handle;
+  async listPinIdsUsingQuestion(questionId: string, db: QuestionBanksDb = this.db()): Promise<string[]> {
     const rows = await db
       .selectFrom('exam_slots')
       .innerJoin('exam_versions', 'exam_versions.id', 'exam_slots.exam_version_id')
@@ -476,8 +460,7 @@ export class QuestionBanksRepository {
   }
 
   /** Số question attempt đã tồn tại cho một câu hỏi (cấm xoá vật lý khi > 0). */
-  async countAttemptsOfQuestion(questionId: string, tx?: QuestionBanksDb): Promise<number> {
-    const db = tx ?? this.handle;
+  async countAttemptsOfQuestion(questionId: string, db: QuestionBanksDb = this.db()): Promise<number> {
     const row = await db
       .selectFrom('question_attempts')
       .select(sql<number>`count(*)::int`.as('n'))
@@ -489,11 +472,10 @@ export class QuestionBanksRepository {
   // --- people ----------------------------------------------------------------------
 
   /** Tên hiển thị của người dùng (cho dòng ghi công + bộ lọc tác giả). */
-  async getUserDisplayNames(userIds: string[], tx?: QuestionBanksDb): Promise<Map<string, string>> {
+  async getUserDisplayNames(userIds: string[], db: QuestionBanksDb = this.db()): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     const ids = [...new Set(userIds.filter(Boolean))];
     if (ids.length === 0) return out;
-    const db = tx ?? this.handle;
     const rows = await db
       .selectFrom('users')
       .select(['id', 'first_name as firstName', 'last_name as lastName', 'username'])
@@ -510,8 +492,7 @@ export class QuestionBanksRepository {
    * Id mọi người dùng đang giữ ít nhất một role thuộc nhóm archetype cho
    * trước ở bất kỳ context nào — đội ngũ giáo viên cho bank trường.
    */
-  async listUserIdsWithArchetypes(archetypes: string[], tx?: QuestionBanksDb): Promise<string[]> {
-    const db = tx ?? this.handle;
+  async listUserIdsWithArchetypes(archetypes: string[], db: QuestionBanksDb = this.db()): Promise<string[]> {
     const rows = await db
       .selectFrom('role_assignments')
       .innerJoin('role', 'role.id', 'role_assignments.role_id')
@@ -523,8 +504,7 @@ export class QuestionBanksRepository {
   }
 
   /** Mọi YCCĐ thuộc một node chương trình và các node con cháu của nó (CTE đệ quy trên cây node) — phục vụ lọc khám phá theo node (QB-4). */
-  async listOutcomeIdsForNode(nodeId: string, tx?: QuestionBanksDb): Promise<string[]> {
-    const db = tx ?? this.handle;
+  async listOutcomeIdsForNode(nodeId: string, db: QuestionBanksDb = this.db()): Promise<string[]> {
     const result = await sql<{ id: string }>`
       WITH RECURSIVE tree AS (
         SELECT id FROM curriculum_nodes WHERE id = ${nodeId}
@@ -537,8 +517,7 @@ export class QuestionBanksRepository {
   }
 
   /** Kiểm chứng nhanh một node chương trình có tồn tại (lọc khám phá theo node). */
-  async outcomeIdsOfNode(nodeId: string, tx?: QuestionBanksDb): Promise<string[]> {
-    const db = tx ?? this.handle;
+  async outcomeIdsOfNode(nodeId: string, db: QuestionBanksDb = this.db()): Promise<string[]> {
     const rows = await db
       .selectFrom('learning_outcomes')
       .select('id')
@@ -550,8 +529,7 @@ export class QuestionBanksRepository {
   // --- contributions -----------------------------------------------------------------
 
   /** Chèn đề xuất đóng góp. */
-  async insertContribution(v: NewContribution, tx?: QuestionBanksDb): Promise<ContributionRow> {
-    const db = tx ?? this.handle;
+  async insertContribution(v: NewContribution, db: QuestionBanksDb = this.db()): Promise<ContributionRow> {
     return db
       .insertInto('question_bank_contributions')
       .values(contributionInsertValues(v))
@@ -560,8 +538,7 @@ export class QuestionBanksRepository {
   }
 
   /** Đề xuất theo id. */
-  async getContribution(id: string, tx?: QuestionBanksDb): Promise<ContributionRow | undefined> {
-    const db = tx ?? this.handle;
+  async getContribution(id: string, db: QuestionBanksDb = this.db()): Promise<ContributionRow | undefined> {
     return db
       .selectFrom('question_bank_contributions')
       .select(CONTRIBUTION_COLUMNS)
@@ -570,8 +547,7 @@ export class QuestionBanksRepository {
   }
 
   /** Đề xuất thuộc một bank đích, lọc tuỳ chọn theo trạng thái/người đề xuất. */
-  async listContributions(filter: { targetBankId: string; status?: string; proposerId?: string }, tx?: QuestionBanksDb): Promise<ContributionRow[]> {
-    const db = tx ?? this.handle;
+  async listContributions(filter: { targetBankId: string; status?: string; proposerId?: string }, db: QuestionBanksDb = this.db()): Promise<ContributionRow[]> {
     let query = db
       .selectFrom('question_bank_contributions')
       .select(CONTRIBUTION_COLUMNS)
@@ -585,8 +561,7 @@ export class QuestionBanksRepository {
   }
 
   /** Cập nhật đề xuất (duyệt/từ chối). */
-  async updateContribution(id: string, patch: Partial<ContributionRow>, tx?: QuestionBanksDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateContribution(id: string, patch: Partial<ContributionRow>, db: QuestionBanksDb = this.db()): Promise<void> {
     await db
       .updateTable('question_bank_contributions')
       .set(contributionUpdateSet(patch))
@@ -597,8 +572,7 @@ export class QuestionBanksRepository {
   // --- misc ---------------------------------------------------------------------------
 
   /** Xoá vật lý một câu hỏi — FK cascade dọn entry/version/answers/options/links (chỉ gọi sau khi qua guard slot/attempt). */
-  async deleteQuestionRow(questionId: string, tx?: QuestionBanksDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async deleteQuestionRow(questionId: string, db: QuestionBanksDb = this.db()): Promise<void> {
     await db
       .deleteFrom('question')
       .where('id', '=', questionId)
@@ -606,8 +580,7 @@ export class QuestionBanksRepository {
   }
 
   /** Cập nhật entry (trạng thái rút câu QB-3). */
-  async updateEntry(id: string, patch: Partial<EntryRow>, tx?: QuestionBanksDb): Promise<void> {
-    const db = tx ?? this.handle;
+  async updateEntry(id: string, patch: Partial<EntryRow>, db: QuestionBanksDb = this.db()): Promise<void> {
     await db
       .updateTable('question_bank_entries')
       .set(entryUpdateSet(patch))

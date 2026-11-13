@@ -1,7 +1,8 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
 import { ContentRepository } from './content';
 
 /**
@@ -9,9 +10,7 @@ import { ContentRepository } from './content';
  * (`getLastAccess` khớp khoá trong mã, `getModuleProgress` đối
  * chiếu user trong mã), và doNothing của learning record.
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g646_content';
 const USER_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a3001';
@@ -32,7 +31,7 @@ beforeAll(async () => {
   repo = new ContentRepository(db);
 
   const [tenant] = await db.insertInto('tenants').values({
-    slug: 'g6-content', name: 'Tenant G6 content', kind: 'center',
+    slug: 'g6-content', name: 'Tenant G6 content', kind: TEST_TENANT_KIND,
   }).returning(['id']).execute();
   const [category] = await db.insertInto('course_categories').values({
     tenant_id: tenant!.id, name: 'Danh mục G6',
@@ -60,7 +59,7 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB).catch(() => undefined);
 });
 
-describe('ContentRepository (Kysely)', () => {
+describe('ContentRepository trên Kysely — trang, dấu vết truy cập và tiến độ module', () => {
   it('chèn trang rồi liệt kê theo khoá, xoá theo cm thì trang biến mất', async () => {
     const page = await repo.insertPage({ course: courseId, cmId: cmIds[0]!, name: 'Trang G6', content: '<p>Nội dung</p>' });
     expect(page.content).toBe('<p>Nội dung</p>');

@@ -8,10 +8,12 @@ import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { ClassPicker } from '../components/class-picker';
+import { selectClass } from '#lib/form-classes';
 import { FrameUnitPicker } from '../components/frame-picker';
 import { useAccessContexts } from '#lib/access';
 import { useCurriculumFrameUnits, useCurriculumSubjectsScoped } from '#lib/curriculum';
 import { courseNewPageClientLoader, useApplyCurriculumFrame, useCourseCategoryTree, useCourseList, useCourseTemplates, useCreateClassForWizard, useCreateCourse, useDuplicateCourse, useWizardClasses } from '../queries/course-new';
+import { titleMeta } from '#lib/route-meta';
 
 /**
  * Wizard tạo khoá học (K1 — issue #68): màn riêng theo chuẩn §9 với NĂM đường tạo khoá cho giáo viên:
@@ -213,7 +215,6 @@ export function CourseNewPage() {
     }
   }
 
-  const selectClass = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
   const isDuplicatePath = path === 'duplicate' || path === 'template';
 
   return (
@@ -415,7 +416,6 @@ export async function clientLoader() {
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { titleMeta } from '#lib/route-meta';
 export function meta() {
   return titleMeta('Tạo khoá học');
 }

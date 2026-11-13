@@ -1,3 +1,10 @@
+/**
+ * Tầng gọi API thuần của feature classes: toàn bộ hàm gọi HTTP cho lớp học, kiểu dữ liệu
+ * lấy thẳng từ @giaokhoa/contracts. Gồm danh sách/chi tiết/tổng quan lớp, khoá trong lớp,
+ * roster và nhập roster (kể cả từ file Excel), đình chỉ, phân quyền đồng giáo viên,
+ * yêu cầu xin vào lớp, và gói công khai cùng thanh toán học phí gói lớp.
+ */
+
 import type {
   AddRosterStudentResult,
   ClassJoinPreview,
@@ -15,7 +22,8 @@ import type {
   JoinClassResult,
   RosterStudentIdentity,
 } from '@giaokhoa/contracts';
-import { apiFetch, apiJson } from '#lib/api';
+import { classRosterImportReportSchema } from '@giaokhoa/contracts';
+import { apiFetch, apiJson, downloadBlob } from '#lib/api';
 import type { ClassFeePaymentView } from '../types/classes';
 
 /**
@@ -156,26 +164,17 @@ export async function importRosterFile(classId: string, file: File): Promise<Cla
   form.set('file', file);
   const res = await apiFetch(`/api/v1/classes/${classId}/roster/import-file`, { method: 'POST', body: form });
   if (!res.ok) throw new Error('import failed');
-  return (await res.json()) as ClassRosterImportReport;
+  // Đáp ứng phải khớp schema hợp đồng — dữ kiện lạ thì lỗi như lượt
+  // tải hỏng thay vì ép kiểu trực tiếp rồi render sai hình ở trang.
+  const parsed = classRosterImportReportSchema.safeParse(await res.json());
+  if (!parsed.success) throw new Error('import failed');
+  return parsed.data;
 }
 
-/** Tải file mẫu roster .xlsx (endpoint đòi đăng nhập nên fetch kèm token rồi tải blob — cùng khuôn tải ICS ở trang Lịch). */
+/** Tải file mẫu roster .xlsx (endpoint đòi đăng nhập nên fetch kèm token rồi tải blob — cùng helper tải chung `downloadBlob` như lượt tải ICS ở trang Lịch). */
 export async function downloadRosterTemplate(): Promise<void> {
   const res = await apiFetch('/api/v1/classes/roster-template');
-  if (!res.ok) throw new Error('template download failed');
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = 'mau-danh-sach-hoc-sinh.xlsx';
-  anchor.click();
-  URL.revokeObjectURL(objectUrl);
-}
-
-/** Tên hiển thị "Họ Tên" của một dòng người dùng; rơi về username khi thiếu tên. */
-export function personName(p: { firstName: string; lastName: string; username: string }): string {
-  const full = `${p.lastName} ${p.firstName}`.trim();
-  return full || p.username;
+  await downloadBlob(res, 'mau-danh-sach-hoc-sinh.xlsx');
 }
 
 // ---------------------------------------------------------------------------

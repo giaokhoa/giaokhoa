@@ -41,6 +41,7 @@ import type {
   ExamMatrixView, MatrixImportIssue, MatrixImportPreview, MatrixImportPreviewCell,
 } from '@giaokhoa/contracts';
 import { CurriculumService, type CurriculumTreeView } from '../curriculum/curriculum.service';
+import { roundToOneDecimal } from '../../common/round';
 import { MATRIX_PRESETS, matrixWarnings } from './domain/matrix';
 import { QuizService } from './quiz.service';
 
@@ -343,7 +344,7 @@ export class MatrixImportService {
     };
     for (let c = firstDataCol; c <= lastDataCol; c++) {
       const formIdx = Math.floor((c - firstDataCol) / colsPerForm);
-      const form = FORM_DEFS[formIdx]!;
+      const form = FORM_DEFS[formIdx]!; // Bất biến: lastDataCol = firstDataCol + FORM_DEFS.length * colsPerForm - 1 nên formIdx < FORM_DEFS.length.
       const L = letter(c);
       ws.getCell(totalsStart, c).value = { formula: `SUM(${L}${dataStart}:${L}${dataEnd})` };
       ws.getCell(totalsStart + 1, c).value = { formula: `SUM(${L}${dataStart}:${L}${dataEnd})*$B$${scoreRowByForm[form.qtype]}` };
@@ -406,6 +407,76 @@ export class MatrixImportService {
   // --- Parse + xem trước -------------------------------------------------------
 
   /**
+   * Bước 4 của `previewImport` — đối chiếu từng hàng ĐVK + đọc các ô số: mỗi hàng dữ liệu khớp "Mã ĐVK" với một đơn vị kiến thức trong cây chương trình (khớp đúng khoá, không đoán theo tên), đọc số câu/chùm từng ô (số nguyên ≥ 0; ô 0 bỏ qua, ô không phải số là lỗi định vị). Hàng tổng ("Tổng số câu"/"Tổng số điểm"/"Tỉ lệ % điểm") kết thúc lưới; hàng trống hoàn toàn được bỏ qua. Hàng nào lỗi thì ghi lỗi định vị rồi bỏ hàng đó, các hàng khác vẫn đọc tiếp — lỗi ở một hàng không huỷ cả file. Trả các ô nháp đã đọc + số câu theo dạng (điểm từng ô tính ở bước 4b khi đã biết điểm-mỗi-câu hợp lệ); các hàng ĐVK đã nhận ghi vào `preview.rows`.
+   */
+  private parseGridRows(
+    ws: ImportWorksheetLike,
+    grid: { dataStartRow: number; columns: (GridColumn & { qtypeLabel: string; levelLabel: string })[] },
+    unitById: Map<string, FlatUnit>,
+    err: (issue: Partial<MatrixImportIssue> & { code: string; message: string }) => void,
+    preview: MatrixImportPreview,
+  ): { draftCells: MatrixImportPreviewCell[]; countByForm: Map<MatrixFormQtype, number> } {
+    const uuidOk = (v: string | null) => v !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    const seenNodes = new Map<string, number>();
+    const draftCells: MatrixImportPreviewCell[] = [];
+    const presentNodeIds: string[] = [];
+    const countByForm = new Map<MatrixFormQtype, number>();
+    for (let r = grid.dataStartRow; r <= ws.rowCount; r++) {
+      const keyText = this.cellText(ws.getCell(r, 1).value);
+      const rowLabel = this.cellText(ws.getCell(r, 4).value);
+      if (keyText === '' && (rowLabel === 'Tổng số câu' || rowLabel === 'Tổng số điểm' || rowLabel === 'Tỉ lệ % điểm')) break;
+      const hasAnyNumber = grid.columns.some((c) => this.rawCell(ws.getCell(r, c.columnIndex).value) !== null);
+      if (keyText === '' && !hasAnyNumber) continue;
+      if (presentNodeIds.length >= MAX_DATA_ROWS) {
+        err({ row: r, code: 'quiz.matrix_import_too_many_rows', message: `File vượt quá ${MAX_DATA_ROWS} hàng đơn vị kiến thức.` });
+        break;
+      }
+      if (keyText === '') {
+        err({ row: r, column: 'A', code: 'quiz.matrix_import_row_key_missing', message: `Dòng ${r} có số câu nhưng thiếu "Mã ĐVK" — không tự khớp hàng bằng tên, hãy giữ nguyên cột khoá của file mẫu.` });
+        continue;
+      }
+      if (!uuidOk(keyText)) {
+        err({ row: r, column: 'A', code: 'quiz.matrix_import_node_key_invalid', message: `Dòng ${r}: "Mã ĐVK" không hợp lệ — không sửa cột khoá của file mẫu.` });
+        continue;
+      }
+      const unit = unitById.get(keyText);
+      if (!unit) {
+        err({ row: r, column: 'A', code: 'quiz.matrix_import_node_not_found', message: `Dòng ${r}: đơn vị kiến thức không tồn tại trong chương trình của file (hoặc không phải đơn vị kiến thức) — hệ thống không tự tạo đơn vị kiến thức từ file nhập.` });
+        continue;
+      }
+      const firstRow = seenNodes.get(keyText);
+      if (firstRow !== undefined) {
+        err({ row: r, column: 'A', code: 'quiz.matrix_import_node_duplicate', message: `Dòng ${r}: đơn vị kiến thức "${unit.nodeTitle}" đã có ở dòng ${firstRow} — mỗi đơn vị kiến thức chỉ một hàng.` });
+        continue;
+      }
+      seenNodes.set(keyText, r);
+      presentNodeIds.push(keyText);
+      preview.rows.push({
+        nodeId: unit.nodeId, topicTitle: unit.topicTitle, nodeTitle: unit.nodeTitle,
+        position: presentNodeIds.length, outcomes: unit.outcomes,
+      });
+      for (const col of grid.columns) {
+        const raw = this.rawCell(ws.getCell(r, col.columnIndex).value);
+        if (raw === null) continue;
+        if (raw.kind !== 'number' || !Number.isInteger(raw.value) || raw.value < 0) {
+          err({
+            row: r, column: col.columnLetter, code: 'quiz.matrix_import_cell_value_invalid',
+            message: `Ô ${col.columnLetter}${r} (${col.qtypeLabel} — ${col.levelLabel}) phải là số nguyên ≥ 0 (số câu/số chùm), nhận được "${raw.kind === 'text' ? raw.value : raw.value}".`,
+          });
+          continue;
+        }
+        if (raw.value === 0) continue;
+        countByForm.set(col.qtype, (countByForm.get(col.qtype) ?? 0) + raw.value);
+        draftCells.push({
+          curriculumNodeId: keyText, cognitiveLevel: col.level, qtype: col.qtype,
+          questionCount: raw.value, cellScore: 0, // điểm tính ở bước sau, khi đã biết điểm-mỗi-câu hợp lệ
+        });
+      }
+    }
+    return { draftCells, countByForm };
+  }
+
+/**
    * Parse một file .xlsx đã điền và trả kết quả XEM TRƯỚC — không ghi
    * DB. Luồng:
    * 1. Đọc workbook bằng exceljs; lỗi đọc/thiếu sheet `Ma trận`/thiếu
@@ -455,6 +526,7 @@ export class MatrixImportService {
     };
 
     // Bước 1 — đọc workbook.
+    // Ép kiểu giữ lại có chủ đích: kiểu đầu vào của `xlsx.load` (ExcelJS) không nhận `Buffer` của Node dưới cấu hình TS hiện tại.
     const wb = new ExcelJS.Workbook();
     try {
       await wb.xlsx.load(buffer as never);
@@ -539,67 +611,11 @@ export class MatrixImportService {
       return preview;
     }
 
-    // Bước 4 — đối chiếu từng hàng ĐVK + đọc các ô số.
+    // Bước 4 — đối chiếu từng hàng ĐVK + đọc các ô số (xem `parseGridRows`).
     const tree = await this.curriculum.getTreeReference(curriculum.id);
     const units = this.flattenUnits(tree);
     const unitById = new Map(units.map((u) => [u.nodeId, u]));
-    const seenNodes = new Map<string, number>();
-    const draftCells: MatrixImportPreviewCell[] = [];
-    const presentNodeIds: string[] = [];
-    const countByForm = new Map<MatrixFormQtype, number>();
-    for (let r = grid.dataStartRow; r <= ws.rowCount; r++) {
-      const keyText = this.cellText(ws.getCell(r, 1).value);
-      const rowLabel = this.cellText(ws.getCell(r, 4).value);
-      if (keyText === '' && (rowLabel === 'Tổng số câu' || rowLabel === 'Tổng số điểm' || rowLabel === 'Tỉ lệ % điểm')) break;
-      const hasAnyNumber = grid.columns.some((c) => this.rawCell(ws.getCell(r, c.columnIndex).value) !== null);
-      if (keyText === '' && !hasAnyNumber) continue;
-      if (presentNodeIds.length >= MAX_DATA_ROWS) {
-        err({ row: r, code: 'quiz.matrix_import_too_many_rows', message: `File vượt quá ${MAX_DATA_ROWS} hàng đơn vị kiến thức.` });
-        break;
-      }
-      if (keyText === '') {
-        err({ row: r, column: 'A', code: 'quiz.matrix_import_row_key_missing', message: `Dòng ${r} có số câu nhưng thiếu "Mã ĐVK" — không tự khớp hàng bằng tên, hãy giữ nguyên cột khoá của file mẫu.` });
-        continue;
-      }
-      if (!uuidOk(keyText)) {
-        err({ row: r, column: 'A', code: 'quiz.matrix_import_node_key_invalid', message: `Dòng ${r}: "Mã ĐVK" không hợp lệ — không sửa cột khoá của file mẫu.` });
-        continue;
-      }
-      const unit = unitById.get(keyText);
-      if (!unit) {
-        err({ row: r, column: 'A', code: 'quiz.matrix_import_node_not_found', message: `Dòng ${r}: đơn vị kiến thức không tồn tại trong chương trình của file (hoặc không phải đơn vị kiến thức) — hệ thống không tự tạo đơn vị kiến thức từ file nhập.` });
-        continue;
-      }
-      const firstRow = seenNodes.get(keyText);
-      if (firstRow !== undefined) {
-        err({ row: r, column: 'A', code: 'quiz.matrix_import_node_duplicate', message: `Dòng ${r}: đơn vị kiến thức "${unit.nodeTitle}" đã có ở dòng ${firstRow} — mỗi đơn vị kiến thức chỉ một hàng.` });
-        continue;
-      }
-      seenNodes.set(keyText, r);
-      presentNodeIds.push(keyText);
-      preview.rows.push({
-        nodeId: unit.nodeId, topicTitle: unit.topicTitle, nodeTitle: unit.nodeTitle,
-        position: presentNodeIds.length, outcomes: unit.outcomes,
-      });
-      for (const col of grid.columns) {
-        const raw = this.rawCell(ws.getCell(r, col.columnIndex).value);
-        if (raw === null) continue;
-        if (raw.kind !== 'number' || !Number.isInteger(raw.value) || raw.value < 0) {
-          err({
-            row: r, column: col.columnLetter, code: 'quiz.matrix_import_cell_value_invalid',
-            message: `Ô ${col.columnLetter}${r} (${col.qtypeLabel} — ${col.levelLabel}) phải là số nguyên ≥ 0 (số câu/số chùm), nhận được "${raw.kind === 'text' ? raw.value : raw.value}".`,
-          });
-          continue;
-        }
-        if (raw.value === 0) continue;
-        countByForm.set(col.qtype, (countByForm.get(col.qtype) ?? 0) + raw.value);
-        draftCells.push({
-          curriculumNodeId: keyText, cognitiveLevel: col.level, qtype: col.qtype,
-          questionCount: raw.value, cellScore: 0, // điểm tính ở bước sau, khi đã biết điểm-mỗi-câu hợp lệ
-        });
-      }
-    }
-
+    const { draftCells, countByForm } = this.parseGridRows(ws, grid, unitById, err, preview);
     // Bước 4b — điểm mỗi câu + điểm từng ô + tổng hai chiều.
     for (const form of FORM_DEFS) {
       const total = countByForm.get(form.qtype) ?? 0;
@@ -753,7 +769,7 @@ export class MatrixImportService {
         .reduce((s, l) => s + l.score, 0);
       const advPct = (advScore / totals.totalScore) * 100;
       if (Math.abs(advPct - 30) > 0.5) {
-        warnings.push(`Tỉ lệ điểm theo mức "Vận dụng + Vận dụng cao": thực tế ${Math.round(advPct * 10) / 10}% so với mục tiêu 30% (CV 7991 không có mốc riêng cho Vận dụng cao).`);
+        warnings.push(`Tỉ lệ điểm theo mức "Vận dụng + Vận dụng cao": thực tế ${roundToOneDecimal(advPct)}% so với mục tiêu 30% (CV 7991 không có mốc riêng cho Vận dụng cao).`);
       }
     }
     return warnings;
@@ -810,7 +826,7 @@ export class MatrixImportService {
         const groupText = this.cellText(ws.getCell(r, c).value);
         if (groupText) {
           currentForm = FORM_DEFS.find((f) => this.normalize(f.label) === this.normalize(groupText))
-            ?? FORM_DEFS.find((f) => this.normalize(groupText).includes(this.normalize(f.label.split(' (')[0]!)))
+            ?? FORM_DEFS.find((f) => this.normalize(groupText).includes(this.normalize(f.label.split(' (')[0]!))) // Bất biến: split luôn trả ít nhất một phần tử.
             ?? null;
         }
         const levelText = this.cellText(ws.getCell(r + 1, c).value);

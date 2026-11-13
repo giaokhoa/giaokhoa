@@ -1,6 +1,30 @@
-import { formatDateTime, formatWithOptions } from '#utils/date-format';
+/**
+ * Helper dùng chung của cụm Tin nhắn: URL roster lớp/khoá, trích dẫn tin, nhãn thời
+ * gian tương đối và giờ hội thoại, bản đồ màu/nhãn hiện diện bốn trạng thái, khuôn
+ * menu chat, hợp nhất trang tin và đếm ký tự tin nhắn. `initialsOf` và `relativeTime`
+ * chỉ tái xuất từ `#utils/` để các bề mặt nhắn tin nhập một chỗ.
+ */
+
+import { formatWithOptions, MS_PER_DAY } from '#utils/date-format';
 
 import type { MessageQuoteView, MessageView, PresenceStatus } from '../types/types';
+
+/**
+ * Đường roster (danh sách thành viên) của một lớp/khoá — dùng chung
+ * cho panel thành viên (trang lớn, limit 100) và bộ chọn người (trang
+ * nhỏ, limit 50): cùng endpoint `…/members` phân trang con trỏ phía
+ * server, chỉ khác kích thước trang.
+ *
+ * @param kind - Loại ngữ cảnh: lớp hay khoá.
+ * @param id - Định danh lớp/khoá.
+ * @param limit - Số dòng mỗi trang.
+ * @param cursor - Con trỏ trang tiếp theo (không có thì lấy trang đầu).
+ * @returns URL roster đã encode con trỏ.
+ */
+export function rosterMembersUrl(kind: 'class' | 'course', id: string, limit: number, cursor?: string): string {
+  const base = `/api/v1/messages/${kind === 'class' ? 'classes' : 'courses'}/${id}/members?limit=${limit}`;
+  return cursor ? `${base}&cursor=${encodeURIComponent(cursor)}` : base;
+}
 
 /** Rút gọn excerpt ở client cho bản lạc quan — CÙNG luật với server (120 ký tự theo code point, thêm … khi cắt). */
 export function quoteExcerptOfText(text: string): string {
@@ -26,23 +50,8 @@ export function localQuoteOf(m: MessageView): MessageQuoteView {
   };
 }
 
-/**
- * Mốc thời gian tương đối của tin cuối trong danh sách conversation
- * (lát M1, issue #204 — cùng khuôn và cùng khoá i18n với trang thông
- * báo): "vừa xong", "{{count}} phút/giờ/ngày trước"; quá một tuần thì
- * in ngày giờ cụ thể.
- */
-export function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 60_000) return t('justNow');
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 60) return t('minutesAgo', { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('hoursAgo', { count: hours });
-  const days = Math.floor(hours / 24);
-  if (days < 7) return t('daysAgo', { count: days });
-  return formatDateTime(iso);
-}
+/** Mốc thời gian tương đối — tái xuất từ `#utils/date-format` (bản duy nhất dùng chung cho tin nhắn, chuông và trung tâm thông báo). */
+export { MS_PER_DAY, relativeTime } from '#utils/date-format';
 
 /**
  * Mốc thời gian trên HÀNG hội thoại (issue #608 — căn theo đúng
@@ -66,7 +75,7 @@ export function conversationTime(
   const minutes = Math.floor(diffMs / 60_000);
   if (minutes < 60) return t('minutesShort', { count: minutes });
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000);
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / MS_PER_DAY);
   if (diffDays <= 0) {
     return formatWithOptions(date, lang, { hour: 'numeric', minute: '2-digit', hour12: true });
   }
@@ -138,30 +147,8 @@ export const CHAT_MENU_CONTENT_CLASS = 'w-max min-w-52 max-w-[calc(100vw-2rem)]'
  */
 export const CHAT_MENU_ITEM_CLASS = 'whitespace-nowrap';
 
-/**
- * Chữ viết tắt của tên hiển thị — nội dung AvatarFallback.
- *
- * Luật (issue #591): chỉ lấy KÝ TỰ CHỮ — ký tự đặc biệt ở đầu
- * tên (ví dụ tên nhóm bắt đầu bằng dấu ngoặc như "[KT] Nhóm…")
- * bị bỏ qua, không lọt vào chữ viết tắt như trước. Cách lấy giữ
- * cùng khuôn với tên người: tách tên thành các TỪ CHỮ (mỗi từ chỉ
- * giữ các ký tự chữ Unicode của nó, từ không còn ký tự chữ nào
- * thì bỏ hẳn); từ hai từ chữ trở lên thì lấy chữ đầu của từ đầu
- * + chữ đầu của từ cuối; đúng một từ chữ thì lấy hai chữ đầu của
- * từ đó; không có ký tự chữ nào thì rơi về '?'.
- */
-export function initialsOf(name: string): string {
-  const letterWords = name
-    .trim()
-    .split(/\s+/)
-    .map((word) => Array.from(word).filter((ch) => /\p{L}/u.test(ch)).join(''))
-    .filter(Boolean);
-  if (letterWords.length === 0) return '?';
-  if (letterWords.length === 1) return Array.from(letterWords[0]!).slice(0, 2).join('').toUpperCase();
-  const first = Array.from(letterWords[0]!)[0]!;
-  const last = Array.from(letterWords[letterWords.length - 1]!)[0]!;
-  return (first + last).toUpperCase();
-}
+/** Chữ viết tắt của tên hiển thị — tái xuất từ `#utils/name-format` (bản duy nhất dùng chung cho avatar ở khung chat và sidebar). */
+export { initialsOf } from '#utils/name-format';
 
 /** Gộp tin vào danh sách hiện có: chống trùng theo id và clientMessageId, sắp theo seq (tin lạc quan chưa có seq thật nằm cuối). */
 export function mergeMessages(existing: MessageView[], incoming: MessageView[]): MessageView[] {

@@ -15,6 +15,7 @@ import { McpIdempotencyRepository } from '@giaokhoa/db/repositories/mcp-idempote
 import type { McpMountDeps } from './mcp.mount';
 import { McpOAuthVerifier } from './mcp-oauth-verifier';
 import { McpRateLimiter } from './mcp-rate-limit';
+import type { McpToolDeps } from './mcp.tools';
 
 /**
  * Facade dựng deps cho tầng mount MCP (issue #138, mục 8.1 của #134).
@@ -45,27 +46,40 @@ export class McpDepsService {
 
   /** Dựng deps của mount từ các provider đã inject (gọi trong main.ts sau NestFactory.create, như mountBetterAuth). */
   createMountDeps(): McpMountDeps {
-    const readLimit = Number(this.config.get<string>('MCP_RATE_READ_PER_HOUR') ?? 300);
-    const createLimit = Number(this.config.get<string>('MCP_RATE_CREATE_PER_HOUR') ?? 120);
-    const publishLimit = Number(this.config.get<string>('MCP_RATE_PUBLISH_PER_HOUR') ?? 10);
-    const port = this.config.get<number>('PORT') ?? 3000;
+    // Phần chung của hai nhánh AS bật/tắt: cầu bridge, rate limit và
+    // các service của tools — chỉ rẽ nhánh ở issuer/verifier và ở
+    // publicBaseUrl (AS dùng origin đã chuẩn hoá, MCP-0 dùng đúng giá
+    // trị cấu hình, rỗng khi chưa cấu hình).
+    const bridgeAuth = new McpBridgeAuth(this.config.getOrThrow<string>('JWT_SECRET'), this.users);
+    const rateLimiter = new McpRateLimiter({
+      read: this.positiveRateLimit('MCP_RATE_READ_PER_HOUR', 300),
+      create: this.positiveRateLimit('MCP_RATE_CREATE_PER_HOUR', 120),
+      publish: this.positiveRateLimit('MCP_RATE_PUBLISH_PER_HOUR', 10),
+    });
     // Origin công khai theo đúng thứ tự ưu tiên mà BetterAuthService dùng để chốt `resource` của AS — hai nơi PHẢI ra cùng một gốc, nếu không `aud` của token và audience RS kỳ vọng sẽ lệch nhau.
     const publicBaseUrl =
       this.config.get<string>('MCP_PUBLIC_BASE_URL') ??
       this.config.get<string>('BETTER_AUTH_URL') ??
       null;
+    const toolDeps = (base: string): McpToolDeps => ({
+      questions: this.questions,
+      banks: this.banks,
+      exams: this.exams,
+      matrixBanks: this.matrixBanks,
+      curriculum: this.curriculum,
+      idempotency: this.idempotency,
+      outbox: this.outbox,
+      publicBaseUrl: base,
+    });
 
     const asEnabled = this.betterAuth.mcpAsEnabled && this.betterAuth.mcpAs !== null;
     if (asEnabled) {
+      const port = this.config.get<number>('PORT') ?? 3000;
       const origin = (publicBaseUrl ?? `http://localhost:${port}`).replace(/\/+$/, '');
       const issuer = `${origin}${BETTER_AUTH_BASE_PATH}`;
       return {
-        bridgeAuth: new McpBridgeAuth(this.config.getOrThrow<string>('JWT_SECRET'), this.users),
-        rateLimiter: new McpRateLimiter({
-          read: Number.isFinite(readLimit) && readLimit > 0 ? readLimit : 300,
-          create: Number.isFinite(createLimit) && createLimit > 0 ? createLimit : 120,
-          publish: Number.isFinite(publishLimit) && publishLimit > 0 ? publishLimit : 10,
-        }),
+        bridgeAuth,
+        rateLimiter,
         publicBaseUrl: origin,
         issuer,
         oauthVerifier: new McpOAuthVerifier({
@@ -81,38 +95,26 @@ export class McpDepsService {
           const tenant = await this.tenants.resolveDefaultTenant(userId).catch(() => null);
           return { username: user.username, tenantId: tenant?.id ?? null };
         },
-        toolDeps: {
-          questions: this.questions,
-          banks: this.banks,
-          exams: this.exams,
-          matrixBanks: this.matrixBanks,
-          curriculum: this.curriculum,
-          idempotency: this.idempotency,
-          outbox: this.outbox,
-          publicBaseUrl: origin,
-        },
+        toolDeps: toolDeps(origin),
       };
     }
 
     return {
-      bridgeAuth: new McpBridgeAuth(this.config.getOrThrow<string>('JWT_SECRET'), this.users),
-      rateLimiter: new McpRateLimiter({
-        read: Number.isFinite(readLimit) && readLimit > 0 ? readLimit : 300,
-        create: Number.isFinite(createLimit) && createLimit > 0 ? createLimit : 120,
-        publish: Number.isFinite(publishLimit) && publishLimit > 0 ? publishLimit : 10,
-      }),
+      bridgeAuth,
+      rateLimiter,
       publicBaseUrl,
       issuer: this.config.get<string>('MCP_AUTH_ISSUER') ?? null,
-      toolDeps: {
-        questions: this.questions,
-        banks: this.banks,
-        exams: this.exams,
-        matrixBanks: this.matrixBanks,
-        curriculum: this.curriculum,
-        idempotency: this.idempotency,
-        outbox: this.outbox,
-        publicBaseUrl: publicBaseUrl ?? '',
-      },
+      toolDeps: toolDeps(publicBaseUrl ?? ''),
     };
+  }
+
+  /**
+   * Trần rate-limit MCP: số nguyên dương từ cấu hình, fallback về default
+   * của schema env khi giá trị thiếu/không hợp lệ (Zod default đã áp nên
+   * fallback này chỉ là phòng thủ cho môi trường test không validate).
+   */
+  private positiveRateLimit(key: string, fallback: number): number {
+    const value = Number(this.config.get<string>(key) ?? fallback);
+    return Number.isFinite(value) && value > 0 ? value : fallback;
   }
 }

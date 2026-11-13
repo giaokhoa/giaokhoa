@@ -5,6 +5,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { OutboxService } from '../../infra/events/outbox.service';
 import type { AccessRepository, ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
+import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import type { CoursesService } from '../courses/courses.service';
 import type { EnrolService } from '../enrol/enrol.service';
@@ -26,6 +27,21 @@ import type { GroupsRepository } from '@giaokhoa/db/repositories/groups';
  *
  * Thế giới kiểm chứng: tenant có 5 lớp ở các trạng thái quyền khác nhau (lớp của mình, lớp có capability, lớp là thành viên roster, lớp không liên hệ, lớp của người khác) trên cây context thật system → tenant → class; `ContextsService` + `PermissionEvaluator` là service THẬT trên tầng dữ liệu giả lập trong bộ nhớ.
  */
+
+/**
+ * Ép một mock từng phần thành dependency đầy đủ của `ClassesService`: các
+ * mock chỉ cài đúng phương thức mà `listClasses` chạm tới, phần còn lại
+ * không tồn tại ở runtime — ép kiểu tập trung tại đây (một chỗ, có ghi
+ * chú) thay vì rải `as unknown as X` khắp file; hình dạng từng mock vẫn
+ * được kiểm tra qua `Partial<...>` ở nơi khai báo. Chỉ dùng cho mock mà
+ * phương thức cài khớp đúng chữ ký thật (đã đối chiếu với
+ * repository/service gốc); mock rút gọn (`accessRepo`, `cache`, cấu hình)
+ * không đủ hình dạng nên giữ ép kiểu trực tiếp tại biên, xem ghi chú ở
+ * `makeWorld`.
+ */
+function mockDependency<T>(mock: Partial<T>): T {
+  return mock as unknown as T;
+}
 
 const SYS_ID = '00000000-0000-4000-8000-000000000010';
 const TEN_ID = '00000000-0000-4000-8000-000000000020';
@@ -80,9 +96,9 @@ interface WorldOptions {
 
 function makeWorld(opts: WorldOptions = {}) {
   const contexts: ContextRow[] = [
-    ctx(SYS_ID, 10, `/${SYS_ID}`),
-    ctx(TEN_ID, 20, `/${SYS_ID}/${TEN_ID}`, TENANT_ID),
-    ...CLASS_CTX_IDS.map((id, i) => ctx(id, 45, `/${SYS_ID}/${TEN_ID}/${id}`, CLASS_IDS[i]!)),
+    ctx(SYS_ID, CONTEXT_LEVELS.SYSTEM, `/${SYS_ID}`),
+    ctx(TEN_ID, CONTEXT_LEVELS.TENANT, `/${SYS_ID}/${TEN_ID}`, TENANT_ID),
+    ...CLASS_CTX_IDS.map((id, i) => ctx(id, CONTEXT_LEVELS.CLASS, `/${SYS_ID}/${TEN_ID}/${id}`, CLASS_IDS[i]!)),
   ];
   const byId = new Map(contexts.map((c) => [c.id, c]));
 
@@ -163,36 +179,43 @@ function makeWorld(opts: WorldOptions = {}) {
     async del(key: string) { cacheStore.delete(key); },
   };
 
+  // `accessRepo`/`cache`/cấu hình giữ `as unknown as X`: mock chỉ cài tập
+  // phương thức tối thiểu với dòng rút gọn (ví dụ `getRoleByShortname` trả
+  // `{ id, shortName }` thay vì đủ trường của `RoleRow`,
+  // `getOverridesForRoles` trả dòng thiếu trường của `RoleCapabilityRow`)
+  // nên không đủ hình dạng để ép qua `Partial<...>` — ép kiểu tập trung
+  // tại biên này, chữ ký từng phương thức đã đối chiếu bằng tay với
+  // `AccessRepository` gốc.
   const accessRepoCast = accessRepo as unknown as AccessRepository;
   const contextsService = new ContextsService(accessRepoCast);
   const evaluator = new PermissionEvaluator(accessRepoCast, contextsService, cache as unknown as Cache, { getOrThrow: () => 'postgres://user:pass@localhost:5432/giaokhoa_test_api' } as unknown as ConfigService);
 
-  const classesRepo = {
+  const classesRepo = mockDependency<ClassesRepository>({
     async listClassesByTenant(tenantId: string) {
       return rows.filter((r) => r.tenantId === tenantId);
     },
-  };
-  const groups = {
+  });
+  const groups = mockDependency<GroupsService>({
     async isCohortMember(cohortId: string, userId: string) {
       return cohortMembers.has(`${cohortId}|${userId}`);
     },
-  };
-  const tenants = { async fallbackTenantId() { return TENANT_ID; } };
-  const tenantContext = { currentTenantId() { return TENANT_ID; } };
+  });
+  const tenants = mockDependency<TenantsService>({ async fallbackTenantId() { return TENANT_ID; } });
+  const tenantContext = mockDependency<TenantContextService>({ currentTenantId() { return TENANT_ID; } });
 
   const service = new ClassesService(
-    classesRepo as unknown as ClassesRepository,
+    classesRepo,
     contextsService,
     evaluator,
-    {} as unknown as RolesService,
-    {} as unknown as CoursesService,
-    groups as unknown as GroupsService,
-    {} as unknown as EnrolService,
-    {} as unknown as UsersService,
-    tenants as unknown as TenantsService,
-    tenantContext as unknown as TenantContextService,
-    {} as unknown as OutboxService,
-    {} as unknown as GroupsRepository,
+    mockDependency<RolesService>({}),
+    mockDependency<CoursesService>({}),
+    groups,
+    mockDependency<EnrolService>({}),
+    mockDependency<UsersService>({}),
+    tenants,
+    tenantContext,
+    mockDependency<OutboxService>({}),
+    mockDependency<GroupsRepository>({}),
   );
   return { service, evaluator, contextsService, groups, rows };
 }
@@ -221,7 +244,7 @@ async function legacyProjection(world: ReturnType<typeof makeWorld>, actorId: st
     || (tenantCtx ? await evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id) : false);
   const canCreate = tenantCtx ? await evaluator.hasCapability(actorId, 'class:create', tenantCtx.id) : false;
   const ctxIdOf = async (classId: string): Promise<string> => {
-    const found = await contextsService.getByLevelInstance(45, classId);
+    const found = await contextsService.getByLevelInstance(CONTEXT_LEVELS.CLASS, classId);
     if (!found) throw new Error(`missing class context for ${classId}`);
     return found.id;
   };
@@ -294,7 +317,8 @@ describe('ClassesService.listClasses — đáp ứng giữ nguyên khi đánh gi
     const actual = project(await world.service.listClasses('admin-z'));
     expect(actual).toEqual(await legacyProjection(world, 'admin-z'));
     expect(actual.map((i) => i.id)).toEqual(CLASS_IDS);
-    expect(actual[0]!.canCreate).toBe(false);
+    expect(actual).toHaveLength(CLASS_IDS.length);
+    expect(actual[0].canCreate).toBe(false);
   });
 
   it('người ngoài tenant chỉ thấy lớp mình là thành viên roster, capability bị cổng tenant chặn', async () => {

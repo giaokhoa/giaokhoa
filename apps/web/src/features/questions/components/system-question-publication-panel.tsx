@@ -16,7 +16,7 @@ import {
   rejectSystemQuestionSubmission, submitSystemQuestion,
   type SystemQuestionSubmission, type SystemSubmissionSource,
 } from '../api/questions';
-import { QTYPE_LABEL_KEYS, QTYPES, systemBankPlainText, type Qtype } from '../utils/shared';
+import { QTYPE_LABEL_KEYS, QTYPES, SYSTEM_SUBMISSION_STATUS_LABEL_KEYS, systemBankPlainText, type Qtype } from '../utils/shared';
 import { SystemSubmissionReviewPreview } from './system-submission-review-preview';
 
 /** Chuỗi văn bản gọn để người duyệt xem cùng đáp án, không hiển thị JSON thô. */
@@ -164,7 +164,7 @@ export function SystemQuestionPublicationPanel() {
                 <li key={item.id} className="rounded-md border p-2 text-sm">
                   <span>{excerpt(item.package.questionText)} · v{item.sourceVersionNumber}</span>
                   <span className="ml-2 font-medium">
-                    {t(`systemSubmissionStatus_${item.status}`)}
+                    {t(SYSTEM_SUBMISSION_STATUS_LABEL_KEYS[item.status])}
                   </span>
                   {item.rejectionReason ? (
                     <p className="mt-1 text-muted-foreground">

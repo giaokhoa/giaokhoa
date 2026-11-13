@@ -57,15 +57,14 @@ export const createSpaceRegistrationSchema = z.strictObject({
 export type CreateSpaceRegistration = z.infer<typeof createSpaceRegistrationSchema>;
 
 /** Cập nhật dòng đăng ký: tên hiển thị trên sổ, kho đích, chế độ kho, tham chiếu kết nối/bí mật, phiên bản schema, gói. Slug và loại không gian là định danh — không sửa qua đường này. */
-export const updateSpaceRegistrationSchema = z.strictObject({
-  name: z.string().min(1).max(200).optional(),
-  databaseName: z.string().min(1).max(120).optional(),
-  storageMode: z.enum(SPACE_STORAGE_MODES).optional(),
-  connectionRoleRef: z.string().min(1).max(200).optional(),
-  secretRef: z.string().max(200).nullable().optional(),
-  schemaVersion: z.string().max(120).nullable().optional(),
-  plan: z.string().max(80).nullable().optional(),
-});
+export const updateSpaceRegistrationSchema = createSpaceRegistrationSchema
+  .omit({ kind: true, slug: true, status: true })
+  .partial()
+  .extend({
+    secretRef: z.string().max(200).nullable().optional(),
+    schemaVersion: z.string().max(120).nullable().optional(),
+    plan: z.string().max(80).nullable().optional(),
+  });
 export type UpdateSpaceRegistration = z.infer<typeof updateSpaceRegistrationSchema>;
 
 /** Đổi trạng thái vòng đời của không gian — thao tác riêng để lịch sử quản trị ghi đúng loại hành động. */

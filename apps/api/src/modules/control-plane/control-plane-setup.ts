@@ -26,6 +26,18 @@ import {
   quoteIdentifier,
 } from './control-plane-provision';
 
+/** Truy vấn kiểm tra tồn tại (`SELECT 1 ...`) có trả dòng nào không. */
+function hasRow(result: { rowCount: number | null }): boolean {
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Chạy tuần tự từng câu lệnh SQL trên cùng một client quản trị. */
+async function runStatements(client: Client, statements: string[]): Promise<void> {
+  for (const statement of statements) {
+    await client.query(statement);
+  }
+}
+
 async function main(): Promise<void> {
   const controlPlaneUrl = process.env.CONTROL_PLANE_DATABASE_URL;
   if (!controlPlaneUrl) {
@@ -44,26 +56,18 @@ async function main(): Promise<void> {
   await client.connect();
   try {
     const roleResult = await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [target.role]);
-    for (const statement of buildEnsureRoleStatements(target, (roleResult.rowCount ?? 0) > 0)) {
-      await client.query(statement);
-    }
+    await runStatements(client, buildEnsureRoleStatements(target, hasRow(roleResult)));
     const databaseResult = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [target.database]);
-    for (const statement of buildEnsureDatabaseStatements(target, (databaseResult.rowCount ?? 0) > 0)) {
-      // CREATE DATABASE không chạy trong transaction — các câu ở đây được thực thi tuần tự ngoài transaction, đúng yêu cầu đó.
-      await client.query(statement);
-    }
-    for (const statement of buildRestrictConnectStatements(target)) {
-      await client.query(statement);
-    }
+    // CREATE DATABASE không chạy trong transaction — các câu ở đây được thực thi tuần tự ngoài transaction, đúng yêu cầu đó.
+    await runStatements(client, buildEnsureDatabaseStatements(target, hasRow(databaseResult)));
+    await runStatements(client, buildRestrictConnectStatements(target));
     // Khoá chiều ngược trên database nghiệp vụ: database đích phải tồn tại sẵn trên cụm (nó là kho của chính ứng dụng đang chạy, luôn có trước bước migrate) — thiếu là cấu hình sai, dừng ngay.
     const businessTarget = parseBusinessTarget(businessUrl);
     const businessResult = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [businessTarget.database]);
-    if ((businessResult.rowCount ?? 0) === 0) {
+    if (!hasRow(businessResult)) {
       throw new Error(`business database ${quoteIdentifier(businessTarget.database)} does not exist on this cluster`);
     }
-    for (const statement of buildRestrictBusinessConnectStatements(businessTarget)) {
-      await client.query(statement);
-    }
+    await runStatements(client, buildRestrictBusinessConnectStatements(businessTarget));
     console.log(
       `control-plane-setup: database ${quoteIdentifier(target.database)} and role ${quoteIdentifier(target.role)} are ready.`,
     );

@@ -234,7 +234,7 @@ export function simulatePhoto(sheet: RgbaImage, opts: PhotoSimOptions = {}): Buf
   };
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const w = inv[6]! * x + inv[7]! * y + inv[8]!;
+      const w = inv[6]! * x + inv[7]! * y + inv[8]!; // Bất biến: inv là ma trận nghịch đảo 3x3 (9 phần tử) — xem invert3.
       const sx = (inv[0]! * x + inv[1]! * y + inv[2]!) / w;
       const sy = (inv[3]! * x + inv[4]! * y + inv[5]!) / w;
       let value: number;
@@ -243,7 +243,7 @@ export function simulatePhoto(sheet: RgbaImage, opts: PhotoSimOptions = {}): Buf
       } else {
         const x0 = Math.floor(sx), y0 = Math.floor(sy);
         const fx = sx - x0, fy = sy - y0;
-        const idx = (yy: number, xx: number) => sheet.data[(yy * TEMPLATE_WIDTH + xx) * 4]!;
+        const idx = (yy: number, xx: number) => sheet.data[(yy * TEMPLATE_WIDTH + xx) * 4]!; // Bất biến: nhánh else đã chặn sx, sy trong [0, TEMPLATE_WIDTH - 1) nên x0 + 1, y0 + 1 vẫn trong ảnh.
         value = (idx(y0, x0) * (1 - fx) + idx(y0, x0 + 1) * fx) * (1 - fy)
           + (idx(y0 + 1, x0) * (1 - fx) + idx(y0 + 1, x0 + 1) * fx) * fy;
         value -= (x / W) * gradient;
@@ -268,7 +268,7 @@ function boxBlur(img: RgbaImage): void {
     for (let x = 1; x < W - 1; x++) {
       let sum = 0;
       for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) sum += src[((y + dy) * W + (x + dx)) * 4]!;
+        for (let dx = -1; dx <= 1; dx++) sum += src[((y + dy) * W + (x + dx)) * 4]!; // Bất biến: vòng lặp chỉ chạy trong lòng ảnh (1..H-2, 1..W-2) nên y + dy, x + dx luôn hợp lệ.
       }
       const v = sum / 9;
       const o = (y * W + x) * 4;

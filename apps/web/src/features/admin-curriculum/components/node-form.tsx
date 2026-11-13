@@ -52,13 +52,26 @@ export function NodeForm({ curriculumId, initial, parentId }: { curriculumId: st
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    // Ô `type="number"` để trống cho Number('') === 0 nên kiểm tra rỗng/NaN trước khi gửi, thay vì gửi 0 lặng lẽ; hai ô thời lượng để trống nghĩa là không đặt (null), chỉ kiểm tra khi đã nhập.
+    const positionValue = Number(position);
+    const durationPeriodsValue = durationPeriods === '' ? null : Number(durationPeriods);
+    const durationPercentValue = durationPercent === '' ? null : Number(durationPercent);
+    if (
+      position.trim() === '' ||
+      !Number.isFinite(positionValue) ||
+      (durationPeriodsValue !== null && !Number.isFinite(durationPeriodsValue)) ||
+      (durationPercentValue !== null && !Number.isFinite(durationPercentValue))
+    ) {
+      setError(t('curriculumInvalidNumber'));
+      return;
+    }
     const payload = {
       title,
       kind,
       parentId: parent === '' ? null : parent,
-      position: Number(position),
-      durationPeriods: durationPeriods === '' ? null : Number(durationPeriods),
-      durationPercent: durationPercent === '' ? null : Number(durationPercent),
+      position: positionValue,
+      durationPeriods: durationPeriodsValue,
+      durationPercent: durationPercentValue,
     };
     try {
       if (initial) {

@@ -9,7 +9,8 @@ import { ContextsService } from '../access/contexts.service';
 import { PasswordService } from '../users/password.service';
 import { UsersService } from '../users/users.service';
 import type { UserRow } from '@giaokhoa/db/repositories/users';
-import { AuthRepository } from '@giaokhoa/db/repositories/auth';
+import type { TenantRow } from '@giaokhoa/db/repositories/tenants';
+import { AuthRepository, type RefreshFamilyRow } from '@giaokhoa/db/repositories/auth';
 import {
   AUTH_LOCKED_OUT_CODE,
   AUTH_LOCKED_OUT_MESSAGE,
@@ -85,6 +86,17 @@ export interface MySessionView {
 }
 
 function hashToken(token: string): string { return createHash('sha256').update(token).digest('hex'); }
+
+/** Số byte ngẫu nhiên của một refresh token opaque (48 byte → 64 ký tự base64url). */
+const REFRESH_TOKEN_BYTES = 48;
+/** Số mili-giây trong một ngày — đổi TTL refresh token từ ngày sang mili-giây. */
+const MS_PER_DAY = 86_400_000;
+/** Hạn mặc định của challenge MFA (giây) khi chưa cấu hình `MFA_CHALLENGE_TTL_SECONDS`. */
+const DEFAULT_MFA_CHALLENGE_TTL_SECONDS = 300;
+/** Hạn mặc định của access token (giây) khi chưa cấu hình `ACCESS_TOKEN_TTL_SECONDS`. */
+const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 900;
+/** Hạn mặc định của refresh token (ngày) khi chưa cấu hình `REFRESH_TOKEN_TTL_DAYS`. */
+const DEFAULT_REFRESH_TOKEN_TTL_DAYS = 30;
 
 /**
  * Facade của AuthModule (report §3.7). Xác thực KHÔNG phải ghi danh và KHÔNG phải gán role: một lần đăng nhập thành công chỉ chứng minh danh tính; người dùng được làm gì do PermissionEvaluator quyết định, còn quyền vào khoá học do Enrol quyết định. Refresh token là opaque, được lưu dưới dạng đã băm, nhóm theo family, được xoay vòng ở mỗi lần dùng; phát lại một token đã bị xoay vòng sẽ thu hồi toàn bộ family.
@@ -164,18 +176,41 @@ export class AuthService {
   }
 
   /**
+   * Gác MFA ở bước mật khẩu: user đã bật MFA thì cấp challenge token của
+   * luồng `flow` và trả về — chưa ghi nhận đăng nhập, chưa cấp token hay
+   * phiên nào. Trả `undefined` khi user không bật MFA; luồng gọi tiếp tục
+   * cấp phiên/token như thường.
+   */
+  private async mfaChallengeIfEnabled(user: UserRow, flow: MfaChallengeFlow): Promise<string | undefined> {
+    if (await this.totp.isEnabled(user.id)) {
+      return this.signMfaChallenge(user, flow);
+    }
+    return undefined;
+  }
+
+  /**
+   * Đuôi dùng chung của các luồng đăng nhập: ghi nhận đăng nhập, phát hành
+   * phiên/token bằng `issue`, rồi ghi sự kiện `user_logged_in`. Thứ tự ba
+   * bước giữ nguyên như trước khi trích: ghi nhận trước, sự kiện sau cùng.
+   */
+  private async finishLogin<T>(user: UserRow, method: string, ip: string | undefined, issue: () => Promise<T>): Promise<T> {
+    await this.users.recordLogin(user.id);
+    const issued = await issue();
+    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method, ip: ip ?? null });
+    return issued;
+  }
+
+  /**
    * Hoàn tất bước mật khẩu cho một user đã qua `validateCredentials`:
    * user bật MFA ⇒ trả challenge token; còn lại ghi nhận đăng nhập và
    * phát hành cặp token. Dùng chung cho cả hai route đăng nhập.
    */
   async completePasswordLogin(user: UserRow, client?: SessionClientInfo): Promise<PasswordLoginOutcome> {
-    if (await this.totp.isEnabled(user.id)) {
-      const challengeToken = await this.signMfaChallenge(user, 'token');
+    const challengeToken = await this.mfaChallengeIfEnabled(user, 'token');
+    if (challengeToken) {
       return { mfaRequired: true, user, challengeToken };
     }
-    await this.users.recordLogin(user.id);
-    const tokens = await this.issueTokens(user, client);
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'password', ip: client?.ip ?? null });
+    const tokens = await this.finishLogin(user, 'password', client?.ip, () => this.issueTokens(user, client));
     return { mfaRequired: false, user, tokens };
   }
 
@@ -194,7 +229,7 @@ export class AuthService {
    * địa chỉ gốc — để bước hoàn tất kiểm lại đúng địa chỉ đó.
    */
   private async signMfaChallenge(user: UserRow, flow: MfaChallengeFlow): Promise<string> {
-    const ttl = this.config.get<number>('MFA_CHALLENGE_TTL_SECONDS') ?? 300;
+    const ttl = this.config.get<number>('MFA_CHALLENGE_TTL_SECONDS') ?? DEFAULT_MFA_CHALLENGE_TTL_SECONDS;
     const spaceSlug = tenantAls.getStore()?.spaceSlug;
     return this.jwt.signAsync(
       { sub: user.id, username: user.username, scope: 'mfa_challenge', flow, ...(spaceSlug ? { space: spaceSlug } : {}) },
@@ -242,9 +277,7 @@ export class AuthService {
    */
   async verifyMfa(challengeToken: string, code: string, ip?: string, userAgent?: string): Promise<{ user: UserRow; tokens: TokenPair }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'token');
-    await this.users.recordLogin(user.id);
-    const tokens = await this.issueTokens(user, { ip, userAgent });
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'totp', ip: ip ?? null });
+    const tokens = await this.finishLogin(user, 'totp', ip, () => this.issueTokens(user, { ip, userAgent }));
     return { user, tokens };
   }
 
@@ -267,18 +300,16 @@ export class AuthService {
    * hành mang `@PlatformRoute()`; user bật MFA thì dừng ở challenge
    * của luồng platform như luồng token.
    */
-  async platformLogin(username: string, password: string, ip?: string, _userAgent?: string): Promise<PlatformLoginOutcome> {
+  async platformLogin(username: string, password: string, ip?: string): Promise<PlatformLoginOutcome> {
     const user = await this.validateCredentials(username, password, ip);
     if (!(await this.evaluator.isPlatformSiteAdmin(user.id))) {
       throw new ForbiddenException({ message: 'Only platform administrators may use this login surface', code: 'auth.platform_admin_required' });
     }
-    if (await this.totp.isEnabled(user.id)) {
-      const challengeToken = await this.signMfaChallenge(user, 'platform');
+    const challengeToken = await this.mfaChallengeIfEnabled(user, 'platform');
+    if (challengeToken) {
       return { mfaRequired: true, user, challengeToken };
     }
-    await this.users.recordLogin(user.id);
-    const issued = await this.issuePlatformToken(user);
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'platform-password', ip: ip ?? null });
+    const issued = await this.finishLogin(user, 'platform-password', ip, () => this.issuePlatformToken(user));
     return { mfaRequired: false, user, accessToken: issued.accessToken, expiresIn: issued.expiresIn };
   }
 
@@ -288,14 +319,12 @@ export class AuthService {
    * Phép tra ghim kho chung tường minh như `platformLogin`
    * (không dùng cấu hình admin của trung tâm cho cổng platform).
    */
-  async verifyPlatformMfa(challengeToken: string, code: string, ip?: string, _userAgent?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
+  async verifyPlatformMfa(challengeToken: string, code: string, ip?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'platform');
     if (!(await this.evaluator.isPlatformSiteAdmin(user.id))) {
       throw new ForbiddenException({ message: 'Only platform administrators may use this login surface', code: 'auth.platform_admin_required' });
     }
-    await this.users.recordLogin(user.id);
-    const issued = await this.issuePlatformToken(user);
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'platform-totp', ip: ip ?? null });
+    const issued = await this.finishLogin(user, 'platform-totp', ip, () => this.issuePlatformToken(user));
     return { user, accessToken: issued.accessToken, expiresIn: issued.expiresIn };
   }
 
@@ -314,12 +343,11 @@ export class AuthService {
     if (!(await this.tenants.isPlatformSupportMember(user.id))) {
       throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
     }
-    if (await this.totp.isEnabled(user.id)) {
-      return { mfaRequired: true, user, challengeToken: await this.signMfaChallenge(user, 'support') };
+    const challengeToken = await this.mfaChallengeIfEnabled(user, 'support');
+    if (challengeToken) {
+      return { mfaRequired: true, user, challengeToken };
     }
-    await this.users.recordLogin(user.id);
-    const issued = await this.issueSupportToken(user);
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'support-password', ip: ip ?? null });
+    const issued = await this.finishLogin(user, 'support-password', ip, () => this.issueSupportToken(user));
     return { mfaRequired: false, user, ...issued };
   }
 
@@ -329,9 +357,7 @@ export class AuthService {
     if (!(await this.tenants.isPlatformSupportMember(user.id))) {
       throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
     }
-    await this.users.recordLogin(user.id);
-    const issued = await this.issueSupportToken(user);
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'support-totp', ip: ip ?? null });
+    const issued = await this.finishLogin(user, 'support-totp', ip, () => this.issueSupportToken(user));
     return { user, ...issued };
   }
 
@@ -341,7 +367,7 @@ export class AuthService {
    */
   private async issueSupportToken(user: UserRow): Promise<{ accessToken: string; expiresIn: number }> {
     const platformTenant = await this.tenants.platformTenant();
-    const expiresIn = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? 900;
+    const expiresIn = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, username: user.username, sid: randomUUID(), tid: platformTenant.id, aud: 'support' },
       { expiresIn },
@@ -359,7 +385,7 @@ export class AuthService {
    */
   private async issuePlatformToken(user: UserRow): Promise<{ accessToken: string; expiresIn: number }> {
     const platformTenant = await this.tenants.platformTenant();
-    const accessTtl = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? 900;
+    const accessTtl = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, username: user.username, sid: randomUUID(), tid: platformTenant.id, aud: 'platform' },
       { expiresIn: accessTtl },
@@ -433,8 +459,8 @@ export class AuthService {
     return user;
   }
 
-  /** Cấp một family refresh-token mới + access token (dùng sau khi local strategy đã kiểm chứng thông tin đăng nhập). */
   /**
+   * Cấp một family refresh-token mới + access token (dùng sau khi local strategy đã kiểm chứng thông tin đăng nhập).
    * Phát hành access token (JWT) + refresh token mới trong một family.
    */
   async issueTokensFor(user: UserRow, client?: SessionClientInfo): Promise<TokenPair> { return this.issueTokens(user, client); }
@@ -479,8 +505,8 @@ export class AuthService {
    */
   private async issueTokens(user: UserRow, client?: SessionClientInfo, tenantId?: string): Promise<TokenPair> {
     const familyId = randomUUID();
-    const refreshToken = randomBytes(48).toString('base64url');
-    const ttlDays = this.config.get<number>('REFRESH_TOKEN_TTL_DAYS') ?? 30;
+    const refreshToken = randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
+    const ttlDays = this.config.get<number>('REFRESH_TOKEN_TTL_DAYS') ?? DEFAULT_REFRESH_TOKEN_TTL_DAYS;
     const space = await this.requestDedicatedSpace();
     let tid: string;
     let centreId: string | undefined;
@@ -499,9 +525,9 @@ export class AuthService {
       familyId, userId: user.id, currentTokenHash: hashToken(refreshToken),
       ip: client?.ip ?? null, userAgent: client?.userAgent ?? null,
       tenantId: tid,
-      expiresAt: new Date(Date.now() + ttlDays * 86_400_000),
+      expiresAt: new Date(Date.now() + ttlDays * MS_PER_DAY),
     });
-    const accessTtl = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? 900;
+    const accessTtl = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, username: user.username, sid: familyId, tid, ...(centreId ? { centre_id: centreId } : {}) },
       { expiresIn: accessTtl },
@@ -547,11 +573,10 @@ export class AuthService {
     }
   }
 
-  /** Xoay vòng: token được trình ra phải là token hiện tại của family. Trình ra token trước đó (đã bị xoay vòng) = dùng lại ⇒ thu hồi family. */
   /**
-   * Xoay refresh token: token cũ chỉ dùng được một lần; tái sử dụng → thu hồi family (auth.token_reuse).
+   * Tìm family của refresh token trình ra và kiểm các bất biến xoay vòng: family phải còn hiệu lực; token trình ra phải là token hiện tại — trình ra token trước đó (đã bị xoay vòng) là tái sử dụng nên thu hồi cả family rồi mới báo lỗi (auth.refresh_reuse_detected).
    */
-  async refresh(refreshToken: string): Promise<TokenPair> {
+  private async resolveRefreshFamily(refreshToken: string): Promise<RefreshFamilyRow> {
     const tokenHash = hashToken(refreshToken);
     const family = await this.repo.getFamilyByHash(tokenHash);
     if (!family || family.revoked || family.expiresAt < new Date()) {
@@ -564,76 +589,90 @@ export class AuthService {
     if (family.currentTokenHash !== tokenHash) {
       throw new UnauthorizedException({ message: 'Refresh token is invalid', code: 'auth.refresh_invalid' });
     }
+    return family;
+  }
+
+  /**
+   * Chốt fail-closed của đường kho riêng trước khi xoay family (issue #584).
+   *
+   * Family của phiên kho riêng sống trong chính kho đó, nên refresh tại địa chỉ kho riêng phân giải lại tenant từ kho riêng (dòng tenant mang slug của địa chỉ) thay vì kiểm lại bằng kho chung — kiểm bằng kho chung sẽ kết luận tenant không tồn tại rồi ghi đè family về tenant-zero chung. Family chỉ tra được ở kho của nó nên refresh ở địa chỉ khác vốn đã 401 từ bước tra family.
+   *
+   * Các chốt chạy TRƯỚC khi xoay family: kho riêng chưa có dòng tenant của chính nó thì từ chối `space.tenant_missing` — cùng kết luận với `issueTokens` khi cấp phiên mới; rơi về phân giải kho chung tại đây sẽ cấp token mang tenant của kho khác. Tenant trong kho đã bị đình chỉ, hoặc membership của user trong kho đã kết thúc, cũng bị từ chối thay vì gia hạn một phiên lẽ ra đã chết. Lần từ chối ở bước này không xoay và không thu hồi family: trạng thái được khôi phục (tenant được kích hoạt lại, membership được gắn lại) thì phiên làm mới lại được bằng chính token cũ.
+   *
+   * Trả tenant của kho riêng khi request ở địa chỉ kho riêng, `undefined` khi ở địa chỉ gốc/kho chung.
+   */
+  private async resolveRefreshSpaceTenant(space: { slug: string; spaceId: string } | null, user: UserRow): Promise<TenantRow | undefined> {
+    if (!space) return undefined;
+    const spaceTenant = await this.tenants.getTenantInSpace(space.slug);
+    if (!spaceTenant) {
+      throw new UnauthorizedException({ message: 'Space tenant is not ready in its own store', code: 'space.tenant_missing' });
+    }
+    if (spaceTenant.status !== 'active') {
+      throw new UnauthorizedException({ message: `Tenant ${spaceTenant.slug} is ${spaceTenant.status}`, code: 'tenant.not_active' });
+    }
+    // Tenant kiểu platform là không gian công cộng — mọi tài
+    // khoản đã đăng nhập đều thuộc về nó, theo đúng quy định của
+    // `resolveSwitchTarget` — nên không gác bằng membership;
+    // tenant trung tâm/trường học thì membership còn hiệu lực
+    // trong kho là điều kiện giữ phiên.
+    if (spaceTenant.kind !== 'platform') {
+      const membership = await this.tenants.getMembershipInSpace(space.slug, spaceTenant.id, user.id);
+      if (!membership || membership.status !== 'active') {
+        throw new UnauthorizedException({ message: 'User is not an active member of this tenant', code: 'tenant.not_member' });
+      }
+    }
+    return spaceTenant;
+  }
+
+  /**
+   * Phân giải tenant hiệu lực cho access token mới sau khi xoay family. Đường kho riêng lấy thẳng tenant của kho riêng; đường kho chung giữ `tid` của family, phân giải lại tenant mặc định khi tenant cũ đã khoá hoặc membership đã kết thúc. Ghi lại `tid` mới lên family khi khác với `tid` đang lưu.
+   */
+  private async resolveRefreshTenant(
+    family: RefreshFamilyRow,
+    user: UserRow,
+    space: { slug: string; spaceId: string } | null,
+    spaceTenant: TenantRow | undefined,
+  ): Promise<{ tid: string; centreId: string | undefined }> {
+    if (space && spaceTenant) {
+      const tid = spaceTenant.id;
+      if (tid !== family.tenantId) await this.repo.setFamilyTenant(family.id, tid);
+      return { tid, centreId: space.spaceId };
+    }
+    // Giữ `tid` của family; tenant đã khoá hoặc membership đã kết thúc
+    // thì phân giải lại tenant mặc định thay vì cấp token vào ngõ cụt.
+    let tid = family.tenantId ?? undefined;
+    if (tid) {
+      try {
+        await this.tenants.resolveSwitchTarget(user.id, tid);
+      } catch {
+        tid = undefined;
+      }
+    }
+    if (!tid) {
+      tid = (await this.tenants.resolveDefaultTenant(user.id)).id;
+      if (tid !== family.tenantId) await this.repo.setFamilyTenant(family.id, tid);
+    }
+    return { tid, centreId: await this.centreClaimForTenant(tid) };
+  }
+
+  /**
+   * Xoay vòng: token được trình ra phải là token hiện tại của family. Trình ra token trước đó (đã bị xoay vòng) = dùng lại ⇒ thu hồi family.
+   * Xoay refresh token: token cũ chỉ dùng được một lần; tái sử dụng → thu hồi family (auth.token_reuse).
+   */
+  async refresh(refreshToken: string): Promise<TokenPair> {
+    const family = await this.resolveRefreshFamily(refreshToken);
     const user = await this.users.getUser(family.userId);
     if (user.deleted || user.suspended) {
       await this.repo.revokeFamily(family.id);
       throw new UnauthorizedException({ message: 'Account is not active', code: 'auth.account_inactive' });
     }
-    // Đường kho riêng (issue #584): family của phiên kho riêng sống
-    // trong chính kho đó, nên refresh tại địa chỉ kho riêng phân
-    // giải lại tenant từ kho riêng (dòng tenant mang slug của địa
-    // chỉ) thay vì kiểm lại bằng kho chung — kiểm bằng kho chung
-    // sẽ kết luận tenant không tồn tại rồi ghi đè family về
-    // tenant-zero chung. Family chỉ tra được ở kho của nó nên
-    // refresh ở địa chỉ khác vốn đã 401 từ bước tra family.
-    //
-    // Các chốt fail-closed của đường kho riêng chạy TRƯỚC khi xoay
-    // family: kho riêng chưa có dòng tenant của chính nó thì từ
-    // chối `space.tenant_missing` — cùng kết luận với `issueTokens`
-    // khi cấp phiên mới; rơi về phân giải kho chung tại đây sẽ cấp
-    // token mang tenant của kho khác. Tenant trong kho đã bị đình
-    // chỉ, hoặc membership của user trong kho đã kết thúc, cũng bị
-    // từ chối thay vì gia hạn một phiên lẽ ra đã chết. Lần từ chối
-    // ở bước này không xoay và không thu hồi family: trạng thái
-    // được khôi phục (tenant được kích hoạt lại, membership được
-    // gắn lại) thì phiên làm mới lại được bằng chính token cũ.
+    // Đường kho riêng (issue #584): các chốt fail-closed chạy TRƯỚC khi xoay family — xem `resolveRefreshSpaceTenant`.
     const space = await this.requestDedicatedSpace();
-    const spaceTenant = space ? await this.tenants.getTenantInSpace(space.slug) : undefined;
-    if (space) {
-      if (!spaceTenant) {
-        throw new UnauthorizedException({ message: 'Space tenant is not ready in its own store', code: 'space.tenant_missing' });
-      }
-      if (spaceTenant.status !== 'active') {
-        throw new UnauthorizedException({ message: `Tenant ${spaceTenant.slug} is ${spaceTenant.status}`, code: 'tenant.not_active' });
-      }
-      // Tenant kiểu platform là không gian công cộng — mọi tài
-      // khoản đã đăng nhập đều thuộc về nó, theo đúng quy định của
-      // `resolveSwitchTarget` — nên không gác bằng membership;
-      // tenant trung tâm/trường học thì membership còn hiệu lực
-      // trong kho là điều kiện giữ phiên.
-      if (spaceTenant.kind !== 'platform') {
-        const membership = await this.tenants.getMembershipInSpace(space.slug, spaceTenant.id, user.id);
-        if (!membership || membership.status !== 'active') {
-          throw new UnauthorizedException({ message: 'User is not an active member of this tenant', code: 'tenant.not_member' });
-        }
-      }
-    }
-    const newRefresh = randomBytes(48).toString('base64url');
+    const spaceTenant = await this.resolveRefreshSpaceTenant(space, user);
+    const newRefresh = randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
     await this.repo.rotateFamily(family.id, hashToken(newRefresh), family.currentTokenHash);
-    let tid: string | undefined;
-    let centreId: string | undefined;
-    if (space && spaceTenant) {
-      tid = spaceTenant.id;
-      centreId = space.spaceId;
-      if (tid !== family.tenantId) await this.repo.setFamilyTenant(family.id, tid);
-    } else {
-      // Giữ `tid` của family; tenant đã khoá hoặc membership đã kết thúc
-      // thì phân giải lại tenant mặc định thay vì cấp token vào ngõ cụt.
-      tid = family.tenantId ?? undefined;
-      if (tid) {
-        try {
-          await this.tenants.resolveSwitchTarget(user.id, tid);
-        } catch {
-          tid = undefined;
-        }
-      }
-      if (!tid) {
-        tid = (await this.tenants.resolveDefaultTenant(user.id)).id;
-        if (tid !== family.tenantId) await this.repo.setFamilyTenant(family.id, tid);
-      }
-      centreId = await this.centreClaimForTenant(tid);
-    }
-    const accessTtl = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? 900;
+    const { tid, centreId } = await this.resolveRefreshTenant(family, user, space, spaceTenant);
+    const accessTtl = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, username: user.username, sid: family.familyId, tid, ...(centreId ? { centre_id: centreId } : {}) },
       { expiresIn: accessTtl },
@@ -697,8 +736,8 @@ export class AuthService {
     }
   }
 
-  /** Đổi mật khẩu phải tuân thủ chính sách; việc xoá forcePasswordChange là một phần của luồng đăng nhập lần đầu. */
   /**
+   * Đổi mật khẩu phải tuân thủ chính sách; việc xoá forcePasswordChange là một phần của luồng đăng nhập lần đầu.
    * Đổi mật khẩu: kiểm mật khẩu cũ + chính sách, sau đó thu hồi mọi phiên khác.
    */
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
@@ -713,11 +752,35 @@ export class AuthService {
   }
 
   /**
+   * Ghi sự kiện đăng nhập + audit login-as dùng chung cho cả hai chặng cutover (legacy/better-auth): sự kiện `user_logged_in` (method `login-as`) và một sự kiện audit riêng `user_loginas` vào outbox (được relay soi vào event_log kèm tenant_id). Ghi audit không bao giờ được làm hỏng luồng login-as — lỗi chỉ ghi cảnh báo.
+   */
+  private async recordLoginAsAudit(adminId: string, target: UserRow, tenant: TenantRow, reason: string, client?: SessionClientInfo): Promise<void> {
+    await this.recordAuthEvent('user_logged_in', { userId: target.id, actorId: adminId, relatedUserId: target.id, method: 'login-as', ip: client?.ip ?? null });
+    await this.outbox
+      .enqueueStandalone({
+        aggregate: 'auth',
+        type: 'user_loginas',
+        tenantId: tenant.id,
+        payload: {
+          actorId: adminId,
+          targetUserId: target.id,
+          targetUsername: target.username,
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug,
+          reason,
+          ip: client?.ip ?? null,
+          userAgent: client?.userAgent ?? null,
+          at: new Date().toISOString(),
+        },
+      })
+      .catch((err) => this.logger.warn(`login-as audit not recorded: ${String(err)}`));
+  }
+
+  /**
    * "Đăng nhập với tư cách" (Moodle): một admin nắm quyền user:loginas sẽ hành động thay một
    * người dùng khác. Phiên ghi lại ai đã đăng nhập thay ai; các assignment role của
    * admin KHÔNG được mang theo — việc đánh giá luôn dùng danh tính của người dùng đích.
-   */
-  /**
+   *
    * Đăng nhập thay (login-as) cho quản trị/giáo viên có capability; phiên mang dấu vết người mạo danh.
    *
    * TENANT-1 (#196, điểm N2): đây là đường DUY NHẤT để platform vào
@@ -751,27 +814,8 @@ export class AuthService {
     const baSession = this.betterAuth.cutoverStage === 'bake'
       ? await this.credentialBridge.createProgrammaticSession(target.id)
       : null;
-    const tokens = baSession ? null : await this.issueTokens(target, client);
-    await this.recordAuthEvent('user_logged_in', { userId: target.id, actorId: adminId, relatedUserId: target.id, method: 'login-as', ip: client?.ip ?? null });
-    await this.outbox
-      .enqueueStandalone({
-        aggregate: 'auth',
-        type: 'user_loginas',
-        tenantId: tenant.id,
-        payload: {
-          actorId: adminId,
-          targetUserId: target.id,
-          targetUsername: target.username,
-          tenantId: tenant.id,
-          tenantSlug: tenant.slug,
-          reason: trimmedReason,
-          ip: client?.ip ?? null,
-          userAgent: client?.userAgent ?? null,
-          at: new Date().toISOString(),
-        },
-      })
-      .catch((err) => this.logger.warn(`login-as audit not recorded: ${String(err)}`));
     if (baSession) {
+      await this.recordLoginAsAudit(adminId, target, tenant, trimmedReason, client);
       return {
         mode: 'better-auth',
         user: target,
@@ -779,7 +823,9 @@ export class AuthService {
         baSession: { signedCookieValue: baSession.signedCookieValue, expiresAt: baSession.expiresAt },
       };
     }
-    return { mode: 'legacy', user: target, tokens: tokens as TokenPair, tenantId: tenant.id };
+    const tokens = await this.issueTokens(target, client);
+    await this.recordLoginAsAudit(adminId, target, tenant, trimmedReason, client);
+    return { mode: 'legacy', user: target, tokens, tenantId: tenant.id };
   }
 
   // --- phiên web -----------------------------------------------------------
@@ -795,13 +841,13 @@ export class AuthService {
    */
   async sessionLogin(username: string, password: string, oldSessionId?: string, ip?: string, userAgent?: string): Promise<SessionLoginOutcome> {
     const user = await this.validateCredentials(username, password, ip);
-    if (await this.totp.isEnabled(user.id)) {
-      const challengeToken = await this.signMfaChallenge(user, 'session');
+    const challengeToken = await this.mfaChallengeIfEnabled(user, 'session');
+    if (challengeToken) {
       return { mfaRequired: true, user, challengeToken };
     }
-    await this.users.recordLogin(user.id);
-    const sessionId = await this.sessions.rotate(oldSessionId, { userId: user.id, username: user.username, ip, userAgent, spaceSlug: tenantAls.getStore()?.spaceSlug });
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'session', ip: ip ?? null });
+    const sessionId = await this.finishLogin(user, 'session', ip, () =>
+      this.sessions.rotate(oldSessionId, { userId: user.id, username: user.username, ip, userAgent, spaceSlug: tenantAls.getStore()?.spaceSlug }),
+    );
     return { mfaRequired: false, sessionId, user };
   }
   /**
@@ -812,9 +858,9 @@ export class AuthService {
    */
   async verifyMfaSession(challengeToken: string, code: string, oldSessionId?: string, ip?: string, userAgent?: string): Promise<{ sessionId: string; user: UserRow }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'session');
-    await this.users.recordLogin(user.id);
-    const sessionId = await this.sessions.rotate(oldSessionId, { userId: user.id, username: user.username, ip, userAgent, spaceSlug: tenantAls.getStore()?.spaceSlug });
-    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'session-totp', ip: ip ?? null });
+    const sessionId = await this.finishLogin(user, 'session-totp', ip, () =>
+      this.sessions.rotate(oldSessionId, { userId: user.id, username: user.username, ip, userAgent, spaceSlug: tenantAls.getStore()?.spaceSlug }),
+    );
     return { sessionId, user };
   }
   /**
@@ -858,6 +904,42 @@ export class AuthService {
 
   // --- phiên của tôi (report_usersessions) --------------------------------------
   /**
+   * Các phiên cookie Better Auth còn hạn của user, đọc từ bảng `session` của kho định tuyến hiện tại.
+   */
+  private async listBetterAuthSessions(userId: string) {
+    return this.spaceDb.routedKysely.selectFrom('session')
+      .select(['id', 'created_at', 'updated_at', 'ip_address', 'user_agent'])
+      .where('user_id', '=', userId)
+      .where('expires_at', '>', new Date())
+      .execute();
+  }
+
+  /** Một phiên cookie Better Auth theo id (chỉ lấy trường cần để kiểm sở hữu). */
+  private async findBetterAuthSession(sessionId: string) {
+    return this.spaceDb.routedKysely.selectFrom('session')
+      .select(['id', 'user_id'])
+      .where('id', '=', sessionId)
+      .executeTakeFirst();
+  }
+
+  /** Xoá một phiên cookie Better Auth của đúng user. */
+  private async deleteBetterAuthSession(sessionId: string, userId: string): Promise<void> {
+    await this.spaceDb.routedKysely.deleteFrom('session')
+      .where('id', '=', sessionId).where('user_id', '=', userId).execute();
+  }
+
+  /**
+   * Xoá mọi phiên cookie Better Auth của user ngoại trừ phiên giữ lại (nếu có); trả các dòng đã xoá.
+   */
+  private async deleteOtherBetterAuthSessions(userId: string, keepSessionId?: string) {
+    return this.spaceDb.routedKysely.deleteFrom('session')
+      .where('user_id', '=', userId)
+      .$if(Boolean(keepSessionId), (qb) => qb.where('id', '!=', keepSessionId!))
+      .returning('id')
+      .execute();
+  }
+
+  /**
    * Mọi phiên đang hoạt động của chính user: Better Auth cookie session,
    * phiên Redis web và họ refresh JWT, đánh dấu
    * phiên hiện tại theo ngữ cảnh của người gọi — `currentFamilyId` là
@@ -868,11 +950,7 @@ export class AuthService {
     const web = await this.sessions.listForUser(userId);
     const families = await this.repo.listActiveFamiliesByUser(userId);
     const betterAuthSessions = this.betterAuth.auth
-      ? await this.spaceDb.routedKysely.selectFrom('session')
-        .select(['id', 'created_at', 'updated_at', 'ip_address', 'user_agent'])
-        .where('user_id', '=', userId)
-        .where('expires_at', '>', new Date())
-        .execute()
+      ? await this.listBetterAuthSessions(userId)
       : [];
     const views: MySessionView[] = [
       ...betterAuthSessions.map((session): MySessionView => ({
@@ -908,16 +986,12 @@ export class AuthService {
       throw new BadRequestException({ message: 'The current session cannot be revoked here; use logout instead', code: 'auth.cannot_revoke_current_session' });
     }
     if (this.betterAuth.auth) {
-      const betterAuthSession = await this.spaceDb.routedKysely.selectFrom('session')
-        .select(['id', 'user_id'])
-        .where('id', '=', sessionId)
-        .executeTakeFirst();
+      const betterAuthSession = await this.findBetterAuthSession(sessionId);
       if (betterAuthSession) {
         if (betterAuthSession.user_id !== userId) {
           throw new NotFoundException({ message: 'Session not found', code: 'auth.session_not_found' });
         }
-        await this.spaceDb.routedKysely.deleteFrom('session')
-          .where('id', '=', sessionId).where('user_id', '=', userId).execute();
+        await this.deleteBetterAuthSession(sessionId, userId);
         return { revoked: 1 };
       }
     }
@@ -942,11 +1016,7 @@ export class AuthService {
     const webRevoked = await this.sessions.destroyOthersForUser(userId, current.webSessionId);
     const apiRevoked = await this.repo.revokeOthersForUser(userId, current.familyId);
     const baDeleted = this.betterAuth.auth
-      ? await this.spaceDb.routedKysely.deleteFrom('session')
-        .where('user_id', '=', userId)
-        .$if(Boolean(current.betterAuthSessionId), (qb) => qb.where('id', '!=', current.betterAuthSessionId!))
-        .returning('id')
-        .execute()
+      ? await this.deleteOtherBetterAuthSessions(userId, current.betterAuthSessionId)
       : [];
     return { revoked: webRevoked + apiRevoked + baDeleted.length };
   }

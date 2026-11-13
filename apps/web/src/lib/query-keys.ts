@@ -88,7 +88,7 @@ export const queryKeys = {
   curriculumTreeScoped: (curriculumId: string, forCourseId: string | null) =>
     ['curriculum', 'tree', 'scoped', curriculumId, forCourseId] as const,
   /** Đơn vị khung chọn được của cặp (môn, khối) — suy từ curricula + cây qua tầng curriculum. */
-  curriculumFrameUnits: (subjectId: string, grade: number, forCourseId: string | null) =>
+  curriculumFrameUnits: (subjectId: string, grade: number | null, forCourseId: string | null) =>
     ['curriculum', 'frame-units', subjectId, grade, forCourseId] as const,
   /** Trạng thái các dataset chương trình chuẩn (GET /curriculum/program-import) — trang quản trị chương trình. */
   programDatasetStatus: ['curriculum', 'program-import'] as const,
@@ -101,7 +101,7 @@ export const queryKeys = {
   /** Cây của một cuốn SGK (GET /books/:id/tree) — trang quản trị chương trình. */
   bookTree: (bookId: string) => ['books', bookId, 'tree'] as const,
   /** Đơn vị khung SGK chọn được của cặp (môn, khối) kèm ngữ cảnh khoá — panel nạp khung SGK. */
-  bookFrameChapters: (subjectId: string, grade: number, forCourseId: string | null) =>
+  bookFrameChapters: (subjectId: string, grade: number | null, forCourseId: string | null) =>
     ['books', 'frame-chapters', subjectId, grade, forCourseId] as const,
   /** Một môn chương trình theo id (GET /curriculum/subjects/:id) — màn sửa môn. */
   curriculumSubjectRow: (subjectId: string) => ['curriculum', 'subjects', 'row', subjectId] as const,
@@ -116,3 +116,8 @@ export const queryKeys = {
   /** Hội thoại chat toàn lớp của một khoá (GET /messages/courses/:id/conversation) — trang quản trị khoá. */
   courseConversation: (courseId: string) => ['messages', 'courses', courseId, 'conversation'] as const,
 };
+
+/**
+ * Đường dẫn endpoint công khai liệt kê nhà cung cấp OAuth đang bật (GET /auth/oauth/providers) — trang đăng nhập (loader SSR + query phía client) và thẻ tài khoản liên kết dùng chung một chuỗi để đổi endpoint chỉ sửa một chỗ.
+ */
+export const OAUTH_PROVIDERS_PATH = '/api/v1/auth/oauth/providers';

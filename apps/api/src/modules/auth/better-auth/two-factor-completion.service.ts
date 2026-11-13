@@ -26,9 +26,11 @@ import { clientIpOf } from '../../../common/client-ip';
 import type { Request } from 'express';
 import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../../db/routing/space-database.service';
+import { cookieValueOf } from '../session.service';
 import { TotpService } from '../totp.service';
 import { BetterAuthService } from './better-auth.service';
 import { CredentialBridgeService } from './credential-bridge.service';
+import { TWO_FACTOR_CHALLENGE_MAX_AGE_SECONDS } from './mfa-gate';
 
 /** Ngân sách lần thử sai cho một challenge — khớp `beginAttempt(5)` của plugin twoFactor 1.7.12. */
 const MAX_CHALLENGE_ATTEMPTS = 5;
@@ -163,7 +165,7 @@ export class TwoFactorCompletionService {
       throw new TwoFactorCompletionError(404, 'NOT_FOUND', 'Not found');
     }
     const ctx = await auth.$context;
-    const cookieAttrs = ctx.createAuthCookie(TWO_FACTOR_COOKIE_NAME, { maxAge: 600 });
+    const cookieAttrs = ctx.createAuthCookie(TWO_FACTOR_COOKIE_NAME, { maxAge: TWO_FACTOR_CHALLENGE_MAX_AGE_SECONDS });
     // Kiểm Origin như handler Better Auth: Origin có mặt phải thuộc origins tin cậy (gồm origin của baseURL) — chặn POST chéo origin mang cookie chờ.
     const origin = req.headers.origin;
     if (origin) {
@@ -265,6 +267,7 @@ export class TwoFactorCompletionService {
         if (attemptsRow) await trx.deleteFrom('verification').where('id', '=', attemptsRow.id).execute();
         return 'exhausted';
       }
+      // Bất biến từ đây trở xuống: `attemptsRow` khác null — khi nó null thì `attempts` đã bằng MAX_CHALLENGE_ATTEMPTS và luồng đã trả 'exhausted' ở trên, nên hai lần dùng `attemptsRow!.id` bên dưới là an toàn.
 
       let valid: boolean;
       try {
@@ -372,14 +375,4 @@ export class TwoFactorCompletionService {
     };
   }
 }
-
-/** Đọc một cookie theo tên từ header Cookie thô (giá trị đã decode URI). */
-function cookieValueOf(req: Request, name: string): string | undefined {
-  const header = req.headers.cookie;
-  if (!header) return undefined;
-  for (const part of header.split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
-  }
-  return undefined;
 }

@@ -58,14 +58,14 @@ export function studentCodeForIndex(index: number): string {
   if (index < 0 || index > 998) throw new Error(`student index out of range: ${index}`);
   const n = index + 1;
   const d = [Math.floor(n / 100) % 10, Math.floor(n / 10) % 10, n % 10];
-  const check = (d[0]! * STUDENT_CHECK_WEIGHTS[0] + d[1]! * STUDENT_CHECK_WEIGHTS[1] + d[2]! * STUDENT_CHECK_WEIGHTS[2]) % 10;
+  const check = (d[0]! * STUDENT_CHECK_WEIGHTS[0] + d[1]! * STUDENT_CHECK_WEIGHTS[1] + d[2]! * STUDENT_CHECK_WEIGHTS[2]) % 10; // Bất biến: d là mảng 3 chữ số dựng ngay trên.
   return `${d[0]}${d[1]}${d[2]}${check}`;
 }
 
 export function studentCodeChecksumOk(code: string): boolean {
   if (!/^\d{4}$/.test(code)) return false;
   const d = code.split('').map((c) => Number(c));
-  return (d[0]! * STUDENT_CHECK_WEIGHTS[0] + d[1]! * STUDENT_CHECK_WEIGHTS[1] + d[2]! * STUDENT_CHECK_WEIGHTS[2]) % 10 === d[3];
+  return (d[0]! * STUDENT_CHECK_WEIGHTS[0] + d[1]! * STUDENT_CHECK_WEIGHTS[1] + d[2]! * STUDENT_CHECK_WEIGHTS[2]) % 10 === d[3]; // Bất biến: regex /^\d{4}$/ đã đảm bảo code có đúng 4 chữ số.
 }
 
 /** Chỉ số (0-based) từ mã học sinh hợp lệ; null khi mã sai số kiểm tra/định dạng. */
@@ -116,14 +116,14 @@ export function sbdCodeForIndex(index: number): string {
   if (index < 0 || index > 9_999_998) throw new Error(`sbd index out of range: ${index}`);
   const body = String(index + 1).padStart(7, '0');
   let sum = 0;
-  for (let i = 0; i < 7; i++) sum += Number(body[i]) * SBD_CHECK_WEIGHTS[i]!;
+  for (let i = 0; i < 7; i++) sum += Number(body[i]) * SBD_CHECK_WEIGHTS[i]!; // Bất biến: SBD_CHECK_WEIGHTS có đúng 7 phần tử.
   return `${body}${sum % 10}`;
 }
 
 export function sbdCodeChecksumOk(code: string): boolean {
   if (!/^\d{8}$/.test(code)) return false;
   let sum = 0;
-  for (let i = 0; i < 7; i++) sum += Number(code[i]) * SBD_CHECK_WEIGHTS[i]!;
+  for (let i = 0; i < 7; i++) sum += Number(code[i]) * SBD_CHECK_WEIGHTS[i]!; // Bất biến: SBD_CHECK_WEIGHTS có đúng 7 phần tử.
   return sum % 10 === Number(code[7]);
 }
 

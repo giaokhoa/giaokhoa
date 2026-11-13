@@ -13,9 +13,10 @@ import { ErrorAlert } from '#components/error-alert';
 import { PageShell } from '#components/page-shell';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
-import { ApiError, apiJson, TwoFactorRedirectError } from '#lib/api';
+import { apiJson, errorText, TwoFactorRedirectError } from '#lib/api';
 import { useAuth } from '#lib/auth';
-import { queryKeys } from '#lib/query-keys';
+import { OAUTH_PROVIDERS_PATH, queryKeys } from '#lib/query-keys';
+import { appKeyMeta } from '#lib/route-meta';
 
 /**
  * Map mã lỗi OAuth mà callback gắn vào `?oauthError=` sang khoá i18n tương ứng; mã lạ rơi về thông báo chung để không lộ chi tiết kỹ thuật của nhà cung cấp lên giao diện.
@@ -36,7 +37,7 @@ const OAUTH_BUTTON_KEYS: Record<OAuthIssuer, string> = {
  * Loader phía server (SSR, Giai đoạn 3 của issue #7): danh sách nhà cung cấp OAuth đang bật là dữ liệu CÔNG KHAI (endpoint @Public) nên lấy ngay trong loader qua API nội bộ và đưa vào HTML + cache truy vấn khởi tạo — trang đăng nhập render đủ nút OAuth từ paint đầu thay vì chờ fetch phía client. Lỗi phía API → trả null, trang vẫn render và truy vấn phía client tự thử lại như trước.
  */
 export async function loader(): Promise<{ providers: OAuthProvidersResponse | null }> {
-  const body = await fetchApiJson('/api/v1/auth/oauth/providers');
+  const body = await fetchApiJson(OAUTH_PROVIDERS_PATH);
   const parsed = oauthProvidersResponseSchema.safeParse(body);
   return { providers: parsed.success ? parsed.data : null };
 }
@@ -72,7 +73,7 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
    */
   const providersQuery = useQuery({
     queryKey: queryKeys.oauthProviders,
-    queryFn: async () => oauthProvidersResponseSchema.parse(await apiJson('/api/v1/auth/oauth/providers')),
+    queryFn: async () => oauthProvidersResponseSchema.parse(await apiJson(OAUTH_PROVIDERS_PATH)),
     // Dữ liệu loader phía server là cùng một đáp án: dùng làm giá trị khởi tạo để lần render đầu (cả server lẫn client) đã có đủ nút OAuth; nền truy vấn vẫn làm mới theo staleTime như mọi query.
     initialData: initialProviders ?? undefined,
   });
@@ -101,7 +102,7 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
         setMfaError(null);
         setStep('mfa');
       } else {
-        setError(err instanceof ApiError ? (err.problem.detail ?? err.problem.title) : t('loginFailed'));
+        setError(errorText(err, t('loginFailed')));
       }
     } finally {
       setBusy(false);
@@ -116,7 +117,7 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
       await completeMfaLogin(mfaCode);
       navigate('/profile');
     } catch (err) {
-      setMfaError(err instanceof ApiError ? (err.problem.detail ?? err.problem.title) : t('mfaFailed'));
+      setMfaError(errorText(err, t('mfaFailed')));
     } finally {
       setMfaBusy(false);
     }
@@ -184,6 +185,7 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
             <form onSubmit={onMfaSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="mfa-code">{t('mfaCode')}</Label>
+                {/* Ô nhập nhận cả mã TOTP 6 số lẫn mã dự phòng dài hơn (xem completeMfaLogin ở #lib/auth: mã không đủ 6 số đi đường mã dự phòng) nên giới hạn 32 ký tự thay vì 6. */}
                 <Input
                   id="mfa-code"
                   inputMode="text"
@@ -384,7 +386,6 @@ export default function LoginRoute() {
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('signIn');
 }

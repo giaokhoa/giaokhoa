@@ -79,22 +79,7 @@ describe('Khối DeprecatedRouteAliasInterceptor', () => {
     ];
 
     it.each(aliasCases)('đánh dấu URL alias %s bằng header Deprecation/Sunset và một log warn có cấu trúc', async (url, method, alias, canonical) => {
-      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-      const interceptor = new DeprecatedRouteAliasInterceptor();
-      const { context, next, headers } = buildContext(`${url}?foo=bar`, method);
-
-      await lastValueFrom(interceptor.intercept(context, next));
-
-      expect(headers.get('Deprecation')).toBe('true');
-      expect(headers.get('Sunset')).toBe('Sun, 01 Feb 2027 00:00:00 GMT');
-      expect(warn).toHaveBeenCalledTimes(1);
-      const logged = JSON.parse(String(warn.mock.calls[0]?.[0])) as Record<string, unknown>;
-      expect(logged.event).toBe('deprecated_route_alias');
-      expect(logged.method).toBe(method);
-      expect(logged.alias).toBe(alias);
-      expect(logged.canonical).toBe(canonical);
-      // Path trong log là path cụ thể của lượt gọi, không kèm query string.
-      expect(logged.path).toBe(url);
+      await assertAlias(url, method, alias, canonical);
     });
 
     it.each([
@@ -107,14 +92,7 @@ describe('Khối DeprecatedRouteAliasInterceptor', () => {
       '/api/v1/exams/dossiers/01900000-0000-7000-8000-000000000001/reject',
       '/api/v1/guardian/students/01900000-0000-7000-8000-000000000001/gradebooks/01900000-0000-7000-8000-000000000002',
     ])('để nguyên URL canonical %s: không header, không log warn', async (url) => {
-      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-      const interceptor = new DeprecatedRouteAliasInterceptor();
-      const { context, next, headers } = buildContext(url, 'POST');
-
-      await lastValueFrom(interceptor.intercept(context, next));
-
-      expect(headers.size).toBe(0);
-      expect(warn).not.toHaveBeenCalled();
+      await assertCanonicalUntouched(url);
     });
   });
 

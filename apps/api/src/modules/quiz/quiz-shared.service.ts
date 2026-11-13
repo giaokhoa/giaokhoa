@@ -42,6 +42,16 @@ export const QUIZ_CAPABILITIES = {
 } as const;
 
 /**
+ * Các phương thức tính điểm quiz hợp lệ + mặc định — MỘT định nghĩa
+ * duy nhất cho validation ở đây, mặc định khi tạo pin
+ * (`quiz-pins.service.ts`) và tính điểm (`quiz-attempts.service.ts`
+ * switch theo đúng tập này, nhánh default là hành vi 'highest').
+ */
+export const QUIZ_GRADE_METHODS = ['highest', 'average', 'first', 'last'] as const;
+export type QuizGradeMethod = (typeof QUIZ_GRADE_METHODS)[number];
+export const DEFAULT_QUIZ_GRADE_METHOD: QuizGradeMethod = 'highest';
+
+/**
  * Tầng thấp dùng chung của QuizService (không phải một cụm ca sử dụng):
  * các primitive tải pin/ma trận, cổng quyền theo context, view pin, và các phép tính điểm/chấm từ usage mà nhiều cụm cùng dùng. Tách riêng tầng này giữ đồ thị phụ thuộc giữa các service cụm không có vòng:
  * cụm ghim, cụm ma trận, cụm sinh đề và cụm lượt làm đều chỉ trỏ xuống tầng này (cụm lượt làm là trung gian cho hai phép gọi chéo còn lại:
@@ -199,7 +209,7 @@ export class QuizSharedService {
       timeClose: quiz.timeClose?.toISOString() ?? null,
       timeLimitSeconds: quiz.timeLimit,
       attemptsAllowed: quiz.attemptsAllowed,
-      gradeMethod: (['highest', 'average', 'first', 'last'].includes(quiz.gradeMethod) ? quiz.gradeMethod : 'highest') as QuizView['gradeMethod'],
+      gradeMethod: ((QUIZ_GRADE_METHODS as readonly string[]).includes(quiz.gradeMethod) ? quiz.gradeMethod : DEFAULT_QUIZ_GRADE_METHOD) as QuizView['gradeMethod'],
       grade: quiz.grade,
       shuffleAnswers: quiz.shuffleAnswers,
       targetGroupId: quiz.targetGroupId,
@@ -365,10 +375,13 @@ export class QuizSharedService {
    */
   public async cellCandidatesForUser(actorId: string, cell: Pick<ExamMatrixCellRow, 'curriculumNodeId' | 'cognitiveLevel' | 'qtype'>): Promise<QuestionView[]> {
     const all = await this.cellCandidates(cell);
+    // Category của mọi ứng viên nạp trong MỘT truy vấn thay vì một lần đọc mỗi câu (N+1).
+    const categories = await this.questions.getCategoriesByIds(all.map((v) => v.entry.questionCategoryId));
     const out: QuestionView[] = [];
     const usableByContext = new Map<string, boolean>();
     for (const view of all) {
-      const category = await this.questions.getCategory(view.entry.questionCategoryId);
+      // Bất biến: getCategoriesByIds ném question.category_not_found khi thiếu id nên mọi category ở đây đều có mặt.
+      const category = categories.get(view.entry.questionCategoryId)!;
       let usable = usableByContext.get(category.contextId);
       if (usable === undefined) {
         usable = await this.evaluator.hasCapability(actorId, 'question:useall', category.contextId);
@@ -395,10 +408,13 @@ export class QuizSharedService {
       nodeId: cell.curriculumNodeId, cognitiveLevel: cell.cognitiveLevel,
       qtype: cell.qtype, status: 'ready',
     });
+    // Category của mọi nhóm nạp trong MỘT truy vấn thay vì một lần đọc mỗi nhóm (N+1).
+    const categories = await this.questions.getCategoriesByIds(groups.map((g) => g.categoryId));
     let total = 0;
     const usableByContext = new Map<string, boolean>();
     for (const group of groups) {
-      const category = await this.questions.getCategory(group.categoryId);
+      // Bất biến: getCategoriesByIds ném question.category_not_found khi thiếu id nên mọi category ở đây đều có mặt.
+      const category = categories.get(group.categoryId)!;
       let usable = usableByContext.get(category.contextId);
       if (usable === undefined) {
         usable = await this.evaluator.hasCapability(actorId, 'question:useall', category.contextId);

@@ -1,7 +1,9 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '../client';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
+import { buildTestDatabase, dropTestDatabase, resolveTestAdminUrl } from '../test-support/build-test-database';
+import { TEST_TENANT_KIND } from '../test-support/test-constants';
+import { UUIDV7_RE } from '../test-support/uuidv7';
 import { BadgesRepository } from './badges';
 import { BookRepository } from './books';
 import { CalendarRepository } from './calendar';
@@ -17,13 +19,10 @@ import { SocialRepository } from './social';
  * Các hành vi được khoá ở đây là các điểm rủi ro của lượt chuyển đổi bộ máy cũ → Kysely: id sinh bởi `DEFAULT uuidv7()` qua returning (phụ lục U của phương án chiến dịch); ngữ nghĩa loại `undefined` khi ghi (T-4) — patch chỉ đổi trường được truyền; jsonb ghi qua helper serialize `::jsonb` đọc lại đúng hình dạng kể cả MẢNG cấp cao nhất; các nhánh onConflict kèm đọc lại qua handle gốc của insert-if-absent; phép đếm `count(*)::int` giữ kiểu runtime `number`; thứ tự sắp xếp ở tầng ứng dụng của danh sách sách; và tính nguyên tử của transaction mở qua repository
  * (commit đủ / rollback sạch).
  */
-const adminUrl =
-  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
-  (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : '');
+const adminUrl = resolveTestAdminUrl();
 
 const TEST_DB = 'giaokhoa_db_g7_647';
 
-const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 /** Các định danh cố định cho dữ kiện mẫu; mỗi describe dùng dải riêng để các ca không giẫm nhau. */
 const USER_A = '01a19887-6b35-7760-8e64-a5960bfd0801';
 const USER_B = '01a19887-6b35-7760-8e64-a5960bfd0802';
@@ -66,7 +65,7 @@ describe('repository lịch trên Kysely', () => {
       timeStart: new Date('2026-09-05T02:00:00.000Z'),
       timeDuration: 3600,
     });
-    expect(created.id).toMatch(UUIDV7_PATTERN);
+    expect(created.id).toMatch(UUIDV7_RE);
     expect(created.createdAt).toBeInstanceOf(Date);
     expect(created.description).toBe('');
     const read = await calendar.getEvent(created.id);
@@ -130,7 +129,7 @@ describe('repository lịch trên Kysely', () => {
     const sub = await calendar.insertSubscription({
       name: 'Lịch trường bạn', url: null, icsData: 'BEGIN:VCALENDAR', eventType: 'site', userId: USER_B,
     });
-    expect(sub.id).toMatch(UUIDV7_PATTERN);
+    expect(sub.id).toMatch(UUIDV7_RE);
     expect(sub.lastUpdated).toBeNull();
     await calendar.touchSubscription(sub.id);
     expect((await calendar.getSubscription(sub.id))!.lastUpdated).toBeInstanceOf(Date);
@@ -243,7 +242,7 @@ describe('repository huy hiệu trên Kysely', () => {
       badgeId: badge.id, userId: USER_A, uniqueHash: 'hash-g7-1',
       snapshot: { badge: { name: 'Huy hiệu G7 cấp' } }, evidence: { note: 'đủ điều kiện' }, visible: true,
     });
-    expect(first.id).toMatch(UUIDV7_PATTERN);
+    expect(first.id).toMatch(UUIDV7_RE);
     expect(first.snapshot).toEqual({ badge: { name: 'Huy hiệu G7 cấp' } });
     const again = await badges.insertIssued({
       badgeId: badge.id, userId: USER_A, uniqueHash: 'hash-g7-2', snapshot: {}, evidence: {}, visible: true,
@@ -400,7 +399,7 @@ describe('repository tệp trên Kysely', () => {
       fileArea: 'content', fileName: 'a.png', fileSize: 10, mimeType: 'image/png', userId: USER_A,
     };
     const first = await files.insert({ ...input, itemId: null, filePath: '/' });
-    expect(first.id).toMatch(UUIDV7_PATTERN);
+    expect(first.id).toMatch(UUIDV7_RE);
     expect(await files.countByHash('hash-g7-files', 'bank-system')).toBe(1);
     const second = await files.insert({ ...input });
     const count = await files.countByHash('hash-g7-files', 'bank-system');
@@ -418,7 +417,7 @@ describe('repository tệp trên Kysely', () => {
     // Giàn dữ kiện tối thiểu cho chuỗi FK: tenant → danh mục → khoá → bài tập → bài nộp; các bảng này thuộc module khác, spec chỉ dựng qua handle để kiểm hình chiếu của repository tệp trên chúng.
     const tenant = await db
       .insertInto('tenants')
-      .values({ slug: 'g7-files', name: 'Trung tâm G7 tệp', kind: 'centre' })
+      .values({ slug: 'g7-files', name: 'Trung tâm G7 tệp', kind: TEST_TENANT_KIND })
       .returning('id')
       .executeTakeFirstOrThrow();
     const category = await db

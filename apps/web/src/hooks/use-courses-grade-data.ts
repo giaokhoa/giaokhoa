@@ -1,6 +1,12 @@
+/**
+ * Hook đọc dữ kiện điểm theo khoá dùng chung cho nhiều bề mặt: dashboard, trang Điểm
+ * theo bài và loader của trang chủ đều đọc bảng điểm qua đây thay vì tự gọi API.
+ * Trả về lưới điểm theo bài toàn lớp và điểm theo bài của chính người dùng cho từng khoá.
+ */
+
 import { useQueries } from '@tanstack/react-query';
 import type { CourseActivityGrid, MyActivityGrades } from '@giaokhoa/contracts';
-import { apiJson } from '#lib/api';
+import { apiJson, probe } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 
 /**
@@ -16,15 +22,6 @@ export interface CourseGradeData {
   report: CourseActivityGrid | null;
   /** Điểm theo từng bài của chính người dùng trong khoá (null nếu không truy cập được). */
   gradebook: MyActivityGrades | null;
-}
-
-/** Tải một tài nguyên đọc: trả dữ liệu khi gọi được, null khi bị từ chối/lỗi. */
-async function probe<T>(path: string): Promise<T | null> {
-  try {
-    return await apiJson<T>(path);
-  } catch {
-    return null;
-  }
 }
 
 /**

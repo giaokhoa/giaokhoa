@@ -90,11 +90,18 @@ interface NewContext {
 
 /**
  * Chèn context mới; path/depth được tính và cập nhật sau khi có id.
+ * Trùng khoá tự nhiên (level, instance) thì KHÔNG chèn (trả undefined
+ * để bên gọi đọc lại dòng hiện hữu) thay vì ném unique violation —
+ * hai phía cùng tạo một context thì một phía thắng, phía thua nối
+ * vào dòng đã có. Ràng buộc duy nhất `context_level_instance_unique`
+ * trên (context_level, instance_id) là căn cứ của hành vi này (xem
+ * migration baseline của `@giaokhoa/db`).
  *
  * @param db - tay cầm Kysely của host.
  * @param values - dữ kiện chèn của dòng context.
+ * @returns dòng vừa chèn; undefined khi trùng khoá tự nhiên với dòng đã có.
  */
-async function insertContext(db: EnrolDatabase, values: NewContext): Promise<ContextRow> {
+async function insertContext(db: EnrolDatabase, values: NewContext): Promise<ContextRow | undefined> {
   return db
     .insertInto('context')
     .values({
@@ -103,8 +110,9 @@ async function insertContext(db: EnrolDatabase, values: NewContext): Promise<Con
       path: values.path,
       depth: values.depth,
     })
+    .onConflict((oc) => oc.doNothing())
     .returning(CONTEXT_COLUMNS)
-    .executeTakeFirstOrThrow();
+    .executeTakeFirst();
 }
 
 /**
@@ -121,7 +129,10 @@ async function updateContextPath(db: EnrolDatabase, id: string, path: string, de
 
 /**
  * Tạo context con dưới một context cha, tính path/depth; idempotent
- * theo khoá tự nhiên (level, instance).
+ * theo khoá tự nhiên (level, instance) — kể cả khi hai phía cùng tạo
+ * đồng thời: chèn trùng được xử lý bằng `onConflict doNothing` +
+ * đọc lại dòng hiện hữu (theo mẫu `insertAssignment` ở
+ * `role-assignment.ts`), không ném unique violation.
  *
  * @param db - tay cầm Kysely của host.
  * @param contextLevel - cấp context.
@@ -144,6 +155,12 @@ export async function createContext(
     throw new SharedDomainError('access.parent_context_not_found', 'Parent context not found');
   }
   const row = await insertContext(db, { contextLevel, instanceId, path: '', depth: 0 });
+  if (!row) {
+    // Đua chèn đồng thời: phía khác đã chèn context cùng khoá tự nhiên trước — đọc lại dòng hiện hữu (đã có path/depth đầy đủ) thay vì ném unique violation.
+    const winner = await getContextByLevelInstance(db, contextLevel, instanceId);
+    if (!winner) throw new SharedDomainError('access.context_not_found', `Context for instance ${instanceId} not found after insert conflict`);
+    return winner;
+  }
   const path = parent ? `${parent.path}/${row.id}` : `/${row.id}`;
   const depth = parent ? parent.depth + 1 : 1;
   await updateContextPath(db, row.id, path, depth);
@@ -160,6 +177,12 @@ export async function ensureSystemContext(db: EnrolDatabase): Promise<ContextRow
   const existing = await getContextByLevelInstance(db, CONTEXT_LEVELS.SYSTEM, null);
   if (existing) return existing;
   const row = await insertContext(db, { contextLevel: CONTEXT_LEVELS.SYSTEM, instanceId: null, path: '', depth: 0 });
+  if (!row) {
+    // Phòng thủ khi có dòng hệ thống được chèn xen giữa hai lượt đọc (lưu ý: instance null không chạm ràng buộc duy nhất vì PostgreSQL coi NULL là khác nhau, nên nhánh này không phải đường đua chèn chính).
+    const winner = await getContextByLevelInstance(db, CONTEXT_LEVELS.SYSTEM, null);
+    if (!winner) throw new SharedDomainError('access.context_not_found', 'System context not found after insert conflict');
+    return winner;
+  }
   const path = `/${row.id}`;
   await updateContextPath(db, row.id, path, 1);
   return { ...row, path, depth: 1 };

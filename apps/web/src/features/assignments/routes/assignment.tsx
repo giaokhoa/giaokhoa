@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import type { Route } from './+types/assignment';
 import { Link, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AssignmentForUserView } from '@giaokhoa/contracts';
@@ -8,13 +9,14 @@ import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { ManagePanel } from '../components/manage-panel';
 import { RubricView } from '../components/rubric-view';
-import { dateLabel } from '../utils/shared';
+import { ASSIGN_RESULT_MODE_LABEL_KEYS, dateLabel } from '../utils/shared';
 import { StudentPanel } from '../components/student-panel';
 import { TeacherPanel } from '../components/teacher-panel';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { assignmentQueryOptions, useAssignment } from '../queries/assignment';
 import { queryClient } from '#lib/query-client';
+import { appKeyMeta } from '#lib/route-meta';
 
 /**
  * Trang hoạt động Bài tập nộp tệp/ảnh (mod_assign): một trang dùng chung theo cờ quyền mà API đã phân giải — học sinh nộp bài và xem kết quả sau khi trả bài; giáo viên xem danh sách bài nộp, chấm + thả dấu vector + trả bài (từng em/theo đợt); người quản lý sửa cài đặt và dựng bảng tiêu chí ngay tại trang.
@@ -61,8 +63,8 @@ export function AssignmentPage() {
         title={assignment.name}
         description={
           assignment.dueDate
-            ? `${t('assignDueLine', { date: dateLabel(assignment.dueDate) })} · ${t('assignGradeScaleLine', { grade: assignment.grade })} · ${t(`assignResultMode_${assignment.resultMode}`)}`
-            : `${t('assignNoDue')} · ${t('assignGradeScaleLine', { grade: assignment.grade })} · ${t(`assignResultMode_${assignment.resultMode}`)}`
+            ? `${t('assignDueLine', { date: dateLabel(assignment.dueDate) })} · ${t('assignGradeScaleLine', { grade: assignment.grade })} · ${t(ASSIGN_RESULT_MODE_LABEL_KEYS[assignment.resultMode])}`
+            : `${t('assignNoDue')} · ${t('assignGradeScaleLine', { grade: assignment.grade })} · ${t(ASSIGN_RESULT_MODE_LABEL_KEYS[assignment.resultMode])}`
         }
       />
       <p className="text-sm">
@@ -102,7 +104,7 @@ export default AssignmentPage;
  * không còn thác nước mount-rồi-fetch. prefetchQuery không ném lỗi:
  * tải hỏng thì component tự xử lý qua useQuery như trước.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.assignmentId) {
     await queryClient.prefetchQuery(assignmentQueryOptions(params.assignmentId));
   }
@@ -111,7 +113,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('contentType_mod_assign');
 }

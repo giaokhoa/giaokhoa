@@ -170,24 +170,25 @@ describe('programRecordOutcomeDocs — tài liệu lưu trực tiếp vào cột
     };
     const docs = programRecordOutcomeDocs(record({ outcomes: [nested], outcome_text: 'x' }));
     expect(docs).toHaveLength(1);
-    expect(docs[0]!.doc).toEqual(nested);
-    expect(docs[0]!.text).toBe(
+    expect(docs[0].doc).toEqual(nested);
+    expect(docs[0].text).toBe(
       'Nêu được:\nĐặc điểm của hệ thống chính trị.\nCấu trúc:\nĐảng Cộng sản Việt Nam.',
     );
-    expect(docs[0]!.position).toBe(1);
+    expect(docs[0].position).toBe(1);
   });
 
   it('phần tử dạng chuỗi được gói thành tài liệu một ý, text trích lại khớp chuỗi gốc', () => {
     const docs = programRecordOutcomeDocs(record({ outcomes: ['Ý một.'], outcome_text: 'Ý một.' }));
-    expect(docs[0]!.doc).toEqual(simpleDoc('Ý một.'));
-    expect(docs[0]!.text).toBe('Ý một.');
+    expect(docs).toHaveLength(1);
+    expect(docs[0].doc).toEqual(simpleDoc('Ý một.'));
+    expect(docs[0].text).toBe('Ý một.');
   });
 
   it('bản ghi chỉ có outcome_text: một tài liệu một ý bằng toàn văn đó', () => {
     const docs = programRecordOutcomeDocs(record({ outcomes: [], outcome_text: 'Thực hành ứng dụng.' }));
     expect(docs).toHaveLength(1);
-    expect(docs[0]!.text).toBe('Thực hành ứng dụng.');
-    expect(programOutcomeDocText(docs[0]!.doc)).toBe('Thực hành ứng dụng.');
+    expect(docs[0].text).toBe('Thực hành ứng dụng.');
+    expect(programOutcomeDocText(docs[0].doc)).toBe('Thực hành ứng dụng.');
   });
 
   it('cả hai rỗng: không có tài liệu nào', () => {

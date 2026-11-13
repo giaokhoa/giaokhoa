@@ -9,6 +9,9 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
+import { errorText } from '#lib/api';
+import { platformKeyMeta } from '#lib/route-meta';
+import { pageLoadState } from '../queries/page-load-state';
 import { useBackupJobs, useBackupSteps, useCreateBackupJob, useRestoreBackup } from '../queries/platform';
 
 /**
@@ -17,7 +20,7 @@ import { useBackupJobs, useBackupSteps, useCreateBackupJob, useRestoreBackup } f
  * `clientLoader` của route nạp trước danh sách việc); các bước chỉ tải khi người dùng chọn xem một việc, tạo job và restore qua đột biến làm mới danh sách như lần tải lại thủ công trước đây.
  */
 export function BackupPage() {
-  const { t: t } = useTranslation();
+  const { t } = useTranslation();
   const jobsQuery = useBackupJobs();
   const createJob = useCreateBackupJob();
   const restoreJob = useRestoreBackup();
@@ -26,14 +29,24 @@ export function BackupPage() {
   const stepsQuery = useBackupSteps(selectedJobId);
   const steps = stepsQuery.data ?? [];
   const [courseId, setCourseId] = useState('');
-  const loading = jobsQuery.isPending || (jobsQuery.isError && jobsQuery.isFetching);
-  const loadError = jobsQuery.isError && !jobsQuery.isFetching ? t('backupLoadFailed') : null;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { loading, loadError } = pageLoadState(jobsQuery, t('backupLoadFailed'));
   async function createBackup(event: FormEvent) {
     event.preventDefault();
-    await createJob.mutateAsync(courseId);
+    setActionError(null);
+    try {
+      await createJob.mutateAsync(courseId);
+    } catch (err) {
+      setActionError(errorText(err, t('actionFailed')));
+    }
   }
   async function restore(id: string) {
-    await restoreJob.mutateAsync(id);
+    setActionError(null);
+    try {
+      await restoreJob.mutateAsync(id);
+    } catch (err) {
+      setActionError(errorText(err, t('actionFailed')));
+    }
   }
   return (
     <PageShell width="medium">
@@ -49,6 +62,11 @@ export function BackupPage() {
             </Button>
           </div>
         </>
+      ) : null}
+      {actionError ? (
+        <ErrorAlert variant="destructive">
+          {actionError}
+        </ErrorAlert>
       ) : null}
       <Card>
         <CardContent className="space-y-3">
@@ -115,7 +133,6 @@ export { BackupPage as default };
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('backupTitle');
 }

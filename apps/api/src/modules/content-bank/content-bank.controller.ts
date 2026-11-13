@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { ContentBankService } from './content-bank.service';
 import {
@@ -8,6 +9,9 @@ import {
   updateContentBankContentSchema, uploadContentBankFileSchema,
   type CreateContentDto, type InsertContentDto, type ReviewContentDto, type UpdateContentDto, type UploadContentFileDto,
 } from './dto/content-bank.dto';
+
+/** Schema query `grade` cho danh sách kho: chuỗi query được ép thành số ở tầng route — giá trị không phải số (ví dụ `?grade=abc`) bị từ chối 400 thay vì trôi xuống service thành NaN. */
+const gradeQuerySchema = z.coerce.number().optional();
 
 /** Controller Content Bank / Kho học liệu (CB-1). */
 @ApiTags('contentbank')
@@ -30,7 +34,7 @@ export class ContentBankController {
     @Query('spaceId') spaceId: string | undefined,
     @Query('creatorId') creatorId: string | undefined,
     @Query('subjectId') subjectId: string | undefined,
-    @Query('grade') grade: string | undefined,
+    @Query('grade', { schema: gradeQuerySchema }) grade: number | undefined,
     @Query('level') level: string | undefined,
     @Query('curriculumNodeId') curriculumNodeId: string | undefined,
     @Query('resourceType') resourceType: string | undefined,
@@ -43,7 +47,8 @@ export class ContentBankController {
       spaceId: spaceId || undefined,
       creatorId: creatorId || undefined,
       subjectId: subjectId || undefined,
-      grade: grade ? Number(grade) : undefined,
+      // grade 0 (kể cả `?grade=` rỗng ép thành 0) giữ nghĩa cũ là "không lọc", như phép kiểm falsy trước đây.
+      grade: grade || undefined,
       level: level || undefined,
       curriculumNodeId: curriculumNodeId || undefined,
       resourceType: resourceType || undefined,

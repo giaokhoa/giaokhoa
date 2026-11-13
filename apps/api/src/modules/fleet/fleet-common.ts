@@ -24,6 +24,19 @@ import { basename, dirname, join } from 'node:path';
 import type { Client } from 'pg';
 import { getAppliedMigrations, getLatestAppliedMigration } from '@giaokhoa/db';
 
+/** Số mili-giây trong một giờ — đổi ngưỡng giờ sang mili-giây khi so tuổi bản sao lưu. */
+export const MS_PER_HOUR = 3_600_000;
+/** Số mili-giây trong một ngày — đổi hạn lưu trữ theo ngày sang mili-giây. */
+export const MS_PER_DAY = 86_400_000;
+/** Độ dài tối đa của chi tiết lỗi ghi vào nhật ký/log — cắt ngắn để không phình dòng ghi. */
+export const ERROR_DETAIL_MAX_LENGTH = 500;
+/** Độ dài mốc UTC nén `YYYYMMDDHHMMSS` trong mã lượt chạy của đội kho. */
+export const COMPACT_TIMESTAMP_LENGTH = 14;
+/** Bộ nhớ tối đa cho stdout của công cụ PostgreSQL con (`pg_dump`/`pg_restore`). */
+export const MAX_PG_TOOL_OUTPUT_BYTES = 64 * 1024 * 1024;
+/** Độ dài tối đa phần đuôi stderr kèm vào lỗi khi công cụ PostgreSQL thất bại. */
+export const STDERR_TAIL_MAX_LENGTH = 2000;
+
 /** Một kho trong mắt công cụ vận hành: dòng đăng ký + ảnh registry phiên bản của nó. */
 export type FleetSpace = {
   id: string;
@@ -81,12 +94,12 @@ export function pickRestoreCandidate(spaces: FleetSpace[]): FleetSpace | null {
  */
 export function isBackupOverdue(lastBackupAt: Date | null, now: Date, maxAgeHours: number): boolean {
   if (!lastBackupAt) return true;
-  return now.getTime() - lastBackupAt.getTime() > maxAgeHours * 3_600_000;
+  return now.getTime() - lastBackupAt.getTime() > maxAgeHours * MS_PER_HOUR;
 }
 
 /** Mã lượt chạy của đội kho: `fleet-<mốc UTC nén>-<4 ký tự hex>` — gắn vào tên tệp sao lưu chốt và nhật ký lượt chạy. */
 export function newFleetRunId(at: Date): string {
-  return `fleet-${at.toISOString().replace(/\D/g, '').slice(0, 14)}-${randomBytes(2).toString('hex')}`;
+  return `fleet-${at.toISOString().replace(/\D/g, '').slice(0, COMPACT_TIMESTAMP_LENGTH)}-${randomBytes(2).toString('hex')}`;
 }
 
 /** Mốc thời gian UTC nén cho tên tệp: `20261030T143005` — sắp xếp theo tên tệp trùng thứ tự thời gian. */
@@ -109,7 +122,11 @@ const BACKUP_FILE_PATTERN = /^(scheduled|pre-migration)-([a-z0-9-]+)-(\d{8}T\d{6
 export function parseBackupFileName(fileName: string): { kind: BackupKind; runId: string; encrypted: boolean } | null {
   const match = BACKUP_FILE_PATTERN.exec(fileName);
   if (!match) return null;
-  return { kind: match[1] as BackupKind, runId: match[2]!, encrypted: match[4] === '.enc' };
+  // Nhóm bắt của regex luôn có khi khớp, nhưng kiểu vẫn là `string | undefined`
+  // — kiểm tra tường minh thay vì khẳng định non-null.
+  const runId = match[2];
+  if (!runId) return null;
+  return { kind: match[1] as BackupKind, runId, encrypted: match[4] === '.enc' };
 }
 
 /** Băm SHA-256 dạng hex của nội dung tệp — ghi vào tệp `.sha256` đi kèm mọi bản sao lưu. */
@@ -252,10 +269,10 @@ export function runPgTool(
     execFile(
       command,
       [...args, ...extraArgs],
-      { env: { ...env, PGPASSWORD: password }, maxBuffer: 64 * 1024 * 1024 },
+      { env: { ...env, PGPASSWORD: password }, maxBuffer: MAX_PG_TOOL_OUTPUT_BYTES },
       (error, stdout, stderr) => {
         if (error) {
-          const tail = stderr.toString().trim().slice(-2000);
+          const tail = stderr.toString().trim().slice(-STDERR_TAIL_MAX_LENGTH);
           reject(new Error(`${binary} failed: ${tail || error.message}`));
           return;
         }

@@ -183,26 +183,26 @@ export function AdminTenantsPage() {
     );
   }
 
-  /** Nhãn loại tenant theo hợp đồng API (`school`, `center` hoặc `platform`). */
-  function kindLabel(kind: Tenant['kind']): string {
-    if (kind === 'center') return t('tenantKindCenter');
-    if (kind === 'school') return t('tenantKindSchool');
-    return t('tenantKindPlatform');
-  }
+  /** Bảng tra nhãn loại tenant — thêm giá trị enum mới thì TypeScript báo thiếu nhánh thay vì rơi về nhãn mặc định. */
+  const KIND_LABELS: Record<Tenant['kind'], string> = {
+    center: t('tenantKindCenter'),
+    school: t('tenantKindSchool'),
+    platform: t('tenantKindPlatform'),
+  };
 
-  /** Nhãn trạng thái vòng đời của tenant. */
-  function tenantStatusLabel(status: Tenant['status']): string {
-    if (status === 'suspended') return t('tenantStatusSuspended');
-    if (status === 'archived') return t('tenantStatusArchived');
-    return t('tenantStatusActive');
-  }
+  /** Bảng tra nhãn trạng thái vòng đời của tenant. */
+  const TENANT_STATUS_LABELS: Record<Tenant['status'], string> = {
+    active: t('tenantStatusActive'),
+    suspended: t('tenantStatusSuspended'),
+    archived: t('tenantStatusArchived'),
+  };
 
-  /** Nhãn trạng thái membership. */
-  function memberStatusLabel(status: TenantMembership['status']): string {
-    if (status === 'suspended') return t('tenantMemberStatusSuspended');
-    if (status === 'ended') return t('tenantMemberStatusEnded');
-    return t('tenantMemberStatusActive');
-  }
+  /** Bảng tra nhãn trạng thái membership. */
+  const MEMBER_STATUS_LABELS: Record<TenantMembership['status'], string> = {
+    active: t('tenantMemberStatusActive'),
+    suspended: t('tenantMemberStatusSuspended'),
+    ended: t('tenantMemberStatusEnded'),
+  };
 
   const rootQuery = platformMode ? tenantsQuery : currentTenantQuery;
   const rootForbidden = isForbidden(rootQuery.error);
@@ -233,7 +233,7 @@ export function AdminTenantsPage() {
     <PageShell width="wide">
       <PageHeader title={t('tenantsTitle')} description={t('tenantsDescription')}
         actions={!platformMode && canManageSelected && selectedTenant?.kind === 'center'
-          ? <Link className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium" to="/admin/support-grants">Quyền hỗ trợ có thời hạn</Link>
+          ? <Link className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium" to="/admin/support-grants">{t('supportGrantsLink')}</Link>
           : undefined} />
       {message ? <ErrorAlert>{message}</ErrorAlert> : null}
       {rootForbidden ? <ErrorAlert variant="destructive">{t('tenantsForbidden')}</ErrorAlert> : null}
@@ -274,7 +274,7 @@ export function AdminTenantsPage() {
                       <span className="min-w-0">
                         <span className="block truncate font-medium">{tenant.name}</span>
                         <span className="block text-sm text-muted-foreground">
-                          {tenant.slug} · {kindLabel(tenant.kind)}
+                          {tenant.slug} · {KIND_LABELS[tenant.kind]}
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           {t('tenantCreatedAt')}: {formatDate(tenant.createdAt)} · {t('tenantUpdatedAt')}:{' '}
@@ -284,7 +284,7 @@ export function AdminTenantsPage() {
                       <span className="flex shrink-0 flex-wrap gap-2">
                         <Badge variant="outline">{tenant.plan ?? t('tenantPlanNone')}</Badge>
                         <Badge variant={tenant.status === 'active' ? 'default' : 'secondary'}>
-                          {tenantStatusLabel(tenant.status)}
+                          {TENANT_STATUS_LABELS[tenant.status]}
                         </Badge>
                       </span>
                     </button>
@@ -295,11 +295,11 @@ export function AdminTenantsPage() {
               <div className="flex flex-col gap-2">
                 <p className="text-lg font-medium">{selectedTenant.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  {selectedTenant.slug} · {kindLabel(selectedTenant.kind)}
+                  {selectedTenant.slug} · {KIND_LABELS[selectedTenant.kind]}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant={selectedTenant.status === 'active' ? 'default' : 'secondary'}>
-                    {tenantStatusLabel(selectedTenant.status)}
+                    {TENANT_STATUS_LABELS[selectedTenant.status]}
                   </Badge>
                 </div>
               </div>
@@ -412,7 +412,7 @@ export function AdminTenantsPage() {
                       <TableCell>{user ? `${user.firstName} ${user.lastName}`.trim() || user.username : membership.userId}</TableCell>
                       <TableCell>{user?.username ?? '—'}</TableCell>
                       <TableCell>{user?.email ?? '—'}</TableCell>
-                      <TableCell>{memberStatusLabel(membership.status)}</TableCell>
+                      <TableCell>{MEMBER_STATUS_LABELS[membership.status]}</TableCell>
                       <TableCell>{formatDate(membership.joinedAt)}</TableCell>
                       <TableCell>{membership.endedAt ? formatDate(membership.endedAt) : '—'}</TableCell>
                       {canManageSelected ? (

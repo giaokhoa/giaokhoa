@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ContextsService } from '../access/contexts.service';
+import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { UsersService } from '../users/users.service';
 import { MessagingRepository, type ConversationRow, type MessageRow, type MessageWithQuoteRow } from '@giaokhoa/db/repositories/messaging';
@@ -25,7 +26,7 @@ export class MessagingConversationsService {
     private readonly membershipSync: MessagingMembershipSyncService,
   ) {}
 
-  // --- conversation & message ---------------------------------------------------
+  // --- hội thoại & tin nhắn ---------------------------------------------------
 
   /**
    * Cổng tạo NHÓM TỰ DO dùng chung cho mọi bề mặt: chỉ ba nhóm người
@@ -94,7 +95,7 @@ export class MessagingConversationsService {
     if (type === 2 && memberIds.length < 2) {
       throw new BadRequestException({ message: 'A group conversation needs at least 2 members', code: 'messaging.group_members' });
     }
-    for (const id of memberIds) await this.users.getUser(id);
+    await Promise.all(memberIds.map((id) => this.users.getUser(id)));
     if (type === 1) {
       const other = memberIds.find((id) => id !== actorId)!;
       await this.contacts.assertCanContact(actorId, other);
@@ -135,7 +136,7 @@ export class MessagingConversationsService {
    */
   private async isCourseStaff(userId: string, courseId: string): Promise<boolean> {
     if (await this.evaluator.isSiteAdmin(userId)) return true;
-    const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
+    const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
     if (!courseCtx) return false;
     return this.evaluator.hasCapability(userId, 'course:managegroups', courseCtx.id);
   }
@@ -170,7 +171,7 @@ export class MessagingConversationsService {
     }
     const existing = await this.repo.findGroupConversation(group.id);
     if (existing) return { ...existing, members: await this.membershipSync.syncGroupConversationMembers(existing) };
-    const courseCtx = await this.contexts.getByLevelInstance(50, group.courseId);
+    const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, group.courseId);
     // TENANT-1 (#196): conversation của group thuộc tenant của khoá chứa group.
     const tenantId = (await this.repo.getCourseTenantId(group.courseId)) ?? tenantAls.getStore()?.tenantId ?? null;
     const conversation = await this.repo.transaction(async (tx) => {
@@ -219,7 +220,7 @@ export class MessagingConversationsService {
       conversation = existing;
       members = await this.membershipSync.syncCourseConversationMembers(existing);
     } else {
-      const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
+      const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
       const memberIds = await this.repo.listCourseConversationMemberIds(courseId);
       const ensured = await this.repo.transaction(async (tx) => {
         // Khoá advisory TRƯỚC, re-check SAU — trong cùng transaction:
@@ -325,7 +326,7 @@ export class MessagingConversationsService {
       conversation = existing;
       members = await this.membershipSync.syncClassConversationMembers(existing);
     } else {
-      const classCtx = await this.contexts.getByLevelInstance(45, classId);
+      const classCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.CLASS, classId);
       const memberIds = await this.repo.listClassConversationMemberIds(classId);
       const ensured = await this.repo.transaction(async (tx) => {
         await this.repo.acquireClassConversationLock(tx, classId);
@@ -362,6 +363,24 @@ export class MessagingConversationsService {
   //    lớp) KHÔNG thành người quản lý — quản lý chỉ theo staff khoá.
 
   /**
+   * Id instance của context mà conversation đang mang, CHỈ khi context
+   * đó ở đúng mức cho trước (khoá = CONTEXT_LEVELS.COURSE, lớp =
+   * CONTEXT_LEVELS.CLASS): hai đường resolve phạm vi (khoá/lớp) dùng
+   * chung một khuôn tra context — context không tồn tại hoặc không
+   * đúng mức thì conversation không thuộc phạm vi đó. Tra cứu
+   * context là tuỳ chọn nên lỗi đọc được nuốt về null.
+   *
+   * @param conversation - Conversation cần tra context.
+   * @param level - Mức context phải khớp (khoá hoặc lớp).
+   * @returns Id instance của context, hoặc null.
+   */
+  private async contextInstanceIdAtLevel(conversation: ConversationRow, level: number): Promise<string | null> {
+    if (!conversation.contextId) return null;
+    const ctx = await this.contexts.getContext(conversation.contextId).catch(() => undefined);
+    return ctx && ctx.contextLevel === level ? ctx.instanceId : null;
+  }
+
+  /**
    * Khoá học mà một conversation "thuộc về" — căn cứ phân phạm vi
    * thẩm quyền của Lớp B. Thứ tự: conversation gắn course group thì là
    * khoá của group; conversation có context là context khoá thì là
@@ -381,10 +400,8 @@ export class MessagingConversationsService {
       const group = await this.repo.getCourseGroup(conversation.itemId!);
       if (group) return group.courseId;
     }
-    if (conversation.contextId) {
-      const ctx = await this.contexts.getContext(conversation.contextId).catch(() => undefined);
-      if (ctx && ctx.contextLevel === 50) return ctx.instanceId;
-    }
+    const courseContextId = await this.contextInstanceIdAtLevel(conversation, CONTEXT_LEVELS.COURSE);
+    if (courseContextId) return courseContextId;
     const members = await this.repo.listMembers(conversation.id);
     if (!members.length) return null;
     let common: string[] | null = null;
@@ -408,11 +425,7 @@ export class MessagingConversationsService {
    */
   async resolveConversationClassId(conversation: ConversationRow): Promise<string | null> {
     if (this.membershipSync.isClassLinked(conversation)) return conversation.itemId;
-    if (conversation.contextId) {
-      const ctx = await this.contexts.getContext(conversation.contextId).catch(() => undefined);
-      if (ctx && ctx.contextLevel === 45) return ctx.instanceId;
-    }
-    return null;
+    return this.contextInstanceIdAtLevel(conversation, CONTEXT_LEVELS.CLASS);
   }
 
   /**
@@ -604,15 +617,7 @@ export class MessagingConversationsService {
     pinnedAt: Date | null; archivedAt: Date | null; muted: boolean;
     memberProfiles: Record<string, PersonSummaryView>;
   })[]> {
-    for (const c of await this.repo.listGroupConversationsForGroupMember(userId)) {
-      await this.membershipSync.syncGroupConversationMembers(c);
-    }
-    for (const c of await this.repo.listCourseConversationsForMember(userId)) {
-      await this.membershipSync.syncCourseConversationMembers(c);
-    }
-    for (const c of await this.repo.listClassConversationsForMember(userId)) {
-      await this.membershipSync.syncClassConversationMembers(c);
-    }
+    await this.membershipSync.syncLinkedConversations(userId);
     const summaries = await this.repo.listConversationSummaries(userId, opts);
     const myGroupIds = new Set(await this.repo.listGroupIdsForUser(userId));
     const out: (ConversationRow & {

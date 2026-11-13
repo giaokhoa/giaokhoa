@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { NotImplementedException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { ContextsService } from '../access/contexts.service';
 import type { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -19,7 +19,7 @@ const SERVICE_ID = '01900000-0000-7000-8000-0000000000bb';
 const TOKEN_ID = '01900000-0000-7000-8000-0000000000cc';
 
 /** Dựng service thật với repository/evaluator/context/khoá học giả lập trong bộ nhớ. */
-function buildService() {
+function buildService(serviceFunctions: string[] = ['core_course_get_courses']) {
   let ownerState: TokenOwnerState | undefined = { suspended: false, deleted: false };
   const tokenRow = {
     id: TOKEN_ID,
@@ -37,7 +37,7 @@ function buildService() {
     name: 'Unit service',
     shortName: 'unit',
     enabled: true,
-    functions: ['core_course_get_courses'],
+    functions: serviceFunctions,
   } as unknown as ServiceRow;
   const updateToken = vi.fn(async (_id: string, _patch: Record<string, unknown>) => {});
   const repo = {
@@ -49,7 +49,10 @@ function buildService() {
   const evaluator = { hasCapability: async () => true } as unknown as PermissionEvaluator;
   const contexts = { ensureSystemContext: async () => ({ id: 'system-context' }) } as unknown as ContextsService;
   const listCourses = vi.fn(async () => [{ id: 'course-1' }]);
-  const courses = { listCourses } as unknown as CoursesService;
+  const courses = {
+    listCourses,
+    courseContextId: async () => ({ id: 'course-context' }),
+  } as unknown as CoursesService;
   return {
     service: new IntegrationsService(repo, evaluator, contexts, courses),
     tokenRow,
@@ -108,5 +111,21 @@ describe('IntegrationsService.callFunction — trạng thái tài khoản chủ 
     for (const [, patch] of updateToken.mock.calls) {
       expect(patch).not.toMatchObject({ revoked: true });
     }
+  });
+});
+
+describe('IntegrationsService.callFunction — function ghi điểm chưa triển khai (S15)', () => {
+  it('caller đủ quyền gọi core_grades_update_grades nhận 501 với mã webservice.not_implemented thay vì updated: true giả', async () => {
+    const { service } = buildService(['core_grades_update_grades']);
+    const err = await service
+      .callFunction({
+        token: RAW_TOKEN,
+        functionName: 'core_grades_update_grades',
+        args: { courseId: '01900000-0000-7000-8000-0000000000dd' },
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NotImplementedException);
+    expect((err as NotImplementedException).getResponse()).toMatchObject({ code: 'webservice.not_implemented' });
+    expect((err as NotImplementedException).getStatus()).toBe(501);
   });
 });

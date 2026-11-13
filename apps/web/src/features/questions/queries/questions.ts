@@ -1,3 +1,7 @@
+/**
+ * Tầng dữ liệu trang ngân hàng câu hỏi/đề/ma trận (F-01 đợt 1, rà soát #133): mỗi cụm tải trước đây (danh mục + câu hỏi/ngữ liệu theo danh mục, bank theo loại + nội dung bank cá nhân, hàng chờ đóng góp, bộ hồ sơ, khám phá) là một query theo khoá factory; options dùng chung cho hook của trang và clientLoader của các route module bọc trang. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của questions nằm ở `keys.ts` cùng tầng này, riêng các khoá `questionBanks`, `bankMatrices`, `questionVersions`, `questionDiscovery` là khoá dùng chung ở factory tập trung.
+ */
+
 import { queryOptions, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { QuestionView, RichTextDocument } from '@giaokhoa/contracts';
 import { queryClient } from '#lib/query-client';
@@ -64,9 +68,6 @@ import {
 import type { BankKindParam, BankLite, ContributionReviewVars } from '../types/questions';
 import { queryKeys } from './keys';
 
-/**
- * Tầng dữ liệu trang ngân hàng câu hỏi/đề/ma trận (F-01 đợt 1, rà soát #133): mỗi cụm tải trước đây (danh mục + câu hỏi/ngữ liệu theo danh mục, bank theo loại + nội dung bank cá nhân, hàng chờ đóng góp, bộ hồ sơ, khám phá) là một query theo khoá factory; options dùng chung cho hook của trang và clientLoader của các route module bọc trang. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của questions nằm ở `keys.ts` cùng tầng này, riêng các khoá `questionBanks`, `bankMatrices`, `questionVersions`, `questionDiscovery` là khoá dùng chung ở factory tập trung.
- */
 
 // --- Danh mục + câu hỏi/ngữ liệu theo danh mục ----------------------
 
@@ -251,6 +252,7 @@ export function questionDiscoveryQueryOptions(params: string) {
 export function clearQuestionBankListCache(client: QueryClient) {
   client.removeQueries({ queryKey: queryKeys.questionCategories });
   client.removeQueries({ queryKey: queryKeys.questionBanksRoot });
+  client.removeQueries({ queryKey: queryKeys.examBanksRoot });
 }
 
 /**

@@ -18,6 +18,7 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { useTranslation } from 'react-i18next';
+import { QUIZ_GRADE_METHOD_LABEL_KEYS } from '../utils/utils';
 
 interface SettingsFormProps {
   name: string;
@@ -125,7 +126,7 @@ export function SettingsForm({
                 <FieldLabel id="quiz-method-label">{t('quizSettingsMethod')}</FieldLabel>
                 <Select
                   items={Object.fromEntries(
-                    (['highest', 'average', 'first', 'last'] as const).map((m) => [m, t(`quizGradeMethod_${m}`)]),
+                    (['highest', 'average', 'first', 'last'] as const).map((m) => [m, t(QUIZ_GRADE_METHOD_LABEL_KEYS[m])]),
                   )}
                   value={gradeMethod}
                   onValueChange={(v) => setGradeMethod(v ?? 'highest')}
@@ -136,7 +137,7 @@ export function SettingsForm({
                   <SelectContent>
                     {(['highest', 'average', 'first', 'last'] as const).map((m) => (
                       <SelectItem key={m} value={m}>
-                        {t(`quizGradeMethod_${m}`)}
+                        {t(QUIZ_GRADE_METHOD_LABEL_KEYS[m])}
                       </SelectItem>
                     ))}
                   </SelectContent>

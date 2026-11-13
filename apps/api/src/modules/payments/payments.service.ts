@@ -706,6 +706,30 @@ export class PaymentsService {
   }
 
   /**
+   * Kích hoạt quyền lợi của một payment đã chốt thành công — điểm kích hoạt
+   * DUY NHẤT cho cả ba đường (matching SePay, webhook, `resolvePaymentReview`).
+   * Chỉ bốn component trong `ENTITLEMENT_COMPONENTS` sinh quyền lợi (issue #419);
+   * component khác không làm gì. Mọi khâu đều idempotent nên gọi lại an toàn.
+   */
+  private async activateEntitlement(payment: PaymentRow): Promise<void> {
+    if (!(ENTITLEMENT_COMPONENTS as readonly string[]).includes(payment.component)) return;
+    // Enrol có phí: chỉ active khi PaymentSucceeded đã xác thực.
+    if (payment.component === 'enrol_fee' && payment.itemId) {
+      await this.enrol.activatePaidEnrol(payment.itemId, payment.userId);
+    }
+    // CLASS-3: gói lớp — vào roster của lớp, cohort sync vật chất hoá
+    // xuống mọi khoá của lớp (idempotent như activatePaidEnrol).
+    if (payment.component === 'class_fee' && payment.itemId) {
+      await this.classes.activatePaidClassEnrol(payment.itemId, payment.userId);
+    }
+    // Lát 2 (#189): gói trung tâm / gói giáo viên — sinh quyền lợi gói
+    // theo ảnh chụp giá + chu kỳ đã ghi vết lúc tạo payment.
+    if (payment.component === 'tenant_plan' || payment.component === 'teacher_plan') {
+      await this.plans.activateForPayment(payment);
+    }
+  }
+
+  /**
    * Xử lý webhook. CỔNG XÁC THỰC CHẠY TRƯỚC TIÊN (vá H1, issue #134):
    * resolve gateway theo `input.gateway` rồi gọi `gateway.verify` — gateway
    * lạ ⇒ 400; verify fail ⇒ 401. Cả hai đều xảy ra TRƯỚC mọi đọc/ghi trạng
@@ -747,20 +771,7 @@ export class PaymentsService {
     // không bao giờ quan sát được khi quyền lợi chưa kích hoạt. Webhook
     // đã xác thực mới tới được đây; các khâu kích hoạt đều idempotent
     // nên webhook bắn lại (sau cổng duplicate ở trên) an toàn.
-    // Enrol có phí: chỉ active khi PaymentSucceeded đã xác thực.
-    if (payment.component === 'enrol_fee' && payment.itemId) {
-      await this.enrol.activatePaidEnrol(payment.itemId, payment.userId);
-    }
-    // CLASS-3: gói lớp — vào roster của lớp, cohort sync vật chất hoá
-    // xuống mọi khoá của lớp (idempotent như activatePaidEnrol).
-    if (payment.component === 'class_fee' && payment.itemId) {
-      await this.classes.activatePaidClassEnrol(payment.itemId, payment.userId);
-    }
-    // Lát 2 (#189): gói trung tâm / gói giáo viên — sinh quyền lợi gói
-    // theo ảnh chụp giá + chu kỳ đã ghi vết lúc tạo payment.
-    if (payment.component === 'tenant_plan' || payment.component === 'teacher_plan') {
-      await this.plans.activateForPayment(payment);
-    }
+    await this.activateEntitlement(payment);
     await this.repo.updatePayment(payment.id, { status: 'succeeded', gateway: input.gateway, externalTransactionId: input.externalTransactionId });
     const succeeded = await this.getPayment(payment.id);
     await this.outbox.enqueueStandalone({
@@ -1055,7 +1066,7 @@ export class PaymentsService {
    * phát bù SAU khi transaction commit (xem `applyRefundSettlement`).
    * Trả null khi không có lần gỡ cohort nào chờ phát.
    */
-  private async suspendEntitlementForFullRefund(actorId: string, payment: PaymentRow, tx: CentreTx): Promise<{ cohortId: string; userId: string } | null> {
+  private async suspendEntitlement(actorId: string, payment: PaymentRow, tx: CentreTx): Promise<{ cohortId: string; userId: string } | null> {
     if (payment.component === 'enrol_fee' && payment.itemId) {
       await this.enrol.setSuspended(actorId, payment.itemId, payment.userId, true, tx);
     }
@@ -1146,7 +1157,7 @@ export class PaymentsService {
         // Đình chỉ trước mọi ghi sổ, theo đúng tổng đã khoá ở trên và
         // bằng chính transaction này: lỗi tại đây ⇒ transaction huỷ
         // trước khi ghi, gọi lại được.
-        pendingRemoval = await this.suspendEntitlementForFullRefund(input.suspensionActorId, payment, tx);
+        pendingRemoval = await this.suspendEntitlement(input.suspensionActorId, payment, tx);
       }
       const data = { ...((fresh.data ?? {}) as Record<string, unknown>), reversal: { applied: full, at: now.toISOString() } };
       const updated = await this.repo.updateRefund(fresh.id, {
@@ -1315,6 +1326,15 @@ export class PaymentsService {
     return scope;
   }
 
+  /** View rút gọn của một provider event trong hàng đợi rà soát — dùng chung cho mục khoản thu và mục sự kiện mồ côi. */
+  private reviewEventView(event: ProviderEventRow): NonNullable<PaymentReviewQueueItem['event']> {
+    return {
+      id: event.id, externalTransactionId: event.externalTransactionId, direction: event.direction as 'credit' | 'debit',
+      amount: event.amount, extractedCode: event.extractedCode,
+      receivedAt: event.receivedAt.toISOString(),
+    };
+  }
+
   /**
    * Danh sách khoản chờ trong phạm vi của người xem: khoản thu
    * `needs_review` (kèm sự kiện liên quan gần nhất + các điều kiện lệch
@@ -1362,11 +1382,7 @@ export class PaymentsService {
           expiresAt: payment.expiresAt ? payment.expiresAt.toISOString() : null,
           createdAt: payment.createdAt.toISOString(),
         },
-        event: event ? {
-          id: event.id, externalTransactionId: event.externalTransactionId, direction: event.direction as 'credit' | 'debit',
-          amount: event.amount, extractedCode: event.extractedCode,
-          receivedAt: event.receivedAt.toISOString(),
-        } : null,
+        event: event ? this.reviewEventView(event) : null,
         mismatches,
         ageHours,
         overdue: ageHours > (await targetHoursFor(payment.tenantId)),
@@ -1382,11 +1398,7 @@ export class PaymentsService {
         kind: 'event',
         tenantId: event.tenantId,
         payment: null,
-        event: {
-          id: event.id, externalTransactionId: event.externalTransactionId, direction: event.direction as 'credit' | 'debit',
-          amount: event.amount, extractedCode: event.extractedCode,
-          receivedAt: event.receivedAt.toISOString(),
-        },
+        event: this.reviewEventView(event),
         mismatches: [event.direction === 'debit' ? 'unmatched_debit' : 'unknown_code'],
         ageHours,
         overdue: ageHours > (await targetHoursFor(event.tenantId)),
@@ -1454,15 +1466,7 @@ export class PaymentsService {
     // nhưng vẫn phải qua phép đối chiếu giá + tenant phía server ở
     // trên (issue #419): người xử lý xác nhận TIỀN, hệ thống xác
     // nhận QUYỀN LỢI chỉ sinh cho payment khớp đối tượng phía server.
-    if (payment.component === 'enrol_fee' && payment.itemId) {
-      await this.enrol.activatePaidEnrol(payment.itemId, payment.userId);
-    }
-    if (payment.component === 'class_fee' && payment.itemId) {
-      await this.classes.activatePaidClassEnrol(payment.itemId, payment.userId);
-    }
-    if (payment.component === 'tenant_plan' || payment.component === 'teacher_plan') {
-      await this.plans.activateForPayment(payment);
-    }
+    await this.activateEntitlement(payment);
     await this.repo.updatePayment(payment.id, { status: 'succeeded', externalTransactionId, ...trail });
     const succeeded = await this.getPayment(payment.id);
     // Vết sự kiện dùng chung với đường khớp tự động và đường webhook.

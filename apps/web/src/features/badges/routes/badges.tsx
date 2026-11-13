@@ -1,3 +1,10 @@
+/**
+ * Trang huy hiệu: mọi người dùng thấy "huy hiệu của tôi" từ GET /badges/mine, còn panel
+ * quản trị (tạo badge, đặt tiêu chí, kích hoạt, xem danh sách đã cấp) chỉ render khi
+ * có quyền quản trị. Loader phía server prefetch hai danh sách dùng chung khi mở trang,
+ * dữ liệu còn lại đi qua các hook TanStack Query của feature.
+ */
+
 import { useState, type FormEvent } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -29,6 +36,9 @@ import { buildSsrLoaderData, serverQueryFn, type SsrLoaderData } from '#lib/ssr-
  * @param request - Request đang phục vụ (nguồn cookie phiên).
  * @returns Dehydrated state cho HydrationBoundary ở root.
  */
+
+import { SELECT_CLASS } from '#utils/form-classes';
+import { BADGE_STATUS_ACTIVE, BADGE_STATUS_ARCHIVED, BADGE_STATUS_DISABLED, BADGE_STATUS_INACTIVE, BADGE_STATUS_RETIRED } from '../types/badges';
 export async function loader({ request }: { request: Request }): Promise<SsrLoaderData> {
   return buildSsrLoaderData(request, async (queryClient, req) => {
     await Promise.all([
@@ -47,18 +57,18 @@ export async function loader({ request }: { request: Request }): Promise<SsrLoad
 /**
  * Trang huy hiệu: "huy hiệu của tôi" (từ GET /badges/mine — server tự suy người dùng từ phiên đăng nhập, không còn endpoint theo userId) hiện cho mọi người dùng; panel quản trị (tạo badge, đặt tiêu chí, kích hoạt qua POST /badges/:id/status, xem danh sách đã cấp của một badge qua GET /badges/:id/issued) chỉ render khi usePermissions().canAdminister. Tiêu chí của huy hiệu đang hoạt động bị đóng băng phía server; panel chỉ hiển thị kết quả từ chối đó.
  *
- * Dữ liệu qua TanStack Query (lib/badges.ts, F-01): hai danh sách là hai query dùng chung cache với mọi bề mặt huy hiệu khác; các đột biến của panel quản trị làm mới cả ba truy vấn (mọi huy hiệu / của tôi / đã cấp) qua tiền tố khoá factory thay vì nạp lại cục bộ như trước. Từ lát SL-1
+ * Dữ liệu qua TanStack Query (features/badges/queries/badges, F-01): hai danh sách là hai query dùng chung cache với mọi bề mặt huy hiệu khác; các đột biến của panel quản trị làm mới cả ba truy vấn (mọi huy hiệu / của tôi / đã cấp) qua tiền tố khoá factory thay vì nạp lại cục bộ như trước. Từ lát SL-1
  * (#7), loader của route prefetch hai danh sách phía server (khi có
  * cookie phiên) và trang hydrate từ cache thay vì fetch lại khi mở.
  */
 export function BadgesPage() {
   const { t } = useTranslation('app');
   const STATUS_LABEL: Record<number, string> = {
-    0: t('badgeStatusInactive'),
-    1: t('badgeStatusActive'),
-    2: t('badgeStatusRetired'),
-    3: t('badgeStatusArchived'),
-    4: t('badgeStatusDisabled'),
+    [BADGE_STATUS_INACTIVE]: t('badgeStatusInactive'),
+    [BADGE_STATUS_ACTIVE]: t('badgeStatusActive'),
+    [BADGE_STATUS_RETIRED]: t('badgeStatusRetired'),
+    [BADGE_STATUS_ARCHIVED]: t('badgeStatusArchived'),
+    [BADGE_STATUS_DISABLED]: t('badgeStatusDisabled'),
   };
   const { canAdminister } = usePermissions();
   const [name, setName] = useState('');
@@ -109,10 +119,10 @@ export function BadgesPage() {
     );
   }
 
-  /** Kích hoạt badge: đổi trạng thái qua POST /badges/:id/status với { status: 1 }. */
+  /** Kích hoạt badge: đổi trạng thái qua POST /badges/:id/status với { status: BADGE_STATUS_ACTIVE }. */
   function activate(id: string) {
     statusMutation.mutate(
-      { badgeId: id, status: 1 },
+      { badgeId: id, status: BADGE_STATUS_ACTIVE },
       {
         onSuccess: () => setMessage(t('badgeActivated')),
         onError: () => setMessage(t('badgeActivationRefused')),
@@ -203,7 +213,7 @@ export function BadgesPage() {
                 <li key={b.id} className="flex items-center gap-3 text-sm">
                   <span className="font-medium">{b.name}</span>
                   <span>{STATUS_LABEL[b.status] ?? b.status}</span>
-                  {b.status === 0 ? (
+                  {b.status === BADGE_STATUS_INACTIVE ? (
                     <Button type="button" variant="outline" onClick={() => activate(b.id)}>
                       {t('activate')}
                     </Button>
@@ -256,11 +266,20 @@ export function BadgesPage() {
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="criteria-badge">{t('badgeId')}</FieldLabel>
-                  <Input
+                  {/* Chọn từ danh sách huy hiệu đã tải thay vì gõ ID thô (S27): danh sách `all` đã có sẵn ở trang. */}
+                  <select
                     id="criteria-badge"
+                    className={SELECT_CLASS}
                     value={criteriaBadgeId}
                     onChange={(e) => setCriteriaBadgeId(e.target.value)}
-                  />
+                  >
+                    <option value="">{t('criteriaChooseBadge')}</option>
+                    {all.map((badge) => (
+                      <option key={badge.id} value={badge.id}>
+                        {badge.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="criteria-course">{t('criteriaCourseId')}</FieldLabel>

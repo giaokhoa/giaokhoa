@@ -13,7 +13,11 @@ import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { resolveDedicatedSpace } from './space-resolution';
 import { isPublicLearningHost, PUBLIC_LEARNING_SLUG } from './public-learning';
-import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
+import {
+  TenantsRepository,
+  type TenantMembershipRow,
+  type TenantRow,
+} from '@giaokhoa/db/repositories/tenants';
 import { tenantAls } from './tenant-als';
 import { TenantsService } from './tenants.service';
 import { TenantContextService } from './tenant-context.service';
@@ -44,6 +48,48 @@ export class TenantGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // HOTFIX #196: guard là khâu THIẾT LẬP ngữ cảnh nên chính các tra cứu của nó (tenant-zero, tenant của claim tid, membership) phải chạy trong ngữ cảnh platform tường minh — ngoài ngữ cảnh, RLS fail-closed giấu sạch bảng tenants/memberships, guard tưởng tenant chưa gieo và cho request chạy KHÔNG ngữ cảnh (chỉ lộ khi app chạy bằng role thường). Ngữ cảnh cho handler vẫn do TenantContextInterceptor bọc lại từ `request.tenantId` như trước.
     return tenantAls.run({ platform: true }, () => this.resolveRequestTenant(context));
+  }
+
+  /**
+   * Gác trạng thái tenant + membership cho một user — dùng chung cho nhánh kho riêng và nhánh kho chung của
+   * `resolveRequestTenant`, chỉ khác nguồn nạp membership (trong kho riêng qua `withSpaceKysely`, trong kho chung
+   * đọc thẳng repository):
+   * - Tenant chưa active → 403 `tenant.not_active`.
+   * - Tenant kind `platform` → qua, không đòi membership.
+   * - Tenant school/center: membership active → qua; không active mà user là site admin và
+   *   `allowSiteAdminFallback` bật → rơi về tenant-zero (đường kho chung); còn lại → 401
+   *   `tenant.membership_inactive` để client đăng nhập lại/chuyển tenant.
+   *
+   * @param tenant - Dòng tenant cần gác (đã tra từ đúng kho của nó).
+   * @param userId - Id user cần kiểm tra membership.
+   * @param loadMembership - Cách nạp membership của cặp (tenant, user) từ đúng kho.
+   * @param zeroId - Id tenant-zero, đích rơi về khi site admin mất membership ở đường kho chung.
+   * @param allowSiteAdminFallback - Bật đường rơi về tenant-zero cho site admin (chỉ nhánh kho chung).
+   * @returns Id tenant hiệu lực của request.
+   */
+  private async resolveAccessibleTenantId(
+    tenant: TenantRow,
+    userId: string,
+    loadMembership: () => Promise<TenantMembershipRow | undefined>,
+    zeroId: string,
+    allowSiteAdminFallback: boolean,
+  ): Promise<string> {
+    if (tenant.status !== 'active') {
+      throw new ForbiddenException({
+        message: `Tenant ${tenant.slug} is ${tenant.status}`,
+        code: 'tenant.not_active',
+      });
+    }
+    if (tenant.kind === 'platform') return tenant.id;
+    const membership = await loadMembership();
+    if (membership?.status === 'active') return tenant.id;
+    if (allowSiteAdminFallback && (await this.evaluator.isSiteAdmin(userId))) {
+      return zeroId;
+    }
+    throw new UnauthorizedException({
+      message: 'Membership in the active tenant is no longer active',
+      code: 'tenant.membership_inactive',
+    });
   }
 
   private async resolveRequestTenant(context: ExecutionContext): Promise<boolean> {
@@ -100,28 +146,21 @@ export class TenantGuard implements CanActivate {
             code: 'space.tenant_missing',
           });
         }
-        if (spaceTenant.status !== 'active') {
-          throw new ForbiddenException({
-            message: `Tenant ${spaceTenant.slug} is ${spaceTenant.status}`,
-            code: 'tenant.not_active',
-          });
-        }
-        if (spaceTenant.kind !== 'platform') {
-          const membership = await this.spaceDb.withSpaceKysely(space.slug, () =>
-            this.repo.getMembership(spaceTenant.id, user.id),
-          );
-          if (membership?.status !== 'active') {
-            throw new UnauthorizedException({
-              message: 'Membership in the active tenant is no longer active',
-              code: 'tenant.membership_inactive',
-            });
-          }
-        }
-        this.tenantContext.enter({ tenantId: spaceTenant.id, userId: user.id });
+        const spaceTenantId = await this.resolveAccessibleTenantId(
+          spaceTenant,
+          user.id,
+          () =>
+            this.spaceDb.withSpaceKysely(space.slug, () =>
+              this.repo.getMembership(spaceTenant.id, user.id),
+            ),
+          zero.id,
+          false,
+        );
+        this.tenantContext.enter({ tenantId: spaceTenantId, userId: user.id });
         // Ghim cả lên request như luồng cũ: interceptor đọc lại từ
         // đây để bọc ALS quanh handler (kèm slug trung tâm do
         // SpaceContextGuard ghim sau đó).
-        request.tenantId = spaceTenant.id;
+        request.tenantId = spaceTenantId;
         return true;
       }
     }
@@ -140,27 +179,13 @@ export class TenantGuard implements CanActivate {
             code: 'tenant.unknown',
           });
         }
-        if (tenant.status !== 'active') {
-          throw new ForbiddenException({
-            message: `Tenant ${tenant.slug} is ${tenant.status}`,
-            code: 'tenant.not_active',
-          });
-        }
-        if (tenant.kind === 'platform') {
-          tenantId = tenant.id;
-        } else {
-          const membership = await this.repo.getMembership(tenant.id, user.id);
-          if (membership?.status === 'active') {
-            tenantId = tenant.id;
-          } else if (await this.evaluator.isSiteAdmin(user.id)) {
-            tenantId = zero.id;
-          } else {
-            throw new UnauthorizedException({
-              message: 'Membership in the active tenant is no longer active',
-              code: 'tenant.membership_inactive',
-            });
-          }
-        }
+        tenantId = await this.resolveAccessibleTenantId(
+          tenant,
+          user.id,
+          () => this.repo.getMembership(tenant.id, user.id),
+          zero.id,
+          true,
+        );
       } else {
         tenantId = (await this.tenants.resolveDefaultTenant(user.id)).id;
       }

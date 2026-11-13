@@ -11,6 +11,8 @@ CREATE TABLE "support_grants" (
   "revoked_at" timestamp with time zone,
   "revoked_by" uuid,
   "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+  -- Mẹo chống trùng: so sánh vị trí [1] <> [2] chỉ đúng vì tối đa 2 scope
+  -- (cardinality BETWEEN 1 AND 2 ở trên); thêm scope thứ ba phải viết lại điều kiện này (S28).
   CONSTRAINT "support_grants_scopes_valid" CHECK (
     cardinality("scopes") BETWEEN 1 AND 2
     AND "scopes" <@ ARRAY['classes:read', 'courses:read']::text[]

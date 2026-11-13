@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import type { BookDatasetStatus, BookImportResult } from '@giaokhoa/contracts';
+import type { CentreTx } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
@@ -12,6 +13,11 @@ import {
 } from './book-datasets';
 
 const COURSE_UPDATE = 'course:update';
+
+/** Khoá chương trong chỉ mục cây của lượt nạp: volume (rỗng khi chưa có) + tựa chương — một chỗ duy nhất dựng khoá để hai phía (chỉ mục hiện có / chương mới tạo) không lệch nhau. */
+function chapterKey(volume: number | null, title: string): string {
+  return `${volume ?? ''}|${title}`;
+}
 
 /** Một đích ánh xạ của một bài SGK trong cây sách: node chương trình hoặc YCCĐ cụ thể, kèm mã bản ghi chương trình để truy vết. */
 export interface BookMappingView {
@@ -87,14 +93,14 @@ export class BookService implements OnModuleInit {
   async listDatasetStatus(actorId: string): Promise<BookDatasetStatus[]> {
     const sys = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, CURRICULUM_VIEW, sys.id);
-    const out: BookDatasetStatus[] = [];
-    for (const def of BOOK_DATASETS) {
+    // Nạp trạng thái các dataset song song thay vì chờ từng dataset một.
+    return Promise.all(BOOK_DATASETS.map(async (def) => {
       const file = loadBookDataset(def);
       const rows = await this.repo.listBookRecords(def.key);
       const subject = await this.curriculumRepo.getSubjectBySlug(def.slug);
       const book = subject ? await this.repo.findBook(subject.id, def.grade, def.bookTitle) : undefined;
       const last = rows.reduce<Date | null>((acc, r) => (acc === null || r.updatedAt > acc ? r.updatedAt : acc), null);
-      out.push({
+      return {
         datasetKey: def.key,
         subjectName: def.subjectName,
         slug: def.slug,
@@ -106,9 +112,8 @@ export class BookService implements OnModuleInit {
         bookId: book?.id ?? null,
         subjectId: subject?.id ?? null,
         lastImportedAt: last ? last.toISOString() : null,
-      });
-    }
-    return out;
+      };
+    }));
   }
 
   /** Nạp (hoặc nạp lại) một dataset SGK theo khoá. Cần curriculum:manage tại context hệ thống. */
@@ -155,11 +160,13 @@ export class BookService implements OnModuleInit {
     // Môn đích ở context hệ thống: tìm theo slug, chưa có thì tạo (như nạp chương trình).
     let subject = await this.curriculumRepo.getSubjectBySlug(def.slug);
     if (!subject) {
+      // Vị trí 1-based của môn trong manifest — tra theo khoá dataset thay vì indexOf theo tham chiếu đối tượng (bản sao của def sẽ cho -1).
+      const datasetPosition = BOOK_DATASETS.findIndex((candidate) => candidate.key === def.key) + 1;
       subject = await this.curriculumRepo.insertSubject({
         contextId: systemContextId,
         name: def.subjectName,
         slug: def.slug,
-        position: BOOK_DATASETS.indexOf(def) + 1,
+        position: datasetPosition,
       });
     }
     // Cuốn sách đích: tìm theo (môn, khối, tựa), chưa có thì tạo.
@@ -172,8 +179,8 @@ export class BookService implements OnModuleInit {
     const index: TreeIndex = { chapterByKey: new Map(), nextPosByParent: new Map() };
     for (const node of nodes) {
       if (node.kind === 'chapter') {
-        // Khoá chương dựng lại từ dữ liệu node: volume|thứ tự chương suy từ position — xem ensureChapter.
-        index.chapterByKey.set(`${node.volume ?? ''}|${node.title}`, node);
+        // Khoá chương dựng lại từ dữ liệu node — xem chapterKey/ensureChapter.
+        index.chapterByKey.set(chapterKey(node.volume, node.title), node);
       }
       const key = node.parentId ?? '';
       index.nextPosByParent.set(key, Math.max(index.nextPosByParent.get(key) ?? 1, node.position + 1));
@@ -191,7 +198,9 @@ export class BookService implements OnModuleInit {
         skipped += 1;
         continue;
       }
-      const mappingNodeIds = record.programRecords.map((code) => nodeIdByProgramRecord.get(code)!);
+      const mappingNodeIds = record.programRecords.map((code) =>
+        this.resolveMappingNodeId(nodeIdByProgramRecord, code),
+      );
       if (!reg) {
         const position = this.takePosition(index, chapter.id);
         await this.repo.transaction(async (tx) => {
@@ -199,9 +208,7 @@ export class BookService implements OnModuleInit {
             bookId: book.id, parentId: chapter.id, title: record.lesson, kind: 'lesson',
             volume: record.volume, lessonNumber: record.lessonNumber, position,
           }, tx);
-          for (const [mi, nodeId] of mappingNodeIds.entries()) {
-            await this.repo.insertMapping({ bookNodeId: lesson.id, curriculumNodeId: nodeId, learningOutcomeId: null, position: mi + 1 }, tx);
-          }
+          await this.writeLessonMappings(tx, lesson.id, mappingNodeIds);
           await this.repo.insertBookRecord({
             datasetKey: def.key, recordId: record.id, bookId: book.id,
             nodeId: lesson.id, contentHash: hash, source: record.source,
@@ -222,10 +229,7 @@ export class BookService implements OnModuleInit {
           patch.position = this.takePosition(index, chapter.id);
         }
         await this.repo.updateBookNode(reg.nodeId, patch, tx);
-        await this.repo.deleteMappingsForNode(reg.nodeId, tx);
-        for (const [mi, nodeId] of mappingNodeIds.entries()) {
-          await this.repo.insertMapping({ bookNodeId: reg.nodeId, curriculumNodeId: nodeId, learningOutcomeId: null, position: mi + 1 }, tx);
-        }
+        await this.writeLessonMappings(tx, reg.nodeId, mappingNodeIds);
         await this.repo.updateBookRecord(reg.id, {
           bookId: book.id, nodeId: reg.nodeId, contentHash: hash, source: record.source,
         }, tx);
@@ -242,9 +246,31 @@ export class BookService implements OnModuleInit {
     };
   }
 
+  /** Lấy node id đã phân giải cho một mã bản ghi chương trình — mọi mã đã được kiểm tra phân giải xong trước vòng ghi nên thiếu ở đây là trạng thái nội bộ không nhất quán. */
+  private resolveMappingNodeId(nodeIdByProgramRecord: Map<string, string>, code: string): string {
+    const nodeId = nodeIdByProgramRecord.get(code);
+    if (!nodeId) throw new Error(`Program record ${code} was resolved but has no node id`);
+    return nodeId;
+  }
+
+  /**
+   * Ghi (thay toàn bộ) ánh xạ của một bài SGK trong transaction: xoá ánh xạ cũ của node rồi ghi lại theo thứ tự dataset (khung chung của hai nhánh tạo-mới/cập-nhật trong runImport — node mới chưa có ánh xạ nên bước xoá là no-op).
+   */
+  private async writeLessonMappings(
+    tx: CentreTx, lessonId: string, mappingNodeIds: string[],
+  ): Promise<void> {
+    await this.repo.deleteMappingsForNode(lessonId, tx);
+    for (const [mi, nodeId] of mappingNodeIds.entries()) {
+      await this.repo.insertMapping(
+        { bookNodeId: lessonId, curriculumNodeId: nodeId, learningOutcomeId: null, position: mi + 1 },
+        tx,
+      );
+    }
+  }
+
   /** Tìm-tạo node chương (chủ đề) của một bản ghi trong cây sách; chương là node gốc, position = số thứ tự chương trong sách. */
   private async ensureChapter(index: TreeIndex, bookId: string, record: BookRecord): Promise<BookNodeRow> {
-    const key = `${record.volume}|${record.chapter}`;
+    const key = chapterKey(record.volume, record.chapter);
     const existing = index.chapterByKey.get(key);
     if (existing) return existing;
     const chapter = await this.repo.insertBookNode({
@@ -269,23 +295,17 @@ export class BookService implements OnModuleInit {
   async listBooks(actorId: string, subjectId?: string, forCourseId?: string, kind?: string): Promise<BookRow[]> {
     if (subjectId) {
       const subject = await this.subjectOr404(subjectId);
-      await this.assertCanRead(actorId, subject.contextId, forCourseId);
+      await this.assertCanReadBook(actorId, subject, forCourseId);
       return this.repo.listBooks(subject.id, kind);
     }
-    const sys = await this.contexts.ensureSystemContext();
-    await this.evaluator.requireCapability(actorId, CURRICULUM_VIEW, sys.id);
+    await this.assertCanReadBook(actorId, null, forCourseId);
     return this.repo.listBooks(undefined, kind);
   }
 
   /** Cây đầy đủ của một cuốn sách: chương → bài, mỗi bài kèm ánh xạ và YCCĐ suy qua ánh xạ. */
   async getBookTree(actorId: string, bookId: string, forCourseId?: string): Promise<BookTreeView> {
     const { book, subject } = await this.bookChainOr404(bookId);
-    if (subject) {
-      await this.assertCanRead(actorId, subject.contextId, forCourseId);
-    } else {
-      const sys = await this.contexts.ensureSystemContext();
-      await this.evaluator.requireCapability(actorId, CURRICULUM_VIEW, sys.id);
-    }
+    await this.assertCanReadBook(actorId, subject, forCourseId);
     return this.buildTree(book, subject);
   }
 
@@ -298,12 +318,7 @@ export class BookService implements OnModuleInit {
    */
   async listBookQuestions(actorId: string, bookId: string) {
     const { book, subject } = await this.bookChainOr404(bookId);
-    if (subject) {
-      await this.assertCanRead(actorId, subject.contextId);
-    } else {
-      const sys = await this.contexts.ensureSystemContext();
-      await this.evaluator.requireCapability(actorId, CURRICULUM_VIEW, sys.id);
-    }
+    await this.assertCanReadBook(actorId, subject);
     return this.repo.listQuestionsByBookSource(book.id);
   }
 
@@ -337,6 +352,19 @@ export class BookService implements OnModuleInit {
     const chapters = nodes.filter((n) => n.kind === 'chapter');
     const lessons = nodes.filter((n) => n.kind === 'lesson');
     const mappings = await this.repo.listMappingsForNodes(lessons.map((l) => l.id));
+    // Nhóm ánh xạ theo bài và bài theo chương một lần trước vòng dựng view, thay cho filter trong vòng lặp.
+    const mappingsByLesson = new Map<string, typeof mappings>();
+    for (const m of mappings) {
+      const list = mappingsByLesson.get(m.bookNodeId) ?? [];
+      list.push(m);
+      mappingsByLesson.set(m.bookNodeId, list);
+    }
+    const lessonsByChapter = new Map<string, BookNodeRow[]>();
+    for (const lesson of lessons) {
+      const list = lessonsByChapter.get(lesson.parentId ?? '') ?? [];
+      list.push(lesson);
+      lessonsByChapter.set(lesson.parentId ?? '', list);
+    }
     // Truy vết mã bản ghi chương trình: node chương trình → mã bản ghi (theo mọi dataset chương trình đã nạp của môn này).
     const programRecords = subject ? await this.curriculumRepo.listProgramRecordsBySubject(subject.id) : [];
     const recordIdByNodeId = new Map(programRecords.map((r) => [r.nodeId, r.recordId]));
@@ -344,29 +372,41 @@ export class BookService implements OnModuleInit {
     // YCCĐ của các node chương trình được ánh xạ + tựa của chúng.
     const mappedNodeIds = [...new Set(mappings.map((m) => m.curriculumNodeId).filter((x): x is string => x !== null))];
     const outcomes = await this.curriculumRepo.listOutcomesForNodes(mappedNodeIds);
+    // Text canonical của mỗi YCCĐ chỉ tính một lần rồi dùng lại cho cả hai bảng tra (theo node / theo id).
+    const outcomeContentById = new Map(
+      outcomes.map((o) => [o.id, programOutcomeDocText(o.content)]),
+    );
     const outcomesByNode = new Map<string, { outcomeId: string; content: string }[]>();
     for (const o of outcomes) {
       const list = outcomesByNode.get(o.nodeId) ?? [];
       // Cột content nay là tài liệu Tiptap (jsonb): bề mặt sách chỉ
       // cần text canonical trích từ tài liệu, không cần cấu trúc.
-      list.push({ outcomeId: o.id, content: programOutcomeDocText(o.content) });
+      list.push({ outcomeId: o.id, content: outcomeContentById.get(o.id) ?? '' });
       outcomesByNode.set(o.nodeId, list);
     }
+    // Tựa node chương trình: repository chưa có phương thức nạp theo lô theo danh sách id (listNodes chỉ nạp theo curriculum) nên nạp song song thay vì chờ từng node một.
+    const mappedNodes = await Promise.all(
+      mappedNodeIds.map((nodeId) => this.curriculumRepo.getNode(nodeId)),
+    );
     const nodeTitleById = new Map<string, string>();
-    for (const nodeId of mappedNodeIds) {
-      const node = await this.curriculumRepo.getNode(nodeId);
-      if (node) nodeTitleById.set(nodeId, node.title);
+    for (const node of mappedNodes) {
+      if (node) nodeTitleById.set(node.id, node.title);
     }
-    const outcomeContentById = new Map(outcomes.map((o) => [o.id, programOutcomeDocText(o.content)]));
-    for (const m of mappings) {
-      if (m.learningOutcomeId && !outcomeContentById.has(m.learningOutcomeId)) {
-        const o = await this.curriculumRepo.getOutcome(m.learningOutcomeId);
-        if (o) outcomeContentById.set(o.id, programOutcomeDocText(o.content));
-      }
+    // Ánh xạ thẳng tới YCCĐ (không qua node) mà listOutcomesForNodes chưa phủ: nạp song song các outcome còn thiếu, khử trùng theo id.
+    const missingOutcomeIds = [...new Set(
+      mappings
+        .map((m) => m.learningOutcomeId)
+        .filter((x): x is string => x !== null && !outcomeContentById.has(x)),
+    )];
+    const missingOutcomes = await Promise.all(
+      missingOutcomeIds.map((id) => this.curriculumRepo.getOutcome(id)),
+    );
+    for (const o of missingOutcomes) {
+      if (o) outcomeContentById.set(o.id, programOutcomeDocText(o.content));
     }
 
     const lessonView = (lesson: BookNodeRow): BookLessonView => {
-      const own = mappings.filter((m) => m.bookNodeId === lesson.id);
+      const own = mappingsByLesson.get(lesson.id) ?? [];
       const seen = new Set<string>();
       const resolved: { outcomeId: string; content: string }[] = [];
       for (const m of own) {
@@ -406,7 +446,7 @@ export class BookService implements OnModuleInit {
         title: chapter.title,
         volume: chapter.volume,
         position: chapter.position,
-        lessons: lessons.filter((l) => l.parentId === chapter.id).map(lessonView),
+        lessons: (lessonsByChapter.get(chapter.id) ?? []).map(lessonView),
       })),
     };
   }
@@ -429,6 +469,18 @@ export class BookService implements OnModuleInit {
     // Môn trên sách chỉ là metadata mô tả — sách không gắn môn thì không có chuỗi môn để truy.
     const subject = book.subjectId ? await this.subjectOr404(book.subjectId) : null;
     return { book, subject };
+  }
+
+  /** Cổng đọc dùng chung cho các đường đọc sách (khung chung của listBooks/getBookTree/listBookQuestions): curriculum:view tại context của môn, hoặc course:update tại khoá đích khi kèm forCourseId; sách không gắn môn thì đòi curriculum:view tại context hệ thống. */
+  private async assertCanReadBook(
+    actorId: string, subject: SubjectRow | null, forCourseId?: string,
+  ): Promise<void> {
+    if (subject) {
+      await this.assertCanRead(actorId, subject.contextId, forCourseId);
+      return;
+    }
+    const sys = await this.contexts.ensureSystemContext();
+    await this.evaluator.requireCapability(actorId, CURRICULUM_VIEW, sys.id);
   }
 
   /** Cổng đọc dùng chung: curriculum:view tại context của môn, hoặc course:update tại khoá đích khi kèm forCourseId (như CurriculumService). */

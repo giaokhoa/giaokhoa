@@ -280,11 +280,22 @@ export type CalendarEvent = z.infer<typeof calendarEventSchema>;
 
 /* ---- Badges ---- */
 
+/** Loại huy hiệu: 1 = site, 2 = khoá học. */
+export const BADGE_TYPES = [1, 2] as const;
+/** Trạng thái vòng đời huy hiệu: 0 = không hoạt động, 1 = đang hoạt động, 2 = đã nghỉ, 3 = đã lưu trữ, 4 = đã tắt. */
+export const BADGE_STATUSES = [0, 1, 2, 3, 4] as const;
+/** Loại huy hiệu (1 = site, 2 = khoá học). */
+export const badgeTypeSchema = z.union([z.literal(BADGE_TYPES[0]), z.literal(BADGE_TYPES[1])]);
+export type BadgeType = z.infer<typeof badgeTypeSchema>;
+/** Trạng thái vòng đời huy hiệu (0 không hoạt động, 1 đang hoạt động, 2 đã nghỉ, 3 đã lưu trữ, 4 đã tắt). */
+export const badgeStatusSchema = z.union([z.literal(BADGE_STATUSES[0]), z.literal(BADGE_STATUSES[1]), z.literal(BADGE_STATUSES[2]), z.literal(BADGE_STATUSES[3]), z.literal(BADGE_STATUSES[4])]);
+export type BadgeStatus = z.infer<typeof badgeStatusSchema>;
+
 export const badgeSchema = z.object({
   id: uuidIdSchema,
   name: z.string(),
-  type: z.number().int(), // 1 site, 2 khoá học
-  status: z.number().int(), // 0 không hoạt động, 1 đang hoạt động, 2 đã nghỉ, 3 đã lưu trữ, 4 đã tắt
+  type: badgeTypeSchema,
+  status: badgeStatusSchema,
 });
 export type Badge = z.infer<typeof badgeSchema>;
 
@@ -302,14 +313,23 @@ export type IssuedBadge = z.infer<typeof issuedBadgeSchema>;
 /* ---- Competencies ---- */
 
 export const PLAN_STATUSES = [0, 1, 2, 3, 4] as const; // các trạng thái: draft, active, waitingforreview, inreview, complete
+/** Trạng thái kế hoạch học tập (0 draft, 1 active, 2 waitingforreview, 3 inreview, 4 complete). */
+export const planStatusSchema = z.union([z.literal(PLAN_STATUSES[0]), z.literal(PLAN_STATUSES[1]), z.literal(PLAN_STATUSES[2]), z.literal(PLAN_STATUSES[3]), z.literal(PLAN_STATUSES[4])]);
+export type PlanStatus = z.infer<typeof planStatusSchema>;
 export const learningPlanSchema = z.object({
   id: uuidIdSchema,
   name: z.string(),
   userId: uuidIdSchema,
   templateId: uuidIdSchema.nullable(),
-  status: z.number().int(),
+  status: planStatusSchema,
 });
 export type LearningPlan = z.infer<typeof learningPlanSchema>;
+
+/** Trạng thái review năng lực người dùng: 0 = không có, 1 = đang chờ, 2 = đang review. */
+export const USER_COMPETENCY_STATUSES = [0, 1, 2] as const;
+/** Trạng thái review năng lực người dùng (0 không có, 1 đang chờ, 2 đang review). */
+export const userCompetencyStatusSchema = z.union([z.literal(USER_COMPETENCY_STATUSES[0]), z.literal(USER_COMPETENCY_STATUSES[1]), z.literal(USER_COMPETENCY_STATUSES[2])]);
+export type UserCompetencyStatus = z.infer<typeof userCompetencyStatusSchema>;
 
 export const userCompetencySchema = z.object({
   id: uuidIdSchema,
@@ -317,7 +337,7 @@ export const userCompetencySchema = z.object({
   competencyId: uuidIdSchema,
   grade: z.number().int().nullable(),
   proficiency: z.boolean().nullable(),
-  status: z.number().int(), // review: 0 không có, 1 đang chờ, 2 đang review
+  status: userCompetencyStatusSchema, // review: 0 không có, 1 đang chờ, 2 đang review
 });
 export type UserCompetency = z.infer<typeof userCompetencySchema>;
 
@@ -655,9 +675,8 @@ export type MessagingSyncRequest = Record<string, number>;
 /** Kết quả đồng bộ: conversationId → các tin còn thiếu, tăng dần theo seq. */
 export type MessagingSyncResult = Record<string, GiaoKhoaMessage[]>;
 
-/** Payload đặt tuỳ chọn kênh nhận cho một message provider. */
 /**
- * Đặt tuỳ chọn v2 cho MỘT provider: ít nhất một trong hai trường phải có mặt (API kiểm tra thêm và trả 400 `messaging.preference_empty`). Tắt popup của loại bắt buộc bị API từ chối 400 `messaging.preference_mandatory`.
+ * Payload đặt tuỳ chọn kênh nhận cho một message provider — đặt tuỳ chọn v2 cho MỘT provider: ít nhất một trong hai trường phải có mặt (API kiểm tra thêm và trả 400 `messaging.preference_empty`). Tắt popup của loại bắt buộc bị API từ chối 400 `messaging.preference_mandatory`.
  */
 export const setNotificationPreferenceSchema = z.strictObject({
   provider: z.string().min(1),
@@ -711,7 +730,7 @@ export type CalendarRepeat = z.infer<typeof calendarRepeatSchema>;
 export const createCalendarEventSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().optional(),
-  eventType: z.enum(['site', 'category', 'course', 'group', 'user']),
+  eventType: z.enum(CALENDAR_EVENT_TYPES),
   courseId: uuidIdSchema.optional(),
   groupId: uuidIdSchema.optional(),
   categoryId: uuidIdSchema.optional(),
@@ -735,7 +754,7 @@ export const createCalendarSubscriptionSchema = z.strictObject({
   name: z.string().min(1),
   url: z.string().optional(),
   icsData: z.string().optional(),
-  eventType: z.enum(['site', 'category', 'course', 'group', 'user']).optional(),
+  eventType: z.enum(CALENDAR_EVENT_TYPES).optional(),
   courseId: uuidIdSchema.optional(),
   categoryId: uuidIdSchema.optional(),
   pollInterval: z.number().int().optional(),
@@ -752,7 +771,7 @@ export type CalendarRemind = z.infer<typeof calendarRemindSchema>;
 export const createBadgeSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().optional(),
-  type: z.number().int().optional(),
+  type: badgeTypeSchema.optional(),
   courseId: uuidIdSchema.optional(),
   issuerName: z.string().optional(),
   issuerUrl: z.string().optional(),
@@ -774,9 +793,15 @@ export type UpdateBadge = z.infer<typeof updateBadgeSchema>;
 
 /** Payload đổi trạng thái vòng đời của huy hiệu. */
 export const setBadgeStatusSchema = z.strictObject({
-  status: z.number().int(),
+  status: badgeStatusSchema,
 });
 export type SetBadgeStatus = z.infer<typeof setBadgeStatusSchema>;
+
+/** Cách gộp tiêu chí cấp huy hiệu: 1 = TẤT CẢ (ALL), 2 = BẤT KỲ (ANY). */
+export const BADGE_CRITERIA_METHODS = [1, 2] as const;
+/** Cách gộp tiêu chí cấp huy hiệu (1 = TẤT CẢ, 2 = BẤT KỲ). */
+export const badgeCriteriaMethodSchema = z.union([z.literal(BADGE_CRITERIA_METHODS[0]), z.literal(BADGE_CRITERIA_METHODS[1])]);
+export type BadgeCriteriaMethod = z.infer<typeof badgeCriteriaMethodSchema>;
 
 /**
  * Tham số của từng loại lá tiêu chí cấp huy hiệu (discriminated theo `criteriaType` ở schema lá bên dưới):
@@ -819,7 +844,7 @@ export type BadgeCriteriaLeaf = z.infer<typeof badgeCriteriaLeafSchema>;
 
 /** Payload đặt bộ tiêu chí cấp huy hiệu: method 1 = TẤT CẢ (ALL), 2 = BẤT KỲ (ANY). */
 export const setBadgeCriteriaSchema = z.strictObject({
-  method: z.number().int(),
+  method: badgeCriteriaMethodSchema,
   criteria: z.array(badgeCriteriaLeafSchema),
 });
 export type SetBadgeCriteria = z.infer<typeof setBadgeCriteriaSchema>;

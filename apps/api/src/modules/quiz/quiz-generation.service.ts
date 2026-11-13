@@ -1,4 +1,4 @@
-import { BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, Logger, UnprocessableEntityException } from '@nestjs/common';
 import type { PaperSlotLayout, RichTextDocument } from '@giaokhoa/contracts';
 import { getTrueFalseStatements, TRUE_FALSE_STATEMENT_COUNT } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -83,6 +83,8 @@ export function flattenSpecification(spec: MatrixSpecification): {
  */
 
 export class QuizGenerationService {
+  private readonly logger = new Logger(QuizGenerationService.name);
+
   constructor(
     private readonly repo: QuizRepository,
     private readonly questions: QuestionsService,
@@ -97,7 +99,7 @@ export class QuizGenerationService {
     const out = [...items];
     for (let i = out.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [out[i], out[j]] = [out[j]!, out[i]!];
+      [out[i], out[j]] = [out[j]!, out[i]!]; // Bất biến: i, j đều trong [0, out.length).
     }
     return out;
   }
@@ -595,7 +597,10 @@ export class QuizGenerationService {
     } catch (err) {
       // Cùng kỷ luật dọn dẹp với startAttempt: attempt chưa thành hình
       // thì xoá usage mồ côi (hàng attempt, nếu đã chèn, cascade theo).
-      await this.questions.deleteUsage(usage.usage.id).catch(() => undefined);
+      // Dọn lỗi thì phải thấy trong log (lỗi gốc vẫn được ném lại).
+      await this.questions.deleteUsage(usage.usage.id).catch((cleanupErr) => {
+        this.logger.warn(`recordPaperAttempt cleanup failed for usage ${usage.usage.id}: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+      });
       throw err;
     }
   }

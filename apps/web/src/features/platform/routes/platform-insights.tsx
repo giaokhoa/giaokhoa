@@ -6,17 +6,18 @@ import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
+import { platformKeyMeta } from '#lib/route-meta';
+import { pageLoadState } from '../queries/page-load-state';
 import { useMyInsights } from '../queries/platform';
 
 /**
  * Insights cho teacher (platform services): chỉ insight mà server đã lọc theo capability mới tới client. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `myInsights`; `clientLoader` của route nạp trước đúng khoá này). Trạng thái đang tải/báo lỗi giữ như bản fetch thủ công: lần tải đầu hoặc lần thử lại đang chạy thì hiện khung xương, lỗi chỉ hiện sau khi lần tải đã kết thúc.
  */
 export function InsightsPage() {
-  const { t: t } = useTranslation();
+  const { t } = useTranslation();
   const insightsQuery = useMyInsights();
   const insights = insightsQuery.data ?? [];
-  const loading = insightsQuery.isPending || (insightsQuery.isError && insightsQuery.isFetching);
-  const loadError = insightsQuery.isError && !insightsQuery.isFetching ? t('insightsLoadFailed') : null;
+  const { loading, loadError } = pageLoadState(insightsQuery, t('insightsLoadFailed'));
   return (
     <PageShell width="medium">
       <PageHeader title={t('insightsTitle')} />
@@ -68,7 +69,6 @@ export { InsightsPage as default };
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('insightsTitle');
 }

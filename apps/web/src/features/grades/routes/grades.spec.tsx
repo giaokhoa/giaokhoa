@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
+import { stubFetch } from '#test/stub-fetch';
 import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { GradebookPage } from './grades';
@@ -61,18 +62,6 @@ const REPORT = {
     { userId: '01900000-0000-7000-8000-000000000008', displayName: 'Bạn Học Khác', grades: { [ITEM.id]: null } },
   ],
 };
-
-function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
-      const body = handler(url, init);
-      if (body === undefined)
-        return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }),
-  );
-}
 
 /**
  * Render trang điểm theo bài trong đúng khung provider của ứng dụng thật: trang đọc `usePermissions()` để chỉ hiện khu quản trị cho staff của khoá. Test học viên không đặt token đăng nhập:

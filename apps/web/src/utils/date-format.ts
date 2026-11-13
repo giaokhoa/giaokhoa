@@ -6,7 +6,7 @@
  * Ranh giới phạm vi:
  * - Chỉ phục vụ định dạng ngày giờ hiển thị. Định dạng SỐ (học phí, số
  *   tiền, điểm) vẫn dùng `toLocaleString` / `Intl.NumberFormat` tại chỗ, không đi qua module này.
- * - Các hàm nội bộ của `lib/calendar.ts` (trích thành phần múi giờ cho
+ * - Các hàm nội bộ của `features/calendar/utils/calendar.ts` (trích thành phần múi giờ cho
  *   lưới lịch) không thuộc module này và không đổi.
  */
 
@@ -82,4 +82,29 @@ export function formatWithOptions(
   options: Intl.DateTimeFormatOptions,
 ): string {
   return new Intl.DateTimeFormat(locale, options).format(toDate(value));
+}
+
+/** Số mili-giây trong một ngày — hằng dùng chung thay cho literal `86_400_000` rải ở nhiều nơi. */
+export const MS_PER_DAY = 86_400_000;
+
+/**
+ * Mốc thời gian tương đối ("vừa xong", "{{count}} phút/giờ/ngày trước"; quá một tuần thì in ngày giờ cụ thể).
+ *
+ * Cùng khuôn và cùng khoá i18n ở mọi bề mặt dùng nó (tin nhắn, chuông thông báo, trung tâm thông báo): trước đây ba bản sao giống hệt nhau
+ * nằm ở `features/messaging/utils/utils.ts`, `features/notifications/components/notification-bell.tsx` và `features/notifications/routes/notifications.tsx`.
+ *
+ * @param iso - Chuỗi ISO của thời điểm cần hiển thị.
+ * @param t - Hàm dịch của i18n (khoá `justNow`, `minutesAgo`, `hoursAgo`, `daysAgo`).
+ * @returns Chuỗi thời gian tương đối.
+ */
+export function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 60_000) return t('justNow');
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return t('minutesAgo', { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t('hoursAgo', { count: hours });
+  const days = Math.floor(hours / 24);
+  if (days < 7) return t('daysAgo', { count: days });
+  return formatDateTime(iso);
 }

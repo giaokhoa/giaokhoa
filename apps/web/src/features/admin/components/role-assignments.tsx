@@ -26,7 +26,7 @@ import { roleAssignmentsQueryOptions } from '../queries/admin-roles';
 import { AdminSelect } from './admin-select';
 import { RoleAssignmentDialog } from './role-assignment-dialog';
 import { RoleUnassignDialog, type UnassignTarget } from './role-unassign-dialog';
-import { TablePagination } from './table-pagination';
+import { ADMIN_PAGE_SIZE_OPTIONS, isAdminPageSize, TablePagination } from './table-pagination';
 
 /**
  * Khu vực bảng gán vai trên trang quản trị vai trò, đặt dưới lưới thẻ
@@ -89,9 +89,6 @@ export interface RoleAssignmentsSectionProps {
   contexts: ContextRow[];
 }
 
-/** Các lựa chọn số dòng mỗi trang của bảng (API chặn tối đa 100). */
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
-
 export function RoleAssignmentsSection({ roles, contexts }: RoleAssignmentsSectionProps) {
   const { t } = useTranslation('app');
   /** '' nghĩa là không lọc theo tiêu chí đó — Select hiện mục "Tất cả". */
@@ -99,7 +96,8 @@ export function RoleAssignmentsSection({ roles, contexts }: RoleAssignmentsSecti
   const [contextFilter, setContextFilter] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // Cỡ trang mặc định 10 như hai bảng quản trị còn lại (S14, rà soát #50): tập lựa chọn dùng chung `ADMIN_PAGE_SIZE_OPTIONS` không còn 20.
+  const [pageSize, setPageSize] = useState(10);
   const [assignOpen, setAssignOpen] = useState(false);
   /** Dòng đang chờ xác nhận gỡ; null khi hộp thoại đóng. */
   const [unassignTarget, setUnassignTarget] = useState<UnassignTarget | null>(null);
@@ -218,10 +216,10 @@ export function RoleAssignmentsSection({ roles, contexts }: RoleAssignmentsSecti
               value={String(pageSize)}
               onValueChange={(next) => {
                 const size = Number(next);
-                setPageSize(PAGE_SIZE_OPTIONS.includes(size as 10 | 20 | 50) ? size : 20);
+                setPageSize(isAdminPageSize(size) ? size : 10);
                 setPage(1);
               }}
-              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+              options={ADMIN_PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
             />
             <Button type="button" className="h-9 gap-1.5 px-2.5" onClick={() => setAssignOpen(true)}>
               <Plus aria-hidden className="size-4" />

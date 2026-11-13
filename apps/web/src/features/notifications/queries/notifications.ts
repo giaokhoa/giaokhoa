@@ -1,3 +1,10 @@
+/**
+ * Tầng dữ liệu TanStack Query của trung tâm thông báo: queryOptions cho số chưa đọc,
+ * danh sách nhóm và tuỳ chọn nhận tin, cùng các đột biến đánh dấu đã đọc/xoá với
+ * cập nhật lạc quan trên cache nhóm; mọi thao tác đọc đều invalidate khoá số chưa
+ * đọc dùng chung để huy hiệu chuông ở header hội tụ cùng lúc với trang.
+ */
+
 import {
   queryOptions,
   useInfiniteQuery,
@@ -167,59 +174,60 @@ export function useNotificationCourseOverrides() {
   });
 }
 
-/**
- * Đặt ghi đè cho đúng một khoá (PUT /messages/preferences/courses) với cập nhật lạc quan trên cache như tuỳ chọn theo provider: áp ngay chế độ mới lên dòng khoá đó, lỗi thì hoàn lại.
- */
-export function useSetNotificationCourseOverride() {
+/** Đột biến đặt một dòng trong danh sách tuỳ chọn với cập nhật lạc quan: áp patch ngay lên dòng khớp, server trả dòng đầy đủ thì chốt theo bản server, lỗi thì hoàn lại danh sách trước đó. */
+function useOptimisticRowMutation<TRow, TVars>(
+  queryKey: readonly unknown[],
+  mutationFn: (vars: TVars) => Promise<TRow>,
+  rowKey: (row: TRow) => string,
+  varsKey: (vars: TVars) => string,
+  patchRow: (row: TRow, vars: TVars) => TRow,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { courseId: string; mode: NotificationCourseOverrideView['mode'] }) =>
-      setNotificationCourseOverride(input),
-    onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.messageCourseOverrides });
-      const previous = queryClient.getQueryData<NotificationCourseOverrideView[]>(queryKeys.messageCourseOverrides);
-      queryClient.setQueryData<NotificationCourseOverrideView[]>(queryKeys.messageCourseOverrides, (old) =>
-        old?.map((c) => (c.courseId === input.courseId ? { ...c, mode: input.mode } : c)),
+    mutationFn,
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<TRow[]>(queryKey);
+      queryClient.setQueryData<TRow[]>(queryKey, (old) =>
+        old?.map((row) => (rowKey(row) === varsKey(vars) ? patchRow(row, vars) : row)),
       );
       return { previous };
     },
     onSuccess: (saved) => {
-      queryClient.setQueryData<NotificationCourseOverrideView[]>(queryKeys.messageCourseOverrides, (old) =>
-        old?.map((c) => (c.courseId === saved.courseId ? saved : c)),
+      queryClient.setQueryData<TRow[]>(queryKey, (old) =>
+        old?.map((row) => (rowKey(row) === rowKey(saved) ? saved : row)),
       );
     },
-    onError: (_error, _input, context) => {
+    onError: (_error, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(queryKeys.messageCourseOverrides, context.previous);
+        queryClient.setQueryData(queryKey, context.previous);
       }
     },
   });
 }
 
 /**
+ * Đặt ghi đè cho đúng một khoá (PUT /messages/preferences/courses) với cập nhật lạc quan trên cache như tuỳ chọn theo provider: áp ngay chế độ mới lên dòng khoá đó, lỗi thì hoàn lại.
+ */
+export function useSetNotificationCourseOverride() {
+  return useOptimisticRowMutation<NotificationCourseOverrideView, { courseId: string; mode: NotificationCourseOverrideView['mode'] }>(
+    queryKeys.messageCourseOverrides,
+    (input) => setNotificationCourseOverride(input),
+    (row) => row.courseId,
+    (input) => input.courseId,
+    (row, input) => ({ ...row, mode: input.mode }),
+  );
+}
+
+/**
  * Đặt tuỳ chọn v2 cho đúng một provider (PUT /messages/preferences) với cập nhật lạc quan trên cache: áp patch ngay lên dòng đó, server trả về dòng đầy đủ thì chốt theo bản server, lỗi thì hoàn lại toàn bộ danh sách trước đó — cùng hành vi trang cũ, nay theo mô hình v2.
  */
 export function useSetMessagePreference() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { provider: string; patch: PreferencePatch }) => setMessagePreference(input),
-    onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.messagePreferences });
-      const previous = queryClient.getQueryData<NotificationPreferenceView[]>(queryKeys.messagePreferences);
-      queryClient.setQueryData<NotificationPreferenceView[]>(queryKeys.messagePreferences, (old) =>
-        old?.map((p) => (p.provider === input.provider ? { ...p, ...input.patch } : p)),
-      );
-      return { previous };
-    },
-    onSuccess: (saved) => {
-      queryClient.setQueryData<NotificationPreferenceView[]>(queryKeys.messagePreferences, (old) =>
-        old?.map((p) => (p.provider === saved.provider ? saved : p)),
-      );
-    },
-    onError: (_error, _input, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKeys.messagePreferences, context.previous);
-      }
-    },
-  });
+  return useOptimisticRowMutation<NotificationPreferenceView, { provider: string; patch: PreferencePatch }>(
+    queryKeys.messagePreferences,
+    (input) => setMessagePreference(input),
+    (row) => row.provider,
+    (input) => input.provider,
+    (row, input) => ({ ...row, ...input.patch }),
+  );
 }

@@ -15,9 +15,10 @@
  * (tên bảng/cột snake_case), cột được chọn bằng danh sách tường
  * minh có bí danh camelCase, giá trị jsonb ghi qua helper serialize + ép kiểu `::jsonb` (mẫu `jsonbValue` của pilot; giá trị `null` giữ nguyên là SQL NULL như đường bộ máy cũ), điều kiện động của `listAudit` dựng bằng `.where` xâu chuỗi trên builder giữ lại (mẫu an toàn của thử nghiệm T-13 — không bao giờ truyền `where(undefined)`). Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
-import { sql, type RawBuilder } from 'kysely';
+
 import type { CentreDb } from '../client';
 import type { Json } from '../types/centre-db';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /** Một dòng vết thay đổi cấu hình do quản trị thực hiện (hình dạng camelCase phía tiêu thụ dùng). */
 export interface AuditRow {
@@ -29,20 +30,6 @@ export interface AuditRow {
   /** NULL = thay đổi ở tầng platform; có giá trị = đổi cấu hình tenant (TENANT-0, #168). */
   tenantId: string | null;
   createdAt: Date;
-}
-
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — cùng mẫu `jsonbValue` của pilot kho control plane: serialize tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi
- * (object lẫn mảng) để một khuôn duy nhất, không phụ thuộc nhánh
- * xử lý riêng của driver theo hình dạng giá trị. Kiểu trả về gắn theo kiểu `Json` của cột đích để builder chấp nhận biểu thức ở vị trí giá trị của cột jsonb.
- */
-function jsonbValue(value: unknown): RawBuilder<Json> {
-  return sql<Json>`${JSON.stringify(value as Json)}::jsonb`;
-}
-
-/** Giá trị jsonb sẽ ghi: `null`/vắng mặt giữ là SQL NULL như đường bộ máy cũ, còn lại serialize qua `jsonbValue`. */
-function storedJsonb(value: unknown): RawBuilder<Json> | null {
-  return value === null || value === undefined ? null : jsonbValue(value);
 }
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng vết thay đổi cấu hình. */
@@ -65,20 +52,25 @@ const AUDIT_COLUMNS = [
 export class SiteConfigRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (mặc định cho tham số `db` của các phương thức). */
+  private db(): CentreDb {
+    return this.handle;
+  }
+
   /**
    * Đọc giá trị đã lưu trong cơ sở dữ liệu của một setting; undefined nếu
    * chưa từng có ghi đè (khi đó giá trị hiệu lực là mặc định trong code).
    */
-  async getStoredValue(component: string, name: string): Promise<unknown> {
+  async getStoredValue(component: string, name: string, db: CentreDb = this.db()): Promise<unknown> {
     if (component === 'core') {
-      const row = await this.handle
+      const row = await db
         .selectFrom('config')
         .select(['value'])
         .where('key', '=', name)
         .executeTakeFirst();
       return row ? row.value : undefined;
     }
-    const row = await this.handle
+    const row = await db
       .selectFrom('plugin_config')
       .select(['value'])
       .where('plugin', '=', component)
@@ -89,6 +81,7 @@ export class SiteConfigRepository {
     try {
       return JSON.parse(row.value) as unknown;
     } catch {
+      // Không parse được thì trả chuỗi thô như đã lưu — cùng ý đồ dự phòng như `catch` ở auth.ts (S22).
       return row.value;
     }
   }
@@ -104,17 +97,18 @@ export class SiteConfigRepository {
    * nhánh ghi platform chạm tới, và dòng platform đã có được cập
    * nhật thay vì vấp ràng buộc duy nhất.
    */
-  async storeValue(component: string, name: string, value: unknown): Promise<void> {
+  async storeValue(component: string, name: string, value: unknown, db: CentreDb = this.db()): Promise<void> {
     if (component === 'core') {
-      const stored = storedJsonb(value);
-      await this.handle
+      // Giá trị vắng mặt giữ là SQL NULL như đường bộ máy cũ (không bỏ qua cột như jsonbField).
+      const stored = value === undefined ? null : jsonbField(value);
+      await db
         .insertInto('config')
         .values({ key: name, value: stored })
         .onConflict((oc) => oc.column('key').doUpdateSet({ value: stored, updated_at: new Date() }))
         .execute();
       return;
     }
-    await this.handle
+    await db
       .insertInto('plugin_config')
       .values({ plugin: component, name, value: JSON.stringify(value) })
       .onConflict((oc) => oc
@@ -127,12 +121,12 @@ export class SiteConfigRepository {
   /**
    * Xoá ghi đè của một setting để giá trị hiệu lực trở về mặc định code.
    */
-  async deleteValue(component: string, name: string): Promise<void> {
+  async deleteValue(component: string, name: string, db: CentreDb = this.db()): Promise<void> {
     if (component === 'core') {
-      await this.handle.deleteFrom('config').where('key', '=', name).execute();
+      await db.deleteFrom('config').where('key', '=', name).execute();
       return;
     }
-    await this.handle
+    await db
       .deleteFrom('plugin_config')
       .where('plugin', '=', component)
       .where('name', '=', name)
@@ -144,20 +138,23 @@ export class SiteConfigRepository {
    * Ghi một dòng vết thay đổi: khoá setting, giá trị trước, giá trị sau và
    * người thực hiện.
    */
-  async insertAudit(entry: {
-    settingKey: string;
-    oldValue: unknown;
-    newValue: unknown;
-    changedBy: string;
-    /** NULL = thay đổi ở tầng platform; có giá trị = đổi cấu hình tenant (TENANT-0, #168). */
-    tenantId?: string | null;
-  }): Promise<void> {
-    await this.handle
+  async insertAudit(
+    entry: {
+      settingKey: string;
+      oldValue: unknown;
+      newValue: unknown;
+      changedBy: string;
+      /** NULL = thay đổi ở tầng platform; có giá trị = đổi cấu hình tenant (TENANT-0, #168). */
+      tenantId?: string | null;
+    },
+    db: CentreDb = this.db(),
+  ): Promise<void> {
+    await db
       .insertInto('admin_setting_audit')
       .values({
         setting_key: entry.settingKey,
-        old_value: storedJsonb(entry.oldValue ?? null),
-        new_value: storedJsonb(entry.newValue ?? null),
+        old_value: jsonbField(entry.oldValue ?? null),
+        new_value: jsonbField(entry.newValue ?? null),
         changed_by: entry.changedBy,
         tenant_id: entry.tenantId ?? null,
       })
@@ -172,8 +169,8 @@ export class SiteConfigRepository {
    * truyền `undefined` vào `where` (nó bị gắn thành NULL và lặng
    * lẽ trả 0 dòng).
    */
-  async listAudit(settingKey?: string): Promise<AuditRow[]> {
-    let query = this.handle.selectFrom('admin_setting_audit').select(AUDIT_COLUMNS);
+  async listAudit(settingKey?: string, db: CentreDb = this.db()): Promise<AuditRow[]> {
+    let query = db.selectFrom('admin_setting_audit').select(AUDIT_COLUMNS);
     if (settingKey) {
       query = query.where('setting_key', '=', settingKey);
     }

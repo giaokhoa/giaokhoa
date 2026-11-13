@@ -6,6 +6,8 @@ import { CardDescription } from '@giaokhoa/ui/components/card';
 import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
+import { selectClass } from '#lib/form-classes';
+import { CRITERIA_METHOD } from '../utils/utils';
 
 type CriterionDraft = { criteriaType: string; moduleInstance: string; date: string };
 type Section = CourseContent['sections'][number];
@@ -19,13 +21,12 @@ interface CompletionCardProps {
   sections: Section[];
   onSaveCriteria: (event: FormEvent) => void;
   onRecalculate: () => void;
-  selectClass: string;
 }
 
 /** Thẻ tiêu chí hoàn thành khoá của trang Xây dựng khoá (chỉ hiện khi có quyền completion:manage). */
 export function CompletionCard({
   canManageCompletion, criteriaMethod, setCriteriaMethod, criteriaDraft, setCriteriaDraft,
-  sections, onSaveCriteria, onRecalculate, selectClass,
+  sections, onSaveCriteria, onRecalculate,
 }: CompletionCardProps) {
   const { t } = useTranslation('app');
   const saveCriteria = onSaveCriteria;
@@ -49,8 +50,8 @@ export function CompletionCard({
                   value={criteriaMethod}
                   onChange={(e) => setCriteriaMethod(Number(e.target.value))}
                 >
-                  <option value={1}>{t('completionMethodAll')}</option>
-                  <option value={2}>{t('completionMethodAny')}</option>
+                  <option value={CRITERIA_METHOD.all}>{t('completionMethodAll')}</option>
+                  <option value={CRITERIA_METHOD.any}>{t('completionMethodAny')}</option>
                 </select>
               </div>
               {criteriaDraft.length === 0 ? <p className="text-sm text-muted-foreground">{t('noCriteria')}</p> : null}

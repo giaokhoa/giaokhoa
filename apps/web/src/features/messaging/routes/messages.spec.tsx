@@ -1,3 +1,12 @@
+/**
+ * Spec của trang Tin nhắn: render trang trong đúng khung provider của app thật với
+ * fetch và socket realtime được mock ở biên. Phủ chặn/bỏ chặn liên hệ, gửi lạc quan
+ * và cập nhật realtime, vòng đời tin nhắn theo vai (thu hồi/xoá), trích dẫn (M3),
+ * tìm kiếm (M4), ghim/lưu trữ/tắt tiếng (M5), panel thành viên (MSG-T4) và các hồi
+ * quy PR #530/#610/#623; helper dùng chung `stubMessagesFetch`/`renderMessages`
+ * đặt ở đầu file, bảng route riêng đi qua stub fetch dùng chung ở `#test/stub-fetch`.
+ */
+
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -6,6 +15,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '#lib/auth';
 import { createQueryClient } from '#lib/query-client';
 import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
+import { stubFetchWithMethod as stubFetch, type RecordedCall } from '#test/stub-fetch';
 import { formatWithOptions } from '#utils/date-format';
 import { MessagesPage } from './messages';
 
@@ -75,51 +85,38 @@ const PROFILE = {
   customFields: [],
 };
 
-interface RecordedCall {
-  url: string;
-  method: string;
-  body: unknown;
-}
-
 /** Stub fetch ghi lời gọi; trạng thái chặn thay đổi theo POST/DELETE block. */
-function stubFetch(calls: RecordedCall[]) {
+function stubMessagesFetch(calls: RecordedCall[]) {
   const state = { blocked: [] as string[] };
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
-      const method = init?.method ?? 'GET';
-      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      const respond = (body: unknown) =>
-        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      if (isGetSessionUrl(url)) return respond(baSessionBody({ id: PROFILE.id, username: PROFILE.username, email: PROFILE.email }));
-      if (url === '/api/v1/users/me') return respond(PROFILE);
-      if (url === '/api/v1/messages/courses')
-        return respond({ courses: [{ courseId: COURSE_ID, fullName: 'Khoá học mẫu', shortName: 'KHOA' }] });
-      if (url.startsWith(`/api/v1/messages/courses/${COURSE_ID}/members`))
-        return respond({
-          members: [{ userId: OTHER_ID, displayName: 'Bạn Học', username: 'otheruser', role: 'student', relationship: 'contact' }],
-          nextCursor: null,
-        });
-      if (url === '/api/v1/messages/conversations' && method === 'POST')
-        return respond({ id: CONV_ID, type: 1, name: null, members: [ME_ID, OTHER_ID] });
-      if (url === '/api/v1/messages/conversations')
-        return respond([{ id: CONV_ID, type: 1, name: null, members: [ME_ID, OTHER_ID] }]);
-      if (url === '/api/v1/messages/unread-count') return respond({ conversations: 0, notifications: 0 });
-      if (url === '/api/v1/messages/contacts/blocked') return respond({ blocked: state.blocked });
-      if (url === `/api/v1/messages/contacts/${OTHER_ID}/block` && method === 'POST') {
-        state.blocked = [OTHER_ID];
-        return respond({ blocked: state.blocked });
-      }
-      if (url === `/api/v1/messages/contacts/${OTHER_ID}/block` && method === 'DELETE') {
-        state.blocked = [];
-        return respond({ blocked: state.blocked });
-      }
-      if (url === `/api/v1/messages/conversations/${CONV_ID}`)
-        return respond({ id: CONV_ID, type: 1, name: null, members: [ME_ID, OTHER_ID], messages: [] });
-      if (url === `/api/v1/messages/conversations/${CONV_ID}/read`) return respond({});
-      return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
-    }),
-  );
+  stubFetch((url, method) => {
+    if (isGetSessionUrl(url)) return baSessionBody({ id: PROFILE.id, username: PROFILE.username, email: PROFILE.email });
+    if (url === '/api/v1/users/me') return PROFILE;
+    if (url === '/api/v1/messages/courses')
+      return ({ courses: [{ courseId: COURSE_ID, fullName: 'Khoá học mẫu', shortName: 'KHOA' }] });
+    if (url.startsWith(`/api/v1/messages/courses/${COURSE_ID}/members`))
+      return ({
+        members: [{ userId: OTHER_ID, displayName: 'Bạn Học', username: 'otheruser', role: 'student', relationship: 'contact' }],
+        nextCursor: null,
+      });
+    if (url === '/api/v1/messages/conversations' && method === 'POST')
+      return ({ id: CONV_ID, type: 1, name: null, members: [ME_ID, OTHER_ID] });
+    if (url === '/api/v1/messages/conversations')
+      return [{ id: CONV_ID, type: 1, name: null, members: [ME_ID, OTHER_ID] }];
+    if (url === '/api/v1/messages/unread-count') return ({ conversations: 0, notifications: 0 });
+    if (url === '/api/v1/messages/contacts/blocked') return ({ blocked: state.blocked });
+    if (url === `/api/v1/messages/contacts/${OTHER_ID}/block` && method === 'POST') {
+      state.blocked = [OTHER_ID];
+      return ({ blocked: state.blocked });
+    }
+    if (url === `/api/v1/messages/contacts/${OTHER_ID}/block` && method === 'DELETE') {
+      state.blocked = [];
+      return ({ blocked: state.blocked });
+    }
+    if (url === `/api/v1/messages/conversations/${CONV_ID}`)
+      return ({ id: CONV_ID, type: 1, name: null, members: [ME_ID, OTHER_ID], messages: [] });
+    if (url === `/api/v1/messages/conversations/${CONV_ID}/read`) return ({});
+    return undefined;
+  }, calls);
 }
 
 /**
@@ -175,7 +172,7 @@ describe('Trang tin nhắn — chặn và bỏ chặn liên hệ', () => {
 
   it('chặn đối tác trò chuyện qua POST contacts/:userId/block và bỏ chặn qua DELETE', async () => {
     const calls: RecordedCall[] = [];
-    stubFetch(calls);
+    stubMessagesFetch(calls);
     renderMessages();
 
     const convButton = await screen.findByRole('button', { name: new RegExp(OTHER_ID) });
@@ -562,7 +559,7 @@ function stubDomainFetch(calls: RecordedCall[]) {
   );
 }
 
-describe('Messages page — Lớp B contacts (request–accept)', () => {
+describe('Trang tin nhắn — Lớp B contacts (request–accept)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -613,7 +610,7 @@ describe('Messages page — Lớp B contacts (request–accept)', () => {
   });
 });
 
-describe('Messages page — Lớp B conversation actions (soft delete + report)', () => {
+describe('Trang tin nhắn — Lớp B conversation actions (soft delete + report)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -701,7 +698,7 @@ function stubDeepLinkFetch(calls: RecordedCall[]) {
   );
 }
 
-describe('Messages page — notification deep-link (việc nối tiếp #33)', () => {
+describe('Trang tin nhắn — notification deep-link (việc nối tiếp #33)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -781,7 +778,7 @@ describe('Trang tin nhắn — hợp đồng tạo cuộc trò chuyện', () => 
 
   it('post memberIds khi bắt đầu trò chuyện từ liên hệ danh sách khoá học và mở nó với người được chỉ định làm thành viên', async () => {
     const calls: RecordedCall[] = [];
-    stubFetch(calls);
+    stubMessagesFetch(calls);
     renderMessages();
 
     // Bắt đầu cuộc trò chuyện từ dòng roster của một liên hệ trong khoá
@@ -872,7 +869,7 @@ describe('Trang tin nhắn — hợp đồng tạo cuộc trò chuyện', () => 
   });
 });
 
-describe('Messages page — vòng đời tin nhắn theo vai (thu hồi + invalidate)', () => {
+describe('Trang tin nhắn — vòng đời tin nhắn theo vai (thu hồi + invalidate)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -996,7 +993,7 @@ function conversationOrderShort(): string[] {
   return conversationOrder().map((s) => (s.includes('Hội thoại A') ? 'A' : 'B'));
 }
 
-describe('Messages page — M1: sắp xếp, thời gian tương đối, nháp, composer', () => {
+describe('Trang tin nhắn — M1: sắp xếp, thời gian tương đối, nháp, composer', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -1177,7 +1174,7 @@ describe('Messages page — M1: sắp xếp, thời gian tương đối, nháp, 
  * báo "gửi quá nhanh" cạnh composer thay vì chỉ để tin rơi vào trạng
  * thái failed câm.
  */
-describe('Messages page — M2: trần ký tự + lỗi gửi rõ ràng', () => {
+describe('Trang tin nhắn — M2: trần ký tự + lỗi gửi rõ ràng', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -1341,7 +1338,7 @@ function stubFetchM3(calls: RecordedCall[], detailMessages: unknown[]) {
   );
 }
 
-describe('Messages page — M3: trả lời trích dẫn (issue #229)', () => {
+describe('Trang tin nhắn — M3: trả lời trích dẫn (issue #229)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -1516,7 +1513,7 @@ function stubFetchM4(calls: RecordedCall[], opts: { failSearch?: boolean } = {})
   );
 }
 
-describe('Messages page — M4: tìm kiếm (issue #237)', () => {
+describe('Trang tin nhắn — M4: tìm kiếm (issue #237)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -1717,7 +1714,7 @@ function stubFetchM5(calls: RecordedCall[], opts?: { bArchived?: boolean; bUnrea
   );
 }
 
-describe('Messages page — M5: ghim / lưu trữ / tắt tiếng và tab Lưu trữ (issue #240, #623)', () => {
+describe('Trang tin nhắn — M5: ghim / lưu trữ / tắt tiếng và tab Lưu trữ (issue #240, #623)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -2024,7 +2021,7 @@ function stubFetch625Round2(
   );
 }
 
-describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm soạn ghi chú', () => {
+describe('Trang tin nhắn — vòng sửa issue #623: tập đã lưu và cụm soạn ghi chú', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -2367,7 +2364,7 @@ function stubMsgT3Fetch(calls: RecordedCall[], opts: { studentView?: boolean; ca
  * của issue #564; các ca dưới khoá đúng các quyết định đó:
  * đổi cấu trúc tab là các ca này phải đỏ.
  */
-describe('Messages page — phân tab, danh sách nhóm, sheet Tin nhắn mới', () => {
+describe('Trang tin nhắn — phân tab, danh sách nhóm, sheet Tin nhắn mới', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -2736,7 +2733,7 @@ function stubDupSendFetch(calls: RecordedCall[]) {
   };
 }
 
-describe('Messages page — fix nhân đôi tin: khoá idempotency theo bản nháp', () => {
+describe('Trang tin nhắn — fix nhân đôi tin: khoá idempotency theo bản nháp', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -2943,7 +2940,7 @@ async function openT4InfoPanel(firstRowTestId: string) {
  * nhóm cấu trúc chỉ dẫn về roster, nhóm tự do mới gỡ được thành
  * viên tại chỗ. Đổi các luật này thì ca tương ứng phải đỏ.
  */
-describe('Messages page — MSG-T4: panel thành viên + menu avatar', () => {
+describe('Trang tin nhắn — MSG-T4: panel thành viên + menu avatar', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -3202,7 +3199,7 @@ function stubMsgT4StudentFetch(calls: RecordedCall[]) {
   );
 }
 
-describe('Messages page — MSG-T4 phía học sinh: không nới luật nhắn riêng', () => {
+describe('Trang tin nhắn — MSG-T4 phía học sinh: không nới luật nhắn riêng', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -3252,7 +3249,7 @@ describe('Messages page — MSG-T4 phía học sinh: không nới luật nhắn 
  * DOM người dùng thật sự nhận được; hành vi/handler không đổi nên
  * các describe cũ ở trên vẫn là nơi gác luồng nghiệp vụ.
  */
-describe('Messages page — dọn gọn trình bày (avatar neo đáy dòng + menu không xuống dòng)', () => {
+describe('Trang tin nhắn — dọn gọn trình bày (avatar neo đáy dòng + menu không xuống dòng)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -3373,7 +3370,7 @@ describe('Messages page — dọn gọn trình bày (avatar neo đáy dòng + me
  *     menu hành động của thành viên bằng đúng handler của trang.
  * Đổi ngược các quyết này thì ca tương ứng phải đỏ.
  */
-describe('Messages page — sửa dứt điểm trình bày (toolbar nổi + giờ ở tin cuối + nút Chặn)', () => {
+describe('Trang tin nhắn — sửa dứt điểm trình bày (toolbar nổi + giờ ở tin cuối + nút Chặn)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -3461,7 +3458,7 @@ describe('Messages page — sửa dứt điểm trình bày (toolbar nổi + gi�
 
   it('header chat 1–1: menu hành động chứa đúng một mục Chặn kèm tên người đối thoại và không còn nút Chặn riêng', async () => {
     const calls: RecordedCall[] = [];
-    stubFetch(calls);
+    stubMessagesFetch(calls);
     renderMessages();
 
     const convButton = await screen.findByRole('button', { name: new RegExp(OTHER_ID) });
@@ -3598,7 +3595,7 @@ function stubFix530Fetch(calls: RecordedCall[]) {
   return controls;
 }
 
-describe('Messages page — hồi quy vòng sửa PR #530 (tin ở hội thoại không hoạt động + tin tạm sau xác nhận)', () => {
+describe('Trang tin nhắn — hồi quy vòng sửa PR #530 (tin ở hội thoại không hoạt động + tin tạm sau xác nhận)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -3721,7 +3718,7 @@ describe('Messages page — hồi quy vòng sửa PR #530 (tin ở hội thoại
   });
 });
 
-describe('Messages page — hồi quy vòng sửa 2 PR #530 (xoá mềm ở hội thoại không hoạt động + ghim thác vô hiệu và nối lại)', () => {
+describe('Trang tin nhắn — hồi quy vòng sửa 2 PR #530 (xoá mềm ở hội thoại không hoạt động + ghim thác vô hiệu và nối lại)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();

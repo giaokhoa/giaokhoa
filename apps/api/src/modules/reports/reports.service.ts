@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import { ReportsRepository, type ReportRow, type ScheduleRow } from '@giaokhoa/db/repositories/reports';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -19,6 +19,7 @@ export const REPORT_DATASOURCES = ['enrolments', 'grades', 'completion'] as cons
  */
 @Injectable()
 export class ReportsService {
+  private readonly logger = new Logger(ReportsService.name);
   private readonly datasources = new Map<string, ReportDatasource>();
 
   constructor(
@@ -50,43 +51,71 @@ export class ReportsService {
     this.datasources.set('enrolments', {
       name: 'enrolments', columns: ['userId', 'username', 'courseId', 'status'],
       fetchRows: async () => {
-        const instances = await db.selectFrom('enrol').select(['id', 'course_id as courseId']).execute();
-        const ues = await db.selectFrom('user_enrolments').select(['user_id as userId', 'enrol_id as enrolId', 'status']).execute();
-        const allUsers = await db.selectFrom('users').select(['id', 'username']).execute();
-        const byInstance = new Map(instances.map((i) => [i.id, i]));
-        const byUser = new Map(allUsers.map((u) => [u.id, u]));
-        return ues.map((ue) => ({
-          userId: ue.userId, username: byUser.get(ue.userId)?.username ?? '',
-          courseId: byInstance.get(ue.enrolId)?.courseId ?? 0, status: ue.status,
+        // Nối ở SQL bằng LEFT JOIN (giữ đúng hàng khi enrol/user vắng —
+        // username/courseId rơi về ''/0 như phép nối trong bộ nhớ trước đây)
+        // thay vì tải toàn bộ ba bảng về rồi nối bằng Map.
+        const rows = await db
+          .selectFrom('user_enrolments')
+          .leftJoin('enrol', 'enrol.id', 'user_enrolments.enrol_id')
+          .leftJoin('users', 'users.id', 'user_enrolments.user_id')
+          .select([
+            'user_enrolments.user_id as userId', 'user_enrolments.status as status',
+            'enrol.course_id as courseId', 'users.username as username',
+          ])
+          .execute();
+        return rows.map((r) => ({
+          userId: r.userId, username: r.username ?? '',
+          courseId: r.courseId ?? 0, status: r.status,
         }));
       },
     });
     this.datasources.set('grades', {
       name: 'grades', columns: ['userId', 'username', 'courseId', 'itemId', 'finalGrade'],
       fetchRows: async () => {
-        const items = await db.selectFrom('grade_items').select(['id', 'course_id as courseId']).execute();
-        const grades = await db.selectFrom('grade_grades').select(['user_id as userId', 'item_id as itemId', 'final_grade as finalGrade']).execute();
-        const allUsers = await db.selectFrom('users').select(['id', 'username']).execute();
-        const byItem = new Map(items.map((i) => [i.id, i]));
-        const byUser = new Map(allUsers.map((u) => [u.id, u]));
-        return grades.map((g) => ({
-          userId: g.userId, username: byUser.get(g.userId)?.username ?? '',
-          courseId: byItem.get(g.itemId)?.courseId ?? 0, itemId: g.itemId, finalGrade: g.finalGrade,
+        // Nối ở SQL bằng LEFT JOIN theo item_id (giữ đúng hàng khi item/user
+        // vắng — courseId rơi về 0 như phép nối trong bộ nhớ trước đây).
+        const rows = await db
+          .selectFrom('grade_grades')
+          .leftJoin('grade_items', 'grade_items.id', 'grade_grades.item_id')
+          .leftJoin('users', 'users.id', 'grade_grades.user_id')
+          .select([
+            'grade_grades.user_id as userId', 'grade_grades.item_id as itemId', 'grade_grades.final_grade as finalGrade',
+            'grade_items.course_id as courseId', 'users.username as username',
+          ])
+          .execute();
+        return rows.map((r) => ({
+          userId: r.userId, username: r.username ?? '',
+          courseId: r.courseId ?? 0, itemId: r.itemId, finalGrade: r.finalGrade,
         }));
       },
     });
     this.datasources.set('completion', {
       name: 'completion', columns: ['userId', 'username', 'courseId', 'status', 'cmId', 'completionState'],
       fetchRows: async () => {
-        const allUsers = await db.selectFrom('users').select(['id', 'username']).execute();
-        const byUser = new Map(allUsers.map((u) => [u.id, u]));
-        const courseRows = await db.selectFrom('course_completions').select(['user_id as userId', 'course', 'status']).execute();
-        const cmRows = await db.selectFrom('course_modules_completion').select(['user_id as userId', 'course_module_id as courseModuleId', 'completion_state as completionState']).execute();
-        const cms = await db.selectFrom('course_modules').select(['id', 'course']).execute();
-        const byCm = new Map(cms.map((c) => [c.id, c]));
+        // Nối ở SQL bằng LEFT JOIN (username/courseId vắng rơi về ''/0
+        // như phép nối trong bộ nhớ trước đây).
+        const courseRows = await db
+          .selectFrom('course_completions')
+          .leftJoin('users', 'users.id', 'course_completions.user_id')
+          .select([
+            'course_completions.user_id as userId', 'course_completions.course as courseId',
+            'course_completions.status as status', 'users.username as username',
+          ])
+          .execute();
+        const cmRows = await db
+          .selectFrom('course_modules_completion')
+          .leftJoin('course_modules', 'course_modules.id', 'course_modules_completion.course_module_id')
+          .leftJoin('users', 'users.id', 'course_modules_completion.user_id')
+          .select([
+            'course_modules_completion.user_id as userId',
+            'course_modules_completion.course_module_id as courseModuleId',
+            'course_modules_completion.completion_state as completionState',
+            'course_modules.course as courseId', 'users.username as username',
+          ])
+          .execute();
         return [
-          ...courseRows.map((r) => ({ userId: r.userId, username: byUser.get(r.userId)?.username ?? '', courseId: r.course, status: r.status, cmId: 0, completionState: -1 })),
-          ...cmRows.map((r) => ({ userId: r.userId, username: byUser.get(r.userId)?.username ?? '', courseId: byCm.get(r.courseModuleId)?.course ?? 0, status: '', cmId: r.courseModuleId, completionState: r.completionState })),
+          ...courseRows.map((r) => ({ userId: r.userId, username: r.username ?? '', courseId: r.courseId, status: r.status, cmId: 0, completionState: -1 })),
+          ...cmRows.map((r) => ({ userId: r.userId, username: r.username ?? '', courseId: r.courseId ?? 0, status: '', cmId: r.courseModuleId, completionState: r.completionState })),
         ];
       },
     });
@@ -222,7 +251,11 @@ export class ReportsService {
     }
     await this.messaging.notify(schedule.createdBy, 'report_scheduled', {
       subject: this.i18n.t('platform.reportFinishedSubject'), body: this.i18n.t('platform.reportFinishedBody', { args: { reportId: schedule.reportId, rows: rowCount } }), contextUrl: `/reports/${schedule.reportId}`,
-    }).catch(() => undefined);
+    }).catch((err) => {
+      // Lỗi phát không bao giờ chặn việc chạy schedule (kết quả đã lưu) —
+      // nhưng phải ghi vết để vận hành thấy khi notification hỏng kéo dài.
+      this.logger.warn(`Failed to notify report schedule completion (schedule ${scheduleId}, report ${schedule.reportId}, user ${schedule.createdBy}): ${err instanceof Error ? err.message : String(err)}`);
+    });
     return { scheduleId, rows: rowCount };
   }
   async runAllSchedules(): Promise<{ ran: number }> {

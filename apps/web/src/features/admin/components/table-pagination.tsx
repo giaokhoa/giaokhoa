@@ -8,6 +8,25 @@ import { Button } from '@giaokhoa/ui/components/button';
  */
 
 /**
+ * Các lựa chọn cỡ trang dùng chung của các bảng quản trị (S14, rà soát
+ * #50): ba bảng kề nhau (người dùng, người dùng kèm vai trò, gán vai)
+ * dùng chung một tập để người dùng không thấy cỡ trang khác nhau giữa
+ * các bảng mà không có lý do — hợp đồng đợt 1 chặn trần 100 phía server.
+ */
+export const ADMIN_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+
+/** Một lựa chọn cỡ trang hợp lệ của các bảng quản trị. */
+export type AdminPageSize = (typeof ADMIN_PAGE_SIZE_OPTIONS)[number];
+
+/**
+ * Kiểm tra một số có phải lựa chọn cỡ trang hợp lệ không — thay cho
+ * ép kiểu literal union lặp lại ở từng bảng khi đọc giá trị ô chọn.
+ */
+export function isAdminPageSize(value: number): value is AdminPageSize {
+  return ADMIN_PAGE_SIZE_OPTIONS.some((option) => option === value);
+}
+
+/**
  * Danh sách nút số trang: tối đa 7 trang thì liệt kê hết; nhiều hơn
  * thì giữ trang đầu, trang cuối và ba trang quanh trang hiện tại.
  *
@@ -22,7 +41,8 @@ function pageNumberList(pageCount: number, current: number): (number | 'ellipsis
     .sort((a, b) => a - b);
   const list: (number | 'ellipsis')[] = [];
   kept.forEach((page, index) => {
-    if (index > 0 && page - kept[index - 1]! > 1) list.push('ellipsis');
+    const previous = kept[index - 1];
+    if (index > 0 && previous !== undefined && page - previous > 1) list.push('ellipsis');
     list.push(page);
   });
   return list;

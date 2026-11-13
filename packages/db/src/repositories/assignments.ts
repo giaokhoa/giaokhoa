@@ -27,8 +27,9 @@
  *
  * Khuôn hình dạng dữ liệu ở biên repository (khuôn của pilot kho control plane, xem sổ tay trong `AGENTS.md` của package): bên trong dùng tên bảng/cột snake_case của interface schema sinh bằng codegen; bên ngoài trả/nhận hình dạng camelCase như phía tiêu thụ đang dùng qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi `*InsertValues`/`*UpdateSet`. Giá trị `undefined` bị LOẠI khỏi values/set trong các hàm ánh xạ (thử nghiệm T-4 đã đo ở pilot). Giá trị ghi vào cột jsonb (`points` của dấu chấm) đi qua helper serialize tường minh + ép kiểu `::jsonb` — driver `pg` hiểu MẢNG ở cấp cao nhất là mảng PostgreSQL nên ghi thẳng sẽ lỗi, đúng khuôn đã chốt ở pilot. Kiểu của `points` ở biên công khai giữ là `unknown` như hợp đồng `$inferSelect` của cột jsonb không khai `$type` trước đây; phía tiêu thụ tự ép kiểu khi đọc. Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
+import {type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { jsonbValue, jsonbField } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: instance gốc hoặc transaction đang mở của kho trung tâm. */
 export type AssignmentsDb = CentreDb | CentreTx;
@@ -347,25 +348,6 @@ export interface NewCommentBankEntry {
   createdAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh.
- *
- * Vì sao cần (đo tại pilot): `pg` tự `JSON.stringify` các OBJECT
- * thường khi gắn tham số, nhưng một MẢNG ở cấp cao nhất bị driver
- * hiểu là mảng PostgreSQL và gửi theo cú pháp mảng — cột jsonb nhận
- * vào sẽ lỗi `invalid input syntax for type json`. Khuôn ở đây:
- * serialize tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi
- * ghi để một khuôn duy nhất, không phụ thuộc nhánh xử lý riêng của
- * driver theo hình dạng giá trị.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
-function jsonbValue<T>(value: T): RawBuilder<T> {
-  return sql<T>`${JSON.stringify(value)}::jsonb`;
-}
-
 /** Danh sách cột tường minh có bí danh camelCase cho bảng bài tập (dùng cho cả select lẫn returning). */
 const ASSIGNMENT_COLUMNS = [
   'id',
@@ -522,19 +504,21 @@ const COMMENT_BANK_COLUMNS = [
  * default của database quyết định (quy tắc T-4 trong sổ tay của
  * package). Mọi hàm ánh xạ ghi của file này giữ cùng quy tắc.
  */
-function assignmentInsertValues(values: NewAssignment): Insertable<CentreDB['assignments']> {
-  const row: Insertable<CentreDB['assignments']> = { course: values.course, name: values.name };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.cmId !== undefined) row.cm_id = values.cmId;
-  if (values.intro !== undefined) row.intro = values.intro;
-  if (values.dueDate !== undefined) row.due_date = values.dueDate;
-  if (values.maxFiles !== undefined) row.max_files = values.maxFiles;
-  if (values.acceptedFileTypes !== undefined) row.accepted_file_types = values.acceptedFileTypes;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.resultMode !== undefined) row.result_mode = values.resultMode;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
+function assignmentInsertValues(values: NewAssignment): InsertObject<CentreDB, 'assignments'> {
+  return {
+    course: values.course,
+    name: values.name,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.cmId !== undefined ? { cm_id: values.cmId } : {}),
+    ...(values.intro !== undefined ? { intro: values.intro } : {}),
+    ...(values.dueDate !== undefined ? { due_date: values.dueDate } : {}),
+    ...(values.maxFiles !== undefined ? { max_files: values.maxFiles } : {}),
+    ...(values.acceptedFileTypes !== undefined ? { accepted_file_types: values.acceptedFileTypes } : {}),
+    ...(values.grade !== undefined ? { grade: values.grade } : {}),
+    ...(values.resultMode !== undefined ? { result_mode: values.resultMode } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
+  };
 }
 
 /**
@@ -543,128 +527,124 @@ function assignmentInsertValues(values: NewAssignment): Insertable<CentreDB['ass
  * thì chỉ trường đó đổi (quy tắc T-4). Mọi hàm ánh xạ set của file
  * này giữ cùng quy tắc.
  */
-function assignmentUpdateSet(patch: Partial<AssignmentRow>): Updateable<CentreDB['assignments']> {
-  const set: Updateable<CentreDB['assignments']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.course !== undefined) set.course = patch.course;
-  if (patch.cmId !== undefined) set.cm_id = patch.cmId;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.intro !== undefined) set.intro = patch.intro;
-  if (patch.dueDate !== undefined) set.due_date = patch.dueDate;
-  if (patch.maxFiles !== undefined) set.max_files = patch.maxFiles;
-  if (patch.acceptedFileTypes !== undefined) set.accepted_file_types = patch.acceptedFileTypes;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.resultMode !== undefined) set.result_mode = patch.resultMode;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+function assignmentUpdateSet(patch: Partial<AssignmentRow>): UpdateObject<CentreDB, 'assignments'> {
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.course !== undefined ? { course: patch.course } : {}),
+    ...(patch.cmId !== undefined ? { cm_id: patch.cmId } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.intro !== undefined ? { intro: patch.intro } : {}),
+    ...(patch.dueDate !== undefined ? { due_date: patch.dueDate } : {}),
+    ...(patch.maxFiles !== undefined ? { max_files: patch.maxFiles } : {}),
+    ...(patch.acceptedFileTypes !== undefined ? { accepted_file_types: patch.acceptedFileTypes } : {}),
+    ...(patch.grade !== undefined ? { grade: patch.grade } : {}),
+    ...(patch.resultMode !== undefined ? { result_mode: patch.resultMode } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện ghi bài nộp (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function submissionInsertValues(values: NewSubmission): Insertable<CentreDB['assign_submissions']> {
-  const row: Insertable<CentreDB['assign_submissions']> = {
+function submissionInsertValues(values: NewSubmission): InsertObject<CentreDB, 'assign_submissions'> {
+  return {
     assignment_id: values.assignmentId,
     user_id: values.userId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.attemptNumber !== undefined ? { attempt_number: values.attemptNumber } : {}),
+    ...(values.submittedAt !== undefined ? { submitted_at: values.submittedAt } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.attemptNumber !== undefined) row.attempt_number = values.attemptNumber;
-  if (values.submittedAt !== undefined) row.submitted_at = values.submittedAt;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Ánh xạ một patch cập nhật bài nộp (camelCase) sang set update (snake_case), loại `undefined` (quy tắc T-4). */
-function submissionUpdateSet(patch: Partial<AssignSubmissionRow>): Updateable<CentreDB['assign_submissions']> {
-  const set: Updateable<CentreDB['assign_submissions']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.assignmentId !== undefined) set.assignment_id = patch.assignmentId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.attemptNumber !== undefined) set.attempt_number = patch.attemptNumber;
-  if (patch.submittedAt !== undefined) set.submitted_at = patch.submittedAt;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+function submissionUpdateSet(patch: Partial<AssignSubmissionRow>): UpdateObject<CentreDB, 'assign_submissions'> {
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.assignmentId !== undefined ? { assignment_id: patch.assignmentId } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.attemptNumber !== undefined ? { attempt_number: patch.attemptNumber } : {}),
+    ...(patch.submittedAt !== undefined ? { submitted_at: patch.submittedAt } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện gắn tệp vào bài nộp (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function submissionFileInsertValues(values: NewSubmissionFile): Insertable<CentreDB['assign_submission_files']> {
-  const row: Insertable<CentreDB['assign_submission_files']> = {
+function submissionFileInsertValues(values: NewSubmissionFile): InsertObject<CentreDB, 'assign_submission_files'> {
+  return {
     submission_id: values.submissionId,
     file_id: values.fileId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi gói chấm (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function gradeInsertValues(values: NewGrade): Insertable<CentreDB['assign_grades']> {
-  const row: Insertable<CentreDB['assign_grades']> = {
+function gradeInsertValues(values: NewGrade): InsertObject<CentreDB, 'assign_grades'> {
+  return {
     assignment_id: values.assignmentId,
     user_id: values.userId,
     grader_id: values.graderId,
     attempt_number: values.attemptNumber,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.grade !== undefined ? { grade: values.grade } : {}),
+    ...(values.level !== undefined ? { level: values.level } : {}),
+    ...(values.feedback !== undefined ? { feedback: values.feedback } : {}),
+    ...(values.feedbackProgress !== undefined ? { feedback_progress: values.feedbackProgress } : {}),
+    ...(values.feedbackStrengths !== undefined ? { feedback_strengths: values.feedbackStrengths } : {}),
+    ...(values.feedbackWeaknesses !== undefined ? { feedback_weaknesses: values.feedbackWeaknesses } : {}),
+    ...(values.status !== undefined ? { status: values.status } : {}),
+    ...(values.releasedAt !== undefined ? { released_at: values.releasedAt } : {}),
+    ...(values.releasedBy !== undefined ? { released_by: values.releasedBy } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.level !== undefined) row.level = values.level;
-  if (values.feedback !== undefined) row.feedback = values.feedback;
-  if (values.feedbackProgress !== undefined) row.feedback_progress = values.feedbackProgress;
-  if (values.feedbackStrengths !== undefined) row.feedback_strengths = values.feedbackStrengths;
-  if (values.feedbackWeaknesses !== undefined) row.feedback_weaknesses = values.feedbackWeaknesses;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.releasedAt !== undefined) row.released_at = values.releasedAt;
-  if (values.releasedBy !== undefined) row.released_by = values.releasedBy;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Ánh xạ một patch cập nhật gói chấm (camelCase) sang set update (snake_case), loại `undefined` (quy tắc T-4). */
-function gradeUpdateSet(patch: Partial<AssignGradeRow>): Updateable<CentreDB['assign_grades']> {
-  const set: Updateable<CentreDB['assign_grades']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.assignmentId !== undefined) set.assignment_id = patch.assignmentId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.graderId !== undefined) set.grader_id = patch.graderId;
-  if (patch.attemptNumber !== undefined) set.attempt_number = patch.attemptNumber;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.level !== undefined) set.level = patch.level;
-  if (patch.feedback !== undefined) set.feedback = patch.feedback;
-  if (patch.feedbackProgress !== undefined) set.feedback_progress = patch.feedbackProgress;
-  if (patch.feedbackStrengths !== undefined) set.feedback_strengths = patch.feedbackStrengths;
-  if (patch.feedbackWeaknesses !== undefined) set.feedback_weaknesses = patch.feedbackWeaknesses;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.releasedAt !== undefined) set.released_at = patch.releasedAt;
-  if (patch.releasedBy !== undefined) set.released_by = patch.releasedBy;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+function gradeUpdateSet(patch: Partial<AssignGradeRow>): UpdateObject<CentreDB, 'assign_grades'> {
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.assignmentId !== undefined ? { assignment_id: patch.assignmentId } : {}),
+    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...(patch.graderId !== undefined ? { grader_id: patch.graderId } : {}),
+    ...(patch.attemptNumber !== undefined ? { attempt_number: patch.attemptNumber } : {}),
+    ...(patch.grade !== undefined ? { grade: patch.grade } : {}),
+    ...(patch.level !== undefined ? { level: patch.level } : {}),
+    ...(patch.feedback !== undefined ? { feedback: patch.feedback } : {}),
+    ...(patch.feedbackProgress !== undefined ? { feedback_progress: patch.feedbackProgress } : {}),
+    ...(patch.feedbackStrengths !== undefined ? { feedback_strengths: patch.feedbackStrengths } : {}),
+    ...(patch.feedbackWeaknesses !== undefined ? { feedback_weaknesses: patch.feedbackWeaknesses } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.releasedAt !== undefined ? { released_at: patch.releasedAt } : {}),
+    ...(patch.releasedBy !== undefined ? { released_by: patch.releasedBy } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /**
  * Ánh xạ dữ kiện ghi dấu chấm (camelCase) sang values insert
  * (snake_case), loại `undefined` (quy tắc T-4). Cột `points` là
- * jsonb: mảng điểm đi qua {@link jsonbValue}; `null` tường minh giữ
+ * jsonb: mảng điểm đi qua {@link jsonbField}; `null` tường minh giữ
  * là `null`; vắng mặt thì cột không có trong values.
  */
 function annotationInsertValues(values: NewAnnotation): InsertObject<CentreDB, 'assign_annotations'> {
-  const row: InsertObject<CentreDB, 'assign_annotations'> = {
+  return {
     submission_id: values.submissionId,
     file_id: values.fileId,
     x: values.x,
     y: values.y,
     kind: values.kind,
     author_id: values.authorId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.page !== undefined ? { page: values.page } : {}),
+    ...(values.color !== undefined ? { color: values.color } : {}),
+    ...(values.text !== undefined ? { text: values.text } : {}),
+    ...(values.points !== undefined ? { points: jsonbField(values.points) } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.page !== undefined) row.page = values.page;
-  if (values.color !== undefined) row.color = values.color;
-  if (values.text !== undefined) row.text = values.text;
-  if (values.points !== undefined) row.points = values.points === null ? null : jsonbValue(values.points);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /**
@@ -675,116 +655,111 @@ function annotationInsertValues(values: NewAnnotation): InsertObject<CentreDB, '
  * được gắn riêng ở phương thức cập nhật bằng biểu thức `::jsonb`
  * (điểm gọi `.set()` chấp nhận biểu thức thô qua `ValueExpression`).
  */
-function annotationUpdateSet(patch: Partial<AssignAnnotationRow>): Updateable<CentreDB['assign_annotations']> {
-  const set: Updateable<CentreDB['assign_annotations']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.submissionId !== undefined) set.submission_id = patch.submissionId;
-  if (patch.fileId !== undefined) set.file_id = patch.fileId;
-  if (patch.page !== undefined) set.page = patch.page;
-  if (patch.x !== undefined) set.x = patch.x;
-  if (patch.y !== undefined) set.y = patch.y;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.color !== undefined) set.color = patch.color;
-  if (patch.text !== undefined) set.text = patch.text;
-  if (patch.authorId !== undefined) set.author_id = patch.authorId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  return set;
+function annotationUpdateSet(patch: Partial<AssignAnnotationRow>): UpdateObject<CentreDB, 'assign_annotations'> {
+  return {
+    ...(patch.id !== undefined ? { id: patch.id } : {}),
+    ...(patch.submissionId !== undefined ? { submission_id: patch.submissionId } : {}),
+    ...(patch.fileId !== undefined ? { file_id: patch.fileId } : {}),
+    ...(patch.page !== undefined ? { page: patch.page } : {}),
+    ...(patch.x !== undefined ? { x: patch.x } : {}),
+    ...(patch.y !== undefined ? { y: patch.y } : {}),
+    ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+    ...(patch.color !== undefined ? { color: patch.color } : {}),
+    ...(patch.text !== undefined ? { text: patch.text } : {}),
+    ...(patch.authorId !== undefined ? { author_id: patch.authorId } : {}),
+    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện ghi bảng chấm (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function rubricInsertValues(values: NewRubric): Insertable<CentreDB['assign_rubrics']> {
-  const row: Insertable<CentreDB['assign_rubrics']> = { assignment_id: values.assignmentId };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.title !== undefined) row.title = values.title;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
+function rubricInsertValues(values: NewRubric): InsertObject<CentreDB, 'assign_rubrics'> {
+  return {
+    assignment_id: values.assignmentId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.title !== undefined ? { title: values.title } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
+  };
 }
 
 /** Ánh xạ dữ kiện ghi tiêu chí (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function rubricCriterionInsertValues(values: NewRubricCriterion): Insertable<CentreDB['assign_rubric_criteria']> {
-  const row: Insertable<CentreDB['assign_rubric_criteria']> = {
+function rubricCriterionInsertValues(values: NewRubricCriterion): InsertObject<CentreDB, 'assign_rubric_criteria'> {
+  return {
     rubric_id: values.rubricId,
     name: values.name,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.descriptionForStudent !== undefined ? { description_for_student: values.descriptionForStudent } : {}),
+    ...(values.descriptionForGrader !== undefined ? { description_for_grader: values.descriptionForGrader } : {}),
+    ...(values.mode !== undefined ? { mode: values.mode } : {}),
+    ...(values.maxScore !== undefined ? { max_score: values.maxScore } : {}),
+    ...(values.outcomeId !== undefined ? { outcome_id: values.outcomeId } : {}),
+    ...(values.outcomeText !== undefined ? { outcome_text: values.outcomeText } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.descriptionForStudent !== undefined) row.description_for_student = values.descriptionForStudent;
-  if (values.descriptionForGrader !== undefined) row.description_for_grader = values.descriptionForGrader;
-  if (values.mode !== undefined) row.mode = values.mode;
-  if (values.maxScore !== undefined) row.max_score = values.maxScore;
-  if (values.outcomeId !== undefined) row.outcome_id = values.outcomeId;
-  if (values.outcomeText !== undefined) row.outcome_text = values.outcomeText;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi mức của tiêu chí (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function rubricLevelInsertValues(values: NewRubricLevel): Insertable<CentreDB['assign_rubric_levels']> {
-  const row: Insertable<CentreDB['assign_rubric_levels']> = {
+function rubricLevelInsertValues(values: NewRubricLevel): InsertObject<CentreDB, 'assign_rubric_levels'> {
+  return {
     criterion_id: values.criterionId,
     label: values.label,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.score !== undefined ? { score: values.score } : {}),
+    ...(values.sortOrder !== undefined ? { sort_order: values.sortOrder } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.score !== undefined) row.score = values.score;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi kết quả theo tiêu chí (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function rubricEvaluationInsertValues(values: NewRubricEvaluation): Insertable<CentreDB['assign_rubric_evaluations']> {
-  const row: Insertable<CentreDB['assign_rubric_evaluations']> = {
+function rubricEvaluationInsertValues(values: NewRubricEvaluation): InsertObject<CentreDB, 'assign_rubric_evaluations'> {
+  return {
     grade_id: values.gradeId,
     criterion_id: values.criterionId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.levelId !== undefined ? { level_id: values.levelId } : {}),
+    ...(values.score !== undefined ? { score: values.score } : {}),
+    ...(values.note !== undefined ? { note: values.note } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
+    ...(values.updatedAt !== undefined ? { updated_at: values.updatedAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.levelId !== undefined) row.level_id = values.levelId;
-  if (values.score !== undefined) row.score = values.score;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi vết kiểm toán (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function gradeRevisionInsertValues(values: NewGradeRevision): Insertable<CentreDB['assign_grade_revisions']> {
-  const row: Insertable<CentreDB['assign_grade_revisions']> = {
+function gradeRevisionInsertValues(values: NewGradeRevision): InsertObject<CentreDB, 'assign_grade_revisions'> {
+  return {
     grade_id: values.gradeId,
     actor_id: values.actorId,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.previousGrade !== undefined ? { previous_grade: values.previousGrade } : {}),
+    ...(values.newGrade !== undefined ? { new_grade: values.newGrade } : {}),
+    ...(values.previousLevel !== undefined ? { previous_level: values.previousLevel } : {}),
+    ...(values.newLevel !== undefined ? { new_level: values.newLevel } : {}),
+    ...(values.previousFeedback !== undefined ? { previous_feedback: values.previousFeedback } : {}),
+    ...(values.newFeedback !== undefined ? { new_feedback: values.newFeedback } : {}),
+    ...(values.reason !== undefined ? { reason: values.reason } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.previousGrade !== undefined) row.previous_grade = values.previousGrade;
-  if (values.newGrade !== undefined) row.new_grade = values.newGrade;
-  if (values.previousLevel !== undefined) row.previous_level = values.previousLevel;
-  if (values.newLevel !== undefined) row.new_level = values.newLevel;
-  if (values.previousFeedback !== undefined) row.previous_feedback = values.previousFeedback;
-  if (values.newFeedback !== undefined) row.new_feedback = values.newFeedback;
-  if (values.reason !== undefined) row.reason = values.reason;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi tin nhắn phản hồi (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function feedbackMessageInsertValues(values: NewFeedbackMessage): Insertable<CentreDB['assign_feedback_messages']> {
-  const row: Insertable<CentreDB['assign_feedback_messages']> = {
+function feedbackMessageInsertValues(values: NewFeedbackMessage): InsertObject<CentreDB, 'assign_feedback_messages'> {
+  return {
     grade_id: values.gradeId,
     author_id: values.authorId,
     body: values.body,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /** Ánh xạ dữ kiện ghi câu lời phê (camelCase) sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
-function commentBankInsertValues(values: NewCommentBankEntry): Insertable<CentreDB['teacher_comment_bank']> {
-  const row: Insertable<CentreDB['teacher_comment_bank']> = {
+function commentBankInsertValues(values: NewCommentBankEntry): InsertObject<CentreDB, 'teacher_comment_bank'> {
+  return {
     owner_id: values.ownerId,
     text: values.text,
+    ...(values.id !== undefined ? { id: values.id } : {}),
+    ...(values.category !== undefined ? { category: values.category } : {}),
+    ...(values.createdAt !== undefined ? { created_at: values.createdAt } : {}),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.category !== undefined) row.category = values.category;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  return row;
 }
 
 /**
@@ -814,12 +789,12 @@ export class AssignmentsRepository {
 
   /** Chèn bản ghi bài tập. */
   async insertAssignment(v: NewAssignment, db: AssignmentsDb = this.db()): Promise<AssignmentRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assignments')
       .values(assignmentInsertValues(v))
       .returning(ASSIGNMENT_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Lấy bài tập theo id. */
@@ -889,12 +864,12 @@ export class AssignmentsRepository {
 
   /** Chèn bài nộp mới. */
   async insertSubmission(v: NewSubmission, db: AssignmentsDb = this.db()): Promise<AssignSubmissionRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_submissions')
       .values(submissionInsertValues(v))
       .returning(SUBMISSION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Cập nhật bài nộp; mốc `updatedAt` luôn lấy thời điểm cập nhật. */
@@ -923,12 +898,12 @@ export class AssignmentsRepository {
 
   /** Gắn một tệp vào bài nộp. */
   async insertSubmissionFile(v: NewSubmissionFile, db: AssignmentsDb = this.db()): Promise<AssignSubmissionFileRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_submission_files')
       .values(submissionFileInsertValues(v))
       .returning(SUBMISSION_FILE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Gỡ quan hệ tệp ↔ bài nộp (bản ghi files được xoá ở tầng Files). */
@@ -973,7 +948,7 @@ export class AssignmentsRepository {
    * tập set của đường cũ trước đây.
    */
   async upsertGrade(v: NewGrade, db: AssignmentsDb = this.db()): Promise<AssignGradeRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_grades')
       .values(gradeInsertValues(v))
       .onConflict((oc) =>
@@ -993,8 +968,8 @@ export class AssignmentsRepository {
         }),
       )
       .returning(GRADE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Cập nhật một phần gói chấm theo id; mốc `updatedAt` luôn lấy thời điểm cập nhật. */
@@ -1029,19 +1004,19 @@ export class AssignmentsRepository {
 
   /** Thêm một dấu chấm. */
   async insertAnnotation(v: NewAnnotation, db: AssignmentsDb = this.db()): Promise<AssignAnnotationRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_annotations')
       .values(annotationInsertValues(v))
       .returning(ANNOTATION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**
    * Sửa một dấu chấm; mốc `updatedAt` luôn lấy thời điểm cập nhật.
    * `points` trong patch được gắn riêng ngoài set đã ánh xạ (xem
    * {@link annotationUpdateSet}): có mặt là `null` thì xoá mảng
-   * điểm (ghi NULL); có mặt là mảng thì ghi qua {@link jsonbValue}
+   * điểm (ghi NULL); có mặt là mảng thì ghi qua {@link jsonbField}
    * như đường insert; vắng mặt thì mảng điểm giữ nguyên.
    */
   async updateAnnotation(
@@ -1054,7 +1029,7 @@ export class AssignmentsRepository {
       .set({
         ...annotationUpdateSet(patch),
         ...(patch.points !== undefined
-          ? { points: patch.points === null ? null : jsonbValue(patch.points as { x: number; y: number }[]) }
+          ? { points: jsonbField(patch.points) }
           : {}),
         updated_at: new Date(),
       })
@@ -1079,12 +1054,12 @@ export class AssignmentsRepository {
 
   /** Tạo bảng chấm mới. */
   async insertRubric(v: NewRubric, db: AssignmentsDb = this.db()): Promise<AssignRubricRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_rubrics')
       .values(rubricInsertValues(v))
       .returning(RUBRIC_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Xoá bảng chấm của bài (tiêu chí/mức/đánh giá cascade theo khoá ngoại). */
@@ -1105,12 +1080,12 @@ export class AssignmentsRepository {
 
   /** Thêm một tiêu chí. */
   async insertCriterion(v: NewRubricCriterion, db: AssignmentsDb = this.db()): Promise<AssignRubricCriterionRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_rubric_criteria')
       .values(rubricCriterionInsertValues(v))
       .returning(RUBRIC_CRITERION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Các mức của một tiêu chí theo thứ tự hiển thị. */
@@ -1126,12 +1101,12 @@ export class AssignmentsRepository {
 
   /** Thêm một mức cho tiêu chí. */
   async insertLevel(v: NewRubricLevel, db: AssignmentsDb = this.db()): Promise<AssignRubricLevelRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_rubric_levels')
       .values(rubricLevelInsertValues(v))
       .returning(RUBRIC_LEVEL_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Kết quả theo tiêu chí của một gói chấm, theo thứ tự tạo. */
@@ -1152,7 +1127,7 @@ export class AssignmentsRepository {
    * tập set của đường cũ trước đây.
    */
   async upsertEvaluation(v: NewRubricEvaluation, db: AssignmentsDb = this.db()): Promise<AssignRubricEvaluationRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_rubric_evaluations')
       .values(rubricEvaluationInsertValues(v))
       .onConflict((oc) =>
@@ -1164,8 +1139,8 @@ export class AssignmentsRepository {
         }),
       )
       .returning(RUBRIC_EVALUATION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Xoá toàn bộ kết quả theo tiêu chí của gói chấm (khi giáo viên gửi lại bộ đánh giá mới). */
@@ -1175,12 +1150,12 @@ export class AssignmentsRepository {
 
   /** Ghi một dòng vết kiểm toán sửa gói chấm sau trả bài. */
   async insertRevision(v: NewGradeRevision, db: AssignmentsDb = this.db()): Promise<AssignGradeRevisionRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_grade_revisions')
       .values(gradeRevisionInsertValues(v))
       .returning(GRADE_REVISION_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Các dòng vết kiểm toán của một gói chấm, cũ → mới. */
@@ -1207,12 +1182,12 @@ export class AssignmentsRepository {
 
   /** Thêm một tin nhắn vào hội thoại phản hồi. */
   async insertMessage(v: NewFeedbackMessage, db: AssignmentsDb = this.db()): Promise<AssignFeedbackMessageRow> {
-    const rows = await db
+    const row = await db
       .insertInto('assign_feedback_messages')
       .values(feedbackMessageInsertValues(v))
       .returning(FEEDBACK_MESSAGE_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Ngân hàng lời phê của một giáo viên, theo thứ tự tạo tăng dần như đường cũ. */
@@ -1228,12 +1203,12 @@ export class AssignmentsRepository {
 
   /** Thêm một câu vào ngân hàng lời phê. */
   async insertCommentBankEntry(v: NewCommentBankEntry, db: AssignmentsDb = this.db()): Promise<TeacherCommentBankRow> {
-    const rows = await db
+    const row = await db
       .insertInto('teacher_comment_bank')
       .values(commentBankInsertValues(v))
       .returning(COMMENT_BANK_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /** Xoá một câu khỏi ngân hàng lời phê của chính chủ sở hữu. */

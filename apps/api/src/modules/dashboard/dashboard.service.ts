@@ -14,6 +14,32 @@ import { DashboardRepository } from '@giaokhoa/db/repositories/dashboard';
 /** Giới hạn tổng số việc đến hạn trả về trong khối tổng hợp (chống phình ở khoá cũ nhiều hoạt động quá hạn). */
 const DUE_ITEMS_LIMIT = 100;
 
+/** Một ngày tính bằng mili-giây — dùng để cộng cửa sổ hạn nộp vào mốc hiện tại. */
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Trạng thái việc đến hạn theo cùng một luật cho quiz lẫn assignment:
+ * quá hạn nộp → 'overdue'; chưa quá hạn nhưng đã bắt đầu làm → 'in_progress';
+ * còn lại → 'not_started'.
+ */
+function dueStatus(dueAt: Date, now: Date, inProgress: boolean): DashboardOverviewView['dueItems'][number]['status'] {
+  if (dueAt < now) return 'overdue';
+  return inProgress ? 'in_progress' : 'not_started';
+}
+
+/**
+ * Map một dòng tuỳ chọn thẻ khoá sang view: màu ở DB là chuỗi tự do, view chỉ
+ * nhận token trong CourseCardColor nên ép kiểu tập trung tại đây thay vì rải
+ * ở từng hàm đọc/ghi pref.
+ */
+function toCourseCardPrefView(row: { courseId: string; color: string | null; nickname: string | null }): CourseCardPrefView {
+  return {
+    courseId: row.courseId,
+    color: (row.color as CourseCardPrefView['color']) ?? null,
+    nickname: row.nickname,
+  };
+}
+
 /**
  * Dashboard việc cần làm (DASH1, issue #121): tổng hợp MỘT lần cho cả khối đầu dashboard. Ba nguyên tắc cứng:
  * - Chỉ tính khoá người dùng thuộc về: ghi danh hiệu lực (học sinh) và khoá
@@ -35,13 +61,14 @@ export class DashboardService {
   /** Khoá user thuộc đội giảng dạy: ứng viên = ghi danh ∪ gán vai tại context khoá, lọc bằng grade:viewall thật. */
   private async teachingCourseIds(userId: string, enrolled: string[], assigned: string[]): Promise<string[]> {
     const candidates = [...new Set([...enrolled, ...assigned])];
-    const teaching: string[] = [];
-    for (const courseId of candidates) {
+    // Kiểm tra context + capability theo lô thay vì await tuần tự từng khoá.
+    const checks = await Promise.all(candidates.map(async (courseId) => {
       const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
-      if (!ctx) continue;
-      if (await this.evaluator.hasCapability(userId, 'grade:viewall', ctx.id)) teaching.push(courseId);
-    }
-    return teaching;
+      if (!ctx) return null;
+      const canViewAll = await this.evaluator.hasCapability(userId, 'grade:viewall', ctx.id);
+      return canViewAll ? courseId : null;
+    }));
+    return checks.filter((courseId): courseId is string => courseId !== null);
   }
 
   /**
@@ -74,7 +101,7 @@ export class DashboardService {
     const teaching = await this.teachingCourseIds(userId, enrolled, assigned);
     const names = await this.repo.courseNames([...new Set([...enrolled, ...teaching])]);
 
-    const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    const until = new Date(now.getTime() + days * MS_PER_DAY);
     const dueItems = await this.buildDueItems(userId, enrolled, names, until, now);
     const newResults = previousSeenAt
       ? await this.buildNewResults(userId, enrolled, names, since)
@@ -106,7 +133,9 @@ export class DashboardService {
     const quizRows = await this.repo.quizDueRows(enrolled, userId, until);
     const quizByCm = new Map<string, { courseId: string; activityId: string; name: string; dueAt: Date; states: (string | null)[] }>();
     for (const row of quizRows) {
-      const entry = quizByCm.get(row.cmId) ?? { courseId: row.courseId, activityId: row.activityId!, name: row.name, dueAt: row.dueAt!, states: [] };
+      // Hàng thiếu activityId/dueAt không đủ dữ liệu để hiển thị việc đến hạn thì bỏ qua (kiểu repo cho phép null dù truy vấn ghi "luôn khác null").
+      if (!row.activityId || !row.dueAt) continue;
+      const entry = quizByCm.get(row.cmId) ?? { courseId: row.courseId, activityId: row.activityId, name: row.name, dueAt: row.dueAt, states: [] };
       entry.states.push(row.attemptState);
       quizByCm.set(row.cmId, entry);
     }
@@ -122,22 +151,24 @@ export class DashboardService {
         kind: 'quiz',
         name: entry.name,
         dueAt: entry.dueAt.toISOString(),
-        status: entry.dueAt < now ? 'overdue' : inProgress ? 'in_progress' : 'not_started',
+        status: dueStatus(entry.dueAt, now, inProgress),
       });
     }
 
     const assignRows = await this.repo.assignmentDueRows(enrolled, userId, until);
     for (const row of assignRows) {
       if (row.submissionStatus === 'submitted') continue; // đã nộp → biến mất
+      // Hàng thiếu activityId/dueAt không đủ dữ liệu để hiển thị việc đến hạn thì bỏ qua.
+      if (!row.activityId || !row.dueAt) continue;
       items.push({
         courseId: row.courseId,
         courseName: names.get(row.courseId) ?? '',
         cmId: row.cmId,
-        activityId: row.activityId!,
+        activityId: row.activityId,
         kind: 'assignment',
         name: row.name,
-        dueAt: row.dueAt!.toISOString(),
-        status: row.dueAt! < now ? 'overdue' : row.submissionStatus === 'draft' ? 'in_progress' : 'not_started',
+        dueAt: row.dueAt.toISOString(),
+        status: dueStatus(row.dueAt, now, row.submissionStatus === 'draft'),
       });
     }
 
@@ -243,31 +274,32 @@ export class DashboardService {
       return entry;
     };
 
-    for (const row of await this.repo.assignmentPendingRows(teaching)) {
-      // Đã có gói chấm RELEASED cho đúng attempt hiện tại thì không còn chờ.
-      if (row.gradeStatus === 'released') continue;
+    // Chuẩn hoá ba nguồn chờ chấm về cùng một hình dạng rồi fold một lượt:
+    // mỗi dòng góp 1 vào bộ đếm của loại mình + 1 vào tổng, và cập nhật mốc chờ lâu nhất.
+    const pending: { courseId: string; kind: 'assignment' | 'quiz' | 'paper'; at: Date | null; pinId?: string }[] = [
+      ...(await this.repo.assignmentPendingRows(teaching))
+        // Đã có gói chấm RELEASED cho đúng attempt hiện tại thì không còn chờ.
+        .filter((row) => row.gradeStatus !== 'released')
+        .map((row) => ({ courseId: row.courseId, kind: 'assignment' as const, at: row.submittedAt })),
+      ...(await this.repo.quizPendingRows(teaching))
+        .map((row) => ({ courseId: row.courseId, kind: 'quiz' as const, at: row.timeFinish ?? row.timeStart })),
+      ...(await this.repo.paperPendingRows(teaching))
+        .map((row) => ({ courseId: row.courseId, kind: 'paper' as const, at: row.createdAt, pinId: row.pinId })),
+    ];
+    for (const row of pending) {
       const entry = entryFor(row.courseId);
-      entry.assignmentPending += 1;
       entry.pendingCount += 1;
-      if (row.submittedAt && (!entry.oldest || row.submittedAt < entry.oldest)) entry.oldest = row.submittedAt;
-    }
-    for (const row of await this.repo.quizPendingRows(teaching)) {
-      const entry = entryFor(row.courseId);
-      entry.quizPending += 1;
-      entry.pendingCount += 1;
-      const at = row.timeFinish ?? row.timeStart;
-      if (!entry.oldest || at < entry.oldest) entry.oldest = at;
-    }
-    for (const row of await this.repo.paperPendingRows(teaching)) {
-      const entry = entryFor(row.courseId);
-      entry.paperPending += 1;
-      entry.pendingCount += 1;
-      if (!entry.oldest || row.createdAt < entry.oldest) entry.oldest = row.createdAt;
-      // Đích deep-link = quiz có phiếu chờ lâu nhất của khoá.
-      if (!entry.paperOldest || row.createdAt < entry.paperOldest) {
-        entry.paperOldest = row.createdAt;
-        entry.paperPinId = row.pinId;
+      if (row.kind === 'assignment') entry.assignmentPending += 1;
+      else if (row.kind === 'quiz') entry.quizPending += 1;
+      else {
+        entry.paperPending += 1;
+        // Đích deep-link = quiz có phiếu chờ lâu nhất của khoá.
+        if (row.at && (!entry.paperOldest || row.at < entry.paperOldest)) {
+          entry.paperOldest = row.at;
+          entry.paperPinId = row.pinId ?? null;
+        }
       }
+      if (row.at && (!entry.oldest || row.at < entry.oldest)) entry.oldest = row.at;
     }
 
     return [...byCourse.values()]
@@ -288,11 +320,7 @@ export class DashboardService {
   /** Pref thẻ khoá của chính người dùng. */
   async listCourseCards(userId: string): Promise<CourseCardPrefView[]> {
     const rows = await this.repo.listPrefs(userId);
-    return rows.map((r) => ({
-      courseId: r.courseId,
-      color: (r.color as CourseCardPrefView['color']) ?? null,
-      nickname: r.nickname,
-    }));
+    return rows.map((r) => toCourseCardPrefView(r));
   }
 
   /** Đặt/xoá màu + biệt danh thẻ khoá của chính người dùng cho một khoá họ thuộc về. */
@@ -309,11 +337,7 @@ export class DashboardService {
       return { courseId, color: null, nickname: null };
     }
     const row = await this.repo.upsertPref(userId, courseId, color, nickname);
-    return {
-      courseId: row.courseId,
-      color: (row.color as CourseCardPrefView['color']) ?? null,
-      nickname: row.nickname,
-    };
+    return toCourseCardPrefView(row);
   }
 
   /** Người dùng chỉ đặt được pref cho khoá mình thuộc về (ghi danh hoặc đội giảng dạy). */
@@ -322,10 +346,9 @@ export class DashboardService {
     const enrolled = await this.repo.enrolledCourseIds(userId, now);
     if (enrolled.includes(courseId)) return;
     const assigned = await this.repo.roleAssignedCourseIds(userId);
-    if (assigned.includes(courseId)) {
-      const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
-      if (ctx && await this.evaluator.hasCapability(userId, 'grade:viewall', ctx.id)) return;
-    }
+    // Cùng định nghĩa "đội giảng dạy" với teachingCourseIds: ghi danh ∪ gán vai, lọc bằng grade:viewall thật.
+    const teaching = await this.teachingCourseIds(userId, enrolled, assigned);
+    if (teaching.includes(courseId)) return;
     throw new ForbiddenException({
       message: 'User does not belong to this course',
       code: 'dashboard.course_not_accessible',

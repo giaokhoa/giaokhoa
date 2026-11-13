@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Route } from './+types/course';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { CourseContent } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -11,7 +12,9 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { courseConversationQueryOptions } from '#features/messaging/queries/messaging';
 import { coursePageQueryOptions, myPaymentsQueryOptions, useCoursePage, useMyPayments, usePayFee, useSelfEnrol, useToggleManualCompletion } from '../queries/course';
+import { ENROL_INSTANCE_ENABLED } from '../types/course';
 import { queryClient } from '#lib/query-client';
+import { appKeyMeta } from '#lib/route-meta';
 
 /** Một course module trong nội dung khoá học (kiểu `CourseModule` của contracts, đã gồm `completionManual`). */
 type CourseModuleView = CourseContent['sections'][number]['modules'][number];
@@ -321,7 +324,7 @@ export function CoursePage() {
   }
 
   // Chưa truy cập được nội dung: panel ghi danh (chỉ self/fee đang bật).
-  const enrolOptions = instances.filter((i) => i.status === 0 && (i.enrol === 'self' || i.enrol === 'fee'));
+  const enrolOptions = instances.filter((i) => i.status === ENROL_INSTANCE_ENABLED && (i.enrol === 'self' || i.enrol === 'fee'));
   const headerCourse = course;
   return (
     <PageShell width="wide">
@@ -429,7 +432,7 @@ export default CoursePage;
  * prefetch gói trang khoá học + thanh toán của tôi vào QueryClient
  * singleton dùng chung, đúng khoá factory, trước khi component mount.
  */
-export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   if (params.id) {
     await Promise.all([
       queryClient.prefetchQuery(coursePageQueryOptions(params.id)),
@@ -441,7 +444,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
-import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('navCourses');
 }

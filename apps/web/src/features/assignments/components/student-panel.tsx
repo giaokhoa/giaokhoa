@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { currentUserQueryOptions, useDeleteSubmissionFile, useReopenSubmission, useSubmitSubmission, useUploadSubmissionFile } from '../queries/assignment';
 import { FeedbackMessages } from './feedback-messages';
 import { SubmissionFileView } from './submission-file';
-import { dateLabel } from '../utils/shared';
+import { ASSIGN_LEVEL_LABEL_KEYS, ASSIGN_STATUS_LABEL_KEYS, dateLabel } from '../utils/shared';
 
 /**
  * Phía học sinh: xem trạng thái bài nộp, tải tệp/ảnh vào bản nháp, chốt nộp (sau hạn vẫn nộp được — máy chủ đánh dấu trễ), mở lại khi chưa bị trả bài; sau khi giáo viên TRẢ bài thì thấy điểm/mức + lời phê + dấu chấm trên bài của mình + kết quả rubric + hội thoại phản hồi. Id của chính học sinh (cho hội thoại phản hồi) đọc từ cache TanStack qua `currentUserQueryOptions` (CN-13, issue #493).
@@ -63,7 +63,7 @@ export function StudentPanel({ data, reload }: { data: AssignmentForUserView; re
       <CardHeader>
         <CardTitle>{t('assignMySubmissionTitle')}</CardTitle>
         <CardDescription>
-          {t(`assignStatus_${mine.status}`)}
+          {t(ASSIGN_STATUS_LABEL_KEYS[mine.status])}
           {mine.late ? (
             <>
               {' '}
@@ -156,7 +156,7 @@ export function StudentPanel({ data, reload }: { data: AssignmentForUserView; re
             ) : null}
             {mine.grade.level ? (
               <p>
-                <Badge>{t(`assignLevel_${mine.grade.level}`)}</Badge>
+                <Badge>{t(ASSIGN_LEVEL_LABEL_KEYS[mine.grade.level])}</Badge>
               </p>
             ) : null}
             {mine.grade.feedbackProgress ? (

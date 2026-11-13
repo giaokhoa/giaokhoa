@@ -1,3 +1,8 @@
+/**
+ * Thẻ cây nội dung (outline) của trang Xây dựng khoá: danh sách section/module với kéo–thả đổi thứ tự (kèm nút lên/xuống), nhân bản/xoá ngay tại dòng, sửa tên + trạng thái mở tại chỗ, thêm nội dung bằng menu chọn loại, panel "Thêm từ kho" trong từng section và trình sửa điều kiện truy cập (availability) của từng section/module.
+ *
+ * Dữ liệu vào qua props gom theo nhóm (state: cây outline + trạng thái gập/kéo–thả; edits: bản nháp sửa tại chỗ; actions: các thao tác ghi/đổi thứ tự do route định nghĩa; context: nhóm/grouping/grade item cho AvailabilityEditor; availability: bản nháp + thao tác lưu availability; bank: panel kho học liệu) + `statusBadge` hiển thị trạng thái. Mọi thao tác ghi đi qua đột biến của route — component này chỉ hiển thị và gọi lại handler, không tự gọi API.
+ */
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import {
   COURSE_CONTENT_TYPES,
@@ -5,6 +10,7 @@ import {
 } from '@giaokhoa/contracts';
 import { AvailabilityEditor } from './availability-editor';
 import { LibraryItem } from '#features/content-bank/types/content-bank';
+import { selectClass } from '#lib/form-classes';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -13,30 +19,39 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import {
-  bankItemInsertable, bankScopeKey, bankTypeKey, moveItem, statusChoiceOf, type ItemStatusChoice,
+  bankItemInsertable, bankScopeKey, bankTypeKey, contentTypeKey, moveItem, statusChoiceOf, type ItemStatusChoice,
 } from '../utils/utils';
 
 type Section = CourseContent['sections'][number];
 type ItemEdit = { name: string; status: ItemStatusChoice; openAt: string };
 
-interface OutlineCardProps {
+/** Trạng thái outline do route giữ: dữ liệu cây + tên section mới + trạng thái gập/kéo–thả. */
+interface OutlineState {
   content: CourseContent | null;
   sections: Section[];
   newSectionName: string;
   setNewSectionName: Dispatch<SetStateAction<string>>;
-  onCreateSection: (event: FormEvent) => void;
   collapsed: Record<string, boolean>;
   setCollapsed: Dispatch<SetStateAction<Record<string, boolean>>>;
   dragSectionId: string | null;
   setDragSectionId: Dispatch<SetStateAction<string | null>>;
   dragModule: { sectionId: string; moduleId: string } | null;
   setDragModule: Dispatch<SetStateAction<{ sectionId: string; moduleId: string } | null>>;
+}
+
+/** Bản nháp sửa tại chỗ của section/module. */
+interface OutlineEdits {
   sectionEdits: Record<string, ItemEdit>;
   setSectionEdits: Dispatch<SetStateAction<Record<string, ItemEdit>>>;
   moduleEdits: Record<string, ItemEdit>;
   setModuleEdits: Dispatch<SetStateAction<Record<string, ItemEdit>>>;
   moduleDrafts: Record<string, { component: string; name: string }>;
   setModuleDrafts: Dispatch<SetStateAction<Record<string, { component: string; name: string }>>>;
+}
+
+/** Thao tác ghi/thay đổi thứ tự trên outline (định nghĩa ở route). */
+interface OutlineActions {
+  onCreateSection: (event: FormEvent) => void;
   onSaveSection: (sectionId: string) => void;
   onDeleteSection: (sectionId: string, name: string) => void;
   onDuplicateSection: (sectionId: string) => void;
@@ -46,12 +61,24 @@ interface OutlineCardProps {
   onDeleteModule: (moduleId: string, name: string) => void;
   onDuplicateModule: (moduleId: string) => void;
   onCreateModule: (event: FormEvent, sectionId: string) => void;
+}
+
+/** Dữ liệu tra cứu cho AvailabilityEditor: nhóm, grouping, grade item. */
+interface OutlineContext {
   groups: CourseGroup[];
   groupings: CourseGrouping[];
   gradeItems: GradeItem[];
+}
+
+/** Bản nháp availability + thao tác lưu của nó. */
+interface OutlineAvailability {
   setAvailabilityDrafts: Dispatch<SetStateAction<Record<string, unknown>>>;
   onSaveSectionAvailability: (sectionId: string) => void;
   onSaveModuleAvailability: (moduleId: string) => void;
+}
+
+/** Panel "Thêm từ kho" trong từng section. */
+interface OutlineBank {
   bankOpenSectionId: string | null;
   onToggleBankPanel: (sectionId: string) => void;
   bankQuery: string;
@@ -61,34 +88,41 @@ interface OutlineCardProps {
   bankFiltered: LibraryItem[];
   bankBusyId: string | null;
   onInsertFromBank: (item: LibraryItem, sectionId: string) => void;
-  selectClass: string;
+}
+
+interface OutlineCardProps {
+  state: OutlineState;
+  edits: OutlineEdits;
+  actions: OutlineActions;
+  context: OutlineContext;
+  availability: OutlineAvailability;
+  bank: OutlineBank;
   statusBadge: (status: string | undefined) => string;
 }
 
 /** Thẻ cây nội dung (outline) của trang Xây dựng khoá: section/module, kéo–thả, kho học liệu, availability. */
-export function OutlineCard(props: OutlineCardProps) {
+export function OutlineCard({ state, edits, actions, context, availability, bank, statusBadge }: OutlineCardProps) {
   const { t } = useTranslation('app');
   const {
     content, sections, newSectionName, setNewSectionName, collapsed, setCollapsed, dragSectionId,
-    setDragSectionId, dragModule, setDragModule, sectionEdits, setSectionEdits, moduleEdits,
-    setModuleEdits, moduleDrafts, setModuleDrafts, groups, groupings, gradeItems,
-    setAvailabilityDrafts, bankOpenSectionId, bankQuery, setBankQuery, bankLoadError, bankItems,
-    bankFiltered, bankBusyId, selectClass, statusBadge,
-  } = props;
-  const createSection = props.onCreateSection;
-  const saveSection = props.onSaveSection;
-  const deleteSection = props.onDeleteSection;
-  const duplicateSection = props.onDuplicateSection;
-  const reorderSections = props.onReorderSections;
-  const reorderModules = props.onReorderModules;
-  const saveModule = props.onSaveModule;
-  const deleteModule = props.onDeleteModule;
-  const duplicateModule = props.onDuplicateModule;
-  const createModule = props.onCreateModule;
-  const saveSectionAvailability = props.onSaveSectionAvailability;
-  const saveModuleAvailability = props.onSaveModuleAvailability;
-  const toggleBankPanel = props.onToggleBankPanel;
-  const insertFromBank = props.onInsertFromBank;
+    setDragSectionId, dragModule, setDragModule,
+  } = state;
+  const { sectionEdits, setSectionEdits, moduleEdits, setModuleEdits, moduleDrafts, setModuleDrafts } = edits;
+  const {
+    onCreateSection: createSection, onSaveSection: saveSection, onDeleteSection: deleteSection,
+    onDuplicateSection: duplicateSection, onReorderSections: reorderSections, onReorderModules: reorderModules,
+    onSaveModule: saveModule, onDeleteModule: deleteModule, onDuplicateModule: duplicateModule,
+    onCreateModule: createModule,
+  } = actions;
+  const { groups, groupings, gradeItems } = context;
+  const {
+    setAvailabilityDrafts, onSaveSectionAvailability: saveSectionAvailability,
+    onSaveModuleAvailability: saveModuleAvailability,
+  } = availability;
+  const {
+    bankOpenSectionId, onToggleBankPanel: toggleBankPanel, bankQuery, setBankQuery, bankLoadError,
+    bankItems, bankFiltered, bankBusyId, onInsertFromBank: insertFromBank,
+  } = bank;
   return (
       <Card>
         <CardHeader>
@@ -250,7 +284,7 @@ export function OutlineCard(props: OutlineCardProps) {
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium">
                                 {cm.name || cm.component}{' '}
-                                <span className="text-muted-foreground">({t(`contentType_${cm.component}`, { defaultValue: cm.component })})</span>
+                                <span className="text-muted-foreground">({t(contentTypeKey(cm.component))})</span>
                               </p>
                               <span className="rounded bg-accent px-2 py-0.5 text-xs">{statusBadge(cm.status)}</span>
                               <span className="ml-auto flex gap-1">
@@ -368,7 +402,7 @@ export function OutlineCard(props: OutlineCardProps) {
                         >
                           {COURSE_CONTENT_TYPES.map((type) => (
                             <option key={type.component} value={type.component}>
-                              {t(`contentType_${type.component}`, { defaultValue: type.component })}
+                              {t(contentTypeKey(type.component))}
                             </option>
                           ))}
                         </select>

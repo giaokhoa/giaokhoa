@@ -1,5 +1,7 @@
 import { useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@giaokhoa/ui/components/button';
+import { ErrorAlert } from '#components/error-alert';
 import { PageShell } from '#components/page-shell';
 import { useCurriculumNode, useCurriculumOutcome } from '#lib/curriculum';
 import { FormScreen } from './form-screen';
@@ -24,11 +26,24 @@ export function AdminOutcomeEditPage() {
   const { t } = useTranslation('app');
   const { outcomeId } = useParams();
   // Đọc YCCĐ rồi mới đọc node chứa nó (để suy đường quay lại) — hai
-  // truy vấn TanStack Query, truy vấn node bật khi đã có YCCĐ.
+  // truy vấn TanStack Query, truy vấn node bật khi đã có YCCĐ. Tải YCCĐ
+  // lỗi thì hiện lỗi kèm nút thử lại thay vì kẹt ở trạng thái đang tải.
   const outcomeQuery = useCurriculumOutcome(outcomeId);
   const outcome = outcomeQuery.data;
   const nodeQuery = useCurriculumNode(outcome?.nodeId);
   const node = nodeQuery.data;
+  if (outcomeQuery.isError) {
+    return (
+      <PageShell width="narrow">
+        <ErrorAlert variant="destructive" descriptionClassName="flex items-center justify-between gap-2">
+          <span>{t('curriculumLoadFailed')}</span>
+          <Button type="button" variant="outline" size="sm" onClick={() => void outcomeQuery.refetch()}>
+            {t('retry')}
+          </Button>
+        </ErrorAlert>
+      </PageShell>
+    );
+  }
   if (!outcome) {
     return (
       <PageShell width="narrow">

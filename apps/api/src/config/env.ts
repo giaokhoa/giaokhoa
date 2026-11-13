@@ -1,3 +1,25 @@
+/**
+ * Nguồn sự thật duy nhất cho biến môi trường của API (schema Zod).
+ *
+ * Flow: `ConfigModule.forRoot({ validate: validateEnv })` ở `AppModule`
+ * kiểm chứng toàn bộ `process.env` bằng `envSchema` NGAY khi khởi động
+ * — biến bắt buộc thiếu hoặc sai dạng thì ứng dụng chết sớm thay vì lỗi
+ * nửa chừng ở request đầu tiên; biến tuỳ chọn mang giá trị mặc định
+ * trong chính schema. Các nhóm biến: kết nối kho nghiệp vụ
+ * (`DATABASE_URL`, `DATABASE_SSL`, trần pool `DATABASE_POOL_MAX`),
+ * database control plane (`CONTROL_PLANE_DATABASE_URL`) và kho ngân
+ * hàng hệ thống (`SYSTEM_BANK_DATABASE_URL`), khung định tuyến theo
+ * trung tâm (TTL đệm sổ, trần/nhàn rỗi pool kho riêng), Redis
+ * (`REDIS_URL`), xác thực (`JWT_SECRET`, chính sách mật khẩu, khoá
+ * MFA, giới hạn đăng nhập, OAuth xã hội) và các cờ vận hành
+ * (presence messaging, giới hạn tốc độ, cổng nghe).
+ *
+ * Ngoài schema, file này cấp các hàm dựng cấu hình kết nối từ URL đã
+ * kiểm chứng: `databaseConnectionFromEnv` (PostgreSQL, kèm TLS khi
+ * bắt buộc), `redisConnectionFromUrl` / `cacheRedisConfigFromUrl` /
+ * `redisTlsFromUrl` (Redis, kèm TLS cho `rediss://`). Giá trị bí mật
+ * kết nối không bao giờ được ghi ra log.
+ */
 import type { PoolConfig } from 'pg';
 import { z } from 'zod';
 
@@ -170,13 +192,35 @@ export function validateEnv(config: Record<string, unknown>): Env {
 }
 
 /**
+ * Tuỳ chọn TLS khi bật TLS cho Redis/Postgres: `rejectUnauthorized: false`
+ * bỏ xác thực chứng chỉ máy chủ. Đây là đánh đổi về an toàn kết nối,
+ * không phải cách xác thực CA riêng; chỉ chấp nhận với môi trường kiểm
+ * soát được mạng và chứng chỉ (xem cảnh báo ở từng hàm dùng nó).
+ */
+export const TLS_WITHOUT_CERT_VERIFICATION = { rejectUnauthorized: false } as const;
+
+/** URL Redis có dùng TLS không (`rediss://` thì có, `redis://` thì không) — một chỗ kiểm duy nhất cho mọi hàm dựng cấu hình Redis. */
+export function isTlsRedisUrl(url: string): boolean {
+  return new URL(url).protocol === 'rediss:';
+}
+
+/**
  * Chuyển URL PostgreSQL thành cấu hình kết nối mà driver `pg` chấp nhận.
  *
  * Khi `ssl` bật, trả `PoolConfig` với TLS nhưng `rejectUnauthorized: false`: chứng chỉ máy chủ KHÔNG được xác thực, nên đường kết nối có nguy cơ bị giả mạo nếu mạng không đáng tin. Khi tắt TLS, giữ nguyên URL; không tự biến đổi thông tin truy cập.
  */
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
-  return { connectionString: url, ssl: { rejectUnauthorized: false } };
+  return { connectionString: url, ssl: TLS_WITHOUT_CERT_VERIFICATION };
+}
+
+/**
+ * Chuẩn hoá kết quả của `databaseConnectionFromEnv` về một `PoolConfig`
+ * duy nhất — caller không còn phải rẽ nhánh `typeof connection ===
+ * 'string'` ở từng chỗ (S5). Chuỗi giữ nguyên thành connectionString.
+ */
+export function toPoolConfig(connection: string | PoolConfig): PoolConfig {
+  return typeof connection === 'string' ? { connectionString: connection } : connection;
 }
 
 /**
@@ -185,7 +229,7 @@ export function databaseConnectionFromEnv(url: string, ssl: boolean): string | P
  * `rejectUnauthorized: false` bỏ xác thực chứng chỉ máy chủ Redis. Đây là đánh đổi về an toàn kết nối, không phải cách xác thực CA riêng; chỉ chấp nhận với môi trường kiểm soát được mạng và chứng chỉ.
  */
 export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: boolean } } {
-  return new URL(url).protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {};
+  return isTlsRedisUrl(url) ? { tls: TLS_WITHOUT_CERT_VERIFICATION } : {};
 }
 
 /**
@@ -197,8 +241,8 @@ export function cacheRedisConfigFromUrl(url: string): {
   url: string;
   socket?: { tls: true; rejectUnauthorized: false };
 } {
-  if (new URL(url).protocol === 'rediss:') {
-    return { url, socket: { tls: true, rejectUnauthorized: false } };
+  if (isTlsRedisUrl(url)) {
+    return { url, socket: { tls: true, ...TLS_WITHOUT_CERT_VERIFICATION } };
   }
   return { url };
 }
@@ -218,7 +262,7 @@ export function redisConnectionFromUrl(url: string): {
     username: parsed.username || undefined,
     password: parsed.password || undefined,
     // URL dạng rediss:// bắt buộc TLS. Chứng chỉ phía dịch vụ không kiểm chứng theo CA hệ thống được nên tắt kiểm chứng cho ioredis.
-    ...(parsed.protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {}),
+    ...(isTlsRedisUrl(url) ? { tls: TLS_WITHOUT_CERT_VERIFICATION } : {}),
     maxRetriesPerRequest: null,
   };
 }

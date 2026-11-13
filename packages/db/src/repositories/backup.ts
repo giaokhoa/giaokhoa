@@ -5,9 +5,10 @@
  *
  * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Các cột jsonb (`archive`, `detail`) khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`) vì `archive` là một OBJECT lớn và `detail` cũng là object — một khuôn duy nhất cho mọi giá trị jsonb, không phụ thuộc nhánh xử lý của driver.
  */
-import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
+import {type InsertObject, type UpdateObject} from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { jsonbValue } from '../jsonb';
 
 /** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type BackupDb = CentreDb | CentreTx;
@@ -84,19 +85,6 @@ export interface NewMapping {
   itemType: string;
   oldId: string;
   newId: string;
-}
-
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + `::jsonb`) — xem lý do ở phần đầu file.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb (hình
- *   dạng do phía gọi chịu trách nhiệm — các cột jsonb của cụm này
- *   không khai kiểu nghiệp vụ riêng ở schema).
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize.
- */
-function jsonbValue(value: unknown): RawBuilder<JsonValue> {
-  return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
 }
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng backup_jobs. */
@@ -200,8 +188,8 @@ function stepUpdateSet(patch: Partial<NewStep>): UpdateObject<CentreDB, 'backup_
 }
 
 /** Ánh xạ dữ kiện ghi ánh xạ id từ camelCase sang snake_case, loại `undefined` từng trường. */
-function mappingInsertValues(values: NewMapping): Insertable<CentreDB['backup_id_mappings']> {
-  const row: Insertable<CentreDB['backup_id_mappings']> = {
+function mappingInsertValues(values: NewMapping): InsertObject<CentreDB, 'backup_id_mappings'> {
+  const row: InsertObject<CentreDB, 'backup_id_mappings'> = {
     job_id: values.jobId,
     item_type: values.itemType,
     old_id: values.oldId,
@@ -215,23 +203,27 @@ function mappingInsertValues(values: NewMapping): Insertable<CentreDB['backup_id
 export class BackupRepository {
   constructor(private readonly handle: CentreDb) {}
 
+  /** Handle gốc của repository (điểm mở giao dịch; mặc định cho tham số `db` của các phương thức). */
+  private db(): BackupDb {
+    return this.handle;
+  }
+
   /** Handle Kysely của kho trung tâm mà repository đang giữ (tầng service dùng cho các contributor sao lưu/khôi phục). */
   get dbHandle(): CentreDb {
     return this.handle;
   }
 
   /** Ghi một job mới, trả dòng vừa ghi. */
-  async insertJob(v: NewJob, db: BackupDb = this.handle): Promise<JobRow> {
-    const rows = await db
+  async insertJob(v: NewJob, db: BackupDb = this.db()): Promise<JobRow> {
+    return db
       .insertInto('backup_jobs')
       .values(jobInsertValues(v))
       .returning(JOB_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Lấy job theo id. */
-  async getJob(id: string, db: BackupDb = this.handle): Promise<JobRow | undefined> {
+  async getJob(id: string, db: BackupDb = this.db()): Promise<JobRow | undefined> {
     return db
       .selectFrom('backup_jobs')
       .select(JOB_COLUMNS)
@@ -240,12 +232,12 @@ export class BackupRepository {
   }
 
   /** Liệt kê mọi job. */
-  async listJobs(db: BackupDb = this.handle): Promise<JobRow[]> {
+  async listJobs(db: BackupDb = this.db()): Promise<JobRow[]> {
     return db.selectFrom('backup_jobs').select(JOB_COLUMNS).execute();
   }
 
   /** Cập nhật một job theo bản vá từng phần. */
-  async updateJob(id: string, v: Partial<NewJob>, db: BackupDb = this.handle): Promise<void> {
+  async updateJob(id: string, v: Partial<NewJob>, db: BackupDb = this.db()): Promise<void> {
     await db
       .updateTable('backup_jobs')
       .set(jobUpdateSet(v))
@@ -254,17 +246,16 @@ export class BackupRepository {
   }
 
   /** Ghi một bước mới, trả dòng vừa ghi. */
-  async insertStep(v: NewStep, db: BackupDb = this.handle): Promise<StepRow> {
-    const rows = await db
+  async insertStep(v: NewStep, db: BackupDb = this.db()): Promise<StepRow> {
+    return db
       .insertInto('backup_job_steps')
       .values(stepInsertValues(v))
       .returning(STEP_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Liệt kê các bước của một job. */
-  async listSteps(jobId: string, db: BackupDb = this.handle): Promise<StepRow[]> {
+  async listSteps(jobId: string, db: BackupDb = this.db()): Promise<StepRow[]> {
     return db
       .selectFrom('backup_job_steps')
       .select(STEP_COLUMNS)
@@ -273,7 +264,7 @@ export class BackupRepository {
   }
 
   /** Cập nhật một bước theo bản vá từng phần. */
-  async updateStep(id: string, v: Partial<NewStep>, db: BackupDb = this.handle): Promise<void> {
+  async updateStep(id: string, v: Partial<NewStep>, db: BackupDb = this.db()): Promise<void> {
     await db
       .updateTable('backup_job_steps')
       .set(stepUpdateSet(v))
@@ -285,20 +276,19 @@ export class BackupRepository {
    * Ghi một ánh xạ id; trùng bộ ba (job, loại, id cũ) thì cập nhật
    * id mới theo dữ kiện (upsert trên ràng buộc unique của bảng).
    */
-  async insertMapping(v: NewMapping, db: BackupDb = this.handle): Promise<MappingRow> {
-    const rows = await db
+  async insertMapping(v: NewMapping, db: BackupDb = this.db()): Promise<MappingRow> {
+    return db
       .insertInto('backup_id_mappings')
       .values(mappingInsertValues(v))
       .onConflict((oc) => oc
         .columns(['job_id', 'item_type', 'old_id'])
         .doUpdateSet({ new_id: v.newId }))
       .returning(MAPPING_COLUMNS)
-      .execute();
-    return rows[0]!;
+      .executeTakeFirstOrThrow();
   }
 
   /** Liệt kê các ánh xạ của một job. */
-  async listMappings(jobId: string, db: BackupDb = this.handle): Promise<MappingRow[]> {
+  async listMappings(jobId: string, db: BackupDb = this.db()): Promise<MappingRow[]> {
     return db
       .selectFrom('backup_id_mappings')
       .select(MAPPING_COLUMNS)
@@ -307,7 +297,7 @@ export class BackupRepository {
   }
 
   /** Tra một ánh xạ theo bộ ba (job, loại, id cũ). */
-  async getMapping(jobId: string, itemType: string, oldId: string, db: BackupDb = this.handle): Promise<MappingRow | undefined> {
+  async getMapping(jobId: string, itemType: string, oldId: string, db: BackupDb = this.db()): Promise<MappingRow | undefined> {
     return db
       .selectFrom('backup_id_mappings')
       .select(MAPPING_COLUMNS)

@@ -295,7 +295,7 @@ describe('Trang làm bài quiz — endpoint thật', () => {
     expect(screen.getByText(/Đáp án đúng: Paris/)).toBeInTheDocument();
   });
 
-  it('renders all four feedback layers on the review page (ĐX-3, #181)', async () => {
+  it('hiển thị đủ bốn lớp phản hồi ở trang xem lại (ĐX-3, #181)', async () => {
     const finishedView = {
       attempt: {
         id: ATTEMPT_ID,

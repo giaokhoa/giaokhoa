@@ -1,13 +1,15 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
-import { databaseConnectionFromEnv } from '../../config/env';
+import { databaseConnectionFromEnv, toPoolConfig } from '../../config/env';
 import { ControlPlaneConnection } from '../control-plane-connection.service';
 import { tenantAls, type TenantAlsStore } from '../tenant-als';
 import { TenantAwarePool } from '../tenant-pool';
 import {
   SpaceConnectionResolver,
   SpaceRoutingError,
+  toSpaceRegistryStatus,
+  toSpaceStorageMode,
   type ResolvedSpaceConnection,
 } from './space-connection-resolver';
 import { SpacePoolManager } from './space-pool-manager';
@@ -64,11 +66,18 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   private readonly poolMax: number;
   private readonly ssl: boolean;
   /**
-   * Các slug mà lần chuẩn bị gần nhất kết luận đang ở chế độ KHO RIÊNG. Bảng này KHÔNG bị `onPoolClosed` xoá theo mục đã-chuẩn-bị: nó là trí nhớ tối thiểu để `currentKysely` phân biệt "slug chưa từng chuẩn bị" (được rơi về kho chung theo hợp đồng) với "slug đã chuẩn bị ở kho riêng nhưng mục đã-chuẩn-bị đã bị thu hồi" (phải fail-closed) — hai tình huống trông giống hệt nhau nếu chỉ nhìn bảng `preparedKysely`. Mục của một slug bị xoá khi lần chuẩn bị sau kết luận slug đó ở kho chung.
-   */
-  private readonly dedicatedSlugs = new Set<string>();
-  /**
-   * Tên database kho riêng đã phân giải gần nhất theo slug — trí nhớ tối thiểu đi cùng `dedicatedSlugs`: mục đã-chuẩn-bị bị thu hồi khi pool đóng, nhưng danh tính kho của một trung tâm đã phân giải kho riêng phải còn tra được (xem `currentContextDatabaseName`) để tầng phía trên gắn đúng danh tính kho cho dữ kiện chỉ có nghĩa trong một kho, thay vì rơi về danh tính kho chung trong cửa sổ đã-chuẩn-bị-bị-thu-hồi. Mục của một slug bị xoá khi lần chuẩn bị sau kết luận slug đó ở kho chung — cùng nhịp với `dedicatedSlugs`.
+   * Tên database kho riêng đã phân giải gần nhất theo slug — MỘT bảng
+   * duy nhất thay cho hai collection song song trước đây (slug có mặt
+   * trong bảng = lần chuẩn bị gần nhất kết luận kho riêng). Bảng này
+   * KHÔNG bị `onPoolClosed` xoá theo mục đã-chuẩn-bị: nó là trí nhớ
+   * tối thiểu để `currentKysely` phân biệt "slug chưa từng chuẩn bị"
+   * (được rơi về kho chung theo hợp đồng) với "slug đã chuẩn bị ở kho
+   * riêng nhưng mục đã-chuẩn-bị đã bị thu hồi" (phải fail-closed) — hai
+   * tình huống trông giống hệt nhau nếu chỉ nhìn bảng `preparedKysely`;
+   * đồng thời để `currentContextDatabaseName` còn tra được danh tính
+   * kho của một trung tâm đã phân giải kho riêng trong cửa sổ
+   * đã-chuẩn-bị-bị-thu-hồi, thay vì rơi về danh tính kho chung. Mục
+   * của một slug bị xoá khi lần chuẩn bị sau kết luận slug đó ở kho chung.
    */
   private readonly dedicatedDatabaseNames = new Map<string, string>();
 
@@ -120,12 +129,20 @@ export class SpaceDatabaseService implements OnModuleDestroy {
           .where('slug', '=', slug)
           .limit(1)
           .executeTakeFirst();
-        return row ?? undefined;
+        if (!row) return undefined;
+        // Dòng sổ trả chuỗi thô — thu hẹp về union của SpaceRegistryEntry
+        // ngay tại biên đọc (fail-closed khi sổ có giá trị lạ, như
+        // toTarget đã làm với storageMode).
+        return {
+          ...row,
+          status: toSpaceRegistryStatus(row.status),
+          storageMode: toSpaceStorageMode(row.storageMode),
+        };
       },
     });
     this.kyselyPools = new SpacePoolManager<CentreDb>({
       idleTimeoutMs,
-      // Pool của một kho bị gỡ (đóng vì nhàn rỗi, hoặc bị thay vì sổ đổi danh tính kết nối) thì các trung tâm trỏ vào kho đó cũng hết trạng thái "đã chuẩn bị": handle của pool đã chết không còn được dùng. Việc chuẩn bị lại diễn ra ở lần gọi `getKyselyForSpace`/`withSpaceKysely` kế tiếp; riêng đường ĐỒNG BỘ của `routedKysely` không chuẩn bị lại được, nên với slug đã chuẩn bị ở kho riêng nó fail-closed (xem `dedicatedSlugs` và `currentKysely`) thay vì chạm vào handle đã chết hoặc rơi về kho chung.
+      // Pool của một kho bị gỡ (đóng vì nhàn rỗi, hoặc bị thay vì sổ đổi danh tính kết nối) thì các trung tâm trỏ vào kho đó cũng hết trạng thái "đã chuẩn bị": handle của pool đã chết không còn được dùng. Việc chuẩn bị lại diễn ra ở lần gọi `getKyselyForSpace`/`withSpaceKysely` kế tiếp; riêng đường ĐỒNG BỘ của `routedKysely` không chuẩn bị lại được, nên với slug đã chuẩn bị ở kho riêng nó fail-closed (xem `dedicatedDatabaseNames` và `currentKysely`) thay vì chạm vào handle đã chết hoặc rơi về kho chung.
       onPoolClosed: (databaseName) => {
         for (const [slug, entry] of [...this.preparedKysely]) {
           if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
@@ -188,7 +205,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    */
   currentContextDatabaseName(): string | undefined {
     const slug = tenantAls.getStore()?.spaceSlug;
-    if (!slug || !this.dedicatedSlugs.has(slug)) return undefined;
+    if (!slug) return undefined;
     return this.dedicatedDatabaseNames.get(slug);
   }
 
@@ -207,8 +224,8 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    *   luôn kết nối bằng danh tính sổ chốt ở lần chuẩn bị này.
    * Kết quả được ghi vào bảng đã-chuẩn-bị để `routedKysely` tra
    * đồng bộ khi ngữ cảnh mang slug này; chế độ kho của lần chuẩn
-   * bị này cũng được ghi vào `dedicatedSlugs` (chỉ khi là kho
-   * riêng) để đường đồng bộ phân biệt được ca đã-chuẩn-bị-bị-thu
+   * bị này cũng được ghi vào `dedicatedDatabaseNames` (chỉ khi là
+   * kho riêng) để đường đồng bộ phân biệt được ca đã-chuẩn-bị-bị-thu
    * hồi với ca chưa từng chuẩn bị.
    *
    * @throws SpaceRoutingError khi slug chưa đăng ký, control plane
@@ -255,11 +272,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     }
     const handle = this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
       const connection = databaseConnectionFromEnv(connectionString, this.ssl);
-      const pool = new TenantAwarePool(
-        typeof connection === 'string'
-          ? { connectionString: connection, max: this.poolMax }
-          : { ...connection, max: this.poolMax },
-      );
+      const pool = new TenantAwarePool({ ...toPoolConfig(connection), max: this.poolMax });
       return { databaseName, pool, db: createCentreKysely(pool) };
     });
     this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName });
@@ -267,17 +280,14 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   }
 
   /**
-   * Ghi chế độ kho của lần chuẩn bị này vào hai bảng trí nhớ
-   * (`dedicatedSlugs`, `dedicatedDatabaseNames`): đích kho riêng
-   * thì ghi, đích kho chung thì xoá mục cũ (lần chuẩn bị sau kết
-   * luận slug đã về kho chung).
+   * Ghi chế độ kho của lần chuẩn bị này vào bảng trí nhớ
+   * `dedicatedDatabaseNames`: đích kho riêng thì ghi, đích kho chung
+   * thì xoá mục cũ (lần chuẩn bị sau kết luận slug đã về kho chung).
    */
   private recordSpaceMode(slug: string, target: ResolvedSpaceConnection): void {
     if (target.mode === 'shared') {
-      this.dedicatedSlugs.delete(slug);
       this.dedicatedDatabaseNames.delete(slug);
     } else {
-      this.dedicatedSlugs.add(slug);
       this.dedicatedDatabaseNames.set(slug, target.databaseName);
     }
   }
@@ -349,7 +359,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     if (slug) {
       const preparedEntry = this.preparedKysely.get(slug);
       if (preparedEntry) return preparedEntry.db;
-      if (this.dedicatedSlugs.has(slug)) {
+      if (this.dedicatedDatabaseNames.has(slug)) {
         throw new SpaceRoutingError(
           'space_routing.prepared_revoked',
           `Space ${slug} was prepared with a dedicated store but that preparation is no longer active; prepare the space again before routing queries to it`,
