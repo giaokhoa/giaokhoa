@@ -27,7 +27,7 @@ Package này là tầng dữ liệu **Kysely** duy nhất của hệ: kiểu sin
 - Kết nối quản trị cho `db:types` lấy từ biến môi trường `DB_TYPES_ADMIN_URL`, hoặc suy từ `DATABASE_URL` (thay tên database thành `postgres`). Cụm dưới PostgreSQL 18 được cài shim `uuidv7()` viết tay trước khi áp SQL (PG18 có hàm tích hợp); shim nằm ngoài nội dung SQL mang dữ liệu.
 - **Không camelCase ở bất kỳ tầng nào**: không bật `--camel-case` của codegen, không dùng `CamelCasePlugin` — tên bảng/cột trong kiểu giữ đúng snake_case của DB (`row.tenant_id`), một nguồn sự thật duy nhất là DB thật.
 - Ánh xạ kiểu mặc định của codegen được giữ nguyên: `uuid` → `string`, `timestamptz` → `ColumnType<Date, …>`, `numeric` → `string` (hiện repo chưa có cột numeric nào — đây là kỷ luật phòng ngừa cho cột đầu tiên xuất hiện).
-- **Cột có giá trị mặc định** được codegen bọc trong `Generated<…>`: cổng đếm theo kho trên cụm PG18 thật — số cột `id` có mặc định `uuidv7()` là **trung tâm 187, control plane 5, ngân hàng hệ thống 10** (đếm trên catalog của DB dựng từ rỗng; riêng `oauth_client.id` mang mặc định `gen_random_uuid()` nên số `id: Generated<string>` trong file sinh của kho trung tâm là 188).
+- **Cột có giá trị mặc định** được codegen bọc trong `Generated<…>`: cổng đếm theo kho trên cụm PG18 thật — số cột `id` có mặc định `uuidv7()` là **trung tâm 187, control plane 4, ngân hàng hệ thống 10** (đếm trên catalog của DB dựng từ rỗng; riêng `oauth_client.id` mang mặc định `gen_random_uuid()` nên số `id: Generated<string>` trong file sinh của kho trung tâm là 188).
 - **Cột jsonb có hình dạng nghiệp vụ thật** (hình dạng được giữ ở `src/jsonb-types.ts`) phải có override từng cột trong file cấu hình codegen của kho (`scripts/codegen/<kho>.json`, khoá `overrides.columns` theo dạng `bảng.cột`, kèm `customImports` trỏ về nơi định nghĩa kiểu thật). Chuỗi override thay toàn bộ kiểu của cột nên phải tự mang `| null` khi cột nullable và `Generated<…>` khi cột có mặc định. Hiện có 21 cột như vậy (liệt kê trong chính các file cấu hình). Lưu ý `--type-mapping` của kysely-codegen ánh xạ theo **kiểu dữ liệu PostgreSQL** trên toàn cục — không dùng nó cho override từng cột.
 - Sau khi đổi hình dạng DB, migration mới viết tay và `db:types` là cơ chế bắt lệch kiểu (không còn `db:generate` cho phần đã chuyển sang Kysely).
 
@@ -60,3 +60,17 @@ Package này là tầng dữ liệu **Kysely** duy nhất của hệ: kiểu sin
 - Ngoại lệ có chủ đích: schema control plane (`src/control-plane.schema.ts`, issue #580) thuộc **database riêng** trên cùng cụm Postgres với bộ migration riêng ở `packages/db/migrations/control-plane/`, nên xuất qua subpath `@giaokhoa/db/control-plane` (`src/control-plane.ts`) và KHÔNG qua `src/index.ts` — đưa vào barrel chung sẽ làm bộ migration của kho nghiệp vụ sinh lệnh cho các bảng control plane và ngược lại. Kho ngân hàng hệ thống theo cùng khuôn qua `@giaokhoa/db/system-bank`. Factory và kiểu handle của từng kho đi theo đúng các điểm vào này.
 - Subpath repository khai bằng **một** wildcard duy nhất (`"./repositories/*"` trong `package.json`, một dòng `paths` wildcard tương ứng trong tsconfig của `apps/api` và `apps/worker`) — không khai thêm đường dẫn riêng cho từng module repository.
 - App tiêu thụ dùng bản `dist` — sửa package xong phải build lại trước khi typecheck/migrate ở app (dist cũ = lỗi giả kinh điển). Build của package chép cả ba file kiểu sinh vào `dist/types/` (tsc không tự chép file `.d.ts` đầu vào).
+
+### Ranh giới schema control plane (issue #9)
+
+Kho control plane chỉ giữ bốn bảng vận hành: space_registry (slug, trạng thái,
+chế độ lưu trữ, tham chiếu cấu hình kết nối, gói dịch vụ và phiên bản schema),
+space_registry_history, space_schema_registry và space_schema_migration_runs.
+Migration 20261113043200_remove_business_directories xoá hai bảng
+space_membership_directory và space_join_code_directory; không giữ
+nhánh đọc/ghi hoặc backfill tương thích với dữ liệu cũ. Dữ liệu người học,
+giáo viên và mã tham gia lớp phải tồn tại trong đúng database nghiệp vụ
+của Host. Khi nâng cấp, áp migration control plane bằng Migrator có sẵn
+trước khi khởi động API mới; không sửa các migration cũ.
+File kiểu src/types/control-plane-db.d.ts được sinh lại bằng db:types
+trên database dựng từ rỗng, không sửa tay.

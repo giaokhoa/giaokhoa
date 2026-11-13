@@ -19,29 +19,16 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Ca đầu-cuối của TIỀN ĐIỀU KIỆN TĐ6 (issue #587): trung tâm CẤP PHÁT MỚI chỉ có dòng tenant trong kho của chính nó — pipeline cấp phát không ghi dòng thư mục nào vào kho chung — nên mọi đường quản trị theo `:tenantId` phải phân giải được đích kho từ ngữ cảnh không gian của request (địa chỉ riêng của trung tâm) thay vì chỉ tra dòng thư mục ở kho chung.
+ * Kiểm chứng HTTP về cô lập dữ liệu trung tâm (issue #9).
  *
- * Trạng thái trước TĐ6 (bằng chứng sống của thí điểm nhantin ngày 01/11/2026): quản trị trung tâm đăng nhập thành công tại địa chỉ của trung tâm, nhưng lời gọi tạo người dùng đầu tiên `POST /api/v1/tenants/<tenantId>/users` trả 404 `tenant.not_found` vì bước kiểm tra tenant đọc ở kho chung; ba lượt đọc quản trị (chi tiết tenant, danh sách thành viên, danh sách người dùng) cùng vấp một gốc ở bước suy slug từ dòng thư mục kho chung.
- *
- * Sửa xong gốc 404, ca (a) vẫn đỏ ở cổng quyền — 403 `access.capability_denied` — vì một khuyết tật liên đới thứ hai: cache của cấu hình `siteadmins` trong PermissionEvaluator chốt khoá theo `DATABASE_URL` của tiến trình, mù kho, nên danh sách site admin của kho nào được đọc trước sẽ thắng cả TTL cho mọi ngữ cảnh; quản trị của trung tâm kho riêng (là site admin của chính kho của mình theo pipeline cấp phát) không bao giờ được nhận diện khi cache đã chứa danh sách của kho chung. TĐ6 sửa cả hai trong cùng một luồng: khoá cache mang danh tính của kho mà ngữ cảnh hiện tại đang đọc (kho chung là tên database chính của tiến trình; kho riêng là tên database trong sổ đăng ký mà tầng phân giải kho đã chốt cho ngữ cảnh).
- *
- * Cô lập của chính bài test: mọi kho bài test dựng (kho riêng của trung tâm và kho control plane) mang tên duy nhất theo lượt chạy, nên khoá cache suy từ tên kho cũng duy nhất theo lượt — lượt chạy lại trên cùng một Redis giữ nguyên không bao giờ đọc trúng danh sách quản trị của lượt trước (danh sách đó mang id quản trị của một thế hệ dữ kiện đã bị xoá– tạo lại cùng tên kho), và không lượt chạy nào phải xoá khoá cache bằng tay để xanh. Nhờ đó kết quả xanh của bài test này phân biệt được "code đã đúng" với "cache đã được dọn tay" — đúng bản chất bằng chứng hồi quy của khuyết tật cache ở trên.
- *
- * Bối cảnh dựng đúng trạng thái sau cấp phát: database riêng + role riêng trên cụm test, baseline áp bằng role chủ kho, sổ đăng ký ở database control plane riêng; dữ kiện nền ghi THẲNG vào kho riêng theo đúng các bước của pipeline cấp phát
- * (context hệ thống, dòng tenant sinh id tại kho đích, context
- * tenant, tài khoản quản trị đầu tiên + membership, cấu hình `siteadmins` của chính kho đó) — kho chung KHÔNG có dòng tenant của trung tâm này ở bất kỳ thời điểm nào.
- *
- * Các ca khoá:
- * (a) quản trị của trung tâm chỉ-có-ở-kho-riêng tạo được người
- *     dùng qua endpoint thật tại địa chỉ của trung tâm (201), người dùng nằm trong kho đích (không ở kho chung), ba lượt đọc quản trị tại địa chỉ của trung tâm thấy đúng dữ kiện ở kho đích, và mục thư mục thành viên ở control plane được ghi trong cùng thao tác như trước;
- * (a2) `siteadmins` hợp nhất một chiều trên cùng một Redis
- *     dùng chung: nạp cache từ kho chung trước rồi chấm trong ngữ cảnh kho riêng vẫn nhận diện đúng quản trị của kho riêng VÀ quản trị platform (lớp phủ một chiều giữ lượt đọc A1 của bề mặt platform, spec TĐ3), và sau khi cache của kho riêng đã nạp, ngữ cảnh kho chung vẫn chỉ thấy danh sách của kho chung — danh sách kho riêng không bao giờ rò sang;
- * (a3) cổng đăng nhập platform ghim kho chung: quản trị trung
- *     tâm gọi cổng platform tại địa chỉ trung tâm mình vẫn bị 403 `auth.platform_admin_required` dù phép hợp nhất một chiều nhận diện quản trị đó trong ngữ cảnh kho riêng;
- * (b) tenant ở kho chung giữ nguyên hành vi: tạo người dùng
- *     qua endpoint thật sinh tài khoản toàn cục ở kho chung kèm membership ở kho chung;
- * (c) id tenant không tồn tại ở bất kỳ kho nào, gọi tại địa
- *     chỉ của trung tâm kho riêng (và tại địa chỉ platform), vẫn trả 404 `tenant.not_found` — fail-closed không đổi.
+ * Hai trung tâm có database, role, Host và siteadmins riêng trên
+ * PostgreSQL thật; cùng username/email không kết nối tài khoản.
+ * Control plane có registry vận hành nhưng không có thư mục
+ * user hoặc mã tham gia. Quản trị platform được phép đọc sổ
+ * vận hành nhưng không được đọc hồ sơ tại địa chỉ A hoặc B;
+ * quản trị địa phương vẫn thao tác qua HTTP với chính kho mình.
+ * Test giữ cache Redis giữa các lượt chạy để phát hiện rò cache
+ * theo tên database, không xoá cache để làm bài test xanh.
  */
 // Cô lập cache giữa các lượt chạy: khoá cache `siteadmins` của evaluator mang tên database của kho đang được đọc, nên mọi kho bài test này dựng đều mang tên duy nhất theo lượt chạy
 // (RUN_SUFFIX) — khoá cache của lượt chạy này vì thế cũng duy
@@ -55,6 +42,13 @@ const CENTRE_ROLE = 'giaokhoa_centre_td6_app';
 const CENTRE_PASSWORD = 'centre-test-td6';
 const CENTRE_SLUG = `trung-tam-td6-${RUN_SUFFIX}`;
 const HOST = `${CENTRE_SLUG}.test.local`;
+
+const CENTRE_B_DATABASE = 'giaokhoa_test_centre_td6_b_' + RUN_SUFFIX;
+const CENTRE_B_ROLE = 'giaokhoa_centre_td6b_app';
+const CENTRE_B_PASSWORD = 'centre-test-td6b';
+const CENTRE_B_SLUG = 'trung-tam-td6-b-' + RUN_SUFFIX;
+const HOST_B = CENTRE_B_SLUG + '.test.local';
+const SECOND_PASSWORD = 'SecondStrong123!';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
@@ -130,15 +124,20 @@ async function countRows(connectionString: string, table: string, column: string
   });
 }
 
-describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kho riêng (đầu-cuối, issue #587 TĐ6)', () => {
+describe('Phân tách quyền vận hành và dữ liệu trung tâm qua HTTP (issue #9)', () => {
   let app: INestApplication;
   let adminToken = '';
   let tenantId = '';
   let centreAdminId = '';
   let centreAdminUsername = '';
   let centreAdminToken = '';
+  let tenantBId = '';
+  let centreBAdminId = '';
+  let centreBAdminUsername = '';
+  let centreBAdminToken = '';
 
   const centreUrl = () => clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
+  const centreBUrl = () => clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD);
   const cpUrl = () => clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD);
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
   const loginAt = async (host: string, username: string, password: string) => {
@@ -167,26 +166,32 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
       for (const row of leftovers.rows) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(row.datname)} WITH (FORCE)`);
       }
-      for (const database of [CP_DATABASE, CENTRE_DATABASE]) {
+      for (const database of [CP_DATABASE, CENTRE_DATABASE, CENTRE_B_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
       }
-      for (const role of [CP_ROLE, CENTRE_ROLE]) {
+      for (const role of [CP_ROLE, CENTRE_ROLE, CENTRE_B_ROLE]) {
         await admin.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       }
       await admin.query(`CREATE ROLE ${quoted(CP_ROLE)} LOGIN PASSWORD '${CP_PASSWORD}'`);
       await admin.query(`CREATE ROLE ${quoted(CENTRE_ROLE)} LOGIN PASSWORD '${CENTRE_PASSWORD}'`);
+      await admin.query(`CREATE ROLE ${quoted(CENTRE_B_ROLE)} LOGIN PASSWORD '${CENTRE_B_PASSWORD}'`);
       await admin.query(`CREATE DATABASE ${quoted(CP_DATABASE)} OWNER ${quoted(CP_ROLE)}`);
       await admin.query(`CREATE DATABASE ${quoted(CENTRE_DATABASE)} OWNER ${quoted(CENTRE_ROLE)}`);
+      await admin.query(`CREATE DATABASE ${quoted(CENTRE_B_DATABASE)} OWNER ${quoted(CENTRE_B_ROLE)}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(CP_DATABASE)} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${quoted(CP_DATABASE)} TO ${quoted(CP_ROLE)}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(CENTRE_DATABASE)} FROM PUBLIC`);
+      await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(CENTRE_B_DATABASE)} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${quoted(CENTRE_DATABASE)} TO ${quoted(CENTRE_ROLE)}`);
+      await admin.query(`GRANT CONNECT ON DATABASE ${quoted(CENTRE_B_DATABASE)} TO ${quoted(CENTRE_B_ROLE)}`);
     });
     await applyControlPlaneMigrations(cpUrl());
     await applyBusinessBaseline(centreUrl());
+    await applyBusinessBaseline(centreBUrl());
 
     process.env.CONTROL_PLANE_DATABASE_URL = cpUrl();
     process.env.SPACE_TEST_TD6_URL = clusterUrl('postgres', CENTRE_ROLE, CENTRE_PASSWORD);
+    process.env.SPACE_TEST_TD6B_URL = clusterUrl('postgres', CENTRE_B_ROLE, CENTRE_B_PASSWORD);
 
     // Dòng đăng ký kho riêng trong sổ, ghi trước khi ứng dụng
     // khởi động như các spec kho riêng trước.
@@ -203,6 +208,17 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
           storage_mode: 'dedicated',
           connection_role_ref: CENTRE_ROLE,
           secret_ref: 'env:SPACE_TEST_TD6_URL',
+          schema_version: 'v1',
+        },
+        {
+          slug: CENTRE_B_SLUG,
+          name: 'Trung tâm B TĐ6',
+          kind: 'center',
+          status: 'active',
+          database_name: CENTRE_B_DATABASE,
+          storage_mode: 'dedicated',
+          connection_role_ref: CENTRE_B_ROLE,
+          secret_ref: 'env:SPACE_TEST_TD6B_URL',
           schema_version: 'v1',
         },
       ]).execute();
@@ -230,6 +246,29 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
       const tenantContext = await client.query<{ id: string }>(
         "INSERT INTO context (context_level, instance_id, path, depth) VALUES (20, $1, '', 0) RETURNING id",
         [tenantId],
+      );
+      const tenantContextId = tenantContext.rows[0]!.id;
+      await client.query('UPDATE context SET path = $1, depth = 2 WHERE id = $2', [
+        `/${systemContextId}/${tenantContextId}`,
+        tenantContextId,
+      ]);
+    });
+
+    await withClient(centreBUrl(), async (client) => {
+      await client.query("SELECT set_config('app.platform', 'on', false)");
+      const system = await client.query<{ id: string }>(
+        "INSERT INTO context (context_level, instance_id, path, depth) VALUES (10, NULL, '', 0) RETURNING id",
+      );
+      const systemContextId = system.rows[0]!.id;
+      await client.query('UPDATE context SET path = $1, depth = 1 WHERE id = $2', [`/${systemContextId}`, systemContextId]);
+      const tenant = await client.query<{ id: string }>(
+        "INSERT INTO tenants (slug, name, kind, status, plan) VALUES ($1, $2, 'center', 'active', NULL) RETURNING id",
+        [CENTRE_B_SLUG, 'Trung tâm B TĐ6 (spec 9)'],
+      );
+      tenantBId = tenant.rows[0]!.id;
+      const tenantContext = await client.query<{ id: string }>(
+        "INSERT INTO context (context_level, instance_id, path, depth) VALUES (20, $1, '', 0) RETURNING id",
+        [tenantBId],
       );
       const tenantContextId = tenantContext.rows[0]!.id;
       await client.query('UPDATE context SET path = $1, depth = 2 WHERE id = $2', [
@@ -275,11 +314,37 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
       ]);
     });
     centreAdminToken = (await loginAt(HOST, centreAdminUsername, STRONG_PASSWORD)).accessToken;
+    centreBAdminUsername = centreAdminUsername;
+    const adminUserB = await spaceDb.withSpaceKysely(
+      CENTRE_B_SLUG,
+      async () => {
+        const user = await users.createUser({
+          username: centreBAdminUsername,
+          email: `${centreBAdminUsername}@example.com`,
+          password: SECOND_PASSWORD,
+          firstName: 'QuanTri',
+          lastName: 'Td6',
+        });
+        await tenants.ensureActiveMembership(tenantBId, user.id);
+        return user;
+      },
+      { tenantId: tenantBId },
+    );
+    centreBAdminId = adminUserB.id;
+    await withClient(centreBUrl(), async (client) => {
+      await client.query("SELECT set_config('app.platform', 'on', false)");
+      await client.query('INSERT INTO config (key, value) VALUES ($1, $2::jsonb)', [
+        'siteadmins',
+        JSON.stringify([centreBAdminId]),
+      ]);
+    });
+    centreBAdminToken = (await loginAt(HOST_B, centreBAdminUsername, SECOND_PASSWORD)).accessToken;
   }, 300_000);
 
   afterAll(async () => {
     await app?.close();
     delete process.env.SPACE_TEST_TD6_URL;
+    delete process.env.SPACE_TEST_TD6B_URL;
   });
 
   it('trung tâm chỉ có ở kho riêng: quản trị trung tâm tạo được người dùng qua endpoint thật và mọi lượt đọc quản trị thấy dữ kiện tại kho đích', async () => {
@@ -309,18 +374,14 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
     expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', createdBody.id)).toBe(0);
     expect(await countRows(centreUrl(), 'tenant_memberships', 'user_id', createdBody.id)).toBe(1);
 
-    // Hiệu ứng thư mục của đường tạo user trong kho riêng giữ
-    // nguyên: mục thư mục thành viên ở control plane mang định
-    // danh tại kho đích ở cả hai phía.
-    const directoryRows = await withClient(cpUrl(), async (client) => {
-      const result = await client.query<{ status: string }>(
-        'SELECT status FROM space_membership_directory WHERE space_slug = $1 AND space_user_id = $2 AND global_user_id = $2',
-        [CENTRE_SLUG, createdBody.id],
+    // Control plane không còn bảng thư mục hay định danh tài khoản trung tâm.
+    const directoryTables = await withClient(cpUrl(), async (client) => {
+      const result = await client.query<{ table_name: string }>(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('space_membership_directory', 'space_join_code_directory')",
       );
       return result.rows;
     });
-    expect(directoryRows).toHaveLength(1);
-    expect(directoryRows[0]!.status).toBe('active');
+    expect(directoryTables).toHaveLength(0);
 
     // Ba lượt đọc quản trị tại địa chỉ của trung tâm đọc tại
     // kho đích: chi tiết tenant đúng slug, danh sách người
@@ -349,7 +410,67 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
     expect(memberIds).toContain(createdBody.id);
   });
 
-  it('siteadmins hợp nhất một chiều: ngữ cảnh kho riêng nhận diện cả quản trị của kho mình và quản trị platform, ngữ cảnh kho chung không bao giờ thấy danh sách kho riêng', async () => {
+  it('hai trung tâm có tài khoản cùng tên/email nhưng không liên kết, không đọc chéo và không dùng chung mật khẩu', async () => {
+    expect(await countRows(process.env.DATABASE_URL!, 'tenants', 'slug', CENTRE_B_SLUG)).toBe(0);
+    expect(await countRows(centreUrl(), 'users', 'username', centreAdminUsername)).toBe(1);
+    expect(await countRows(centreBUrl(), 'users', 'username', centreAdminUsername)).toBe(1);
+    expect(centreBAdminId).not.toBe(centreAdminId);
+
+    const wrongBPassword = await http(app)
+      .post('/api/v1/auth/token')
+      .set('Host', HOST_B)
+      .send({ username: centreAdminUsername, password: STRONG_PASSWORD });
+    expect(wrongBPassword.status).toBe(401);
+
+    const wrongAPassword = await http(app)
+      .post('/api/v1/auth/token')
+      .set('Host', HOST)
+      .send({ username: centreAdminUsername, password: SECOND_PASSWORD });
+    expect(wrongAPassword.status).toBe(401);
+
+    const ownB = await http(app).get('/api/v1/tenants/' + tenantBId + '/users')
+      .set('Host', HOST_B).set(auth(centreBAdminToken));
+    expect(ownB.status).toBe(200);
+
+    const ownA = await http(app).get('/api/v1/tenants/' + tenantId + '/users')
+      .set('Host', HOST).set(auth(centreAdminToken));
+    expect(ownA.status).toBe(200);
+
+    const crossedA = await http(app).get('/api/v1/tenants/' + tenantId + '/users')
+      .set('Host', HOST_B).set(auth(centreBAdminToken));
+    expect(crossedA.status).not.toBe(200);
+    const crossedB = await http(app).get('/api/v1/tenants/' + tenantBId + '/users')
+      .set('Host', HOST).set(auth(centreAdminToken));
+    expect(crossedB.status).not.toBe(200);
+
+    const reusedToken = await http(app).get('/api/v1/tenants/' + tenantBId + '/users')
+      .set('Host', HOST_B).set(auth(centreAdminToken));
+    expect([401, 403]).toContain(reusedToken.status);
+
+    const username = uniqueName('giaovienb');
+    const createdB = await http(app).post('/api/v1/tenants/' + tenantBId + '/users')
+      .set('Host', HOST_B).set(auth(centreBAdminToken))
+      .send({
+        username,
+        email: username + '@example.com',
+        password: SECOND_PASSWORD,
+        firstName: 'GiaoVien',
+        lastName: 'TrungTamB',
+      });
+    expect(createdB.status).toBe(201);
+    expect(await countRows(centreBUrl(), 'users', 'username', username)).toBe(1);
+    expect(await countRows(centreUrl(), 'users', 'username', username)).toBe(0);
+    expect(await countRows(process.env.DATABASE_URL!, 'users', 'username', username)).toBe(0);
+
+    const tables = await withClient(cpUrl(), async (client) =>
+      (await client.query<{ table_name: string }>(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('space_membership_directory','space_join_code_directory')",
+      )).rows,
+    );
+    expect(tables).toHaveLength(0);
+  });
+
+  it('quản trị platform không được quyền quản trị nghiệp vụ kho riêng dù cache danh tính đã ấm', async () => {
     const evaluator = app.get(PermissionEvaluator, { strict: false });
     const spaceDb = app.get(SpaceDatabaseService, { strict: false });
 
@@ -369,9 +490,8 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
     // ngữ cảnh platform trước (đúng thứ tự làm ca (a) đỏ trước
     // TĐ6), rồi chấm trong ngữ cảnh kho riêng qua chính
     // evaluator của ứng dụng — quản trị kho riêng phải được
-    // nhận diện từ danh sách của kho riêng, và quản trị
-    // platform cũng được nhận diện nhờ lớp phủ một chiều (giữ
-    // lượt đọc A1 của bề mặt platform vào kho riêng).
+    // nhận diện từ danh sách kho riêng; quản trị platform
+    // phải bị từ chối tại kho trung tâm.
     await tenantAls.run({ platform: true }, async () => {
       expect(await evaluator.isSiteAdmin(sharedAdminId)).toBe(true);
       expect(await evaluator.isSiteAdmin(centreAdminId)).toBe(false);
@@ -380,7 +500,7 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
       CENTRE_SLUG,
       async () => {
         expect(await evaluator.isSiteAdmin(centreAdminId)).toBe(true);
-        expect(await evaluator.isSiteAdmin(sharedAdminId)).toBe(true);
+        expect(await evaluator.isSiteAdmin(sharedAdminId)).toBe(false);
       },
       { tenantId },
     );
@@ -395,13 +515,32 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
     });
   });
 
+  it('HTTP từ nhân sự platform bị từ chối khi đọc hồ sơ, thành viên và lớp của trung tâm; quản trị trung tâm vẫn được đọc', async () => {
+    for (const path of [
+      `/api/v1/tenants/${tenantId}`,
+      `/api/v1/tenants/${tenantId}/members`,
+      `/api/v1/tenants/${tenantId}/users`,
+      '/api/v1/classes',
+    ]) {
+      const denied = await http(app).get(path).set('Host', HOST).set(auth(adminToken));
+      expect([401, 403]).toContain(denied.status);
+      const allowed = await http(app).get(path).set('Host', HOST).set(auth(centreAdminToken));
+      expect(allowed.status, `Quản trị trung tâm phải đọc được ${path}`).toBe(200);
+    }
+    // Chặn trước khi đọc bản ghi nghiệp vụ, kể cả với đường nộp bài và báo cáo điểm.
+    for (const path of [
+      `/api/v1/assignments/${randomUUID()}/submissions`,
+      `/api/v1/courses/${randomUUID()}/gradebook/report`,
+    ]) {
+      const denied = await http(app).get(path).set('Host', HOST).set(auth(adminToken));
+      expect([401, 403]).toContain(denied.status);
+    }
+  });
+
   it('cổng đăng nhập platform ghim kho chung: quản trị trung tâm gọi tại địa chỉ trung tâm mình vẫn bị 403 auth.platform_admin_required', async () => {
     // Quản trị trung tâm xác thực được tại địa chỉ của trung
-    // tâm (tài khoản và mật khẩu nằm trong kho riêng) nên chỉ
-    // phép tra ghim kho chung mới chặn được: phép hợp nhất một
-    // chiều của isSiteAdmin sẽ nhận diện quản trị này trong
-    // ngữ cảnh kho riêng, nhưng cổng platform không dùng phép
-    // đó mà tra thẳng danh sách của kho chung.
+    // tâm (tài khoản và mật khẩu nằm trong kho riêng) nhưng
+    // cổng platform chỉ đối chiếu danh sách vận hành kho chung.
     const res = await http(app)
       .post('/api/v1/auth/platform/login')
       .set('Host', HOST)
@@ -420,7 +559,7 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
     expect((wrongPassword.body as { code?: string }).code).toBe('auth.invalid_credentials');
   });
 
-  it('tenant ở kho chung: tạo người dùng giữ nguyên hành vi — tài khoản toàn cục ở kho chung kèm membership ở kho chung', async () => {
+  it('nhân sự platform không được cấp tài khoản hoặc xem hồ sơ của trường thuộc kho chung', async () => {
     const slug = `truong-td6-${RUN_SUFFIX}`;
     const tenantRes = await http(app)
       .post('/api/v1/tenants')
@@ -440,23 +579,13 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
         firstName: 'GiaoVien',
         lastName: 'Chung',
       });
-    expect(created.status).toBe(201);
-    const createdBody = created.body as { id: string; username: string };
-    expect(createdBody.username).toBe(username);
-    expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', createdBody.id)).toBe(1);
-    const membershipCount = await withClient(process.env.DATABASE_URL!, async (client) => {
-      await client.query("SELECT set_config('app.platform', 'on', false)");
-      const result = await client.query<{ count: string }>(
-        'SELECT count(*) FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
-        [sharedTenantId, createdBody.id],
-      );
-      return Number(result.rows[0]!.count);
-    });
-    expect(membershipCount).toBe(1);
+    expect(created.status).toBe(403);
+    expect(await countRows(process.env.DATABASE_URL!, 'users', 'username', username)).toBe(0);
 
-    const userList = await http(app).get(`/api/v1/tenants/${sharedTenantId}/users`).set(auth(adminToken));
-    expect(userList.status).toBe(200);
-    expect((userList.body as { username: string }[]).map((u) => u.username)).toContain(username);
+    const list = await http(app)
+      .get(`/api/v1/tenants/${sharedTenantId}/users`)
+      .set(auth(adminToken));
+    expect(list.status).toBe(403);
   });
 
   it('id tenant không tồn tại ở bất kỳ kho nào: gọi tại địa chỉ kho riêng và tại địa chỉ platform đều vẫn 404 tenant.not_found', async () => {

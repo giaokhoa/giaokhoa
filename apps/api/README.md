@@ -38,3 +38,26 @@
 
 - NestJS 12, prefix `/api/v1`. Schema route chỉ dùng kiểu biểu diễn được trong JSON Schema (ngày giờ = `z.iso.datetime(...)`) — `z.date()` làm app chết lúc boot production qua Swagger (đã có test hồi quy `openapi-document`).
 - Boot local, migrate, seed: xem `package.json` (`db:migrate`, `seed:review`) và README gốc của repo. Tài khoản demo ghi công khai trong README gốc của repo.
+
+### Giới hạn control plane và quyền người vận hành (issue #9)
+
+Control plane chỉ chứa registry, lịch sử vận hành, metadata cấp phát và
+phiên bản schema. Cơ chế đồng bộ danh bạ thành viên/mã tham gia lớp lên
+control plane đã bỏ; tạo tài khoản tại trung tâm A, B hay khu công cộng
+chỉ ghi vào kho thuộc địa chỉ đang phục vụ. Đăng nhập qua Host của
+trung tâm xác thực tại đúng kho đó; hai tài khoản trùng email ở hai
+trung tâm không phải cùng một định danh. Mã tham gia lớp được tra trong
+kho của Host hiện tại, không dùng để tìm kho đích ở control plane.
+
+Quyền siteadmins được chấm theo kho hiện hành, không cộng danh sách
+admin platform vào một trung tâm. Trên Host trung tâm, token thiếu
+centre_id tương ứng bị chặn, kể cả khi chủ token là nhân sự platform.
+Quản trị của trung tâm phải có membership hoạt động trong chính kho
+và nằm trong siteadmins của kho hoặc được gán capability tại tenant
+đó để quản lý tài khoản. Trên địa chỉ gốc, nhân sự vận hành tiếp tục
+quản lý registry, trạng thái, gói và migration theo capability riêng;
+không có quyền đọc hồ sơ, bài nộp hoặc điểm trung tâm mặc định. Quyền
+hỗ trợ do trung tâm cấp sẽ được thiết kế ở issue #19, không mở ngoại lệ
+trong issue này. Endpoint liệt kê tenant của phiên chỉ trả tenant đang
+hiệu lực tại kho hiện hành; chuyển phiên trong kho chung không phải SSO
+giữa các trung tâm kho riêng.

@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "space:provision": "node dist/modules/tenants/space-provision.js",
-    "space:directory-backfill": "node dist/modules/tenants/space-directory-backfill-cli.js",
     "db:ensure:centre-delta": "node dist/modules/tenants/centre-schema-delta-ensure.js",
     "build": "nest build",
     "lint": "eslint .",

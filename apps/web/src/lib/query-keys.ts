@@ -52,8 +52,6 @@ export const queryKeys = {
   calendarEvents: (from: string, to: string) => ['calendar', 'events', from, to] as const,
   /** Gốc khoá lịch — tiền tố làm mới mọi truy vấn lịch sau đột biến. */
   calendar: ['calendar'] as const,
-  /** Các tenant người dùng là thành viên (GET /auth/tenants) — mục chuyển không gian làm việc. */
-  myTenants: ['auth', 'tenants'] as const,
   /** Các nhà cung cấp đăng nhập ngoài đang bật (GET /auth/oauth/providers) — dùng chung cho trang login và thẻ liên kết ở hồ sơ. */
   oauthProviders: ['auth', 'oauth', 'providers'] as const,
   /** Các liên kết đăng nhập ngoài của chính người dùng (GET /auth/oauth/links). */

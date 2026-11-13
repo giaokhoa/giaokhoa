@@ -37,7 +37,7 @@ export function tenantsQueryOptions() {
 /**
  * Tuỳ chọn truy vấn tenant hiệu lực cho chế độ chủ trung tâm.
  *
- * Đáp ứng là bản ghi tenant ĐẦY ĐỦ `Tenant` — endpoint này trả cùng DTO `toTenantDto` với danh sách platform (id, slug, name, kind, status, plan, createdAt, updatedAt) — nên tầng hiển thị đọc được trạng thái vòng đời và gói từ đáp ứng này như ở chế độ platform. Hình dạng rút gọn `MyTenant` kèm cờ `active` (nghĩa là tenant đang hiệu lực trong phiên) chỉ thuộc về `GET /auth/tenants`, không phải endpoint này.
+ * Đáp ứng là bản ghi tenant ĐẦY ĐỦ `Tenant` — endpoint này trả cùng DTO `toTenantDto` với danh sách platform (id, slug, name, kind, status, plan, createdAt, updatedAt) — nên tầng hiển thị đọc được trạng thái vòng đời và gói ngay trên bản ghi tenant; không dùng danh bạ thành viên xuyên trung tâm.
  */
 export function currentTenantQueryOptions() {
   return queryOptions({

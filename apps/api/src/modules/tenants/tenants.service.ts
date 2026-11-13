@@ -17,7 +17,6 @@ import {
 import type { UserRow } from '@giaokhoa/db/repositories/users';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
-import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import { PlanLimitsService } from '../access/plan-limits.service';
 import { UsersService } from '../users/users.service';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -101,7 +100,6 @@ export class TenantsService {
     private readonly outbox: OutboxService,
     private readonly planLimits: PlanLimitsService,
     private readonly spaceDb: SpaceDatabaseService,
-    private readonly directory: ControlPlaneRepository,
   ) {}
 
   // --- tenant-zero + hàm hỗ trợ seed ------------------------------------------
@@ -228,25 +226,39 @@ export class TenantsService {
     await this.evaluator.requireCapability(actorId, 'tenant:manage', await this.systemContextId());
   }
 
-  /** Quản trị một tenant: manager của chính tenant đó (tại context tenant), hoặc platform manager. */
+  /**
+   * Quản trị/xem tenant: quyền gán trong cây tenant hoặc site admin
+   * CỦA CHÍNH kho trung tâm đang phục vụ (với membership active).
+   * Không dùng quyền quản trị tại context hệ thống của platform để
+   * đi vào một trung tâm khác.
+   */
+  private async isOwnCentreAdmin(actorId: string, tenantId: string): Promise<boolean> {
+    const store = tenantAls.getStore();
+    if (!store?.spaceSlug) return false;
+    const { tenant, membership } = await tenantAls.run({ ...store, platform: true }, async () => ({
+      tenant: await this.repo.getTenant(tenantId),
+      membership: await this.repo.getMembership(tenantId, actorId),
+    }));
+    if (tenant?.kind !== 'center' || tenant.slug !== store.spaceSlug || membership?.status !== 'active') {
+      return false;
+    }
+    return this.evaluator.isSiteAdmin(actorId);
+  }
+
   async assertTenantManager(actorId: string, tenantId: string): Promise<void> {
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
     if (await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id)) return;
-    await this.assertPlatformManager(actorId);
+    if (await this.isOwnCentreAdmin(actorId, tenantId)) return;
+    throw new ForbiddenException({ message: 'Missing capability tenant:manage', code: 'access.capability_denied' });
   }
 
-  /** Xem một tenant: tenant:viewall/manage tại context tenant, hoặc phía platform. */
   async assertTenantViewer(actorId: string, tenantId: string): Promise<void> {
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
     if (
       (await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id)) ||
       (await this.evaluator.hasCapability(actorId, 'tenant:viewall', tenantCtx.id))
     ) return;
-    const systemId = await this.systemContextId();
-    if (
-      (await this.evaluator.hasCapability(actorId, 'tenant:manage', systemId)) ||
-      (await this.evaluator.hasCapability(actorId, 'tenant:viewall', systemId))
-    ) return;
+    if (await this.isOwnCentreAdmin(actorId, tenantId)) return;
     throw new ForbiddenException({ message: 'Missing capability tenant:viewall', code: 'access.capability_denied' });
   }
 
@@ -559,44 +571,6 @@ export class TenantsService {
     return ensureActiveTenantMembership(this.spaceDb.routedKysely, tenantId, userId);
   }
 
-  /**
-   * Đồng bộ thư mục thành viên ở control plane sau một thao tác
-   * ghi membership thành công (issue #587, hạng mục 3 — thiết kế
-   * B1): chỉ áp cho tenant ở kho riêng và chỉ khi control plane
-   * đã cấu hình; tenant ở kho chung không có gì phải đồng bộ vì
-   * bộ chọn đọc thẳng membership ở kho chung.
-   *
-   * Mục đã có trong thư mục thì chỉ cập nhật trạng thái — giữ
-   * nguyên `spaceUserId` mà các điểm ghi biết định danh đích
-   * (lấp thư mục của đợt di trú, cấp phát) đã chốt, không ghi
-   * đè bằng định danh toàn cục. Chưa có mục thì tạo mới với
-   * `spaceUserId` bằng chính định danh của người dùng: mô hình
-   * vật chất hoá tài khoản sang kho riêng giữ nguyên định danh
-   * gốc của người dùng, nên định danh toàn cục cũng là định
-   * danh tại kho đích cho tới khi một điểm ghi biết đích tường
-   * minh chốt lại liên kết khác.
-   *
-   * Lỗi ghi thư mục ném ra nguyên trạng thay vì nuốt lặng: ghi
-   * membership và ghi thư mục là hai nửa của cùng một thao tác,
-   * lệch lặng sẽ làm bộ chọn trung tâm mất trung tâm mà không
-   * ai biết — thà thao tác thất bại tường minh để gọi lại (mọi
-   * điểm ghi đều chạy lại an toàn).
-   */
-  private async syncMembershipDirectory(tenantId: string, userId: string, status: string): Promise<void> {
-    if (!this.directory.isConfigured()) return;
-    const target = await this.spaceTargetForTenant(tenantId);
-    if (!target?.dedicated) return;
-    const updated = await this.directory.updateMembershipDirectoryStatus(userId, target.slug, status);
-    if (updated === 0) {
-      await this.directory.upsertMembershipDirectory({
-        globalUserId: userId,
-        spaceSlug: target.slug,
-        spaceUserId: userId,
-        status,
-      });
-    }
-  }
-
   async addMember(actorId: string, tenantId: string, dto: AddTenantMemberDto): Promise<TenantMembershipDto> {
     // Ngữ cảnh platform (HOTFIX #196 vòng 2): đây là điểm seed chết ở
     // production — platform admin đứng trong ngữ cảnh tenant-zero gọi
@@ -604,7 +578,6 @@ export class TenantsService {
     // giả; ghi membership + outbox cho tenant đích cũng cần tầm nhìn
     // platform. Cổng assertTenantManager chạy nguyên vẹn bên trong.
     const result = await tenantAls.run({ platform: true }, () => this.addMemberInContext(actorId, tenantId, dto));
-    await this.syncMembershipDirectory(tenantId, dto.userId, result.status);
     return result;
   }
 
@@ -650,7 +623,6 @@ export class TenantsService {
     const result = await tenantAls.run({ platform: true }, () =>
       this.setMemberStatusInContext(actorId, tenantId, userId, status),
     );
-    await this.syncMembershipDirectory(tenantId, userId, status);
     return result;
   }
 
@@ -724,14 +696,10 @@ export class TenantsService {
    * để cổng membership của evaluator tiếp tục hoạt động trong kho
    * riêng mà không cần bất kỳ tra cứu nào sang kho chung. Cổng quản
    * trị tenant cũng xét trong kho riêng: quản trị của trung tâm
-   * được nhận diện từ danh sách `siteadmins` của chính kho đó, và
-   * quản trị platform cũng được nhận diện trong ngữ cảnh này qua
-   * phép hợp nhất một chiều của evaluator — lớp phủ của người vận
-   * hành platform, không tạo membership hay tài khoản nào cho họ
-   * trong kho riêng, và chiều ngược lại không tồn tại (kho chung
-   * không bao giờ thấy danh sách của kho riêng). Riêng cổng đăng
-   * nhập platform vẫn ghim danh sách của kho chung, nên quản trị
-   * trung tâm không qua được cổng đó tại bất kỳ địa chỉ nào.
+   * được nhận diện từ danh sách siteadmins trong đúng kho đó
+   * và membership active của trung tâm. Quản trị platform không
+   * được nhận diện hay cấp quyền ở kho này; cổng đăng nhập
+   * platform chỉ kiểm danh sách vận hành ở kho chung.
    */
   async createTenantUser(actorId: string, tenantId: string, dto: CreateTenantUserDto): Promise<TenantUserView> {
     // Phân giải đích kho của tenant đích qua điểm phân giải dùng
@@ -786,22 +754,6 @@ export class TenantsService {
       await this.ensureActiveMembership(spaceTenant.id, user.id);
       return toTenantUserView(user);
     });
-    // Ghi thư mục thành viên cho tài khoản vừa sinh ra trong kho
-    // riêng (issue #587, hạng mục 3 — thiết kế B1): tài khoản này
-    // không tồn tại ở kho chung, định danh duy nhất của họ là
-    // định danh tại kho đích, nên cả hai phía của mục thư mục
-    // đều mang định danh đó — bộ chọn tra theo định danh tại kho
-    // đích sẽ thấy trung tâm này. Ghi sau khi phiên kho riêng đã
-    // hoàn tất; lỗi ghi thư mục ném ra nguyên trạng như các điểm
-    // ghi membership khác (xem syncMembershipDirectory).
-    if (this.directory.isConfigured()) {
-      await this.directory.upsertMembershipDirectory({
-        globalUserId: view.id,
-        spaceSlug: slug,
-        spaceUserId: view.id,
-        status: 'active',
-      });
-    }
     return view;
   }
 
@@ -842,89 +794,35 @@ export class TenantsService {
 
   // --- phân giải tenant cho phiên đăng nhập -----------------------------------
 
-  /** Các tenant user là thành viên active và tenant đang active — cho bộ chọn tenant. */
+  /** Bộ chọn chỉ chứa tenant hiện hành của chính phiên, không dò các kho khác. */
   async listMyTenants(userId: string, activeTenantId?: string): Promise<MyTenant[]> {
-    // Đường hệ thống xuyên tenant (bộ chọn tenant phải thấy membership ở
-    // MỌI tenant của user) — chạy trong ngữ cảnh platform như platformTenant.
-    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    const store = tenantAls.getStore();
+    const spaceSlug = store?.spaceSlug;
+    const currentTenantId = activeTenantId ?? store?.tenantId;
     return tenantAls.run(
-      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
-      () => this.listMyTenantsInContext(userId, activeTenantId),
+      { platform: true, ...(spaceSlug ? { spaceSlug } : {}) },
+      () => this.listMyTenantsInContext(userId, currentTenantId),
     );
   }
 
   private async listMyTenantsInContext(userId: string, activeTenantId?: string): Promise<MyTenant[]> {
-    const memberships = await this.repo.listMembershipsForUser(userId);
-    const active = memberships.filter((m) => m.status === 'active');
-    const rows: MyTenant[] = [];
-    for (const m of active) {
-      const tenant = await this.repo.getTenant(m.tenantId);
-      if (!tenant || tenant.status !== 'active') continue;
-      rows.push({
-        id: tenant.id,
-        slug: tenant.slug,
-        name: tenant.name,
-        kind: tenant.kind as MyTenant['kind'],
-        active: tenant.id === activeTenantId,
-      });
+    // Chỉ công bố tenant hiệu lực của phiên trong kho hiện tại;
+    // không dò thành viên các trung tâm khác theo cùng userId.
+    if (!activeTenantId) return [];
+    const tenant = await this.repo.getTenant(activeTenantId);
+    if (!tenant || tenant.status !== 'active') return [];
+    if (tenant.kind !== 'platform') {
+      const membership = await this.repo.getMembership(tenant.id, userId);
+      if (membership?.status !== 'active') return [];
     }
-    // Hợp nhất thư mục thành viên của các không gian kho riêng
-    // (issue #587, hạng mục 3 — thiết kế B1): membership của
-    // trung tâm đã chuyển chỉ còn ở kho đích nên lượt tra kho
-    // chung ở trên không thấy; thư mục ở control plane cho biết
-    // người này còn là thành viên của không gian kho riêng nào,
-    // và dữ kiện của từng trung tâm được đọc tại chính kho của
-    // nó (xem myTenantFromDirectoryEntry). Slug đã có từ nguồn
-    // kho chung thì không đọc lại từ thư mục.
-    if (tenantAls.getStore()?.spaceSlug !== PUBLIC_LEARNING_SLUG && this.directory.isConfigured()) {
-      const seenSlugs = new Set(rows.map((r) => r.slug));
-      const entries = await this.directory.listMembershipDirectoryForUser(userId);
-      for (const entry of entries) {
-        if (entry.status !== 'active' || seenSlugs.has(entry.spaceSlug)) continue;
-        const row = await this.myTenantFromDirectoryEntry(entry.spaceSlug, entry.spaceUserId, activeTenantId);
-        if (row) {
-          rows.push(row);
-          seenSlugs.add(entry.spaceSlug);
-        }
-      }
-    }
+    const rows: MyTenant[] = [{
+      id: tenant.id,
+      slug: tenant.slug,
+      name: tenant.name,
+      kind: tenant.kind as MyTenant['kind'],
+      active: true,
+    }];
     return rows;
-  }
-
-  /**
-   * Đọc một trung tâm kho riêng cho bộ chọn từ một mục thư mục
-   * thành viên (issue #587, hạng mục 3 — thiết kế B1): thư mục
-   * chỉ là chỉ mục định tuyến — tên/trạng thái của trung tâm và
-   * trạng thái membership THẬT đều đọc tại kho đích trong
-   * `withSpaceKysely`, đối chiếu bằng `spaceUserId` của mục.
-   * Trung tâm không còn active hoặc membership ở kho đích
-   * không còn active → trả `null` (không thuộc bộ chọn). Chuẩn
-   * bị kho đích lỗi thì `withSpaceKysely` ném ra nguyên
-   * trạng: bộ chọn lỗi tường minh thay vì lặng lẽ thiếu một
-   * trung tâm.
-   *
-   * @param spaceSlug - Slug của không gian kho riêng.
-   * @param spaceUserId - Định danh của người dùng trong kho đích.
-   * @param activeTenantId - Tenant hiệu lực của phiên (đánh dấu `active`).
-   */
-  private async myTenantFromDirectoryEntry(
-    spaceSlug: string,
-    spaceUserId: string,
-    activeTenantId?: string,
-  ): Promise<MyTenant | null> {
-    return this.spaceDb.withSpaceKysely(spaceSlug, async () => {
-      const tenant = await this.repo.getTenantBySlug(spaceSlug);
-      if (!tenant || tenant.status !== 'active') return null;
-      const membership = await this.repo.getMembership(tenant.id, spaceUserId);
-      if (!membership || membership.status !== 'active') return null;
-      return {
-        id: tenant.id,
-        slug: tenant.slug,
-        name: tenant.name,
-        kind: tenant.kind as MyTenant['kind'],
-        active: tenant.id === activeTenantId,
-      };
-    });
   }
 
   /**

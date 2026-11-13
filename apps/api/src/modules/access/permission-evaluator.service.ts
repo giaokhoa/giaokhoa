@@ -67,34 +67,15 @@ export class PermissionEvaluator {
     return `access:siteadmins:${this.spaceDb?.currentContextDatabaseName() ?? this.sharedDatabaseName}`;
   }
 
-  /** Site admin (tương đương $CFG->siteadmins, khoá config `siteadmins`) bỏ qua mọi kiểm tra capability. */
   /**
-   * User có nằm trong danh sách site admin hay không — admin bỏ qua mọi capability check.
-   *
-   * HỢP NHẤT MỘT CHIỀU (TĐ6, issue #587): trong ngữ cảnh kho riêng,
-   * user được nhận diện nếu thuộc danh sách site admin CỦA KHO ĐÓ
-   * hoặc danh sách site admin PLATFORM (kho chung) — lớp phủ của
-   * người vận hành platform, giữ lượt đọc A1 của bề mặt platform
-   * vào trung tâm kho riêng (spec TĐ3) mà không tạo membership hay
-   * gán vai nào trong kho trung tâm. Chiều ngược không tồn tại:
-   * trong ngữ cảnh kho chung chỉ danh sách kho chung được dùng,
-   * danh sách kho riêng không bao giờ rò sang. Cổng đăng nhập
-   * platform KHÔNG dùng phép này mà dùng `isPlatformSiteAdmin`
-   * (ghim kho chung tường minh) để quản trị trung tâm không qua
-   * được cổng platform tại địa chỉ trung tâm mình.
+   * Site admin chỉ có quyền trong kho hiện tại. Danh sách admin
+   * của platform không được phủ lên kho riêng khi ID trùng.
    */
   async isSiteAdmin(userId: string): Promise<boolean> {
     const raw = await this.siteAdminsConfig();
-    if (Array.isArray(raw) && raw.map((v) => String(v)).includes(userId)) return true;
-    // Ngữ cảnh kho riêng mới cần lớp phủ platform: danh tính kho
-    // của ngữ cảnh do khung định tuyến báo (không phải kho chung)
-    // thì tra thêm danh sách platform; ngữ cảnh kho chung dừng ở
-    // danh sách vừa đọc — không có chiều rò ngược.
-    if (this.spaceDb?.currentContextDatabaseName() !== undefined) {
-      return this.isPlatformSiteAdmin(userId);
-    }
-    return false;
+    return Array.isArray(raw) && raw.map((v) => String(v)).includes(userId);
   }
+
   /**
    * User có nằm trong danh sách site admin CỦA KHO CHUNG
    * (platform) hay không — phép tra ghim tường minh cho cổng
@@ -102,7 +83,7 @@ export class PermissionEvaluator {
    * lược slug không gian nên handle định tuyến và khoá cache đều
    * rơi về kho chung, bất kể ngữ cảnh kho hiện hành của request.
    * Dùng cho `platformLogin` và `verifyPlatformMfa`; mọi phép
-   * gác còn lại dùng `isSiteAdmin` (hợp nhất một chiều).
+   * gác còn lại dùng `isSiteAdmin` tại đúng kho hiện hành.
    */
   async isPlatformSiteAdmin(userId: string): Promise<boolean> {
     const raw = await tenantAls.run({ platform: true }, async () => this.siteAdminsConfig());
@@ -141,9 +122,9 @@ export class PermissionEvaluator {
    * `siteAdminsCacheKey`): một lượt đọc nguyên thuỷ chỉ bao giờ thấy
    * danh sách admin của đúng kho của nó — kể cả khi nhiều tiến trình
    * dùng chung một Redis và kể cả khi cùng một tiến trình phục vụ
-   * nhiều kho. Lớp hợp nhất một chiều nằm ở `isSiteAdmin` (đọc
-   * thêm danh sách platform trong ngữ cảnh kho riêng), không nằm
-   * ở tầng cache này: các khoá cache vẫn tách bạch theo từng kho.
+   * nhiều kho. Không cộng quyền site admin của platform vào danh sách
+   * này khi đang phục vụ kho riêng: cả dữ liệu và cache được cô
+   * lập theo tên kho, kể cả khi các kho có userId trùng nhau.
    */
   private async siteAdminsConfig(): Promise<unknown> {
     const cacheKey = this.siteAdminsCacheKey();

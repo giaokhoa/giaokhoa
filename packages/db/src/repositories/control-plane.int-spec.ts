@@ -307,45 +307,18 @@ describe('repository control plane trên Kysely — đối chiếu hành vi', ()
     expect(runs[0]!.finishedAt).toBeInstanceOf(Date);
   });
 
-  it('thư mục thành viên: upsert theo cặp (tài khoản, không gian) hội tụ một dòng; đổi trạng thái trả đúng số dòng', async () => {
-    const userId = '01a19887-1111-7000-8000-000000000001';
-    const created = await repo.upsertMembershipDirectory({
-      globalUserId: userId,
-      spaceSlug: 'pilot-dir',
-      spaceUserId: '01a19887-2222-7000-8000-000000000002',
-      status: 'active',
-    });
-    expect(created.id).toMatch(UUIDV7_PATTERN);
-    const overwritten = await repo.upsertMembershipDirectory({
-      globalUserId: userId,
-      spaceSlug: 'pilot-dir',
-      spaceUserId: '01a19887-3333-7000-8000-000000000003',
-      status: 'suspended',
-    });
-    expect(overwritten.id).toBe(created.id);
-    expect(overwritten.spaceUserId).toBe('01a19887-3333-7000-8000-000000000003');
-    expect(overwritten.status).toBe('suspended');
-
-    expect(await repo.updateMembershipDirectoryStatus(userId, 'pilot-dir', 'ended')).toBe(1);
-    expect(await repo.updateMembershipDirectoryStatus(userId, 'khong-co', 'ended')).toBe(0);
-
-    // Khớp cả hai chiều định danh; khớp cả hai cùng lúc vẫn một dòng.
-    const byGlobal = await repo.listMembershipDirectoryForUser(userId);
-    expect(byGlobal).toHaveLength(1);
-    const bySpace = await repo.listMembershipDirectoryForUser('01a19887-3333-7000-8000-000000000003');
-    expect(bySpace).toHaveLength(1);
-    expect(bySpace[0]!.id).toBe(created.id);
+  it('control plane chỉ giữ bốn bảng vận hành và không có thư mục nghiệp vụ xuyên trung tâm', async () => {
+    const result = await pool.query<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name LIKE 'space_%' ORDER BY table_name",
+    );
+    expect(result.rows.map((row) => row.table_name)).toEqual([
+      'space_registry',
+      'space_registry_history',
+      'space_schema_migration_runs',
+      'space_schema_registry',
+    ]);
   });
 
-  it('thư mục mã tham gia: claim phân biệt claimed/already/conflict đúng ba nhánh', async () => {
-    expect(await repo.claimJoinCodeDirectory('CODE640A', 'pilot-dir')).toBe('claimed');
-    expect(await repo.claimJoinCodeDirectory('CODE640A', 'pilot-dir')).toBe('already');
-    expect(await repo.claimJoinCodeDirectory('CODE640A', 'space-khac')).toBe('conflict');
-    expect((await repo.findJoinCodeDirectory('CODE640A'))!.spaceSlug).toBe('pilot-dir');
-    expect((await repo.listJoinCodeDirectoryForSpace('pilot-dir')).map((row) => row.joinCode)).toEqual(['CODE640A']);
-    await repo.deleteJoinCodeDirectory('CODE640A');
-    expect(await repo.findJoinCodeDirectory('CODE640A')).toBeUndefined();
-  });
 });
 
 describe('T-4 — ngữ nghĩa undefined trong values/set/where của Kysely (đo trên kho control plane)', () => {
@@ -511,7 +484,7 @@ describe('T-7 (phần control plane) + T-10 — contract kiểu runtime và hìn
   it('T-7: kho control plane không có cột int8 nào — quyết định setTypeParser toàn cục không có bề mặt trên kho này', async () => {
     const result = await pool.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM information_schema.columns
-       WHERE table_name IN ('space_registry','space_registry_history','space_schema_registry','space_schema_migration_runs','space_membership_directory','space_join_code_directory')
+       WHERE table_name IN ('space_registry','space_registry_history','space_schema_registry','space_schema_migration_runs')
          AND data_type = 'bigint'`,
     );
     expect(result.rows[0]!.n).toBe(0);
@@ -582,10 +555,10 @@ describe('T-7 (phần control plane) + T-10 — contract kiểu runtime và hìn
 });
 
 describe('bộ máy migration trên kho control plane — hai đường', () => {
-  it('đường từ rỗng: database dựng bằng bộ máy migration có đủ 6 bảng, 3 dòng nhật ký và hậu kiểm của package đạt', async () => {
+  it('đường từ rỗng: database dựng bằng bộ máy migration có đúng 4 bảng vận hành, 4 dòng nhật ký và hậu kiểm của package đạt', async () => {
     const counts = await verifyStore(db, 'control-plane');
-    expect(counts.tables).toBe(6);
-    expect(counts.journalRows).toBe(3);
+    expect(counts.tables).toBe(4);
+    expect(counts.journalRows).toBe(4);
   });
 
   it('đường đã có nhật ký đầy đủ: migrateToLatest là no-op, dữ kiện còn nguyên', async () => {

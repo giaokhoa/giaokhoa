@@ -10,7 +10,6 @@ import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
 import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SKIP_SPACE_CONTEXT_KEY } from './skip-space-context.decorator';
 import { spaceSlugForHost } from './space-resolution';
 import { tenantAls } from './tenant-als';
@@ -23,11 +22,8 @@ import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
  *    ước tên miền con (xem `space-resolution.ts`). Địa chỉ không mang trung tâm → request đi đúng đường hiện tại, guard không chạm gì thêm.
  * 2. Phân giải ứng viên qua sổ đăng ký control plane. Host mang
  *    slug chưa đăng ký hoặc tầng định tuyến chưa cấu hình đều là lỗi bắt buộc từ chối; không có đường về kho chung. Host không mang slug chỉ dành cho request bề mặt platform.
- * 3. Đường vận hành platform tường minh được miễn toàn bộ các bước
- *    sau: request mà tenant hiệu lực là tenant platform
- *    (tenant-zero) và người dùng là quản trị viên của site chính
- *    (`isSiteAdmin`) là đường vận hành hệ thống có sẵn — nó không
- *    bị chặn bởi trạng thái trung tâm, không bị đối chiếu token, và không bị ghim vào kho của trung tâm, vì vận hành phải còn vào được trung tâm đang bị đình chỉ để xử lý.
+ * 3. Phiên nhân sự vận hành không được miễn kiểm tra Host,
+ *    trạng thái hoặc sở hữu phiên của trung tâm.
  * 4. Trung tâm chưa ở trạng thái `active` (đang cấp phát, bị đình
  *    chỉ hoặc đã đóng) → từ chối traffic nghiệp vụ bằng 403 `space.not_active` kèm trạng thái trong thông điệp; dữ kiện của trung tâm không bị đụng tới.
  * 5. Trung tâm ở kho riêng: phiên phải thuộc đúng trung tâm này.
@@ -46,7 +42,6 @@ export class SpaceContextGuard implements CanActivate {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly repo: TenantsRepository,
-    private readonly evaluator: PermissionEvaluator,
     private readonly reflector: Reflector,
   ) {}
 
@@ -93,16 +88,6 @@ export class SpaceContextGuard implements CanActivate {
     // Host chỉ định một trung tâm phải có dòng đăng ký hợp lệ:
     // slug giả hay sổ không khả dụng không được đổi đích sang kho chung.
     const target: ResolvedSpaceConnection = await this.spaceDb.resolveTarget(slug);
-
-    // Các tra cứu phục vụ quyết định miễn trừ chạy trong ngữ cảnh platform tường minh như chính TenantGuard: ngoài ngữ cảnh platform, RLS fail-closed giấu các dòng tenant/membership của trung tâm khác.
-    const platformExempt = await tenantAls.run({ platform: true }, async () => {
-      const user = request.user;
-      if (!user || !request.tenantId) return false;
-      const platformTenant = await this.repo.getPlatformTenant();
-      if (!platformTenant || request.tenantId !== platformTenant.id) return false;
-      return this.evaluator.isSiteAdmin(user.id);
-    });
-    if (platformExempt) return true;
 
     if (target.status !== 'active') {
       throw new ForbiddenException({

@@ -255,9 +255,9 @@ export class AuthService {
    * này; tài khoản thường — kể cả quản trị của một trung tâm —
    * bị 403 `auth.platform_admin_required`. Phép tra ghim kho
    * chung tường minh (`isPlatformSiteAdmin`): cổng này KHÔNG
-   * dùng `isSiteAdmin` (hợp nhất một chiều, TĐ6) vì tại địa chỉ
-   * kho riêng phép đó nhận diện cả quản trị của chính kho đó —
-   * quản trị trung tâm gọi cổng này tại địa chỉ trung tâm mình
+   * dùng phép tra site admin của kho đang định tuyến, vì danh
+   * tính quản trị trung tâm không phải nhân sự vận hành; quản trị
+   * trung tâm gọi cổng này tại địa chỉ trung tâm mình
    * vẫn bị 403. Đăng nhập ở địa chỉ kho riêng tra tài khoản
    * trong kho đó nên quản trị platform ở kho chung không đăng
    * nhập được tại đó — bề mặt vận hành sống ở địa chỉ gốc.
@@ -285,8 +285,7 @@ export class AuthService {
    * Bước hai của đăng nhập platform: qua thử thách MFA của luồng
    * platform rồi cấp access token platform như `platformLogin`.
    * Phép tra ghim kho chung tường minh như `platformLogin`
-   * (cùng lý do: không dùng phép hợp nhất một chiều của
-   * `isSiteAdmin` cho cổng platform).
+   * (không dùng cấu hình admin của trung tâm cho cổng platform).
    */
   async verifyPlatformMfa(challengeToken: string, code: string, ip?: string, _userAgent?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'platform');

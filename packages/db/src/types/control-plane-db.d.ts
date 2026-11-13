@@ -12,24 +12,6 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
-export interface SpaceJoinCodeDirectory {
-  created_at: Generated<Timestamp>;
-  id: Generated<string>;
-  join_code: string;
-  space_slug: string;
-  updated_at: Generated<Timestamp>;
-}
-
-export interface SpaceMembershipDirectory {
-  created_at: Generated<Timestamp>;
-  global_user_id: string;
-  id: Generated<string>;
-  space_slug: string;
-  space_user_id: string;
-  status: string;
-  updated_at: Generated<Timestamp>;
-}
-
 export interface SpaceRegistry {
   connection_role_ref: string;
   created_at: Generated<Timestamp>;
@@ -79,8 +61,6 @@ export interface SpaceSchemaRegistry {
 }
 
 export interface DB {
-  space_join_code_directory: SpaceJoinCodeDirectory;
-  space_membership_directory: SpaceMembershipDirectory;
   space_registry: SpaceRegistry;
   space_registry_history: SpaceRegistryHistory;
   space_schema_migration_runs: SpaceSchemaMigrationRuns;
