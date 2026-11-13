@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Label } from '@giaokhoa/ui/components/label';
 
-import { SubjectLite } from '#features/matrices/types/matrix';
+import type { SubjectLite } from '#lib/curriculum';
 import { useBankMatrices, useBankMatrixContributions, useCopyMatrixToMyBank, useDeleteMatrix, useProposeMatrixContribution, useReviewMatrixContribution } from '../queries/questions';
 import type { BankLite, MatrixLite } from '../types/questions';
 import { matrixStatusKey } from '../utils/shared';

@@ -17,6 +17,9 @@ export interface CurriculumSubject {
   position: number;
 }
 
+/** Môn tối giản dùng cho các ô lọc, danh sách ma trận và ngân hàng câu hỏi. */
+export type SubjectLite = Pick<CurriculumSubject, 'id' | 'name'>;
+
 export interface Curriculum {
   id: string;
   subjectId: string;
@@ -84,6 +87,25 @@ export async function fetchSubjects(contextId?: string, forCourseId?: string): P
   if (forCourseId) params.set('forCourseId', forCourseId);
   const query = params.toString();
   return apiJson<CurriculumSubject[]>(`/api/v1/curriculum/subjects${query ? `?${query}` : ''}`);
+}
+
+/**
+ * Tuỳ chọn query môn dùng chung giữa ngân hàng câu hỏi và màn ma trận.
+ * Giữ nguyên cache key không kèm context, thêm id khoá khi đọc theo quyền khoá.
+ *
+ * @param forCourseId - Khoá mở nhánh quyền đọc chương trình nếu có.
+ * @returns Tuỳ chọn query theo key có sẵn của hệ thống.
+ */
+export function curriculumSubjectsQueryOptions(forCourseId?: string) {
+  return queryOptions({
+    queryKey: forCourseId ? [...queryKeys.curriculumSubjects, forCourseId] : queryKeys.curriculumSubjects,
+    queryFn: (): Promise<SubjectLite[]> => fetchSubjects(undefined, forCourseId),
+  });
+}
+
+/** Danh sách môn chỉ tải khi được phép; lỗi tải nổi lên query như trước. */
+export function useCurriculumSubjects(enabled: boolean, forCourseId?: string) {
+  return useQuery({ ...curriculumSubjectsQueryOptions(forCourseId), enabled });
 }
 
 /** Các chương trình (theo khối) của một môn. */

@@ -33,7 +33,7 @@ import {
   useQuestionCategories,
 } from '../queries/questions';
 import type { AttributionLite } from '../types/questions';
-import { useCurriculumSubjects } from '#features/matrices/queries/matrix';
+import { useCurriculumSubjects } from '#lib/curriculum';
 import { type BankArea } from '../utils/shared';
 
 

@@ -2,10 +2,6 @@
  * Kiểu dữ liệu của màn ma trận thuộc feature matrices. Tách từ module dữ liệu phẳng `src/lib/matrix-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng queries/.
  */
 
-export interface SubjectLite {
-  id: string;
-  name: string;
-}
 export interface CurriculumLite {
   id: string;
   subjectId: string;

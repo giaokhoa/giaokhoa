@@ -15,7 +15,7 @@ import type { LibraryItem, LibrarySpace, ReviewChecklist } from '../types/conten
 import { useQueryClient } from '@tanstack/react-query';
 import { contentBankItemFileUrlQueryOptions, contentBankItemsQueryOptions, contentBankSpacesQueryOptions, contentBankSubjectsQueryOptions, useDeleteContentBankItem, useInsertContentBankItem, useReviewContentBankItem, useSubmitContentBankItem } from '../queries/content-bank';
 import { coursesListQueryOptions } from '#features/courses/queries/courses';
-import { courseContentQueryOptions } from '#features/course-builder/queries/course-builder';
+import { courseContentQueryOptions } from '#lib/course-content';
 
 const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
 
