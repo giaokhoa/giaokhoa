@@ -19,10 +19,12 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm fetch --store-dir /
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --offline --frozen-lockfile --store-dir /pnpm/store
 RUN pnpm exec turbo run build --filter=@giaokhoa/api --filter=@giaokhoa/worker --filter=@giaokhoa/web
+# Deploy cần tải metadata registry để xác minh supply-chain policy của pnpm 12;
+# --offline khiến ERR_PNPM_NO_OFFLINE_META dù store đã có các tarball.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm --filter @giaokhoa/api deploy --offline --prod --store-dir /pnpm/store /out/api \
-  && pnpm --filter @giaokhoa/worker deploy --offline --prod --store-dir /pnpm/store /out/worker \
-  && pnpm --filter @giaokhoa/web deploy --offline --prod --store-dir /pnpm/store /out/web
+    pnpm --filter @giaokhoa/api deploy --prod --store-dir /pnpm/store /out/api \
+  && pnpm --filter @giaokhoa/worker deploy --prod --store-dir /pnpm/store /out/worker \
+  && pnpm --filter @giaokhoa/web deploy --prod --store-dir /pnpm/store /out/web
 
 # ----- Runtime API -----
 # Tiến trình API NestJS đã biên dịch (dist/main.js). Dữ liệu tệp tải lên nằm ở FILE_STORAGE_DIR (mặc định ./data/files theo cấu hình app) — compose.yaml gắn volume bền vào đúng thư mục này.
