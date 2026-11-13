@@ -209,7 +209,8 @@ export function redisConnectionFromUrl(url: string): {
   username?: string;
   password?: string;
   tls?: { rejectUnauthorized: boolean };
-  maxRetriesPerRequest: null;
+  maxRetriesPerRequest: number;
+  enableOfflineQueue: false;
 } {
   const parsed = new URL(url);
   return {
@@ -219,6 +220,10 @@ export function redisConnectionFromUrl(url: string): {
     password: parsed.password || undefined,
     // URL dạng rediss:// bắt buộc TLS. Chứng chỉ phía dịch vụ không kiểm chứng theo CA hệ thống được nên tắt kiểm chứng cho ioredis.
     ...(parsed.protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {}),
-    maxRetriesPerRequest: null,
+    // API chỉ là producer BullMQ: từ chối enqueue sớm nếu Redis mất kết
+    // nối, không treo request HTTP vô hạn hay giữ lệnh trong offline queue.
+    // Worker ở apps/worker có cấu hình riêng để nhận job sau khi Redis hồi phục.
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
   };
 }
