@@ -3,9 +3,5 @@
     "../../packages/oxlint-config/base.json",
     "../../packages/oxlint-config/react.json"
   ],
-  "plugins": [],
-  "options": {
-    "typeAware": true,
-    "typeCheck": true
-  }
+  "plugins": []
 }

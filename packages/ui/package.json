@@ -38,7 +38,7 @@
   "name": "@giaokhoa/ui",
   "private": true,
   "scripts": {
-    "lint": "oxlint .",
+    "lint": "oxlint --type-aware --type-check .",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "sideEffects": [

@@ -18,7 +18,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "oxlint .",
+    "lint": "oxlint --type-aware --type-check .",
     "test": "vitest run",
     "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.test.json"
