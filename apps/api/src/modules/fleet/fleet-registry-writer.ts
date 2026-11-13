@@ -37,6 +37,7 @@ export class FleetRegistryWriter {
         id: space.id,
         slug: space.slug,
         kind: space.kind === 'platform' ? 'platform' : 'center',
+        storageMode: space.storageMode,
         status: space.status,
         databaseName: space.databaseName,
         secretRef: space.secretRef,

@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { Client } from 'pg';
 import { quoteIdentifier } from '../control-plane/control-plane-provision';
@@ -6,12 +7,17 @@ import {
   newFleetRunId,
   parseBackupFileName,
   pickRestoreCandidate,
-  readVerifiedBackupFile,
   retargetUrl,
   runPgTool,
   type FleetSpace,
 } from './fleet-common';
 import { FleetRegistryWriter } from './fleet-registry-writer';
+import {
+  readVerifiedSpaceArchive,
+  restoreArchiveFilesToLocalDir,
+  removeTemporaryRestoreFiles,
+  verifyRestoredFileMetadata,
+} from './fleet-space-archive';
 
 export type FleetRestoreTestOptions = {
   env?: NodeJS.ProcessEnv;
@@ -51,7 +57,8 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
   const backupDir = options.backupDir ?? env.FLEET_BACKUP_DIR;
   if (!backupDir) throw new Error('FLEET_BACKUP_DIR is required');
   const adminUrl = env.DATABASE_ADMIN_URL ?? env.MIGRATION_DATABASE_URL;
-  if (!adminUrl) throw new Error('DATABASE_ADMIN_URL (or MIGRATION_DATABASE_URL) is required to create the temporary restore database');
+  if (!adminUrl)
+    throw new Error('DATABASE_ADMIN_URL (or MIGRATION_DATABASE_URL) is required to create the temporary restore database');
   const encryptionKey = env.FLEET_BACKUP_ENCRYPTION_KEY || undefined;
   const runId = newFleetRunId(new Date());
 
@@ -77,19 +84,22 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
     if (!backupPath) return await fail('no backup file found for this space');
     log(`[${space.slug}] restore test on ${basename(backupPath)}`);
 
-    let plain: Buffer;
+    let archive: ReturnType<typeof readVerifiedSpaceArchive>;
     try {
-      plain = readVerifiedBackupFile(backupPath, encryptionKey);
+      archive = readVerifiedSpaceArchive(backupPath, space, encryptionKey);
     } catch (error) {
       return await fail(error instanceof Error ? error.message : String(error));
     }
 
     const plainPath = join(backupDir, `.restore-${runId}.dump`);
     const tempDatabase = `giaokhoa_restore_test_${space.slug.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${runId.replace(/\D/g, '').slice(0, 14)}`;
-    writeFileSync(plainPath, plain);
-    const admin = new Client({ connectionString: retargetUrl(adminUrl, 'postgres') });
+    const restoreFilesDir = mkdtempSync(join(tmpdir(), 'giaokhoa-restore-files-'));
+    const admin = new Client({
+      connectionString: retargetUrl(adminUrl, 'postgres'),
+    });
     let adminConnected = false;
     try {
+      writeFileSync(plainPath, archive.dump, { mode: 0o600 });
       await admin.connect();
       adminConnected = true;
       await admin.query(`CREATE DATABASE ${quoteIdentifier(tempDatabase)}`);
@@ -123,12 +133,15 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
             totalRows,
           });
         }
+        await verifyRestoredFileMetadata(check, archive.manifest);
+        await restoreArchiveFilesToLocalDir(archive.files, space.id, restoreFilesDir);
         if (env.FLEET_SMOKE_CHECK !== 'off') {
           if (!tables.includes('users')) {
-            return await fail(
-              'restored backup has no users table; the smoke check cannot verify the seeded admin account',
-              { tempDatabase, tableCount: tables.length, totalRows },
-            );
+            return await fail('restored backup has no users table; the smoke check cannot verify the seeded admin account', {
+              tempDatabase,
+              tableCount: tables.length,
+              totalRows,
+            });
           }
           const columnsResult = await check.query<{ column_name: string }>(
             `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users'`,
@@ -152,7 +165,13 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
         }
         await writer.recordRestoreOutcome(space.id, 'success', new Date());
         log(`[${space.slug}] restore test passed: ${tables.length} table(s), ${totalRows} row(s)`);
-        return { slug: space.slug, status: 'success', tempDatabase, tableCount: tables.length, totalRows };
+        return {
+          slug: space.slug,
+          status: 'success',
+          tempDatabase,
+          tableCount: tables.length,
+          totalRows,
+        };
       } finally {
         await check.end();
       }
@@ -170,6 +189,7 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
         }
       }
       if (existsSync(plainPath)) unlinkSync(plainPath);
+      removeTemporaryRestoreFiles(restoreFilesDir);
     }
   } finally {
     await writer.close();

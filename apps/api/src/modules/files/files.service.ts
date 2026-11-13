@@ -234,12 +234,15 @@ export class FilesService {
     return this.signing.createDownloadTarget(await this.fileForSigning(file));
   }
   async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
-    const store = tenantAls.getStore();
-    const slug = store?.spaceSlug;
-    const platformScope = { platform: true, ...(slug ? {
-      spaceSlug: slug, spaceId: store?.spaceId, spaceHandle: store?.spaceHandle,
-    } : {}) };
-    const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
+    const requestScope = tenantAls.getStore();
+    const slug = requestScope?.spaceSlug;
+    const platformScope = {
+      platform: true,
+      ...(slug ? {
+        spaceSlug: slug, spaceId: requestScope?.spaceId, spaceHandle: requestScope?.spaceHandle,
+      } : {}),
+    };
+    const file = await tenantAls.run(platformScope, async () => this.repo.getById(fileId));
     if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
 
     const owner = file.component === 'core_contentbank' && file.itemId

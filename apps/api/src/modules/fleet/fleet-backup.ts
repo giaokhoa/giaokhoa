@@ -9,6 +9,7 @@ import {
   resolveDumpConnectionUrl,
 } from './fleet-common';
 import { FleetRegistryWriter } from './fleet-registry-writer';
+import { archiveSidecarPaths, dumpSpaceArchive } from './fleet-space-archive';
 
 export const CONTROL_PLANE_BACKUP_SLUG = 'control-plane';
 
@@ -25,7 +26,11 @@ export type FleetBackupTargetResult = {
   detail?: string;
 };
 
-export type FleetBackupSummary = { runId: string; results: FleetBackupTargetResult[]; failedCount: number };
+export type FleetBackupSummary = {
+  runId: string;
+  results: FleetBackupTargetResult[];
+  failedCount: number;
+};
 
 export type FleetBackupOverdue = { slug: string; reason: string };
 
@@ -45,8 +50,16 @@ function pruneSpaceBackupDir(dir: string, retentionDays: number, now: Date): num
     if (index === 0) continue;
     if (file.mtime.getTime() >= cutoff) continue;
     unlinkSync(join(dir, file.name));
-    const sidecar = join(dir, `${file.name}.sha256`);
-    if (existsSync(sidecar)) unlinkSync(sidecar);
+    const archive = archiveSidecarPaths(join(dir, file.name));
+    for (const sidecar of [
+      join(dir, `${file.name}.sha256`),
+      archive.manifest,
+      archive.manifest + '.sha256',
+      archive.files,
+      archive.files + '.sha256',
+    ]) {
+      if (existsSync(sidecar)) unlinkSync(sidecar);
+    }
     removed += 1;
   }
   return removed;
@@ -68,7 +81,8 @@ export async function runFleetBackup(options: FleetBackupOptions = {}): Promise<
       if (!isBackupTarget(space.status)) continue;
       const at = new Date();
       try {
-        const stored = await dumpDatabaseToFile({
+        const stored = await dumpSpaceArchive({
+          space,
           url: resolveDumpConnectionUrl(space, env),
           dir: join(backupDir, space.slug),
           kind: 'scheduled',
@@ -79,7 +93,11 @@ export async function runFleetBackup(options: FleetBackupOptions = {}): Promise<
         });
         await writer.recordBackupOutcome(space.id, 'success', at);
         log(`[${space.slug}] backup written: ${basename(stored.path)}`);
-        results.push({ slug: space.slug, status: 'success', file: stored.path });
+        results.push({
+          slug: space.slug,
+          status: 'success',
+          file: stored.path,
+        });
       } catch (error) {
         const detail = (error instanceof Error ? error.message : String(error)).slice(0, 500);
         await writer.recordBackupOutcome(space.id, 'failed', at);
@@ -104,11 +122,19 @@ export async function runFleetBackup(options: FleetBackupOptions = {}): Promise<
         env,
       });
       log(`[${CONTROL_PLANE_BACKUP_SLUG}] backup written: ${basename(stored.path)}`);
-      results.push({ slug: CONTROL_PLANE_BACKUP_SLUG, status: 'success', file: stored.path });
+      results.push({
+        slug: CONTROL_PLANE_BACKUP_SLUG,
+        status: 'success',
+        file: stored.path,
+      });
     } catch (error) {
       const detail = (error instanceof Error ? error.message : String(error)).slice(0, 500);
       log(`[${CONTROL_PLANE_BACKUP_SLUG}] backup FAILED: ${detail}`);
-      results.push({ slug: CONTROL_PLANE_BACKUP_SLUG, status: 'failed', detail });
+      results.push({
+        slug: CONTROL_PLANE_BACKUP_SLUG,
+        status: 'failed',
+        detail,
+      });
     }
   }
 

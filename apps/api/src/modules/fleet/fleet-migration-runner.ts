@@ -4,7 +4,6 @@ import { createCentreKysely } from '@giaokhoa/db';
 import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
 import {
-  dumpDatabaseToFile,
   listMigrationFolders,
   newFleetRunId,
   orderSpacesIntoWaves,
@@ -17,6 +16,7 @@ import {
   type FleetSpace,
 } from './fleet-common';
 import { FleetRegistryWriter } from './fleet-registry-writer';
+import { dumpSpaceArchive } from './fleet-space-archive';
 
 export type FleetMigrationOptions = {
   env?: NodeJS.ProcessEnv;
@@ -97,7 +97,8 @@ async function migrateSpace(
     }
 
     try {
-      const stored = await dumpDatabaseToFile({
+      const stored = await dumpSpaceArchive({
+        space,
         url: resolveDumpConnectionUrl(space, env),
         dir: join(context.backupDir, space.slug),
         kind: 'pre-migration',
@@ -106,7 +107,11 @@ async function migrateSpace(
         encryptionKey: env.FLEET_BACKUP_ENCRYPTION_KEY || undefined,
         env,
       });
-      steps.push({ name: 'pre-migration-backup', status: 'success', detail: basename(stored.path) });
+      steps.push({
+        name: 'pre-migration-backup',
+        status: 'success',
+        detail: basename(stored.path),
+      });
     } catch (error) {
       const detail = errorDetail(error);
       steps.push({ name: 'pre-migration-backup', status: 'failed', detail });
@@ -116,7 +121,9 @@ async function migrateSpace(
     const pool = new Pool({ connectionString: url });
     try {
       const db = createCentreKysely(pool);
-      await applyStoreMigrations(db, 'centre', context.migrationsDir, { allowUnorderedMigrations: true });
+      await applyStoreMigrations(db, 'centre', context.migrationsDir, {
+        allowUnorderedMigrations: true,
+      });
       steps.push({ name: 'apply-migrations', status: 'success' });
     } catch (error) {
       const detail = errorDetail(error);
@@ -165,8 +172,7 @@ export async function runFleetMigration(options: FleetMigrationOptions = {}): Pr
   const log = options.log ?? ((message: string) => console.log(message));
   const backupDir = options.backupDir ?? env.FLEET_BACKUP_DIR;
   if (!backupDir) throw new Error('FLEET_BACKUP_DIR is required (pre-migration backups need a destination)');
-  const migrationsDir =
-    options.migrationsDir ?? env.FLEET_MIGRATIONS_DIR ?? resolveCentreMigrationsDir();
+  const migrationsDir = options.migrationsDir ?? env.FLEET_MIGRATIONS_DIR ?? resolveCentreMigrationsDir();
   const folders = listMigrationFolders(migrationsDir);
   const targetVersion = folders[folders.length - 1];
   if (!targetVersion) throw new Error(`no migration folders found under ${migrationsDir}`);

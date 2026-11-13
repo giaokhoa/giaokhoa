@@ -10,6 +10,7 @@ export type FleetSpace = {
   id: string;
   slug: string;
   kind: 'platform' | 'center';
+  storageMode?: string;
   status: string;
   databaseName: string;
   secretRef: string | null;
@@ -17,6 +18,15 @@ export type FleetSpace = {
   lastBackupAt: Date | null;
   lastRestoreAt: Date | null;
 };
+
+export function fleetArchiveMemoryBudgetBytes(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.FLEET_ARCHIVE_MAX_IN_MEMORY_MB ?? '128';
+  const mb = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(mb) || mb < 1 || mb > 2048) {
+    throw new Error('FLEET_ARCHIVE_MAX_IN_MEMORY_MB must be an integer from 1 to 2048');
+  }
+  return mb * 1024 * 1024;
+}
 
 export type BackupKind = 'scheduled' | 'pre-migration';
 
@@ -59,7 +69,10 @@ export function newFleetRunId(at: Date): string {
 }
 
 export function formatBackupTimestamp(at: Date): string {
-  return at.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '');
+  return at
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}Z$/, '');
 }
 
 export function backupFileName(kind: BackupKind, runId: string, at: Date, encrypted: boolean): string {
@@ -71,7 +84,11 @@ const BACKUP_FILE_PATTERN = /^(scheduled|pre-migration)-([a-z0-9-]+)-(\d{8}T\d{6
 export function parseBackupFileName(fileName: string): { kind: BackupKind; runId: string; encrypted: boolean } | null {
   const match = BACKUP_FILE_PATTERN.exec(fileName);
   if (!match) return null;
-  return { kind: match[1] as BackupKind, runId: match[2]!, encrypted: match[4] === '.enc' };
+  return {
+    kind: match[1] as BackupKind,
+    runId: match[2]!,
+    encrypted: match[4] === '.enc',
+  };
 }
 
 export function sha256Hex(data: Buffer): string {
@@ -133,7 +150,10 @@ export function resolveDumpConnectionUrl(space: FleetSpace, env: NodeJS.ProcessE
   return resolveSpaceConnectionUrl(space, env);
 }
 
-export function buildPgToolArgs(url: string): { args: string[]; password: string } {
+export function buildPgToolArgs(url: string): {
+  args: string[];
+  password: string;
+} {
   const parsed = new URL(url);
   return {
     args: [
@@ -222,6 +242,7 @@ export async function dumpDatabaseToFile(options: {
   runId: string;
   at: Date;
   encryptionKey?: string;
+  snapshot?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<StoredBackup> {
   const env = options.env ?? process.env;
@@ -233,13 +254,21 @@ export async function dumpDatabaseToFile(options: {
   mkdirSync(options.dir, { recursive: true });
   const plainPath = join(options.dir, backupFileName(options.kind, options.runId, options.at, false));
   try {
-    await runPgTool('pg_dump', options.url, ['-Fc', '-f', plainPath], env);
+    await runPgTool(
+      'pg_dump',
+      options.url,
+      ['-Fc', ...(options.snapshot ? ['--snapshot', options.snapshot] : []), '-f', plainPath],
+      env,
+    );
   } catch (error) {
     if (existsSync(plainPath)) unlinkSync(plainPath);
     throw error;
   }
   const finalPath = join(options.dir, backupFileName(options.kind, options.runId, options.at, true));
   try {
+    if (statSync(plainPath).size > fleetArchiveMemoryBudgetBytes(env)) {
+      throw new Error('fleet.archive_memory_budget_exceeded: database dump is too large for in-memory encryption');
+    }
     const encrypted = encryptBackup(readFileSync(plainPath), options.encryptionKey);
     writeFileSync(finalPath, encrypted);
     const digest = sha256Hex(readFileSync(finalPath));
@@ -260,6 +289,9 @@ export function readVerifiedBackupFile(path: string, encryptionKey?: string): Bu
     expected = readFileSync(sidecarPath, 'utf8').trim();
   } catch {
     throw new Error(`backup checksum file is missing for ${basename(path)}`);
+  }
+  if (statSync(path).size > fleetArchiveMemoryBudgetBytes()) {
+    throw new Error('fleet.archive_memory_budget_exceeded: encrypted component is too large to read');
   }
   const stored = readFileSync(path);
   if (sha256Hex(stored) !== expected) {
