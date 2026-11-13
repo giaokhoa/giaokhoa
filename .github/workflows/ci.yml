@@ -119,11 +119,17 @@ jobs:
       # Test fleet dùng pg_dump/pg_restore cùng major với server.
       - name: Install PostgreSQL 18 client tools
         run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          # ubuntu-26.04 có client 18 từ kho Ubuntu chính thức: không
+          # phụ thuộc curl tới PGDG (đã gặp lỗi SSL EOF trên Actions).
+          # Fallback cho runner Ubuntu cũ chưa có phiên bản 18.
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
+          if ! sudo apt-get install -y -qq postgresql-client-18; then
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl --retry 7 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 45 -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client-18
+          fi
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: Build the API and its dependencies
         run: pnpm exec turbo run build --filter=@giaokhoa/api...
@@ -183,11 +189,17 @@ jobs:
       # phải cùng major 18 với PostgreSQL server của shard.
       - name: Install PostgreSQL 18 client tools for restore E2E
         run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          # ubuntu-26.04 có client 18 từ kho Ubuntu chính thức: không
+          # phụ thuộc curl tới PGDG (đã gặp lỗi SSL EOF trên Actions).
+          # Fallback cho runner Ubuntu cũ chưa có phiên bản 18.
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
+          if ! sudo apt-get install -y -qq postgresql-client-18; then
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl --retry 7 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 45 -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client-18
+          fi
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: Create the test database of this shard
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_api_${{ matrix.shardIndex }}'

@@ -40,6 +40,21 @@ export type FleetSpace = {
   lastRestoreAt: Date | null;
 };
 
+/**
+ * Ngân sách tối đa cho các bộ đệm của khuôn archive v1.
+ * Khuôn này còn mã hóa/giải mã trên Buffer nguyên khối, nên phải
+ * từ chối bản quá lớn TƯỜNG MINH, thay vì làm OOM tiến trình fleet.
+ * Vùng dữ liệu lớn hơn cần cơ chế streaming ở phiên bản archive sau.
+ */
+export function fleetArchiveMemoryBudgetBytes(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.FLEET_ARCHIVE_MAX_IN_MEMORY_MB ?? '128';
+  const mb = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(mb) || mb < 1 || mb > 2048) {
+    throw new Error('FLEET_ARCHIVE_MAX_IN_MEMORY_MB must be an integer from 1 to 2048');
+  }
+  return mb * 1024 * 1024;
+}
+
 /** Loại bản sao lưu: theo lịch định kỳ hoặc bản chốt trước một lượt migration. */
 export type BackupKind = 'scheduled' | 'pre-migration';
 
@@ -413,6 +428,11 @@ export async function dumpDatabaseToFile(options: {
   }
   const finalPath = join(options.dir, backupFileName(options.kind, options.runId, options.at, true));
   try {
+    // Kiểm kích thước trên DISK trước readFileSync: chưa giới hạn thì
+    // Buffer + bản mã hóa có thể làm OOM và chết trước catch/cleanup.
+    if (statSync(plainPath).size > fleetArchiveMemoryBudgetBytes(env)) {
+      throw new Error('fleet.archive_memory_budget_exceeded: database dump is too large for in-memory encryption');
+    }
     const encrypted = encryptBackup(readFileSync(plainPath), options.encryptionKey);
     writeFileSync(finalPath, encrypted);
     const digest = sha256Hex(readFileSync(finalPath));
@@ -447,6 +467,10 @@ export function readVerifiedBackupFile(path: string, encryptionKey?: string): Bu
     expected = readFileSync(sidecarPath, 'utf8').trim();
   } catch {
     throw new Error(`backup checksum file is missing for ${basename(path)}`);
+  }
+  // Từ chối trước khi nạp byte hỏng/khổng lồ vào RAM.
+  if (statSync(path).size > fleetArchiveMemoryBudgetBytes()) {
+    throw new Error('fleet.archive_memory_budget_exceeded: encrypted component is too large to read');
   }
   const stored = readFileSync(path);
   if (sha256Hex(stored) !== expected) {

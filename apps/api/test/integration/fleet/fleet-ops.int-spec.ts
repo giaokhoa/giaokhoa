@@ -1220,6 +1220,36 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       }
     }, 60_000);
 
+    it('archive lớn vượt ngân sách RAM bị từ chối trước khi mã hóa, không để lại bản chụp giả', async () => {
+      // Fixture >1 MiB buộc JSON/base64 vượt ngân sách cấu hình 1 MiB.
+      // Không cố gây OOM, nhưng kiểm điểm chặn kích thước TRƯỚC khi nạp blob.
+      const large = Buffer.alloc(1_050_000, 0x61);
+      const largeHash = createHash('sha256').update(large).digest('hex');
+      const domain = fileDomainForSpace(spaceA.id);
+      const key = join(filesRoot, fileContentKey(domain, largeHash));
+      mkdirSync(join(key, '..'), { recursive: true });
+      writeFileSync(key, large);
+      try {
+        await withClient(clusterUrl(dbA), (db) => db.query(
+          'INSERT INTO files (storage_domain, content_hash, file_size) VALUES ($1, $2, $3)',
+          [domain, largeHash, large.length],
+        ));
+        const path = join(dir, 'over-budget');
+        await expect(dumpSpaceArchive({
+          space: spaceA, url: clusterUrl(dbA), dir: path, kind: 'scheduled',
+          runId: 'issue12-memory-limit', at: new Date(),
+          encryptionKey: env().FLEET_BACKUP_ENCRYPTION_KEY,
+          env: { ...env(), FLEET_ARCHIVE_MAX_IN_MEMORY_MB: '1' },
+        })).rejects.toThrow(/archive_memory_budget_exceeded/);
+        expect(readdirSync(path).filter((entry) => entry.endsWith('.enc'))).toEqual([]);
+      } finally {
+        await withClient(clusterUrl(dbA), (db) => db.query(
+          'DELETE FROM files WHERE content_hash = $1', [largeHash],
+        ));
+        rmSync(key, { force: true });
+      }
+    }, 60_000);
+
     it('sao lưu A với manifest toàn vẹn không chứa metadata hay miền file của B và ngân hàng', async () => {
       const at = new Date();
       const saved = await dumpSpaceArchive({

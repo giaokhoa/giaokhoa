@@ -7,7 +7,7 @@
  * Bộ kiểm chứng đối chiếu ID kho, từng đối tượng, băm và kích thước trước
  * khi cho phép phục hồi. Mọi byte tạm/sản phẩm dở được dọn khi lỗi.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import { Client } from 'pg';
@@ -17,6 +17,7 @@ import {
   backupFileName,
   dumpDatabaseToFile,
   encryptBackup,
+  fleetArchiveMemoryBudgetBytes,
   readVerifiedBackupFile,
   sha256Hex,
   type BackupKind,
@@ -167,6 +168,8 @@ export async function dumpSpaceArchive(options: {
     const files: ArchiveFile[] = [];
     const payload: ArchivePayload = { version: 1, files: [] };
     const seen = new Map<string, number>();
+    const memoryBudget = fleetArchiveMemoryBudgetBytes(env);
+    let payloadSizeUpperBound = 128;
     for (const row of rows) {
       assertOwnedDomain(row.storage_domain, space.id);
       fileContentKey(row.storage_domain, row.content_hash);
@@ -175,6 +178,15 @@ export async function dumpSpaceArchive(options: {
       if (previousSize !== undefined) {
         if (previousSize !== row.file_size) throw new Error('inconsistent file size in snapshot: ' + key);
         continue;
+      }
+      // JSON/base64 có thể nhân bản byte trong RAM nhiều lần. Giới
+      // hạn TRƯỚC khi đọc blob để tránh OOM rồi để lại archive dở.
+      if (!Number.isSafeInteger(row.file_size) || row.file_size < 0) {
+        throw new Error('archive file has invalid size');
+      }
+      payloadSizeUpperBound += 4 * Math.ceil(row.file_size / 3) + row.storage_domain.length + row.content_hash.length + 128;
+      if (payloadSizeUpperBound > memoryBudget) {
+        throw new Error('fleet.archive_memory_budget_exceeded: file payload exceeds in-memory archive budget');
       }
       seen.set(key, row.file_size);
       const bytes = await storage.get(row.storage_domain, row.content_hash);
@@ -201,6 +213,10 @@ export async function dumpSpaceArchive(options: {
     transactionOpen = false;
 
     const sidecars = archiveSidecarPaths(stored.path);
+    // Không cho dump và payload cùng lúc tràn ngân sách bộ đệm.
+    if (statSync(stored.path).size + payloadSizeUpperBound > memoryBudget) {
+      throw new Error('fleet.archive_memory_budget_exceeded: combined database and file payload exceed budget');
+    }
     const payloadBytes = Buffer.from(JSON.stringify(payload));
     const manifest: SpaceArchiveManifest = {
       version: 1,
@@ -245,6 +261,12 @@ export function readVerifiedSpaceArchive(
     throw new Error('fleet.archive_requires_dedicated_database: cannot restore a shared database as one centre');
   }
   const sidecars = archiveSidecarPaths(dumpPath);
+  // Trước khi giải mã/tạo Buffer file, kiểm ngân sách kết hợp.
+  // Giữ giới hạn đối xứng với lúc chụp (kèm biên header AES nhỏ).
+  const budget = fleetArchiveMemoryBudgetBytes();
+  if (statSync(dumpPath).size + statSync(sidecars.files).size > budget + 128) {
+    throw new Error('fleet.archive_memory_budget_exceeded: combined encrypted archive exceeds budget');
+  }
   const dump = readVerifiedBackupFile(dumpPath, encryptionKey);
   const manifestBytes = readVerifiedBackupFile(sidecars.manifest, encryptionKey);
   const payloadBytes = readVerifiedBackupFile(sidecars.files, encryptionKey);
