@@ -7,15 +7,11 @@ import { TotpService } from './totp.service';
 /**
  * Cổng tái xác thực khi setup lại TOTP trên một factor ĐANG BẬT.
  *
- * Luật nghiệp vụ: `setup` ghi đè secret và đưa bản ghi về chưa xác nhận,
- * mà cổng đăng nhập chỉ nhìn cờ `confirmed` — nên ghi đè vô điều kiện
- * trên factor đang bật đồng nghĩa tắt MFA ngay lập tức và làm
- * authenticator hiện tại thành vô dụng, chỉ với một phiên đăng nhập sẵn
- * có. Các ca ở đây ghim luật: factor đang bật thì setup lại bắt buộc mã
- * TOTP hiện tại đúng (cùng khuôn với luồng tắt MFA); thiếu/sai mã thì bị
- * từ chối và factor cũ nguyên vẹn; chưa có factor đang bật (lần đầu,
- * hoặc đang chờ xác nhận) thì setup vẫn tự do như luồng thường. Luồng
- * HTTP trọn đường được kiểm ở e2e của luồng auth.
+ * Luật nghiệp vụ: khi factor đã bật, setup mới đòi mã hiện tại
+ * và chỉ dựng pending replacement; chưa confirm thì giữ MFA đang bật.
+ * Khi factor chưa bật, setup nhiều lần được phép thay pending secret;
+ * xác nhận chỉ kích hoạt đúng secret đã được kiểm mã.
+ * Kiểm chứng HTTP được đặt tại e2e Authentication.
  */
 
 const USER_ID = '01900000-0000-7000-8000-0000000000aa';
@@ -37,6 +33,7 @@ function buildService() {
     clearPendingTotpReplacement: async () => { pending = undefined; },
     getTotpByUserId: async () => row,
     upsertPendingTotp: async (userId: string, secretEncrypted: string) => {
+      if (row?.confirmed) return undefined;
       row = {
         id: '01900000-0000-7000-8000-0000000000bb',
         userId,
@@ -47,8 +44,10 @@ function buildService() {
       } as UserTotpRow;
       return row;
     },
-    confirmTotp: async () => {
-      if (row) row = { ...row, confirmed: true, confirmedAt: new Date() };
+    confirmTotp: async (_userId: string, encryptedSecret: string) => {
+      if (!row || row.confirmed || row.secretEncrypted !== encryptedSecret) return false;
+      row = { ...row, confirmed: true, confirmedAt: new Date() };
+      return true;
     },
     deleteTotp: async () => {
       row = undefined;

@@ -50,7 +50,7 @@
 import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { constantTimeEqual, makeSignature } from 'better-auth/crypto';
 import { createHash } from 'node:crypto';
-import { sql } from '@giaokhoa/db';
+import { sql, type CentreTx } from '@giaokhoa/db';
 import { clientIpOf } from '../../../common/client-ip';
 import type { Request } from 'express';
 import type { CentreDb } from '@giaokhoa/db';
@@ -81,6 +81,9 @@ export class TwoFactorCompletionError extends Error {
   }
 }
 
+/** Trạng thái commit của một lần MFA, trước khi phát cookie ở HTTP. */
+type AttemptResult = 'valid' | 'invalid' | 'exhausted' | 'invalid-cookie' | 'unavailable';
+
 /** Kết quả hoàn tất thành công: thông tin đặt cookie phiên + thân đáp ứng cho client. */
 export interface TwoFactorCompletionResult {
   sessionCookieName: string;
@@ -97,7 +100,6 @@ interface ResolvedChallenge {
   identifier: string;
   userId: string;
   expiresAt: Date;
-  attempts: number;
   twoFactorCookieName: string;
   twoFactorCookieAttributes: Record<string, unknown>;
 }
@@ -141,41 +143,50 @@ export class TwoFactorCompletionService {
    */
   async verifyTotp(req: Request, code: string): Promise<TwoFactorCompletionResult> {
     const challenge = await this.resolveChallenge(req);
-    await this.assertMfaBudget(challenge.userId, clientIpOf(req));
-    await this.beginAttempt(challenge);
-    if (!this.totp) {
-      throw new TwoFactorCompletionError(500, 'mfa_status_unavailable', 'Could not verify multi-factor authentication status');
-    }
-    let valid: boolean;
-    try {
-      valid = await this.totp.verifyForUser(challenge.userId, code);
-    } catch {
-      // Lỗi ở tầng kiểm mã (không phải mã sai): trả lại ngân sách
-      // của lần thử này như semantics `restore()` của plugin, rồi
-      // fail-closed — không kết luận được thì không cấp phiên.
-      await this.rearmAttempts(challenge, challenge.attempts);
-      throw new TwoFactorCompletionError(500, 'mfa_status_unavailable', 'Could not verify multi-factor authentication status');
-    }
-    if (!valid) {
-      // Ghi lỗi MFA theo user/IP trước khi dựng lại challenge: đăng nhập mới không được xoá ngân sách.
-      await this.recordMfaFailure(challenge.userId, clientIpOf(req));
-      await this.rearmAttempts(challenge, challenge.attempts + 1);
-      throw new TwoFactorCompletionError(401, 'INVALID_CODE', 'Invalid code');
-    }
-    return this.issueSession(challenge);
+    const result = await this.runChallengeAttempt(
+      challenge,
+      clientIpOf(req),
+      async () => {
+        if (!this.totp) throw new Error('TOTP service unavailable');
+        return this.totp.verifyForUser(challenge.userId, code);
+      },
+    );
+    if (result === 'valid') return this.issueSession(challenge);
+    this.throwForAttempt(result, 'INVALID_CODE');
   }
 
   /**
-   * Mã dự phòng: sản phẩm không phát mã dự phòng nên luôn từ chối;
-   * vẫn đi qua cửa challenge + đếm lần thử như verify TOTP.
+   * Mã dự phòng: sản phẩm không phát mã dự phòng nên luôn từ chối.
+   * Vẫn tiêu thụ đúng ngân sách cùng luồng TOTP; không mở đường dò riêng.
+   * @param req Request mang challenge do primary authentication phát.
    */
   async verifyBackupCode(req: Request): Promise<never> {
     const challenge = await this.resolveChallenge(req);
-    await this.assertMfaBudget(challenge.userId, clientIpOf(req));
-    await this.beginAttempt(challenge);
-    await this.recordMfaFailure(challenge.userId, clientIpOf(req));
-    await this.rearmAttempts(challenge, challenge.attempts + 1);
-    throw new TwoFactorCompletionError(400, 'INVALID_BACKUP_CODE', 'Invalid backup code');
+    const result = await this.runChallengeAttempt(
+      challenge,
+      clientIpOf(req),
+      async () => false,
+    );
+    this.throwForAttempt(result, 'INVALID_BACKUP_CODE');
+  }
+
+  /**
+   * Ánh xạ kết quả giao dịch thành mã lỗi ở biên HTTP. Ném lỗi SAU
+   * commit để lượt sai vẫn được lưu và budget không bị rollback.
+   * @param result Trạng thái sau xác minh trong transaction.
+   * @param invalidCode Mã lỗi riêng cho TOTP/backup-code.
+   */
+  private throwForAttempt(result: AttemptResult, invalidCode: 'INVALID_CODE' | 'INVALID_BACKUP_CODE'): never {
+    if (result === 'invalid') {
+      throw new TwoFactorCompletionError(invalidCode === 'INVALID_CODE' ? 401 : 400, invalidCode, 'Invalid code');
+    }
+    if (result === 'exhausted') {
+      throw new TwoFactorCompletionError(400, 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE', 'Too many attempts. Please request a new code.');
+    }
+    if (result === 'unavailable') {
+      throw new TwoFactorCompletionError(500, 'mfa_status_unavailable', 'Could not verify multi-factor authentication status');
+    }
+    throw new TwoFactorCompletionError(401, 'INVALID_TWO_FACTOR_COOKIE', 'Invalid two factor cookie');
   }
 
   /**
@@ -228,133 +239,141 @@ export class TwoFactorCompletionService {
       .limit(1)
       .executeTakeFirst();
     if (!pending || pending.expires_at <= new Date()) throw invalid();
-    const attemptsRow = await this.db
-      .selectFrom('verification')
-      .selectAll()
-      .where('identifier', '=', `2fa-attempts-${identifier}`)
-      .limit(1)
-      .executeTakeFirst();
-    const parsed = attemptsRow ? Number(attemptsRow.value) : Number.NaN;
     return {
       identifier,
       userId: pending.value,
       expiresAt: pending.expires_at,
-      attempts: Number.isInteger(parsed) && parsed >= 0 ? parsed : MAX_CHALLENGE_ATTEMPTS,
       twoFactorCookieName: cookieAttrs.name,
       twoFactorCookieAttributes: cookieAttrs.attributes as Record<string, unknown>,
     };
   }
 
   /**
-   * Tiêu thụ challenge qua giao dịch DELETE RETURNING: PostgreSQL chỉ cho một
-   * request chiếm dòng khi nhiều verify song song; replay bị từ chối.
-   * @param challenge Challenge đã giải từ cookie và kho verification.
-   * @throws TwoFactorCompletionError Khi không chiếm được challenge.
+   * Xác minh challenge + ngân sách toàn cục trên MỘT transaction:
+   *
+   * 1. Khoá user/IP bằng advisory transaction lock theo thứ tự cố định
+   *    để nhiều API instance không cùng vượt ngân sách.
+   * 2. Đọc lại challenge VÀ số lần thử đang sống dưới row lock,
+   *    tuyệt đối không dùng snapshot trước khi đợi khoá.
+   * 3. Mã sai: tăng cả budget và attempts trong cùng transaction.
+   *    Mã đúng: tiêu thụ cả challenge và attempts cùng transaction.
+   * 4. Khi verify lỗi kỹ thuật: không ghi lượt thử hay budget;
+   *    khi budget hết: trả 429 trước khi kiểm mã.
+   *
+   * Giao dịch giữ khoá qua phép kiểm TOTP ngắn, nhưng KHÔNG qua bước
+   * tạo phiên. Phiên chỉ được cấp sau khi commit thành công.
+   *
+   * @param challenge Challenge có cookie ký đã kiểm tra.
+   * @param ip IP được lấy theo trusted proxy.
+   * @param verifyFactor Hàm kiểm TOTP (false cố định cho backup-code).
+   * @returns Trạng thái được commit, không phải một kết quả từ snapshot cũ.
    */
-  private async beginAttempt(challenge: ResolvedChallenge): Promise<void> {
-    await this.db.transaction().execute(async (trx) => {
-      const consumed = await trx.deleteFrom('verification')
-        .where('identifier', '=', challenge.identifier)
-        .where('expires_at', '>', new Date())
-        .returning('value')
-        .executeTakeFirst();
-      if (!consumed || consumed.value !== challenge.userId) {
-        throw new TwoFactorCompletionError(401, 'INVALID_TWO_FACTOR_COOKIE', 'Invalid two factor cookie');
+  private async runChallengeAttempt(
+    challenge: ResolvedChallenge,
+    ip: string | undefined,
+    verifyFactor: () => Promise<boolean>,
+  ): Promise<AttemptResult> {
+    return this.db.transaction().execute(async (trx) => {
+      const budgets = this.budgetKeys(challenge.userId, ip);
+      for (const budget of budgets) {
+        await sql`SELECT pg_advisory_xact_lock(hashtext(${budget.identifier}))`.execute(trx);
       }
-      await trx.deleteFrom('verification')
+      for (const budget of budgets) {
+        const current = await trx.selectFrom('verification')
+          .select(['value', 'expires_at'])
+          .where('identifier', '=', budget.identifier)
+          .executeTakeFirst();
+        if (current && current.expires_at > new Date() && Number(current.value) >= budget.limit) {
+          throw new TwoFactorCompletionError(429, 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE', 'Too many attempts. Please try again later.');
+        }
+      }
+
+      const pending = await trx.selectFrom('verification')
+        .select(['id', 'value', 'expires_at'])
+        .where('identifier', '=', challenge.identifier)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!pending || pending.value !== challenge.userId || pending.expires_at <= new Date()) {
+        return 'invalid-cookie';
+      }
+      const attemptsRow = await trx.selectFrom('verification')
+        .select(['id', 'value'])
         .where('identifier', '=', '2fa-attempts-' + challenge.identifier)
-        .execute();
+        .forUpdate()
+        .executeTakeFirst();
+      const parsed = attemptsRow ? Number(attemptsRow.value) : Number.NaN;
+      const attempts = Number.isInteger(parsed) && parsed >= 0 ? parsed : MAX_CHALLENGE_ATTEMPTS;
+      if (attempts >= MAX_CHALLENGE_ATTEMPTS) {
+        await trx.deleteFrom('verification').where('id', '=', pending.id).execute();
+        if (attemptsRow) await trx.deleteFrom('verification').where('id', '=', attemptsRow.id).execute();
+        return 'exhausted';
+      }
+
+      let valid: boolean;
+      try {
+        valid = await verifyFactor();
+      } catch {
+        // Không kết luận được thì không chạm attempts hoặc budget.
+        return 'unavailable';
+      }
+      if (!valid) {
+        await this.recordMfaFailure(trx, budgets);
+        await trx.updateTable('verification')
+          .set({ value: String(attempts + 1) })
+          .where('id', '=', attemptsRow!.id)
+          .execute();
+        return 'invalid';
+      }
+      // Hai yêu cầu mã đúng cùng challenge chỉ một lần có thể đến đây:
+      // request sau đọc lại dưới khoá, thấy challenge đã bị tiêu thụ.
+      await trx.deleteFrom('verification').where('id', '=', pending.id).execute();
+      await trx.deleteFrom('verification').where('id', '=', attemptsRow!.id).execute();
+      return 'valid';
     });
-    if (challenge.attempts >= MAX_CHALLENGE_ATTEMPTS) {
-      throw new TwoFactorCompletionError(
-        400,
-        'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE',
-        'Too many attempts. Please request a new code.',
-      );
-    }
   }
 
   /**
-   * Chặn ngân sách MFA tổng hợp theo user và IP, độc lập challenge riêng lẻ.
-   * @param userId Danh tính đã qua primary authentication.
-   * @param ip Địa chỉ do proxy tin cậy xác định.
-   * @throws TwoFactorCompletionError Khi chạm một trong hai ngưỡng.
+   * Khóa ngân sách được tạo theo thứ tự user rồi IP để tránh deadlock.
+   * @param userId ID đã xác thực primary factor.
+   * @param ip IP đã chuẩn hoá, có thể vắng khi môi trường không cung cấp.
+   * @returns Khóa cùng giới hạn của cửa sổ 20 phút.
    */
-  private async assertMfaBudget(userId: string, ip?: string): Promise<void> {
-    const identifiers = [
+  private budgetKeys(userId: string, ip?: string): Array<{ identifier: string; limit: number }> {
+    return [
       { identifier: 'mfa-fail-user-' + userId, limit: MAX_USER_MFA_FAILURES },
       ...(ip ? [{ identifier: 'mfa-fail-ip-' + createHash('sha256').update(ip).digest('hex'), limit: MAX_IP_MFA_FAILURES }] : []),
     ];
-    for (const { identifier, limit } of identifiers) {
-      const budget = await this.db.selectFrom('verification')
-        .select(['value', 'expires_at'])
-        .where('identifier', '=', identifier)
-        .executeTakeFirst();
-      if (budget && budget.expires_at > new Date() && Number(budget.value) >= limit) {
-        throw new TwoFactorCompletionError(429, 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE', 'Too many attempts. Please try again later.');
-      }
-    }
   }
 
   /**
-   * Ghi số lần xác minh MFA sai bằng UPSERT nguyên tử trong verification,
-   * dùng chung giữa các API instance; hết cửa sổ cũ thì đặt lại đếm.
-   * @param userId Danh tính đã qua bước đăng nhập thứ nhất.
-   * @param ip Địa chỉ khách thật đã chuẩn hoá.
+   * Tăng số lượt SAI trong giao dịch đang giữ cả khoá user/IP.
+   * Không dùng UPSERT(identifier) vì verification không có UNIQUE key.
+   * @param trx Transaction chứa cả admission, xác minh và cập nhật.
+   * @param budgets Các ngân sách đang được giữ khoá.
    */
-  private async recordMfaFailure(userId: string, ip?: string): Promise<void> {
+  private async recordMfaFailure(trx: CentreTx, budgets: Array<{ identifier: string; limit: number }>): Promise<void> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + MFA_WINDOW_MS);
-    const identifiers = [
-      'mfa-fail-user-' + userId,
-      ...(ip ? ['mfa-fail-ip-' + createHash('sha256').update(ip).digest('hex')] : []),
-    ];
-    for (const identifier of identifiers) {
-      // Bảng verification của Better Auth KHÔNG có UNIQUE(identifier).
-      // Khoá advisory theo key trong transaction rồi cập nhật/chèn để
-      // các API instance không mất lượt thử khi request chạy song song.
-      await this.db.transaction().execute(async (trx) => {
-        await sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`.execute(trx);
-        const existing = await trx.selectFrom('verification')
-          .select(['id', 'value', 'expires_at'])
-          .where('identifier', '=', identifier)
-          .executeTakeFirst();
-        if (!existing) {
-          await trx.insertInto('verification')
-            .values({ identifier, value: '1', expires_at: expiresAt }).execute();
-          return;
-        }
-        const expired = existing.expires_at <= now;
-        await trx.updateTable('verification')
-          .set({
-            value: String(expired ? 1 : Number(existing.value) + 1),
-            expires_at: expired ? expiresAt : existing.expires_at,
-          })
-          .where('id', '=', existing.id).execute();
-      });
+    for (const { identifier } of budgets) {
+      const row = await trx.selectFrom('verification')
+        .select(['id', 'value', 'expires_at'])
+        .where('identifier', '=', identifier)
+        .executeTakeFirst();
+      if (!row) {
+        await trx.insertInto('verification')
+          .values({ identifier, value: '1', expires_at: expiresAt })
+          .execute();
+        continue;
+      }
+      const expired = row.expires_at <= now;
+      await trx.updateTable('verification')
+        .set({
+          value: String(expired ? 1 : Number(row.value) + 1),
+          expires_at: expired ? expiresAt : row.expires_at,
+        })
+        .where('id', '=', row.id)
+        .execute();
     }
-  }
-
-  /** Dựng lại dòng đếm lần thử sau một lần verify không thành công (cùng hạn với challenge). */
-  private async rearmAttempts(challenge: ResolvedChallenge, count: number): Promise<void> {
-    await this.db
-      .insertInto('verification')
-      .values({
-        identifier: `2fa-attempts-${challenge.identifier}`,
-        value: String(count),
-        expires_at: challenge.expiresAt,
-      })
-      .execute();
-    // Dòng challenge phải sống lại cùng dòng đếm: beginAttempt đã
-    // tiêu thụ cả hai, lần verify kế tiếp cần tìm thấy challenge.
-    await this.db
-      .insertInto('verification')
-      .values({
-        identifier: challenge.identifier,
-        value: challenge.userId,
-        expires_at: challenge.expiresAt,
-      })
-      .execute();
   }
 
   /**

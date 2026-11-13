@@ -400,7 +400,7 @@ export class AuthRepository {
    * chưa xác nhận. Với factor đã bật, caller phải dùng
    * stageTotpReplacement() để giữ trạng thái confirmed và secret cũ.
    */
-  async upsertPendingTotp(userId: string, secretEncrypted: string): Promise<UserTotpRow> {
+  async upsertPendingTotp(userId: string, secretEncrypted: string): Promise<UserTotpRow | undefined> {
     const rows = await this.handle
       .insertInto('user_totp')
       .values({ user_id: userId, secret_encrypted: secretEncrypted, confirmed: false, confirmed_at: null })
@@ -409,10 +409,12 @@ export class AuthRepository {
         confirmed: false,
         confirmed_at: null,
         created_at: new Date(),
-      }))
+      }).where('user_totp.confirmed', '=', false))
       .returning(USER_TOTP_COLUMNS)
       .execute();
-    return rows[0]!;
+    // Nếu confirm thắng cuộc đua, WHERE bảo vệ factor active và
+    // RETURNING rỗng để service báo 409, không lộ secret chưa lưu.
+    return rows[0];
   }
 
   /**
@@ -480,14 +482,24 @@ export class AuthRepository {
   }
 
   /**
-   * Đánh dấu TOTP đã xác nhận (MFA bắt đầu chặn đăng nhập từ đây).
+   * Kích hoạt đúng secret mà service đã kiểm mã TOTP, với CAS atomically.
+   * Nếu setup khác vừa ghi secret, không bật nhầm factor chưa được
+   * xác minh. Nếu confirm khác đã thắng, trả false để client thử lại.
+   *
+   * @param userId User đang thiết lập MFA.
+   * @param encryptedSecret Secret đã đọc trước khi xác minh mã.
+   * @returns true khi đã xác nhận chính xác factor đó.
    */
-  async confirmTotp(userId: string): Promise<void> {
-    await this.handle
+  async confirmTotp(userId: string, encryptedSecret: string): Promise<boolean> {
+    const row = await this.handle
       .updateTable('user_totp')
       .set({ confirmed: true, confirmed_at: new Date() })
       .where('user_id', '=', userId)
-      .execute();
+      .where('secret_encrypted', '=', encryptedSecret)
+      .where('confirmed', '=', false)
+      .returning('user_id')
+      .executeTakeFirst();
+    return Boolean(row);
   }
 
   /**

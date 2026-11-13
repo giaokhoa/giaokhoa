@@ -147,20 +147,28 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
     expect(await authRepo.listActiveFamiliesByUser(user.id)).toHaveLength(0);
   });
 
-  it('TOTP: upsert lần đầu chèn mới, upsert lại thay secret và đưa trạng thái về chưa xác nhận trên cùng một dòng', async () => {
+  it('TOTP: chỉ thay secret pending trước khi bật MFA, setup muộn không thể hạ factor đã xác nhận', async () => {
     const user = await makeUser('auth-totp');
     const first = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-1');
-    expect(first.confirmed).toBe(false);
-    await authRepo.confirmTotp(user.id);
+    expect(first?.confirmed).toBe(false);
+
+    const replacedPending = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-2');
+    expect(replacedPending?.id).toBe(first?.id);
+    expect(replacedPending?.secretEncrypted).toBe('secret-ma-hoa-2');
+    expect(replacedPending?.confirmed).toBe(false);
+
+    // Confirm phải trùng với đúng secret đã kiểm; snapshot cũ không được bật nhầm.
+    expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-1')).toBe(false);
+    expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-2')).toBe(true);
     const confirmed = await authRepo.getTotpByUserId(user.id);
     expect(confirmed?.confirmed).toBe(true);
     expect(confirmed?.confirmedAt).toBeInstanceOf(Date);
 
-    const replaced = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-2');
-    expect(replaced.id).toBe(first.id);
-    expect(replaced.secretEncrypted).toBe('secret-ma-hoa-2');
-    expect(replaced.confirmed).toBe(false);
-    expect(replaced.confirmedAt).toBeNull();
+    // Mô phỏng setup đã đọc pending=false trước khi request khác confirm.
+    const staleSetup = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-3');
+    expect(staleSetup).toBeUndefined();
+    expect(await authRepo.getTotpByUserId(user.id)).toEqual(confirmed);
+    expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-3')).toBe(false);
 
     await authRepo.deleteTotp(user.id);
     expect(await authRepo.getTotpByUserId(user.id)).toBeUndefined();

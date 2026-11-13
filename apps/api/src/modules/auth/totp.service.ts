@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
@@ -105,7 +105,12 @@ export class TotpService {
       // Factor cũ vẫn bật trong suốt lúc người dùng quét và xác nhận thiết bị mới.
       await this.repo.stageTotpReplacement(userId, this.encryptSecret(secret));
     } else {
-      await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
+      const staged = await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
+      if (!staged) {
+        // Confirm khác đã bật factor giữa lúc đọc trạng thái và setup:
+        // từ chối thay vì vô tình tắt MFA hoặc trả QR chưa được lưu.
+        throw new ConflictException({ message: 'MFA status changed during setup', code: 'auth.mfa_state_changed' });
+      }
     }
     const otpauthUrl = generateURI({ issuer: TOTP_ISSUER, label: username, secret });
     return { secret, otpauthUrl };
@@ -134,7 +139,9 @@ export class TotpService {
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
       throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
     }
-    await this.repo.confirmTotp(userId);
+    if (!(await this.repo.confirmTotp(userId, row.secretEncrypted))) {
+      throw new ConflictException({ message: 'MFA factor changed during confirmation', code: 'auth.mfa_state_changed' });
+    }
   }
 
   /**

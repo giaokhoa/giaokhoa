@@ -387,6 +387,93 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     expect(await sessionCount(user.id)).toBe(0);
   });
 
+  it('(a6) hai mã TOTP sai song song cùng challenge phải ghi đúng hai lượt và không cấp phiên', async () => {
+    const user = await createUser('mfagatetwobad');
+    const secret = await enableMfa(user.id, user.username);
+    const start = await http(app).post('/api/v1/auth/sign-in/username')
+      .set('Origin', TRUSTED_ORIGIN)
+      .send({ username: user.username, password: FLOW_PASSWORD });
+    const cookie = cookiePairFrom(start.headers['set-cookie'] as unknown as string[], 'better-auth.two_factor');
+    expect(cookie).toBeTruthy();
+    const identifier = cookie!.split('=')[1]!.split('.')[0]!;
+    const wrong = await wrongTotpCode(secret);
+    const results = await Promise.all([verifyTotp(cookie!, wrong), verifyTotp(cookie!, wrong)]);
+    expect(results.map((response) => response.status).sort()).toEqual([401, 401]);
+    const budget = await pg.query<{ value: string }>(
+      'select value from verification where identifier = $1',
+      ['2fa-attempts-' + identifier],
+    );
+    expect(budget.rows).toHaveLength(1);
+    expect(Number(budget.rows[0]!.value)).toBe(2);
+    expect(await sessionCount(user.id)).toBe(0);
+
+    // Sau ba lượt sai tiếp theo, challenge hết ngân sách. Mã đúng cũng
+    // không thể tạo phiên và không thể hồi sinh challenge đã kết thúc.
+    for (let i = 0; i < 3; i++) {
+      expect((await verifyTotp(cookie!, wrong)).status).toBe(401);
+    }
+    expect((await verifyTotp(cookie!, await generate({ secret }))).status).toBeGreaterThanOrEqual(400);
+    expect((await verifyTotp(cookie!, await generate({ secret }))).status).toBe(401);
+    expect(await sessionCount(user.id)).toBe(0);
+  });
+
+  it('(a7) hai challenge cùng user không được vượt 10 lần sai trong 20 phút', async () => {
+    const user = await createUser('mfagateglobalrace');
+    const secret = await enableMfa(user.id, user.username);
+    const wrong = await wrongTotpCode(secret);
+    const signIn = async (): Promise<string> => {
+      const response = await http(app).post('/api/v1/auth/sign-in/username')
+        .set('Origin', TRUSTED_ORIGIN)
+        .send({ username: user.username, password: FLOW_PASSWORD });
+      expect(response.status).toBe(200);
+      const cookie = cookiePairFrom(response.headers['set-cookie'] as unknown as string[], 'better-auth.two_factor');
+      expect(cookie).toBeTruthy();
+      return cookie!;
+    };
+    const first = await signIn();
+    for (let i = 0; i < 5; i++) expect((await verifyTotp(first, wrong)).status).toBe(401);
+    const second = await signIn();
+    for (let i = 0; i < 4; i++) expect((await verifyTotp(second, wrong)).status).toBe(401);
+
+    const third = await signIn();
+    const fourth = await signIn();
+    const results = await Promise.all([verifyTotp(third, wrong), verifyTotp(fourth, wrong)]);
+    expect(results.map((response) => response.status).sort()).toEqual([401, 429]);
+
+    const budget = await pg.query<{ value: string }>(
+      'select value from verification where identifier = $1',
+      ['mfa-fail-user-' + user.id],
+    );
+    expect(budget.rows).toHaveLength(1);
+    expect(Number(budget.rows[0]!.value)).toBe(10);
+    expect((await verifyTotp(fourth, await generate({ secret }))).status).toBe(429);
+    expect(await sessionCount(user.id)).toBe(0);
+  });
+
+  it('(a8) ngân sách còn 1 lượt cho phép mã TOTP đúng; challenge quá 600 giây không được cấp phiên', async () => {
+    const user = await createUser('mfagateboundaries');
+    const secret = await enableMfa(user.id, user.username);
+    const wrong = await wrongTotpCode(secret);
+    const start = async (): Promise<string> => {
+      const response = await http(app).post('/api/v1/auth/sign-in/username')
+        .set('Origin', TRUSTED_ORIGIN)
+        .send({ username: user.username, password: FLOW_PASSWORD });
+      return cookiePairFrom(response.headers['set-cookie'] as unknown as string[], 'better-auth.two_factor')!;
+    };
+    const first = await start();
+    for (let i = 0; i < 5; i++) expect((await verifyTotp(first, wrong)).status).toBe(401);
+    const second = await start();
+    for (let i = 0; i < 4; i++) expect((await verifyTotp(second, wrong)).status).toBe(401);
+    expect((await verifyTotp(second, await generate({ secret }))).status).toBe(200);
+
+    const stale = await start();
+    const identifier = stale.split('=')[1]!.split('.')[0]!;
+    await pg.query("update verification set expires_at = now() - interval '1 second' where identifier = $1",
+      [identifier]);
+    expect((await verifyTotp(stale, await generate({ secret }))).status).toBe(401);
+    expect((await verifyTotp(stale, await generate({ secret }))).status).toBe(401);
+  });
+
   it('(s1) liệt kê và thu hồi cookie session Better Auth trên thiết bị khác mà giữ phiên hiện tại', async () => {
     const user = await createUser('basessionrevoke');
     const signIn = () => http(app)
