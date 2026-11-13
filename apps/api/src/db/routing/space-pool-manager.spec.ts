@@ -296,12 +296,15 @@ describe('Trình quản lý pool theo database', () => {
       created += 1;
       return { databaseName, pool: new FakePool(), db: databaseName };
     });
-    const rejected = expect(rotate).rejects.toThrow(/closed/);
+    const outcome = rotate.then(
+      () => 'resolved',
+      (error: unknown) => error instanceof Error ? error.message : String(error),
+    );
     const closing = manager.closeAll();
     expect(endCalls).toBe(1);
     finishDrain();
     await closing;
-    await rejected;
+    expect(await outcome).toMatch(/closed/);
     expect(created).toBe(0);
     expect(manager.size).toBe(0);
   });
