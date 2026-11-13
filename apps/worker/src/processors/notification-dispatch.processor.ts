@@ -1,10 +1,12 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
-import { tenantAls } from '../db/tenant-als';
+import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { ResendMailService } from '../resend-mail.service';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 
 export interface NotificationDispatchJobData {
+  spaceSlug?: string | null;
+  spaceId?: string | null;
   userId: string;
   provider: string;
   channel: string; // email | push (các cổng kênh ngoài)
@@ -59,14 +61,15 @@ export class NotificationDispatchProcessor extends WorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly mail: ResendMailService,
+    private readonly jobRunner: SpaceJobRunner,
   ) { super(); }
 
   /**
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<NotificationDispatchJobData>): Promise<NotificationDispatchResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
-    return tenantAls.run({ platform: true }, () => this.processInContext(job));
+    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
   private async processInContext(job: Job<NotificationDispatchJobData>): Promise<NotificationDispatchResult> {

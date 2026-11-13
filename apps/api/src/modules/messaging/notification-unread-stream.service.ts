@@ -5,11 +5,28 @@ import { Observable, Subject } from 'rxjs';
 import { redisTlsFromUrl } from '../../config/env';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { tenantAls } from '../tenants/tenant-als';
+import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 
 /**
  * Kênh Redis pub/sub mang tín hiệu "số thông báo chưa đọc của một user vừa thay đổi". Payload chỉ là userId — số đếm thật luôn được đọc lại từ database ở phía nhận, không tin số mang theo tín hiệu.
  */
 export const NOTIFICATION_UNREAD_CHANGED_CHANNEL = 'giaokhoa:notifications:unread-changed';
+
+/** Chỉ báo thay đổi, không mang dữ liệu hoặc số đếm của người nhận. */
+interface UnreadSignal { userId: string; spaceId: string | null }
+
+/** Ngữ cảnh đã xác thực của một SSE subscriber tại lúc kết nối. */
+interface UnreadSubscriber {
+  subject: Subject<MessageEvent>;
+  tenantId: string | null;
+  spaceSlug: string | null;
+  spaceId: string | null;
+}
+
+/** Khoá local theo cả database; UUID của hai kho có thể trùng nhau. */
+function unreadScopeKey(userId: string, spaceId: string | null): string {
+  return `${spaceId ?? 'shared'}:${userId}`;
+}
 
 /** Nhịp heartbeat của stream: đủ dày để giữ kết nối SSE sống qua giới hạn idle của các chặng proxy ở biên. */
 const HEARTBEAT_INTERVAL_MS = 25_000;
@@ -31,11 +48,12 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
   private readonly publisher: Redis;
   private readonly subscriber: Redis;
   /** Các stream SSE đang mở trong tiến trình này, theo user. */
-  private readonly streamsByUser = new Map<string, Set<Subject<MessageEvent>>>();
+  private readonly streamsByUser = new Map<string, Set<UnreadSubscriber>>();
 
   constructor(
     @Inject(ConfigService) config: ConfigService,
     private readonly repo: MessagingRepository,
+    private readonly spaceDb: SpaceDatabaseService,
   ) {
     const redisUrl = config.getOrThrow<string>('REDIS_URL');
     const options = { maxRetriesPerRequest: null, ...redisTlsFromUrl(redisUrl) };
@@ -44,10 +62,21 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
   }
 
   async onModuleInit(): Promise<void> {
-    this.subscriber.on('message', (channel: string, userId: string) => {
-      if (channel === NOTIFICATION_UNREAD_CHANGED_CHANNEL) {
-        void this.pushCurrentCount(userId);
+    this.subscriber.on('message', (channel: string, raw: string) => {
+      if (channel !== NOTIFICATION_UNREAD_CHANGED_CHANNEL) return;
+      let signal: UnreadSignal;
+      try {
+        const decoded: unknown = JSON.parse(raw);
+        if (!decoded || typeof decoded !== 'object') return;
+        const value = decoded as Record<string, unknown>;
+        if (typeof value.userId !== 'string' || !(value.spaceId === null || typeof value.spaceId === 'string')) return;
+        signal = { userId: value.userId, spaceId: value.spaceId } as UnreadSignal;
+      } catch {
+        // Tín hiệu legacy chỉ mang userId là của kho chung; không
+        // bao giờ chuyển nó sang stream của một kho riêng.
+        signal = { userId: raw, spaceId: null };
       }
+      void this.pushCurrentCount(signal);
     });
     this.subscriber.on('error', (error: Error) => {
       this.logger.warn(`Redis subscriber của stream thông báo lỗi: ${error.message}`);
@@ -57,7 +86,7 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
 
   async onModuleDestroy(): Promise<void> {
     for (const subjects of this.streamsByUser.values()) {
-      for (const subject of subjects) subject.complete();
+      for (const subscriber of subjects) subscriber.subject.complete();
     }
     this.streamsByUser.clear();
     await Promise.allSettled([this.publisher.quit(), this.subscriber.quit()]);
@@ -70,7 +99,8 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
    */
   async signalUnreadCountChanged(userId: string): Promise<void> {
     try {
-      await this.publisher.publish(NOTIFICATION_UNREAD_CHANGED_CHANNEL, userId);
+      const spaceId = tenantAls.getStore()?.spaceId ?? null;
+      await this.publisher.publish(NOTIFICATION_UNREAD_CHANGED_CHANNEL, JSON.stringify({ userId, spaceId } satisfies UnreadSignal));
     } catch {
       // Bỏ qua: client vẫn còn số khởi tạo từ REST và snapshot khi nối lại.
     }
@@ -85,15 +115,24 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
   streamUnreadCount(userId: string): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       const subject = new Subject<MessageEvent>();
-      let subjects = this.streamsByUser.get(userId);
+      const store = tenantAls.getStore();
+      const stream: UnreadSubscriber = {
+        subject,
+        tenantId: store?.tenantId ?? null,
+        spaceSlug: store?.spaceSlug ?? null,
+        spaceId: store?.spaceId ?? null,
+      };
+      const key = unreadScopeKey(userId, stream.spaceId);
+      let subjects = this.streamsByUser.get(key);
       if (!subjects) {
         subjects = new Set();
-        this.streamsByUser.set(userId, subjects);
+        this.streamsByUser.set(key, subjects);
       }
-      subjects.add(subject);
+      subjects.add(stream);
       const subscription = subject.subscribe(subscriber);
 
-      void this.repo.countUnreadNotifications(userId, tenantAls.getStore()?.tenantId).then(
+      // Snapshot ở ALS request đã được xác thực (gồm database và GUC).
+      void this.repo.countUnreadNotifications(userId, store?.tenantId).then(
         (unread) => { if (!subject.closed) subject.next({ type: 'unread-count', data: { unread } }); },
         () => undefined,
       );
@@ -104,36 +143,46 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
       return () => {
         clearInterval(heartbeat);
         subscription.unsubscribe();
-        subjects.delete(subject);
-        if (subjects.size === 0) this.streamsByUser.delete(userId);
+        subjects.delete(stream);
+        if (subjects.size === 0) this.streamsByUser.delete(key);
         subject.complete();
       };
     });
   }
 
-  /** Đọc số thật từ DB và đẩy xuống mọi stream đang mở của user. */
-  private async pushCurrentCount(userId: string): Promise<void> {
-    const subjects = this.streamsByUser.get(userId);
+  /**
+   * Lấy số đếm trong từng miền SSE đã mở, không dùng lại handle
+   * database của lần pub/sub (callback Redis không có ALS request).
+   * Nếu sổ không còn khớp với danh tính của stream, từ chối đẩy
+   * dữ liệu thay vì đổi im lặng sang kho mới hoặc kho chung.
+   */
+  private async pushCurrentCount(signal: UnreadSignal): Promise<void> {
+    const subjects = this.streamsByUser.get(unreadScopeKey(signal.userId, signal.spaceId));
     if (!subjects || subjects.size === 0) return;
-    try {
-      // TENANT-1 (#196): callback pub/sub chạy NGOÀI mọi ngữ cảnh
-      // request — đếm trong ngữ cảnh tenant mặc định của chính user
-      // (theo membership) để RLS fail-closed không trả 0 giả; không
-      // phân giải được tenant thì rơi về ngữ cảnh platform (đếm theo
-      // userId vẫn đúng phạm vi một người).
-      const tenantId = await this.repo.getUserDefaultTenantId(userId).catch(() => null);
-      const unread = await tenantAls.run(
-        tenantId ? { tenantId } : { platform: true },
-        // Vòng ALS vẫn giữ (nó lập cả ngữ cảnh pool/RLS); tenantId
-        // đồng thời truyền tường minh xuống repository vì
-        // repository tại `@giaokhoa/db` không đọc ALS (issue #658).
-        () => this.repo.countUnreadNotifications(userId, tenantId ?? undefined),
-      );
-      for (const subject of subjects) {
-        if (!subject.closed) subject.next({ type: 'unread-count', data: { unread } });
+    for (const stream of subjects) {
+      if (stream.subject.closed) continue;
+      try {
+        const readCount = () => this.repo.countUnreadNotifications(signal.userId, stream.tenantId ?? undefined);
+        let unread: number;
+        if (stream.spaceSlug) {
+          const target = await this.spaceDb.resolveTarget(stream.spaceSlug);
+          if ((target.mode === 'dedicated' ? target.spaceId : null) !== stream.spaceId) {
+            throw new Error('space_routing.stream_identity_changed');
+          }
+          unread = await this.spaceDb.withSpaceKysely(stream.spaceSlug, readCount, {
+            tenantId: stream.tenantId ?? undefined,
+          });
+        } else {
+          if (stream.spaceId) throw new Error('space_routing.stream_slug_missing');
+          unread = await tenantAls.run(
+            stream.tenantId ? { tenantId: stream.tenantId } : { platform: true },
+            readCount,
+          );
+        }
+        if (!stream.subject.closed) stream.subject.next({ type: 'unread-count', data: { unread } });
+      } catch (error) {
+        this.logger.warn(`Không đọc được số chưa đọc trong đúng kho SSE: ${(error as Error).message}`);
       }
-    } catch (error) {
-      this.logger.warn(`Không đọc được số chưa đọc cho stream thông báo: ${(error as Error).message}`);
     }
   }
 }

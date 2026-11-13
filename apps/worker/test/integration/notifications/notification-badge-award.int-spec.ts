@@ -105,7 +105,7 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
 
   it('huy hiệu của khoá bị tắt tiếng: assertion đã cấp, thông báo giữ lại, log gửi ghi skipped-course-mute', async () => {
     const processor = context.get(BadgeAwardProcessor);
-    const result = await processor.process({ data: { userId: mutedUser, trigger: 'test-174a' } } as never);
+    const result = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: mutedUser, trigger: 'test-174a' } } as never);
     // Cả ba huy hiệu đều đủ tiêu chí và đều được CẤP cho người này
     // (result.issued là id các assertion vừa ghi — khẳng định theo
     // bảng badgeIssued bên dưới mới là đối chiếu theo huy hiệu).
@@ -128,7 +128,7 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
 
   it('người nhận không tắt tiếng gì nhận cả ba thông báo huy hiệu', async () => {
     const processor = context.get(BadgeAwardProcessor);
-    await processor.process({ data: { userId: openUser, trigger: 'test-174a' } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, userId: openUser, trigger: 'test-174a' } } as never);
     const subjects = (await badgeNotificationsOf(openUser)).map((n) => n.subject);
     expect(subjects.some((s) => s.includes('muted-course badge'))).toBe(true);
     expect(subjects.some((s) => s.includes('open-course badge'))).toBe(true);
@@ -139,7 +139,7 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
   it('chạy lại job không cấp trùng gì và không gửi trùng gì', async () => {
     const processor = context.get(BadgeAwardProcessor);
     const before = await badgeNotificationsOf(mutedUser);
-    const rerun = await processor.process({ data: { userId: mutedUser, trigger: 'test-174a' } } as never);
+    const rerun = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: mutedUser, trigger: 'test-174a' } } as never);
     expect(rerun.issued).toHaveLength(0);
     expect(await badgeNotificationsOf(mutedUser)).toHaveLength(before.length);
     expect(await badgeDispatchOf(mutedUser, 'skipped-course-mute')).toHaveLength(1);

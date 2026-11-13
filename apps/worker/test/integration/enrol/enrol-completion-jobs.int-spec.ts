@@ -62,7 +62,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     const expired = await db.insertInto('user_enrolments').values({ enrol_id: instanceId, user_id: userId, status: 0, time_start: new Date(Date.now() - 7200_000), time_end: past }).returningAll().executeTakeFirstOrThrow();
     const alive = await db.insertInto('user_enrolments').values({ enrol_id: instanceId, user_id: userIdB, status: 0, time_start: new Date(), time_end: future }).returningAll().executeTakeFirstOrThrow();
     const processor = context.get(EnrolExpiryProcessor);
-    const result = await processor.process({ data: {} } as never);
+    const result = await processor.process({ data: { spaceSlug: null, spaceId: null,} } as never);
     expect(result.suspendedIds).toContain(expired.id);
     expect(result.suspendedIds).not.toContain(alive.id);
     const row = await db.selectFrom('user_enrolments').selectAll().where('id', '=', expired.id).executeTakeFirstOrThrow();
@@ -70,7 +70,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     const events = await db.selectFrom('outbox_events').selectAll().where('type', '=', 'user_enrolment_suspended').execute();
     expect((events as { payload: { enrolmentId?: string } }[]).some((e) => e.payload.enrolmentId === expired.id)).toBe(true);
     // Idempotent: lượt quét thứ hai không chuyển nó lần nữa.
-    const second = await processor.process({ data: {} } as never);
+    const second = await processor.process({ data: { spaceSlug: null, spaceId: null,} } as never);
     expect(second.suspendedIds).not.toContain(expired.id);
   });
 
@@ -88,7 +88,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     const warningsFor = async (enrolmentId: string) => (await db.selectFrom('outbox_events').selectAll()
       .where('type', '=', 'enrol_expiry_warning').execute())
       .filter((e) => (e.payload as { enrolmentId?: string }).enrolmentId === enrolmentId);
-    const first = await processor.process({ data: {} } as never);
+    const first = await processor.process({ data: { spaceSlug: null, spaceId: null,} } as never);
     expect(first.warnedIds).toContain(soon.id);
     expect(first.warnedIds).not.toContain(later.id);
     const events = await warningsFor(soon.id) as { payload: { userId?: string; courseId?: string } }[];
@@ -97,7 +97,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     expect(events[0]!.payload.courseId).toBe(courseId);
     expect(await warningsFor(later.id)).toHaveLength(0);
     // Quét lại không phát trùng cảnh báo cho cùng một ghi danh.
-    const second = await processor.process({ data: {} } as never);
+    const second = await processor.process({ data: { spaceSlug: null, spaceId: null,} } as never);
     expect(second.warnedIds).not.toContain(soon.id);
     expect(await warningsFor(soon.id)).toHaveLength(1);
   });
@@ -107,7 +107,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     await db.insertInto('course_modules_completion').values({ course_module_id: cmId, user_id: userId, completion_state: 1, viewed: true }).execute();
     await db.insertInto('course_completion_settings').values({ course: courseId, method: 1 }).onConflict((oc) => oc.doNothing()).execute();
     await db.insertInto('course_completion_criteria').values({ course: courseId, criteria_type: 'module', module_instance: cmId, sort_order: 0 }).execute();
-    const result = await processor.process({ data: { courseId } } as never);
+    const result = await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(result.users).toBeGreaterThan(0);
     let cc = await db.selectFrom('course_completions').selectAll()
       .where('course', '=', courseId).where('user_id', '=', userId).executeTakeFirstOrThrow();
@@ -116,7 +116,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
 
     // Thêm một tiêu chí date trong tương lai ⇒ việc tính lại mở lại completion.
     await db.insertInto('course_completion_criteria').values({ course: courseId, criteria_type: 'date', date: new Date('2100-01-01'), sort_order: 1 }).execute();
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     cc = await db.selectFrom('course_completions').selectAll()
       .where('course', '=', courseId).where('user_id', '=', userId).executeTakeFirstOrThrow();
     expect(cc.status).not.toBe('complete');
@@ -142,20 +142,20 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     const prereqRows = await sql`insert into course (category, tenant_id, full_name, short_name, class_id) values ((select category from course where id = ${courseId}), (select tenant_id from course where id = ${courseId}), 'Prereq course', ${`wkpre${suffix}`}, ${await fixtureClassId()}) returning id`.execute(db);
     const prereqId = (prereqRows.rows[0] as { id: string }).id;
     await replaceCriteria([{ criteria_type: 'course', course_instance: prereqId }]);
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userId)).not.toBe('complete');
     await db.insertInto('course_completions').values({ user_id: userId, course: prereqId, status: 'complete', time_completed: new Date() }).execute();
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userId)).toBe('complete');
 
     // self: cần một dòng bằng chứng crit_compl cho tiêu chí.
     await db.deleteFrom('course_completion_criteria').where('course', '=', courseId).execute();
     const selfCritRow = await db.insertInto('course_completion_criteria')
       .values({ course: courseId, criteria_type: 'self', sort_order: 0 }).returningAll().executeTakeFirstOrThrow();
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userId)).not.toBe('complete');
     await db.insertInto('course_completion_crit_compl').values({ criteria_id: selfCritRow.id, user_id: userId, marked_by: userId }).execute();
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userId)).toBe('complete');
 
     // role: dùng chung đường bằng chứng markedKeys với self, nhưng
@@ -168,27 +168,27 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     await db.deleteFrom('course_completion_criteria').where('course', '=', courseId).execute();
     const roleCritRow = await db.insertInto('course_completion_criteria')
       .values({ course: courseId, criteria_type: 'role', role_id: markerRoleId, sort_order: 0 }).returningAll().executeTakeFirstOrThrow();
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userId)).not.toBe('complete');
     await db.insertInto('course_completion_crit_compl').values({ criteria_id: roleCritRow.id, user_id: userId, marked_by: userIdB }).execute();
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userId)).toBe('complete');
 
     // duration: neo trên timeStart của ghi danh (cách đây 10 ngày ở đây).
     const userIdC = `01900000-0000-7000-8000-${String(900200 + (suffix % 10000)).padStart(12, '0')}`;
     await db.insertInto('user_enrolments').values({ enrol_id: instanceId, user_id: userIdC, status: 0, time_start: new Date(Date.now() - 10 * 86_400_000) }).execute();
     await replaceCriteria([{ criteria_type: 'duration', enrol_period_days: 30 }]);
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userIdC)).not.toBe('complete');
     await replaceCriteria([{ criteria_type: 'duration', enrol_period_days: 7 }]);
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userIdC)).toBe('complete');
 
     // unenrol: một user có dòng completion đã lưu nhưng không còn ghi danh sống.
     const userIdD = `01900000-0000-7000-8000-${String(900300 + (suffix % 10000)).padStart(12, '0')}`;
     await db.insertInto('course_completions').values({ user_id: userIdD, course: courseId, status: 'in_progress', time_started: new Date() }).execute();
     await replaceCriteria([{ criteria_type: 'unenrol' }]);
-    await processor.process({ data: { courseId } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, courseId } } as never);
     expect(await statusOf(userIdD)).toBe('complete');
     // ...trong khi một user vẫn đang ghi danh thì KHÔNG thoả mãn nó.
     expect(await statusOf(userIdC)).not.toBe('complete');

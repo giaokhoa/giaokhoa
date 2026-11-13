@@ -247,7 +247,7 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     // Tại thời điểm job được đẩy, dòng vẫn chưa có dấu — dấu chỉ có sau khi phát xong.
     expect(queue.stampedAtDispatch).toEqual([false]);
     expect(row.publishedAt).not.toBeNull();
-    const job = queue.jobs.get(row.id);
+    const job = queue.jobs.get(`shared-${row.id}`);
     expect(job?.name).toBe('auth_mail_requested');
     expect(job?.data).toEqual({
       outboxId: row.id,
@@ -256,7 +256,8 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
       type: 'auth_mail_requested',
       payload: { n: row.seq },
       tenantId: 'tenant-1',
-      spaceSlug: 'trung-tam-a',
+      spaceSlug: null,
+      spaceId: null,
       occurredAt: '2026-10-29T00:00:00.000Z',
     });
   });
@@ -288,8 +289,8 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     const published = await relay.publishPending();
 
     expect(published).toBe(3);
-    expect([...queues.get('outbox-auth-mail')!.jobs.keys()]).toEqual([mailRow.id]);
-    expect([...queues.get('outbox-messaging')!.jobs.keys()]).toEqual([messageRow.id]);
+    expect([...queues.get('outbox-auth-mail')!.jobs.keys()]).toEqual([`shared-${mailRow.id}`]);
+    expect([...queues.get('outbox-messaging')!.jobs.keys()]).toEqual([`shared-${messageRow.id}`]);
     // Loại chưa định tuyến: không job nào được tạo, nhưng dòng vẫn được
     // đóng dấu và phản chiếu như đường production hiện hành (phía tiêu
     // thụ của nó vẫn đọc trực tiếp bảng outbox theo watermark seq).
@@ -309,12 +310,12 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     // phát, tiến độ xử lý thuộc về phía consumer.
     expect(published).toBe(1);
     expect(row.publishedAt).not.toBeNull();
-    expect(queue.jobs.get(row.id)?.name).toBe('message_sent');
+    expect(queue.jobs.get(`shared-${row.id}`)?.name).toBe('message_sent');
   });
 
   it('phản chiếu dòng đã phát vào event_log qua EventLogWriter với đầy đủ định danh của dòng', async () => {
     const row = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-9' });
-    const { relay, mirrored } = makeRelay([row], ROUTES);
+    const { relay, mirrored } = makeRelay([row], ROUTES, { tenantSlugs: { 'tenant-9': 'trung-tam-9' } });
 
     await relay.publishPending();
 
@@ -399,11 +400,11 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
     const published = await relay.publishPending();
 
     expect(published).toBe(1);
-    expect(notificationsQueue.jobs.get(row.id)?.name).toBe('message_sent');
-    expect(realtimeQueue.jobs.get(row.id)?.name).toBe('message_sent');
+    expect(notificationsQueue.jobs.get(`shared-${row.id}`)?.name).toBe('message_sent');
+    expect(realtimeQueue.jobs.get(`shared-${row.id}`)?.name).toBe('message_sent');
     // Dữ liệu job ở cả hai đích là toàn bộ dòng outbox đã chuẩn hoá.
     for (const queue of [notificationsQueue, realtimeQueue]) {
-      expect(queue.jobs.get(row.id)?.data).toEqual({
+      expect(queue.jobs.get(`shared-${row.id}`)?.data).toEqual({
         outboxId: row.id,
         seq: row.seq,
         aggregate: 'messaging',
@@ -411,6 +412,7 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
         payload: { n: row.seq },
         tenantId: row.tenantId,
         spaceSlug: null,
+        spaceId: null,
         occurredAt: '2026-10-29T00:00:00.000Z',
       });
     }
@@ -478,18 +480,23 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
     schemaVersion: 'v3',
   };
 
-  it('sự kiện không gắn tenant hoặc tenant không còn dòng tương ứng thì job mang spaceSlug null', async () => {
-    const anonymousRow = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: null });
+  it('tenant bị xoá không được phát job vô chủ lên platform, dòng giữ nguyên để kiểm tra', async () => {
     const orphanRow = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-da-xoa' });
-    const { relay, queues } = makeRelay([anonymousRow, orphanRow], ROUTES, {
+    const { relay, queues } = makeRelay([orphanRow], ROUTES, {
       tenantSlugs: { 'tenant-khac': 'trung-tam-b' },
     });
-    const queue = queues.get('outbox-auth-mail')!;
+    await expect(relay.publishPending()).rejects.toThrow('has no owning tenant');
+    expect(orphanRow.publishedAt).toBeNull();
+    expect(queues.get('outbox-auth-mail')?.jobs.size).toBe(0);
+  });
 
+  it('sự kiện thực sự không gắn tenant giữ ngữ cảnh platform và không mang spaceId', async () => {
+    const row = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: null });
+    const { relay, queues } = makeRelay([row], ROUTES);
     await relay.publishPending();
-
-    expect(queue.jobs.get(anonymousRow.id)?.data.spaceSlug).toBeNull();
-    expect(queue.jobs.get(orphanRow.id)?.data.spaceSlug).toBeNull();
+    expect(queues.get('outbox-auth-mail')?.jobs.get(`shared-${row.id}`)?.data).toMatchObject({
+      tenantId: null, spaceSlug: null, spaceId: null,
+    });
   });
 
   it('nhịp relay quét outbox của trung tâm ở kho riêng trong phiên của trung tâm đó: dòng của trung tâm được phát với slug của nó và được đóng dấu ở kho của nó', async () => {
@@ -503,8 +510,35 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
 
     expect(result).toEqual({ published: 1, failedSlugs: [] });
     expect(centreRow.publishedAt).not.toBeNull();
-    expect(queue.jobs.get(centreRow.id)?.data.spaceSlug).toBe('trung-tam-a');
-    expect(queue.jobs.get(centreRow.id)?.data.tenantId).toBe('tenant-a');
+    expect(queue.jobs.get(`${DEDICATED_SPACE.id}-${centreRow.id}`)?.data.spaceSlug).toBe('trung-tam-a');
+    expect(queue.jobs.get(`${DEDICATED_SPACE.id}-${centreRow.id}`)?.data.spaceId).toBe(DEDICATED_SPACE.id);
+    expect(queue.jobs.get(`${DEDICATED_SPACE.id}-${centreRow.id}`)?.data.tenantId).toBe('tenant-a');
+  });
+
+  it('hai database trùng outbox UUID và tenant UUID phát hai job độc lập vào cùng Redis queue', async () => {
+    const id = '0191e8f2-7c3a-7b21-9f00-000000000011';
+    const aRow = makeRow({ id, aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-trung' });
+    const bRow = makeRow({ id, aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-trung' });
+    const spaceB = { ...DEDICATED_SPACE, id: 'id-dang-ky-b', slug: 'trung-tam-b' };
+    const dbA = makeFakeDb([aRow], { 'tenant-trung': 'trung-tam-a' }).db;
+    const dbB = makeFakeDb([bRow], { 'tenant-trung': 'trung-tam-b' }).db;
+    const spaceDb = makeFakeSpaceDb([DEDICATED_SPACE, spaceB], new Map([
+      ['trung-tam-a', dbA], ['trung-tam-b', dbB],
+    ]));
+    const { relay, queues } = makeRelay([], ROUTES, { spaceDb });
+    const outcome = await relay.publishPendingForCentres();
+    expect(outcome).toEqual({ published: 2, failedSlugs: [] });
+    const jobs = queues.get('outbox-auth-mail')!.jobs;
+    expect(jobs.size).toBe(2);
+    expect(jobs.get(`${DEDICATED_SPACE.id}-${id}`)?.data).toMatchObject({ spaceId: DEDICATED_SPACE.id, spaceSlug: DEDICATED_SPACE.slug });
+    expect(jobs.get(`${spaceB.id}-${id}`)?.data).toMatchObject({ spaceId: spaceB.id, spaceSlug: spaceB.slug });
+    expect(aRow.publishedAt).not.toBeNull();
+    expect(bRow.publishedAt).not.toBeNull();
+    // Cùng những UUID, relay lại hai database không ghi đè payload của nhau.
+    aRow.publishedAt = null;
+    bRow.publishedAt = null;
+    await relay.publishPendingForCentres();
+    expect(jobs.size).toBe(2);
   });
 
   it('trung tâm đã đóng (closed) và trung tâm ở kho chung không thuộc lượt quét theo trung tâm', async () => {

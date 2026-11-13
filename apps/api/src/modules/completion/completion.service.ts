@@ -13,6 +13,7 @@ import { AvailabilityService } from '../availability/availability.service';
 import { CoursesService } from '../courses/courses.service';
 import { ENROL_WITHDRAWN, EnrolService } from '../enrol/enrol.service';
 import { tenantAls } from '../tenants/tenant-als';
+import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
 
 export const COMPLETION_INCOMPLETE = 0;
 export const COMPLETION_COMPLETE = 1;
@@ -396,7 +397,7 @@ export class CompletionService implements OnModuleInit {
       for (const cc of completions) {
         await this.repo.upsertCourseCompletion({ ...cc, reAggregate: new Date() });
       }
-      await this.recalcQueue.add('recalculate', { courseId }, { jobId: `completion-recalc-${courseId}-${Date.now()}`, attempts: 3 });
+      await this.recalcQueue.add('recalculate', { courseId, ...backgroundJobContext() }, { jobId: backgroundJobId(`completion-recalc-${courseId}-${Date.now()}`), attempts: 3 });
       await this.outbox.enqueueStandalone({ aggregate: 'completion', type: 'completion_criteria_changed', payload: { courseId, reAggregate: true } });
     }
     return { method, criteria: await this.repo.listCriteria(courseId) };

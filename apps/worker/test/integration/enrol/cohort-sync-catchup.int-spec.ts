@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql, type JsonValue } from '@giaokhoa/db';
 import { CohortSyncCatchupService } from '../../../src/cohort-sync-catchup.service';
+import { outboxRelayJobId } from '../../../src/outbox-relay.scheduler';
 import { redisConnectionFromUrl } from '../../../src/config/env';
 import {
   bootWorkerModuleAsOrdinaryRole,
@@ -91,7 +92,7 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
   async function waitJobCompleted(outboxId: string, timeoutMs = 90000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const job = await eventsQueue.getJob(outboxId);
+      const job = await eventsQueue.getJob(outboxRelayJobId(null, outboxId));
       if (job && (await job.getState()) === 'completed') return;
       if (Date.now() > deadline) throw new Error(`job sự kiện ${outboxId} chưa completed sau ${timeoutMs}ms`);
       await new Promise((r) => setTimeout(r, 400));
@@ -107,7 +108,7 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
    */
   async function enrolDirectly(type: string, outboxId: string, payload: Record<string, unknown>): Promise<void> {
     const job = await eventsQueue.add(type, {
-      outboxId, seq: 0, aggregate: 'cohort', type, payload, tenantId, occurredAt: new Date().toISOString(),
+      outboxId, seq: 0, aggregate: 'cohort', type, payload, tenantId, spaceSlug: null, spaceId: null, occurredAt: new Date().toISOString(),
     }, { jobId: randomUUID() });
     const deadline = Date.now() + 90000;
     for (;;) {
@@ -140,7 +141,7 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     await sql`INSERT INTO course_categories (id, tenant_id, name) VALUES (${categoryId}, ${tenantId}, 'Danh mục worker 550')`.execute(db);
     await sql`INSERT INTO context (id, context_level, instance_id, path, depth) VALUES (${systemCtxId}, 10, NULL, ${`/${systemCtxId}`}, 1)`.execute(db);
     await sql`INSERT INTO context (id, context_level, instance_id, path, depth) VALUES (${tenantCtxId}, 20, ${tenantId}, ${`/${systemCtxId}/${tenantCtxId}`}, 2)`.execute(db);
-    await sql`INSERT INTO role (id, name, short_name, archetype) VALUES (${studentRoleId}, 'Student', 'student550', 'student')`.execute(db);
+    await sql`INSERT INTO role (id, name, short_name, archetype) VALUES (${studentRoleId}, 'Student', ${`student550-${tenantId.slice(0, 8)}`}, 'student')`.execute(db);
   });
 
   afterAll(async () => {
@@ -168,7 +169,7 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     expect(ue).toBeDefined();
     expect(ue?.status).toBe(0);
     expect(await outboxOf('user_enrolled', userId)).toHaveLength(1);
-    expect(await eventsQueue.getJob(below.id)).toBeFalsy();
+    expect(await eventsQueue.getJob(outboxRelayJobId(null, below.id))).toBeFalsy();
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
     // Phát bù lại sau khi khoá đã xoá là no-op, không sinh job mới.
     expect(await catchup.drainLegacyBacklog()).toBe(0);
@@ -205,7 +206,7 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
 
     await redis.del(legacyWatermarkKey);
     expect(await catchup.drainLegacyBacklog()).toBe(0);
-    expect(await eventsQueue.getJob(marked.id)).toBeFalsy();
+    expect(await eventsQueue.getJob(outboxRelayJobId(null, marked.id))).toBeFalsy();
     expect(await ueRow(graph.instanceId, userId)).toBeUndefined();
   }, 180000);
 

@@ -7,6 +7,7 @@ import Redis from 'ioredis';
 import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
 import { redisConnectionFromUrl } from '../config/env';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
+import { scopedOutboxId } from '../db/routing/outbox-redis-scope';
 import type { OutboxEventJobData } from '../outbox-event-routes';
 import { ResendMailService } from '../resend-mail.service';
 
@@ -22,7 +23,7 @@ import { ResendMailService } from '../resend-mail.service';
  *    rồi trả về ngay — không gửi mail trong request.
  * 2. Relay outbox duy nhất ở worker phát dòng đó thành MỘT job trên
  *    hàng đợi `auth-mail` (bảng định tuyến ở `outbox-event-routes.ts`:
- *    tên job là loại sự kiện, `jobId` là id của dòng outbox, dữ liệu
+ *    tên job là loại sự kiện, `jobId` ghép định danh kho bất biến với id dòng outbox, dữ liệu
  *    job là toàn bộ dòng — xem {@link OutboxEventJobData}), đóng dấu
  *    `publishedAt` và phản chiếu `event_log`. Dấu `publishedAt` là
  *    dấu ĐÃ PHÁT, không phải dấu hoàn thành xử lý.
@@ -146,10 +147,10 @@ export interface AuthMailSentMarker {
 /** Khoá tiêm của {@link AuthMailSentMarker} trong `worker.module.ts`. */
 export const AUTH_MAIL_SENT_MARKER = 'AUTH_MAIL_SENT_MARKER';
 
-/** Tiền tố khoá Redis của dấu ĐÃ GỬI: `giaokhoa:auth-mail:sent:<outboxId>`. */
+/** Tiền tố Redis của dấu đã gửi: kho chung `<outboxId>`, kho riêng `<spaceId>:<outboxId>`. */
 const SENT_MARKER_KEY_PREFIX = 'giaokhoa:auth-mail:sent:';
 
-/** Tiền tố khoá Redis của lease ĐANG XỬ LÝ: `giaokhoa:auth-mail:processing:<outboxId>`. */
+/** Tiền tố Redis của lease: kho chung `<outboxId>`, kho riêng `<spaceId>:<outboxId>`. */
 const PROCESSING_LEASE_KEY_PREFIX = 'giaokhoa:auth-mail:processing:';
 
 /**
@@ -177,10 +178,12 @@ const RELEASE_PROCESSING_IF_OWNER_SCRIPT =
 
 /**
  * Bản cài đặt Redis của {@link AuthMailSentMarker}: mỗi sự kiện có
- * hai khoá độc lập — `giaokhoa:auth-mail:sent:<outboxId>` (dấu ĐÃ GỬI,
+ * hai khoá độc lập — `giaokhoa:auth-mail:sent:<scope>:<outboxId>` (dấu ĐÃ GỬI,
  * hạn {@link SENT_MARKER_TTL_SECONDS}) và
- * `giaokhoa:auth-mail:processing:<outboxId>` (lease ĐANG XỬ LÝ mang
+ * `giaokhoa:auth-mail:processing:<scope>:<outboxId>` (lease ĐANG XỬ LÝ mang
  * token chủ sở hữu, hạn {@link PROCESSING_LEASE_TTL_SECONDS}).
+ * Kho shared không có đoạn `<scope>` để tương thích dấu cũ trong Redis;
+ * kho dedicated thêm ID bất biến của sổ đăng ký.
  * Chiếm lease bằng `SET ... NX` (lệnh nguyên tử phía Redis — đúng
  * một lượt trong mọi lượt đồng thời nhận được khoá); nhả lease
  * bằng script Lua kiểm tra chủ. Kết nối Redis tạo lười theo đúng
@@ -215,13 +218,13 @@ export class RedisAuthMailSentMarker implements AuthMailSentMarker, OnModuleDest
   }
 
   async hasSent(outboxId: string): Promise<boolean> {
-    return (await this.redis().get(`${SENT_MARKER_KEY_PREFIX}${outboxId}`)) !== null;
+    return (await this.redis().get(`${SENT_MARKER_KEY_PREFIX}${scopedOutboxId(outboxId)}`)) !== null;
   }
 
   async claimProcessing(outboxId: string): Promise<string | null> {
     const ownerToken = randomUUID();
     const result = await this.redis().set(
-      `${PROCESSING_LEASE_KEY_PREFIX}${outboxId}`,
+      `${PROCESSING_LEASE_KEY_PREFIX}${scopedOutboxId(outboxId)}`,
       ownerToken,
       'EX',
       PROCESSING_LEASE_TTL_SECONDS,
@@ -231,14 +234,14 @@ export class RedisAuthMailSentMarker implements AuthMailSentMarker, OnModuleDest
   }
 
   async markSent(outboxId: string): Promise<void> {
-    await this.redis().set(`${SENT_MARKER_KEY_PREFIX}${outboxId}`, '1', 'EX', SENT_MARKER_TTL_SECONDS);
+    await this.redis().set(`${SENT_MARKER_KEY_PREFIX}${scopedOutboxId(outboxId)}`, '1', 'EX', SENT_MARKER_TTL_SECONDS);
   }
 
   async releaseProcessing(outboxId: string, ownerToken: string): Promise<void> {
     await this.redis().eval(
       RELEASE_PROCESSING_IF_OWNER_SCRIPT,
       1,
-      `${PROCESSING_LEASE_KEY_PREFIX}${outboxId}`,
+      `${PROCESSING_LEASE_KEY_PREFIX}${scopedOutboxId(outboxId)}`,
       ownerToken,
     );
   }

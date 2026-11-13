@@ -47,7 +47,7 @@ const LEGACY_AUTH_SEGMENTS = new Set([
 /**
  * Khung định tuyến tối thiểu mà đường ghi Better Auth cần: chỉ phân giải đích và chuẩn bị kho — mount không tự mở pool hay đọc sổ đăng ký trực tiếp.
  */
-export type BetterAuthSpaceRouting = Pick<SpaceDatabaseService, 'resolveTarget' | 'getKyselyForSpace'>;
+export type BetterAuthSpaceRouting = Pick<SpaceDatabaseService, 'resolveTarget' | 'getKyselyForSpace' | 'preparedSpaceScope'>;
 
 /**
  * Mount handler của Better Auth (xem chú thích ở đầu file về thứ tự mount).
@@ -98,8 +98,14 @@ export function mountBetterAuth(
       handler(req, res);
       return;
     }
+    let pinnedHandle: object;
     try {
-      await spaceDb.getKyselyForSpace(space.slug);
+      const db = await spaceDb.getKyselyForSpace(space.slug);
+      const prepared = spaceDb.preparedSpaceScope(space.slug, db);
+      if (prepared.spaceId !== space.spaceId || !prepared.spaceHandle) {
+        throw new Error('space_routing.prepared_identity_mismatch: Better Auth space changed');
+      }
+      pinnedHandle = prepared.spaceHandle;
     } catch (err) {
       next(err);
       return;
@@ -111,7 +117,7 @@ export function mountBetterAuth(
     // ngữ cảnh mang slug, đúng khuôn các điểm bọc handler khác của
     // hệ. Bước chuẩn bị ở trên đã ghi handle kho đích vào bảng
     // đã-chuẩn-bị nên handle định tuyến tra được kho đích ngay.
-    tenantAls.run({ spaceSlug: space.slug }, () => {
+    tenantAls.run({ spaceSlug: space.slug, spaceId: space.spaceId, spaceHandle: pinnedHandle }, () => {
       handler(req, res);
     });
   });

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
+import { tenantAls } from '../../../src/db/tenant-als';
 import { ClassEnrolReconcileProcessor } from '../../../src/processors/class-enrol-reconcile.processor';
 import { TaskLogService } from '../../../src/task-log.service';
 import { TenantAwarePool } from '../../../src/db/tenant-pool';
@@ -118,6 +119,13 @@ describe('Worker class enrol reconcile dưới RLS (hồi quy #292)', () => {
     // Processor chạy bằng role thường qua đúng TenantAwarePool của worker.
     rlsPool = new TenantAwarePool({ connectionString: ordinaryRoleUrl(adminUrl) });
     rlsDb = createCentreKysely(rlsPool);
+    const roleDb = createCentreKysely(rlsPool);
+    // Đây là harness RLS chỉ có kho chung: mô phỏng chính xác lượt
+    // quét shared của helper mới, không bịa danh sách kho dedicated.
+    const sharedScope = {
+      routedKysely: roleDb,
+      sweepSharedAndDedicated: async <T>(sweep: () => Promise<T>) => tenantAls.run({ platform: true }, sweep),
+    };
     processor = new ClassEnrolReconcileProcessor(
       // Processor chạy trên handle Kysely định tuyến
       // (`SpaceDatabaseService.routedKysely`): cấp một khung định
@@ -125,13 +133,13 @@ describe('Worker class enrol reconcile dưới RLS (hồi quy #292)', () => {
       // thường của ca này, để mọi đường đọc/ghi của processor
       // giữ nguyên hình dạng kết nối production (role không
       // BYPASSRLS) như trước.
-      { routedKysely: createCentreKysely(rlsPool) } as never,
+      sharedScope as never,
       // TaskLogService chạy trên handle Kysely định tuyến: cấp một
       // khung định tuyến tối thiểu mà `routedKysely` trỏ vào đúng
       // pool role thường của ca này, để đường ghi task_log giữ
       // nguyên hình dạng kết nối production (role không BYPASSRLS)
       // như trước.
-      new TaskLogService({ routedKysely: createCentreKysely(rlsPool) } as never),
+      new TaskLogService(sharedScope as never),
     );
   });
 

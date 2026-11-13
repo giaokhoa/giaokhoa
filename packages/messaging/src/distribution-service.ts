@@ -70,8 +70,11 @@ export function createMessagingDistributionService(deps: {
   store: MessagingDistributionStore;
   emitter: RealtimeEmitter;
   logger: MessagingDistributionLogger;
+  /** Kho hiện hành của job đã được kiểm chứng trước khi phân phối. */
+  spaceId?: () => string | null | undefined;
 }): MessagingDistributionService {
   const { store, emitter, logger } = deps;
+  const currentSpaceId = () => deps.spaceId?.() ?? null;
 
   /** Tenant của một conversation (TENANT-1, #196) — namespace cho room/khoá realtime; lỗi đọc thì rơi về null (đoạn 'platform'). */
   async function tenantIdOfConversation(conversationId: string): Promise<string | null> {
@@ -102,7 +105,7 @@ export function createMessagingDistributionService(deps: {
   async function evictNonMemberSockets(tenantId: string | null, conversationId: string, memberIds: string[]): Promise<void> {
     try {
       const memberSet = new Set(memberIds);
-      const room = conversationRoom(tenantId, conversationId);
+      const room = conversationRoom(tenantId, conversationId, currentSpaceId());
       const sockets = await emitter.fetchSocketsInRoom(room);
       await Promise.all(sockets
         .filter((socket) => {
@@ -141,7 +144,7 @@ export function createMessagingDistributionService(deps: {
   /** Phát `conversation.invalidate` tới room riêng của TỪNG thành viên: cache danh sách của họ phải tải lại. */
   async function emitConversationInvalidate(tenantId: string | null, conversationId: string, memberIds: string[]): Promise<void> {
     const payload: RealtimeConversationInvalidatePayload = { conversationId };
-    await Promise.all(memberIds.map((memberId) => emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationInvalidate, payload)));
+    await Promise.all(memberIds.map((memberId) => emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationInvalidate, payload)));
   }
 
   /**
@@ -192,13 +195,13 @@ export function createMessagingDistributionService(deps: {
     // mọi sự kiện room về sau (F1 — trước đây chỉ kiểm tra membership
     // lúc bắt tay/join nên socket cũ nằm lại trong room vô hạn).
     await evictNonMemberSockets(tenantId, messageRow.conversationId, memberIds);
-    await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId), MESSAGING_SOCKET_EVENTS.newMessage, newPayload);
+    await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.newMessage, newPayload);
     await Promise.all(memberIds.map(async (memberId) => {
       const unreadCount = await store.countUnreadForConversation(messageRow.conversationId, memberId).catch(() => 0);
       const payload: RealtimeConversationUpdatedPayload = {
         conversationId: messageRow.conversationId, message: wire, unreadCount,
       };
-      await emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
+      await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
     }));
   }
 
@@ -242,7 +245,7 @@ export function createMessagingDistributionService(deps: {
       seq: messageRow.seq,
       deletedBy: messageRow.deletedBy ?? '',
     };
-    await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
+    await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
     // Tin cuối còn hiển thị: cửa sổ đọc mặc định của bề mặt đọc đã lọc
     // tin đã xoá — lấy đúng 1 tin mới nhất còn sống làm xem trước mới.
     const [lastVisible] = await store.listMessages(messageRow.conversationId, { limit: 1 }).catch(() => []);
@@ -253,7 +256,7 @@ export function createMessagingDistributionService(deps: {
       const payload: RealtimeConversationUpdatedPayload = {
         conversationId: messageRow.conversationId, message: wire, unreadCount,
       };
-      await emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
+      await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
     }));
   }
 
@@ -276,7 +279,7 @@ export function createMessagingDistributionService(deps: {
       seq: messageRow.seq,
       deletedBy: messageRow.recalledBy ?? '',
     };
-    await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
+    await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
     const [lastVisible] = await store.listMessages(messageRow.conversationId, { limit: 1 }).catch(() => []);
     if (lastVisible) {
       // Tin cuối còn hiển thị có thể CHÍNH LÀ tin vừa thu hồi: xem
@@ -287,7 +290,7 @@ export function createMessagingDistributionService(deps: {
         const payload: RealtimeConversationUpdatedPayload = {
           conversationId: messageRow.conversationId, message: wire, unreadCount,
         };
-        await emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
+        await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
       }));
     }
     await emitConversationInvalidate(tenantId, messageRow.conversationId, memberIds);
@@ -315,7 +318,7 @@ export function createMessagingDistributionService(deps: {
       seq: snapshot.seq,
       deletedBy: snapshot.removedBy,
     };
-    await emitter.emitToRoom(conversationRoom(tenantId, snapshot.conversationId), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
+    await emitter.emitToRoom(conversationRoom(tenantId, snapshot.conversationId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
     const [lastVisible] = await store.listMessages(snapshot.conversationId, { limit: 1 }).catch(() => []);
     if (lastVisible) {
       const wire = toWireMessage(blankRecalledContent(lastVisible));
@@ -324,7 +327,7 @@ export function createMessagingDistributionService(deps: {
         const payload: RealtimeConversationUpdatedPayload = {
           conversationId: snapshot.conversationId, message: wire, unreadCount,
         };
-        await emitter.emitToRoom(userRoom(tenantId, memberId), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
+        await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
       }));
     }
     await emitConversationInvalidate(tenantId, snapshot.conversationId, memberIds);
@@ -345,9 +348,9 @@ export function createMessagingDistributionService(deps: {
       seq: snapshot.seq,
       deletedBy: snapshot.actorId,
     };
-    await emitter.emitToRoom(userRoom(tenantId, snapshot.actorId), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
+    await emitter.emitToRoom(userRoom(tenantId, snapshot.actorId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.messageDeleted, deletedPayload);
     const invalidatePayload: RealtimeConversationInvalidatePayload = { conversationId: snapshot.conversationId };
-    await emitter.emitToRoom(userRoom(tenantId, snapshot.actorId), MESSAGING_SOCKET_EVENTS.conversationInvalidate, invalidatePayload);
+    await emitter.emitToRoom(userRoom(tenantId, snapshot.actorId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationInvalidate, invalidatePayload);
   }
 
   /** Phân phối biên đã-đọc của một thành viên vào room của conversation. */
@@ -378,7 +381,7 @@ export function createMessagingDistributionService(deps: {
     // membership lỗi thì vẫn phát như cũ (realtime là đường phụ).
     const tenantId = conversation?.tenantId ?? null;
     if (memberIds) await evictNonMemberSockets(tenantId, payload.conversationId, memberIds);
-    await emitter.emitToRoom(conversationRoom(tenantId, payload.conversationId), MESSAGING_SOCKET_EVENTS.messageRead, payload);
+    await emitter.emitToRoom(conversationRoom(tenantId, payload.conversationId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.messageRead, payload);
   }
 
   /** Phân phối một sự kiện outbox đã commit. Payload hỏng/thiếu thì bỏ qua (consumer coi là đã xử lý). */

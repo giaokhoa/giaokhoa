@@ -37,8 +37,9 @@ describe('MessagingRealtimeProcessor — chống trùng theo outboxId', () => {
     aggregate: 'messaging',
     type: 'message_sent',
     payload: { conversationId: 'conv-1', messageId: 'msg-1' },
-    tenantId: 'tenant-1',
+    tenantId: null,
     spaceSlug: null,
+    spaceId: null,
     occurredAt: '2026-10-29T00:00:00.000Z',
   };
 

@@ -4,6 +4,7 @@ import { DelayedError, type Job } from 'bullmq';
 import type Redis from 'ioredis';
 import type { MessagingDistributionService } from '@giaokhoa/messaging';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
+import { scopedOutboxId } from '../db/routing/outbox-redis-scope';
 import type { OutboxEventJobData } from '../outbox-event-routes';
 
 /** Tên hàng đợi BullMQ của consumer phân phối realtime messaging. */
@@ -38,8 +39,8 @@ const DISTRIBUTION_RETRY_DELAY_MS = 5_000;
  * Flow của một job: relay duy nhất đã phát job từ một dòng
  * `outbox_events` (tên job là loại sự kiện, `jobId` là id của dòng,
  * dữ liệu job là toàn bộ dòng). Processor này:
- * 1. Chạy trong ngữ cảnh platform tường minh (phân phối quét xuyên
- *    tenant — cùng kỷ luật TENANT-1 với relay và consumer tiền lệ).
+ * 1. Kiểm phạm vi trong sổ trung tâm ở mỗi lượt và chạy trong phiên
+ *    kho của job (issue #11), không thay bằng quyền platform khi thiếu miền.
  * 2. Kiểm dấu đã-phân-phối theo `outboxId` trong Redis: đã có dấu
  *    thì job là lượt phát lại của một sự kiện đã phân phối xong —
  *    kết thúc ngay, không phân phối lần hai.
@@ -116,7 +117,7 @@ export class MessagingRealtimeProcessor extends WorkerHost {
    *
    * @param job Job do relay phát: `job.data` là toàn bộ dòng
    * outbox đã chuẩn hoá; định danh chống trùng là
-   * `job.data.outboxId` (đồng thời là `jobId` của job).
+   * cặp `(job.data.spaceId, job.data.outboxId)`.
    * @param token Token khoá job do worker của BullMQ cấp (NestJS
    * truyền qua `WorkerHost.process`) — cần cho thao tác hoãn job
    * `moveToDelayed`; các lượt gọi trực tiếp không qua worker
@@ -135,7 +136,7 @@ export class MessagingRealtimeProcessor extends WorkerHost {
       throw new Error('Messaging realtime job is missing its outboxId or event type');
     }
     await this.jobRunner.runForJob(data, async () => {
-      const markKey = `${MESSAGING_DISTRIBUTED_KEY_PREFIX}${data.outboxId}`;
+      const markKey = `${MESSAGING_DISTRIBUTED_KEY_PREFIX}${scopedOutboxId(data.outboxId)}`;
       try {
         // Đọc dấu nằm TRONG cùng phạm vi thử lại: lỗi đọc dấu
         // (Redis dấu lỗi thoáng qua) cũng phải hoãn job như mọi

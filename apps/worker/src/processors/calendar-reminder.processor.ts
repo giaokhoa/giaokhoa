@@ -2,11 +2,12 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { NotificationDeliveryService } from '../notification-delivery.service';
-import { tenantAls } from '../db/tenant-als';
+import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { resolveDefaultTenantId } from '../db/default-tenant';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
+import type { BackgroundJobScope } from '../db/routing/background-job-scope';
 
-export interface CalendarReminderJobData { eventId: string; userId: string; minutesBefore: number }
+export interface CalendarReminderJobData extends BackgroundJobScope { eventId: string; userId: string; minutesBefore: number }
 export interface CalendarReminderResult { status: 'notified' | 'duplicate' | 'skipped-suspended' | 'skipped-preference' | 'skipped-admin-disabled' | 'event-missing'; notificationId?: string }
 
 /**
@@ -28,14 +29,15 @@ export class CalendarReminderProcessor extends WorkerHost {
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,
     private readonly spaceDb: SpaceDatabaseService,
+    private readonly jobRunner: SpaceJobRunner,
   ) { super(); }
 
   /**
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<CalendarReminderJobData>): Promise<CalendarReminderResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
-    return tenantAls.run({ platform: true }, () => this.processInContext(job));
+    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
   private async processInContext(job: Job<CalendarReminderJobData>): Promise<CalendarReminderResult> {

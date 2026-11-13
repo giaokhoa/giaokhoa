@@ -23,6 +23,8 @@ export interface MessagingSocketIdentity {
    * Slug của trung tâm ở kho riêng mà danh tính này đã được phân giải TRONG kho của trung tâm đó; `null` khi danh tính thuộc đường kho chung (địa chỉ thường, trung tâm kho chung, hoặc phiên vận hành platform được tra ở kho chung ngay tại địa chỉ kho riêng). Gateway gắn slug này lên kết nối để mọi lượt đọc dữ kiện theo kết nối (vào room lúc nối, join/sync/typing) chạy trong đúng kho của trung tâm qua `withSpaceKysely` — danh tính đã phân giải ở kho riêng mà các lượt đọc đó rơi về kho chung thì hội thoại/membership của trung tâm vô hình với socket dù xác thực đã qua.
    */
   spaceSlug: string | null;
+  /** Định danh đăng ký của kho đã xác thực; khác nhau dù ID nội bộ của hai kho trùng nhau. */
+  spaceId?: string | null;
 }
 
 /** Phần handshake của Socket.IO mà lớp auth cần: `auth` mang theo + headers (chứa cookie). */
@@ -163,7 +165,7 @@ export class MessagingSocketAuth {
    * kho chung trả rỗng, và phiên chỉ tồn tại ở kho chung mang tới
    * địa chỉ này cũng không được phục vụ lặng lẽ từ kho chung.
    * Lượt suy tenant mặc định vẫn chạy trong ngữ cảnh platform
-   * nhưng store ALS PHẢI giữ `spaceSlug` của trung tâm: thay toàn
+   * nhưng store ALS PHẢI giữ `spaceSlug` và `spaceId` của trung tâm: thay toàn
    * bộ store bằng `{ platform: true }` trần sẽ đánh rơi slug và
    * handle định tuyến rơi về kho chung (đúng lớp lỗi A4 của Phần A
    * đã sửa ở các wrapper phía service).
@@ -199,12 +201,12 @@ export class MessagingSocketAuth {
     if (!user || user.suspended || user.deleted) return null;
     const tenantId = space
       ? await this.spaceDb.withSpaceKysely(space.slug, () =>
-          tenantAls.run({ platform: true, spaceSlug: space.slug }, () =>
+          tenantAls.run({ platform: true, spaceSlug: space.slug, spaceId: space.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle }, () =>
             this.repo.getUserDefaultTenantId(user.id),
           ),
         )
       : await tenantAls.run({ platform: true }, () => this.repo.getUserDefaultTenantId(user.id));
-    return { userId: user.id, username: user.username, tenantId, spaceSlug: space?.slug ?? null };
+    return { userId: user.id, username: user.username, tenantId, spaceSlug: space?.slug ?? null, spaceId: space?.spaceId ?? null };
   }
 
   /**
@@ -293,6 +295,7 @@ export class MessagingSocketAuth {
       username: user.username,
       tenantId: tid ?? null,
       spaceSlug: resolvedInSpace ? space!.slug : null,
+      spaceId: resolvedInSpace ? space!.spaceId : null,
     };
   }
 }

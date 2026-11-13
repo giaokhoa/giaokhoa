@@ -68,6 +68,16 @@ export class PermissionEvaluator {
   }
 
   /**
+   * Mọi giá trị phân quyền đều được tính từ một database cụ thể:
+   * contextId, tenantId và userId có thể trùng ở hai kho độc lập.
+   * Chọn đúng tên kho của handle đã chuẩn bị như khoá siteadmins,
+   * nên cache xuyên kho không thể trả về quyền sai.
+   */
+  private accessCacheScope(): string {
+    return this.spaceDb?.currentContextDatabaseName() ?? this.sharedDatabaseName;
+  }
+
+  /**
    * Site admin chỉ có quyền trong kho hiện tại. Danh sách admin
    * của platform không được phủ lên kho riêng khi ID trùng.
    */
@@ -211,7 +221,7 @@ export class PermissionEvaluator {
    */
   private platformScope<T>(fn: () => Promise<T>): Promise<T> {
     const spaceSlug = tenantAls.getStore()?.spaceSlug;
-    return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug } : {}) }, fn);
+    return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) }, fn);
   }
 
   /**
@@ -229,7 +239,7 @@ export class PermissionEvaluator {
    * — repository không tự lập ngữ cảnh này.
    */
   private async tenantGateInfo(tenantCtx: ContextRow): Promise<{ kind: string; status: string } | undefined> {
-    const cacheKey = `access:gateinfo:${tenantCtx.instanceId}:v${tenantCtx.version}`;
+    const cacheKey = `access:${this.accessCacheScope()}:gateinfo:${tenantCtx.instanceId}:v${tenantCtx.version}`;
     const cached = await this.cache.get<{ kind: string; status: string }>(cacheKey);
     if (cached !== undefined && cached !== null) return cached;
     const info = await this.platformScope(() => this.repo.getTenantGateInfo(tenantCtx.instanceId!));
@@ -246,7 +256,7 @@ export class PermissionEvaluator {
    * hiệu lực ở đúng cùng điều kiện như cache kết quả đánh giá.
    */
   private async membershipStatus(tenantCtx: ContextRow, userId: string): Promise<string | undefined> {
-    const cacheKey = `access:member:${tenantCtx.instanceId}:${userId}:v${tenantCtx.version}`;
+    const cacheKey = `access:${this.accessCacheScope()}:member:${tenantCtx.instanceId}:${userId}:v${tenantCtx.version}`;
     const cached = await this.cache.get<string | null>(cacheKey);
     if (cached !== undefined) return cached ?? undefined;
     const status = await this.platformScope(() => this.repo.getMembershipStatus(tenantCtx.instanceId!, userId));
@@ -274,7 +284,7 @@ export class PermissionEvaluator {
     const target = await this.contexts.getContext(contextId);
     const pathContexts = await this.contexts.getPathContexts(target);
     const stamp = this.contexts.pathVersionStamp(pathContexts);
-    const cacheKey = `access:${userId}:${capability}:${contextId}:${stamp}:${opts?.isGuest ? 'g' : 'u'}`;
+    const cacheKey = `access:${this.accessCacheScope()}:${userId}:${capability}:${contextId}:${stamp}:${opts?.isGuest ? 'g' : 'u'}`;
     // Cache kết quả được tra TRƯỚC mọi truy vấn DB còn lại của đường
     // đánh giá. Cổng tenant và lối tắt site admin vẫn áp ở lượt này
     // trước khi kết quả cache được dùng — thứ tự ra quyết định không
