@@ -11,21 +11,10 @@ import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 
 const PRESENCE_KEY_PREFIX = 'giaokhoa:messaging:presence:';
 const TYPING_KEY_PREFIX = 'giaokhoa:messaging:typing:';
-/** Mặc định của hai knob presence trong env (xem config/env.ts): TTL 600s, gia hạn mỗi 120s. */
 const PRESENCE_TTL_SECONDS_DEFAULT = 600;
 const PRESENCE_REFRESH_MS_DEFAULT = 120_000;
-/** Cửa sổ typing: một lần phát hiệu lực 4 giây, trong cửa sổ không phát lại. */
 const TYPING_TTL_SECONDS = 4;
 
-/**
- * Tầng realtime PHÍA KẾT NỐI của messaging (issue #33, chặng A1/A2).
- *
- * Chỉ nơi này chạm vào Socket.IO server tại tiến trình API: gateway lo xác thực + room theo kết nối, service này giữ adapter Redis, presence/typing (sống trong Redis — tạm thời, KHÔNG xuống Postgres; DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc đã đọc) và hai thao tác room theo lệnh nghiệp vụ (đẩy socket của thành viên bị gỡ, nối lại room 1–1 sau bỏ chặn).
- *
- * PHÂN PHỐI sự kiện nghiệp vụ (message.new, conversation.updated, message.read, message.deleted, conversation.invalidate) KHÔNG còn ở đây: từ issue #521, consumer phía worker tiêu thụ sự kiện outbox qua hàng đợi và phân phối qua Redis emitter theo luật ở package dùng chung `@giaokhoa/messaging` (nhà duy nhất của luật phân phối — cổng chặn 1–1 fail-closed và rà soát membership tại thời điểm phân phối nằm ở đó). Tên room cũng lấy từ package đó để nơi nối (gateway) và nơi phát (worker) không bao giờ lệch nhau.
- *
- * Mọi lỗi Redis ở các đường phụ (presence/typing) đều bị nuốt kèm log cảnh báo: realtime là đường phụ, không được làm hỏng nghiệp vụ.
- */
 @Injectable()
 export class MessagingRealtimeService implements OnModuleDestroy {
   private readonly logger = new Logger(MessagingRealtimeService.name);
@@ -36,9 +25,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   private stateClient: Redis | null = null;
   private readonly presenceTtlSeconds: number;
   private readonly presenceRefreshMs: number;
-  /**
-   * Sổ socket ĐANG nối tại chính tiến trình này (chủ thể presence `{tenant}:{userId}` → socketId). Vòng gia hạn presence chỉ gia hạn cho user có mặt trong sổ này: tiến trình chết thì sổ biến mất theo, không ai gia hạn nữa và TTL trong Redis tự hết hạn — giữ đúng tính chất lưới an toàn của TTL.
-   */
   private readonly localPresence = new Map<string, Set<string>>();
   private presenceTimer: NodeJS.Timeout | null = null;
 
@@ -52,9 +38,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     this.presenceRefreshMs = config.get<number>('MESSAGING_PRESENCE_REFRESH_MS') ?? PRESENCE_REFRESH_MS_DEFAULT;
   }
 
-  /**
-   * Gateway gắn server Socket.IO vào đây khi khởi tạo: tạo Redis adapter (hai connection pub/sub riêng). Redis lỗi lúc khởi động thì giữ adapter in-memory mặc định + cảnh báo — một tiến trình vẫn phân phối nội bộ được, không chặn app boot.
-   */
   attachServer(server: Server): void {
     this.server = server;
     try {
@@ -82,7 +65,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     this.server = null;
   }
 
-  /** Connection Redis cho presence/typing (tách khỏi cặp adapter). */
   private state(): Redis {
     if (!this.stateClient) {
       this.stateClient = new Redis(this.redisUrl, this.redisOptions);
@@ -93,21 +75,10 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     return this.stateClient;
   }
 
-  /** Tenant của một conversation (TENANT-1, #196) — namespace cho room/khoá realtime; lỗi đọc thì rơi về null (đoạn 'platform'). */
   private async tenantIdOfConversation(conversationId: string): Promise<string | null> {
     return this.repo.getConversationTenantId(conversationId).catch(() => null);
   }
 
-  /**
-   * Nối lại room hội thoại 1–1 cho socket hiện tại của cả hai phía
-   * sau khi bỏ chặn (tiếp quản PR #94): socket nối vào lúc đang chặn
-   * bị handshake bỏ qua khỏi room, và socket trong room có thể đã bị
-   * đẩy ra khi phân phối trong lúc chặn — không có bước nối lại thì
-   * presence và các sự kiện room sau bỏ chặn mất vĩnh viễn cho tới
-   * khi nối lại, trái bất biến "bỏ chặn thì mọi bề mặt hiện lại
-   * nguyên trạng". Đường phụ: lỗi bị nuốt kèm log, không lan ra
-   * lệnh bỏ chặn.
-   */
   async rejoinDirectConversationAfterUnblock(userId: string, otherUserId: string): Promise<void> {
     if (!this.server) return;
     try {
@@ -126,14 +97,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Đẩy MỌI socket của một user ra khỏi room của conversation — tầng
-   * dịch vụ gọi ngay khi gỡ thành viên (đồng bộ group), để socket của
-   * người bị gỡ thôi nhận mọi sự kiện của conversation (tin mới, đã
-   * đọc, typing, presence) chứ không chờ tới lần phân phối kế tiếp.
-   * Đi qua room riêng của user nên trúng mọi kết nối của họ trên mọi
-   * tiến trình (Redis adapter).
-   */
   async evictUserFromConversation(userId: string, conversationId: string): Promise<void> {
     if (!this.server) return;
     try {
@@ -144,14 +107,11 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  // --- presence (A2): tập socket đang mở của từng user trong Redis -------
 
-  /** Chủ thể presence trong Redis + sổ local: `{tenant}:{userId}` (TENANT-1, #196). */
   private presenceSubject(tenantId: string | null | undefined, userId: string): string {
     return `${tenantRealtimeSegment(tenantId, tenantAls.getStore()?.spaceId)}:${userId}`;
   }
 
-  /** Ghi nhận một socket vừa nối; là socket ĐẦU TIÊN của user thì phát trạng thái online. */
   async markConnected(tenantId: string | null, userId: string, socketId: string): Promise<void> {
     const subject = this.presenceSubject(tenantId, userId);
     this.trackLocalSocket(subject, socketId);
@@ -167,10 +127,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  /** Ghi nhận một socket vừa ngắt; là socket CUỐI CÙNG của user thì phát trạng thái offline. */
   async markDisconnected(tenantId: string | null, userId: string, socketId: string, broadcast = true): Promise<void> {
-    // Bỏ khỏi sổ local TRƯỚC: vòng gia hạn dừng ngay cho socket này,
-    // kể cả khi thao tác Redis dưới đây lỗi.
     const subject = this.presenceSubject(tenantId, userId);
     this.untrackLocalSocket(subject, socketId);
     try {
@@ -183,37 +140,11 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Ảnh chụp presence tại thời điểm người xem nối socket: liệt kê
-   * những người ĐANG trực tuyến trong số các thành viên có quan hệ
-   * hội thoại chung với người xem. Sự kiện `presence.changed` chỉ
-   * phát lúc trạng thái THAY ĐỔI (xem {@link broadcastPresence}) nên
-   * người đã trực tuyến từ trước khi người xem mở trang không phát
-   * sinh sự kiện nào — gateway phát ảnh chụp này ngay sau khi người
-   * xem nối để lấp khoảng trống đó.
-   *
-   * Phạm vi nhìn thấy bám đúng luật của {@link broadcastPresence}:
-   * chỉ thành viên của các hội thoại người xem tham gia mới được xét;
-   * ở hội thoại 1–1, phía bên kia đang có quan hệ chặn (bất kỳ chiều
-   * nào) bị loại — presence không lộ qua bề mặt 1–1 khi đang chặn.
-   * Trạng thái đọc thẳng từ cùng tập socket trong Redis mà
-   * {@link markConnected}/{@link markDisconnected} ghi (không dựng
-   * kho presence thứ hai); presence được ghi theo đoạn tenant của
-   * TỪNG hội thoại nên một người được kiểm ở mọi đoạn mà người xem
-   * thấy họ qua đó. Đường phụ như mọi đường presence: lỗi đọc bị nuốt
-   * kèm log và trả danh sách rỗng — trang vẫn mở bình thường, trạng
-   * thái sẽ tự lấp khi có sự kiện trực tiếp kế tiếp.
-   *
-   * @param viewerId - Người dùng vừa nối socket, chủ thể được nhận ảnh chụp.
-   * @returns Danh sách userId đang trực tuyến (đã khử trùng lặp).
-   */
   async listOnlineCoMemberIds(viewerId: string): Promise<string[]> {
     try {
       const conversations = await this.repo.listConversationsForUser(viewerId);
       if (!conversations.length) return [];
       const blockedCounterparts = new Set(await this.repo.listBlockedCounterpartIds(viewerId));
-      // userId → tập đoạn tenant của các hội thoại mà người xem thấy
-      // người đó qua đó (presence ghi theo đoạn của từng hội thoại).
       const segmentsByUser = new Map<string, Set<string>>();
       for (const c of conversations) {
         const members = await this.repo.listMembers(c.id);
@@ -254,7 +185,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  /** Ghi socket vào sổ local và bảo đảm vòng gia hạn đang chạy. */
   private trackLocalSocket(subject: string, socketId: string): void {
     let sockets = this.localPresence.get(subject);
     if (!sockets) {
@@ -268,7 +198,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  /** Bỏ socket khỏi sổ local; user hết socket tại tiến trình này thì vòng gia hạn không đụng tới nữa. */
   private untrackLocalSocket(subject: string, socketId: string): void {
     const sockets = this.localPresence.get(subject);
     if (!sockets) return;
@@ -276,13 +205,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     if (sockets.size === 0) this.localPresence.delete(subject);
   }
 
-  /**
-   * Một nhịp gia hạn presence (F2): nới lại TTL cho mọi user còn ít
-   * nhất một socket đang nối tại tiến trình này. Thiếu nhịp này, TTL
-   * đặt lúc nối là hạn chót duy nhất — user online quá TTL (mặc định
-   * 600s) bị coi là offline dù kết nối vẫn sống. Lỗi Redis bị nuốt
-   * như mọi đường phụ của presence.
-   */
   private async refreshLocalPresence(): Promise<void> {
     if (this.localPresence.size === 0) return;
     try {
@@ -295,12 +217,6 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Phát `presence.changed` tới room của mọi conversation mà user là
-   * thành viên — NGOẠI TRỪ room 1–1 với đối tác đang có quan hệ chặn
-   * (bất kỳ chiều nào): trạng thái trực tuyến không lộ qua bề mặt 1–1
-   * khi đang chặn (chuẩn app nhắn tin, issue #33). Room nhóm không đổi.
-   */
   private async broadcastPresence(userId: string, online: boolean): Promise<void> {
     if (!this.server) return;
     try {
@@ -325,13 +241,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     }
   }
 
-  // --- typing (A2): tín hiệu thoáng qua trong Redis, không xuống DB ------
 
-  /**
-   * Ghi nhận "đang nhập" và phát vào room của conversation — tối đa
-   * một lần mỗi cửa sổ TTL cho mỗi (conversation, user); client tự hết
-   * hạn hiển thị sau cửa sổ đó nếu không có tín hiệu mới.
-   */
   async noteTyping(conversationId: string, userId: string): Promise<void> {
     if (!this.server) return;
     try {

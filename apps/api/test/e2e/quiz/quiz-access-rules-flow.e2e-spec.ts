@@ -5,17 +5,6 @@ import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, r
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Quiz Chặng 2 (issue #30) — quy tắc thi + ghi đè, đối chiếu hồ sơ thiết kế mục B và ngữ nghĩa mod_quiz của Moodle:
- *  - mật khẩu vào thi lưu BĂM (không lộ qua API), sai/thiếu mật khẩu bị
- *    chặn ở server với mã lỗi riêng; subnet kiểm theo IP khách thật cả khi bắt đầu lượt lẫn khi nộp từng đáp án;
- *  - delay1/delay2: độ trễ bắt buộc giữa các lượt chốt;
- *  - quiz_overrides: hợp nhất theo từng trường user > nhóm (rộng nhất)
- *    > quiz, áp cho cửa sổ mở–đóng, số lượt, giới hạn giờ và cả mốc quá
- *    hạn của lượt đang chạy;
- *  - review options: bitmask 4 cửa sổ của Moodle cổng ở tầng server —
- *    khía cạnh bị tắt thì dữ liệu không rời server cho chủ lượt.
- */
 describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
   let app: INestApplication;
   let admin: string;
@@ -67,9 +56,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     };
     const s1 = await mkStudent();
     const s2 = await mkStudent();
-    // Fixture câu nguồn thuộc context khoá, nơi giáo viên được gán
-    // editingteacher và có question:useall; không dùng câu hệ thống
-    // ngoài phạm vi quyền rồi để đường tạo đề bỏ qua cổng đọc.
     const bankRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
       .send({ name: 'Stage2 bank', contextId: courseCtx.id });
     const bankCatId = bankRes.body.id as string;
@@ -89,7 +75,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     };
   }
 
-  /** Tạo pin kèm một slot qua hành trình gộp Đề (#226): soạn đề → ready → ghim. `examKind` của thân cũ ánh xạ sang `preset` của pin. */
   async function createPinWithSlot(ctx: Ctx, body: Record<string, unknown>): Promise<Record<string, any>> {
     const { examKind, name, ...rest } = body;
     const draft = await createExamDraft(app, ctx.teacher, (name as string) ?? 'Stage2 quiz');
@@ -138,7 +123,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     expect(JSON.stringify(info.body)).not.toContain('secret1');
     const ok = await startAttempt(ctx.student, quizId, { password: 'secret1' });
     expect(ok.status === 200 || ok.status === 201).toBe(true);
-    // Mật khẩu lưu dạng băm argon2, không phải dạng rõ.
     const rows = await pg.query('SELECT password_hash FROM exam_pins WHERE id = $1', [quizId]);
     expect(rows.rows[0].password_hash).toMatch(/^\$argon2/);
   });
@@ -162,7 +146,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const start = await startAttempt(ctx.student, allowedQuiz);
     expect(start.status === 200 || start.status === 201).toBe(true);
     const view = start.body as AttemptViewBody;
-    // Giáo viên thu hẹp subnet giữa chừng: nộp đáp án từ IP ngoài danh sách bị chặn.
     const patch = await http(app).patch(`/api/v1/exam-pins/${allowedQuiz}`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ subnet: '10.99.0.0/16' });
     expect(patch.status).toBe(200);
@@ -175,9 +158,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
 
   it('không có trễ giữa các lượt trong mô hình ghim: lượt đã xong không bao giờ chặn lượt tiếp theo', async () => {
     const ctx = await setup();
-    // delay1/delay2 của quiz cũ đã bỏ hẳn khỏi mô hình pin (hồ sơ gộp
-    // #226): làm xong một lượt thì bắt đầu lượt mới được ngay, không
-    // có mốc chờ và nextAttemptAt luôn null.
     const quizId = await createQuizWithSlot(ctx, {});
     await finishAttemptCorrectly(ctx, ctx.student, quizId);
     const info = await http(app).get(`/api/v1/exam-pins/${quizId}`).set('Authorization', `Bearer ${ctx.student}`);
@@ -195,24 +175,19 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     expect(blocked.status).toBe(403);
     expect(blocked.body.code).toBe('quiz.not_yet_open');
 
-    // Học sinh không có quyền tạo override.
     const forbidden = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.student}`)
       .send({ userId: ctx.studentId, timeOpen: null });
     expect(forbidden.status).toBe(403);
-    // Hai đích cùng lúc bị từ chối.
     const ambiguous = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ userId: ctx.studentId, groupId: ctx.studentId, timeOpen: null });
     expect(ambiguous.status).toBe(400);
     expect(ambiguous.body.code).toBe('quiz.override_target');
 
-    // Mở cửa sổ riêng cho một học sinh = cửa sổ kiểm tra bù → reason
-    // bắt buộc theo quy tắc của chính Chặng 2 (quiz.override_reason_required).
     const created = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ userId: ctx.studentId, timeOpen: new Date(Date.now() - 60_000).toISOString(), reason: 'Kiểm tra bù — mở cửa sổ riêng cho học sinh' });
     expect(created.status === 200 || created.status === 201).toBe(true);
     expect(created.body.userId).toBe(ctx.studentId);
     expect(created.body.hasPassword).toBe(false);
-    // Trùng đích bị từ chối.
     const dup = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ userId: ctx.studentId, timeOpen: null });
     expect(dup.status).toBe(400);
@@ -224,7 +199,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     expect(stillBlocked.status).toBe(403);
     expect(stillBlocked.body.code).toBe('quiz.not_yet_open');
 
-    // Xoá override thì cửa sổ gốc quay lại hiệu lực.
     const del = await http(app).delete(`/api/v1/exam-pin-overrides/${created.body.id}`).set('Authorization', `Bearer ${ctx.teacher}`);
     expect(del.status).toBe(200);
     const info = await http(app).get(`/api/v1/exam-pins/${quizId}`).set('Authorization', `Bearer ${ctx.student}`);
@@ -251,7 +225,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const blocked = await startAttempt(ctx.student, quizId);
     expect(blocked.status).toBe(403);
     expect(blocked.body.code).toBe('quiz.no_more_attempts');
-    // Học sinh không thuộc nhóm không bị giới hạn của nhóm.
     const other = await startAttempt(ctx.student2, quizId);
     expect(other.status === 200 || other.status === 201).toBe(true);
 
@@ -281,9 +254,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
 
   it('tuỳ chọn xem lại cổng các khía cạnh theo cửa sổ cho chủ sở hữu; giáo viên không bị cổng', async () => {
     const ctx = await setup();
-    // Cửa sổ hiện tại ngay sau nộp = "ngay sau" (2 phút): correctness/marks
-    // chỉ bật ở cửa sổ SAU ĐÓ → ẩn; rightAnswer bật mọi cửa sổ → hiện;
-    // reviewAttempt = 0 → nội dung câu bị ẩn hẳn ở mọi cửa sổ sau nộp.
     const quizId = await createQuizWithSlot(ctx, {
       reviewCorrectness: 0x00100 | 0x00010,
       reviewMarks: 0x00100 | 0x00010,
@@ -295,7 +265,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     expect(q1.fraction).toBeNull();
     expect(q1.mark).toBeNull();
     expect(typeof q1.rightAnswer).toBe('string');
-    // Giáo viên xem cùng lượt: không bị cổng.
     const teacherView = await http(app).get(`/api/v1/quiz-attempts/${submitted.attempt.id}`).set('Authorization', `Bearer ${ctx.teacher}`);
     const tq = (teacherView.body as AttemptViewBody).questions.find((x) => x.slot === 1)!;
     expect(tq.fraction).toBe(1);
@@ -310,17 +279,17 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const ctx = await setup();
     const mock = await createPinWithSlot(ctx, { name: 'Thi thử', preset: 'mock' });
     expect(mock.preset).toBe('mock');
-    expect(mock.lateEntryMinutes).toBe(15); // Điều 21 TT 24/2024
+    expect(mock.lateEntryMinutes).toBe(15);
     expect(mock.monitorEvents).toBe(true);
     expect(mock.attemptsAllowed).toBe(1);
-    expect(mock.reviewRightAnswer).toBe(16); // chỉ sau khi đóng
+    expect(mock.reviewRightAnswer).toBe(16);
     expect(mock.reviewMarks).toBe(16);
 
     const regular = await createPinWithSlot(ctx, { name: 'Thường xuyên', preset: 'regular', lateEntryMinutes: 5 });
     expect(regular.preset).toBe('regular');
-    expect(regular.lateEntryMinutes).toBe(5); // trường gửi kèm thắng preset
+    expect(regular.lateEntryMinutes).toBe(5);
     expect(regular.monitorEvents).toBe(false);
-    expect(regular.reviewRightAnswer).toBe(4368); // ngay sau nộp
+    expect(regular.reviewRightAnswer).toBe(4368);
   });
 
   it('vào muộn: bắt đầu sau timeOpen + lateEntryMinutes bị từ chối ngay cả khi cửa sổ đang mở', async () => {
@@ -340,11 +309,9 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const later = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
     const laterClose = new Date(Date.now() + 3 * 60 * 60_000).toISOString();
     const quizId = await createQuizWithSlot(ctx, { timeOpen: later, timeClose: laterClose });
-    // Chưa có override: cửa sổ gốc chưa mở.
     const early = await startAttempt(ctx.student, quizId);
     expect(early.status).toBe(403);
     expect(early.body.code).toBe('quiz.not_yet_open');
-    // Thiếu reason khi mở cửa sổ riêng cho một người → bị từ chối.
     const noReason = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ userId: ctx.studentId, timeOpen: new Date(Date.now() - 60_000).toISOString(), timeClose: laterClose });
     expect(noReason.status).toBe(400);
@@ -359,7 +326,6 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     expect(body.attempt.makeup).toBe(true);
     expect(body.attempt.appliedSettings?.userOverrideId).toBe(ov.body.id);
     expect(body.attempt.appliedSettings?.questionOrder).toEqual([ctx.qMc]);
-    // Học sinh khác không có override vẫn bị cửa sổ gốc chặn.
     const other = await startAttempt(ctx.student2, quizId);
     expect(other.status).toBe(403);
   });
@@ -367,29 +333,23 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
   it('quy tắc lý do ghi đè cũng ràng buộc PATCH: kéo dài thời gian hoặc gỡ lý do khỏi trạng thái đã hợp nhất bị từ chối', async () => {
     const ctx = await setup();
     const quizId = await createQuizWithSlot(ctx, {});
-    // Override lành tính lúc tạo: chỉ đổi số lượt — không cần reason.
     const created = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ userId: ctx.studentId, attempts: 3 });
     expect(created.status === 200 || created.status === 201).toBe(true);
-    // PATCH cộng giờ mà không bổ sung reason → bị từ chối như đường tạo
-    // (trước vòng fix này PATCH trả 200 — vòng qua cổng reason).
     const patched = await http(app).patch(`/api/v1/exam-pin-overrides/${created.body.id}`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ timeLimitSeconds: 3600 });
     expect(patched.status).toBe(400);
     expect(patched.body.code).toBe('quiz.override_reason_required');
-    // PATCH kèm reason → chấp nhận; trạng thái hợp nhất mang cả hai thay đổi.
     const withReason = await http(app).patch(`/api/v1/exam-pin-overrides/${created.body.id}`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ timeLimitSeconds: 3600, reason: 'Cộng giờ theo KHGD cá nhân (HS hoà nhập)' });
     expect(withReason.status).toBe(200);
     expect(withReason.body.timeLimitSeconds).toBe(3600);
     expect(withReason.body.attempts).toBe(3);
     expect(withReason.body.reason).toContain('KHGD');
-    // Gỡ reason trong khi override vẫn còn cộng giờ → cũng bị từ chối.
     const strip = await http(app).patch(`/api/v1/exam-pin-overrides/${created.body.id}`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ reason: null });
     expect(strip.status).toBe(400);
     expect(strip.body.code).toBe('quiz.override_reason_required');
-    // Gỡ luôn phần cộng giờ thì reason không còn bắt buộc nữa.
     const cleared = await http(app).patch(`/api/v1/exam-pin-overrides/${created.body.id}`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ timeLimitSeconds: null, reason: null });
     expect(cleared.status).toBe(200);
@@ -401,10 +361,8 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const ctx = await setup();
     const past = new Date(Date.now() - 60 * 60_000).toISOString();
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
-    // reviewRightAnswer chỉ mở ở cửa sổ sau khi đóng (bit 0x10).
     const quizId = await createQuizWithSlot(ctx, { timeOpen: past, timeClose: future, reviewRightAnswer: 16 });
     const submitted = await finishAttemptCorrectly(ctx, ctx.student, quizId);
-    // Nhóm ca muộn: override nhóm đóng sau 2 giờ nữa.
     const groupRes = await http(app).post(`/api/v1/courses/${ctx.courseId}/groups`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ name: 'Ca muộn' });
     const groupId = groupRes.body.id as string;
@@ -414,17 +372,12 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const gov = await http(app).post(`/api/v1/exam-pins/${quizId}/overrides`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ groupId, timeClose: lateClose });
     expect(gov.status === 200 || gov.status === 201).toBe(true);
-    // Đóng cửa sổ gốc của quiz về quá khứ: theo mốc riêng của học sinh
-    // thì đã "sau khi đóng", nhưng cả đợt còn ca muộn chưa thi.
     const patch = await http(app).patch(`/api/v1/exam-pins/${quizId}`).set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ timeClose: new Date(Date.now() - 60_000).toISOString() });
     expect(patch.status).toBe(200);
-    // Già hoá time_finish qua cửa sổ "ngay sau nộp" (2 phút) để cửa sổ
-    // xét theo mốc đóng của đợt, không theo mốc nộp.
     await pg.query(`UPDATE exam_attempts SET time_finish = now() - interval '10 minutes' WHERE id = $1`, [submitted.attempt.id]);
     const view1 = await http(app).get(`/api/v1/quiz-attempts/${submitted.attempt.id}`).set('Authorization', `Bearer ${ctx.student}`);
-    expect(view1.body.questions[0].rightAnswer).toBeNull(); // chưa lộ đáp án
-    // Gỡ override ca muộn → đợt đóng hẳn → đáp án hiện.
+    expect(view1.body.questions[0].rightAnswer).toBeNull();
     await http(app).delete(`/api/v1/exam-pin-overrides/${gov.body.id}`).set('Authorization', `Bearer ${ctx.teacher}`);
     const view2 = await http(app).get(`/api/v1/quiz-attempts/${submitted.attempt.id}`).set('Authorization', `Bearer ${ctx.student}`);
     expect(view2.body.questions[0].rightAnswer).not.toBeNull();
@@ -441,13 +394,11 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     const list = await http(app).get(`/api/v1/quiz-attempts/${attemptId}/events`).set('Authorization', `Bearer ${ctx.teacher}`);
     expect(list.body).toHaveLength(1);
     expect(list.body[0].type).toBe('focus_lost');
-    // Lượt vẫn tiếp tục bình thường sau sự kiện (chỉ ghi nhận).
     const submit = await http(app).post(`/api/v1/quiz-attempts/${attemptId}/submit`).set('Authorization', `Bearer ${ctx.student}`).send({});
     expect(submit.status === 200 || submit.status === 201).toBe(true);
     const afterSubmit = await http(app).post(`/api/v1/quiz-attempts/${attemptId}/events`).set('Authorization', `Bearer ${ctx.student}`)
       .send({ type: 'focus_lost' });
     expect(afterSubmit.status).toBe(400);
-    // Quiz không bật giám sát → từ chối ghi.
     const plain = await createQuizWithSlot(ctx, {});
     const start2 = await startAttempt(ctx.student2, plain);
     const attempt2 = (start2.body as AttemptViewBody).attempt.id;

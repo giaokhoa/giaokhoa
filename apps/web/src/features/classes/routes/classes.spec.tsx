@@ -7,9 +7,6 @@ import { ClassDetailPage } from './class-detail';
 import { ClassesPage } from './classes';
 import { ClassJoinPage } from './class-join';
 
-/**
- * Spec bề mặt lớp của GV (CLASS-1, issue #184): kiểm LUỒNG NGHIỆP VỤ qua endpoint thật (fetch được stub ở biên mạng): nạp học sinh theo định danh tạo tài khoản thì mật khẩu tạm hiện đúng một lần trong thông báo; import Excel trả báo cáo từng dòng (dòng lỗi không chặn dòng tốt); duyệt yêu cầu tự báo danh gọi đúng endpoint; gán vai chấm bài cho đồng GV gửi đúng bộ vai; kích hoạt lại học sinh đã đình chỉ là thêm lại vào roster. Đổi luật nghiệp vụ (mã lỗi/mật khẩu tạm/hàng chờ) thì các ca này phải đỏ.
- */
 const CLASS_ID = '01900000-0000-7000-8000-0000000000c1';
 const OWNER_ID = '01900000-0000-7000-8000-0000000000b1';
 const STUDENT_ID = '01900000-0000-7000-8000-0000000000e1';
@@ -72,7 +69,6 @@ const COURSE_A = {
 };
 const COURSE_B = { ...COURSE_A, id: '01900000-0000-7000-8000-0000000000c3', shortName: 'VAN10', fullName: 'Văn 10' };
 
-/** Gói overview phía chủ lớp (CLASS-2): đủ cờ quản trị, mọi khoá trong lớp. */
 const OWNER_OVERVIEW = {
   class: CLASS_VIEW,
   viewerRole: 'owner',
@@ -82,7 +78,6 @@ const OWNER_OVERVIEW = {
   courses: [COURSE_A, COURSE_B],
 };
 
-/** Gói overview phía học sinh (CLASS-2): chỉ khoá em đang ghi danh ACTIVE (Toán 10), mã vào lớp bị ẩn. */
 const MEMBER_OVERVIEW = {
   class: { ...CLASS_VIEW, joinCode: null },
   viewerRole: 'member',
@@ -92,10 +87,8 @@ const MEMBER_OVERVIEW = {
   courses: [COURSE_A],
 };
 
-/** Danh sách lớp phía học sinh: mọi cờ quản trị false, mã vào lớp bị ẩn — trang danh sách không được vẽ hành động nào ngoài lối vào chi tiết. */
 const MEMBER_CLASS_LIST = [{ ...CLASS_VIEW, joinCode: null, canCreate: false, canUpdate: false, canDelete: false, canManageRoster: false }];
 
-/** Danh sách lớp phía chủ lớp: đủ cờ — trang danh sách giữ nguyên mọi hành động như trước. */
 const OWNER_CLASS_LIST = [{ ...CLASS_VIEW, canCreate: true, canUpdate: true, canDelete: true, canManageRoster: true }];
 
 const REQUESTS = [
@@ -253,13 +246,6 @@ describe('Chi tiết lớp — roster và các luồng quản trị (CLASS-1)', 
   });
 });
 
-/**
- * Luồng nút "Chat lớp" ở trang chi tiết lớp (MSG-T2, issue #184):
- * người dùng bấm nút → trang gọi đúng endpoint ensure chat cấp lớp
- * phía messages → điều hướng sang trang Tin nhắn với tham số mở
- * đúng conversation mà server trả. Đổi endpoint hoặc deep-link thì
- * ca này phải đỏ.
- */
 describe('Chi tiết lớp — nút Chat lớp (MSG-T2)', () => {
   afterEach(() => {
     cleanup();
@@ -294,15 +280,6 @@ describe('Chi tiết lớp — nút Chat lớp (MSG-T2)', () => {
   });
 });
 
-/**
- * Dashboard theo lớp (CLASS-2, issue #184): cùng một trang chi tiết
- * lớp nhưng dựng theo gói overview server trả cho TỪNG vai — chủ lớp
- * thấy tổng quan + mọi khoá + bề mặt quản trị; học sinh chỉ thấy khoá
- * mình đang ghi danh ACTIVE trong lớp + giáo viên của lớp + Chat lớp,
- * không tải/gọi bất kỳ endpoint quản trị nào và trang không chứa bất
- * kỳ số điểm tổng hợp nào (điểm chỉ theo từng bài). Đổi luật lọc theo
- * vai ở client hoặc server thì các ca này phải đỏ.
- */
 describe('Chi tiết lớp — dashboard theo vai (CLASS-2)', () => {
   afterEach(() => {
     cleanup();
@@ -330,37 +307,22 @@ describe('Chi tiết lớp — dashboard theo vai (CLASS-2)', () => {
 
     expect(await screen.findByText('Khoá học của tôi trong lớp')).toBeTruthy();
     expect(screen.getByText('Toán 10')).toBeTruthy();
-    // Khoá Văn 10 có trong lớp nhưng em không ghi danh → không được thấy.
     expect(screen.queryByText('Văn 10')).toBeNull();
-    // Giáo viên của lớp hiện trong khối tổng quan; chat lớp vẫn mở được.
     expect(screen.getByText('Giáo viên của lớp')).toBeTruthy();
     expect(screen.getByText('Lê Cô')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chat lớp' })).toBeTruthy();
-    // Không bề mặt quản trị nào: roster, form nạp HS, phân quyền, sửa lớp.
     expect(screen.queryByText('Danh sách học sinh')).toBeNull();
     expect(screen.queryByText('Nguyễn Văn An')).toBeNull();
     expect(screen.queryByLabelText(/Họ tên học sinh/)).toBeNull();
     expect(screen.queryByText('Phân quyền trong lớp')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Sửa' })).toBeNull();
-    // Không bất kỳ số điểm tổng hợp nào trên dashboard.
     expect(document.body.textContent ?? '').not.toMatch(/điểm trung bình|điểm tổng|tổng điểm/i);
-    // Học sinh không gọi các endpoint quản trị của lớp.
     expect(calls.some((c) => c.url === `/api/v1/classes/${CLASS_ID}/roster`)).toBe(false);
     expect(calls.some((c) => c.url.endsWith('/roster/suspended'))).toBe(false);
     expect(calls.some((c) => c.url.endsWith('/join-requests'))).toBe(false);
   });
 });
 
-/**
- * Danh sách lớp theo vai + header trang chi tiết (issue #381): trang
- * danh sách vẽ hành động thuần theo cờ server trả trong đáp số
- * GET /classes — học viên không thấy "Tạo lớp"/"Sửa"/"Lưu trữ"/"Xoá"
- * (các thao tác mà API sẽ trả 403), chủ lớp thấy đủ; lối vào trang
- * chi tiết giữ cho mọi vai thuộc lớp. Header trang chi tiết không
- * được chớp liên kết "Sửa" trong lúc gói tổng quan chưa tải xong
- * (vai chưa được khẳng định thì không vẽ hành động quản trị). Đổi
- * luật vẽ theo cờ thì các ca này phải đỏ.
- */
 describe('Danh sách lớp — hành động theo cờ quyền của server (issue #381)', () => {
   afterEach(() => {
     cleanup();
@@ -384,9 +346,7 @@ describe('Danh sách lớp — hành động theo cờ quyền của server (iss
     renderList();
 
     expect(await screen.findByText('Lớp 10A1')).toBeTruthy();
-    // Header không có nút tạo lớp vì người gọi không có khả năng tạo lớp.
     expect(screen.queryByRole('link', { name: 'Tạo lớp' })).toBeNull();
-    // Mở rộng dòng lớp: chỉ còn lối vào trang chi tiết.
     await userEvent.click(screen.getByRole('button', { name: /Lớp 10A1/ }));
     expect(await screen.findByRole('link', { name: 'Danh sách học sinh' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Sửa' })).toBeNull();
@@ -409,9 +369,6 @@ describe('Danh sách lớp — hành động theo cờ quyền của server (iss
   });
 
   it('header trang chi tiết: gói tổng quan chưa trả về thì liên kết "Sửa" không có trong DOM', async () => {
-    // Gói overview treo (không bao giờ resolve): trang đang ở trạng
-    // thái tải — header chỉ được giữ nút Chat lớp, không vẽ "Sửa"
-    // theo mặc định "chưa biết vai thì coi như không phải học viên".
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {

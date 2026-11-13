@@ -14,21 +14,6 @@ import {
   uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * TENANT-0 (issue #168) — spec phủ 6 tiêu chí xong của issue:
- *  (1) đọc chéo tenant bằng id đoán → 404 đồng nhất trên các bề mặt đã
- *      phủ (khoá học, danh mục, cohort, bank, liên kết giám hộ, danh sách user của tenant);
- *  (2) cấu hình ghi ở tenant A không chạm tenant B / platform;
- *  (3) mỗi tenant đúng một bank trường theo kind, hai tenant cùng có;
- *  (4) giáo viên thuộc cả A+B chuyển tenant trong phiên, vai ở mỗi
- *      tenant độc lập (manager ở A không cho quyền quản trị ở B);
- *  (5) RLS: phiên SQL thô đã đặt GUC app.tenant_id (kể cả khi truy vấn
- *      KHÔNG lọc tenant_id) chỉ thấy dữ liệu của tenant đó — chạy dưới một role phụ không-superuser để RLS thật sự có hiệu lực;
- *  (6) seed: tenant-zero + tenant trường mặc định tồn tại, admin khởi
- *      tạo là thành viên của cả hai.
- *
- * Hai tenant A/B tạo qua API công khai; fixture gán riêng vai manager của tenant trước khi thực hiện thao tác nghiệp vụ qua HTTP. Chuyển phiên giữa hai tenant chỉ trong kho chung.
- */
 describe('Cô lập tenant (TENANT-0, #168)', () => {
   let app: INestApplication;
   let adminZero = '';
@@ -81,10 +66,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     const guardianBUser = await createUserViaApi(app, adminZero);
     const studentBUser = await createUserViaApi(app, adminZero);
 
-    // Gieo quyền của người quản trị TRONG tenant bằng fixture nền:
-    // quản trị platform không được tự thêm thành viên tenant chỉ nhờ
-    // quyền manager ở hệ thống. Mọi thao tác nghiệp vụ sau đó vẫn qua
-    // HTTP với vai manager tường minh gán tại context A/B.
     const allContexts = await must(await http(app).get('/api/v1/access/contexts').set(auth(adminZero)), 'list contexts') as { id: string; contextLevel: number; instanceId: string }[];
     const tenantCtxA = allContexts.find((c) => c.contextLevel === 20 && c.instanceId === tenantA);
     const tenantCtxB = allContexts.find((c) => c.contextLevel === 20 && c.instanceId === tenantB);
@@ -111,7 +92,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     };
     adminA = await switchTo(adminZero, tenantA);
     adminB = await switchTo(adminA, tenantB);
-    // adminZero đã bị thu hồi bởi lần chuyển đầu; đăng nhập lại cho các ca platform.
     adminZero = (await login(app, 'admin', 'Admin123!')).accessToken;
 
     const seedTenantContent = async (token: string, marker: string) => {
@@ -146,7 +126,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     bankSchoolA = (await schoolBankOf(adminA)).id;
     bankSchoolB = (await schoolBankOf(adminB)).id;
 
-    // Vai manager của giáo viên CHỈ ở context tenant A (tiêu chí 4).
     await must(await http(app).post('/api/v1/access/assignments').set(auth(adminZero)).send({
       userId: teacherId, roleId: managerRole, contextId: tenantCtxA.id,
     }), 'assign manager in tenant A');
@@ -167,11 +146,10 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(slugs).toContain('truong-mac-dinh');
     const mine = await must(await http(app).get('/api/v1/auth/tenants').set(auth(adminZero)), 'my tenants') as { slug: string }[];
     const mineSlugs = mine.map((t) => t.slug);
-    expect(mineSlugs).toEqual(['trang-chinh']); // Bộ chọn chỉ trả tenant của phiên hiện hành.
+    expect(mineSlugs).toEqual(['trang-chinh']);
   });
 
   it('(1) đọc chéo tenant bằng id đoán → 404 đồng nhất', async () => {
-    // Giáo viên đang ở phiên tenant A (đăng nhập mặc định về A).
     const course = await http(app).get(`/api/v1/courses/${courseB}`).set(auth(teacherTokenA));
     expect(course.status).toBe(404);
     const category = await http(app).get(`/api/v1/courses/categories/${categoryB}`).set(auth(teacherTokenA));
@@ -180,17 +158,14 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(cohort.status).toBe(404);
     const bank = await http(app).get(`/api/v1/question-banks/${bankSchoolB}`).set(auth(teacherTokenA));
     expect(bank.status).toBe(404);
-    // Danh sách trong phiên A không chứa tài nguyên B.
     const courses = await must(await http(app).get('/api/v1/courses').set(auth(teacherTokenA)), 'list courses A') as { id: string }[];
     expect(courses.map((c) => c.id)).toContain(courseA);
     expect(courses.map((c) => c.id)).not.toContain(courseB);
-    // Liên kết giám hộ của B không lộ trong phiên A; thu hồi chéo → 404.
     const links = await must(await http(app).get('/api/v1/guardian-links').set(auth(adminA)), 'list links A') as { id: string }[];
     expect(links.map((l) => l.id)).toContain(linkA);
     expect(links.map((l) => l.id)).not.toContain(linkB);
     const revoke = await http(app).delete(`/api/v1/guardian-links/${linkB}`).set(auth(adminA));
     expect(revoke.status).toBe(404);
-    // Người chỉ thuộc A không xem được danh sách user của B.
     const memberToken = (await login(app, memberAOnlyUsername, STRONG_PASSWORD)).accessToken;
     const usersB = await http(app).get(`/api/v1/tenants/${tenantB}/users`).set(auth(memberToken));
     expect(usersB.status).toBe(403);
@@ -206,7 +181,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(inB.find((s) => s.name === 'fullname')?.value).not.toBe('Trường A (spec)');
     const platform = await must(await http(app).get('/api/v1/site-config').set(auth(adminZero)), 'platform settings') as { name: string; value: unknown }[];
     expect(platform.find((s) => s.name === 'fullname')?.value).not.toBe('Trường A (spec)');
-    // Setting chỉ-platform không ghi đè được từ tenant (400, code site_config.platform_only).
     const platformOnly = await http(app).put('/api/v1/site-config/tenant-settings/core/sitepolicy').set(auth(adminA)).send({ value: 'x' });
     expect(platformOnly.status).toBe(400);
     expect((platformOnly.body as { code?: string }).code).toBe('site_config.platform_only');
@@ -227,18 +201,13 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   it('(4) chuyển tenant trong phiên; vai manager ở A không lan sang B', async () => {
     const current = await must(await http(app).get('/api/v1/tenants/current').set(auth(teacherTokenA)), 'current tenant') as { id: string };
     expect(current.id).toBe(tenantA);
-    // Ở A: xem được danh sách thành viên A nhờ vai manager tại context tenant A.
     const membersA = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(teacherTokenA));
     expect(membersA.status).toBe(200);
-    // Chuyển sang B: phiên mới mang tenant B, nhưng KHÔNG có vai quản trị ở B.
     const pair = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantB}`).set(auth(teacherTokenA)), 'teacher switch to B') as { accessToken: string };
     const currentB = await must(await http(app).get('/api/v1/tenants/current').set(auth(pair.accessToken)), 'current tenant B') as { id: string };
     expect(currentB.id).toBe(tenantB);
     const membersB = await http(app).get(`/api/v1/tenants/${tenantB}/members`).set(auth(pair.accessToken));
     expect(membersB.status).toBe(403);
-    // Phiên cũ bị chốt theo claim: access token cũ vẫn mang tenant A
-    // (đúng vòng đời token ngắn hạn hiện hữu), nhưng refresh token của
-    // family cũ đã bị thu hồi — không gia hạn tiếp được ở tenant cũ.
     const staleCurrent = await must(await http(app).get('/api/v1/tenants/current').set(auth(teacherTokenA)), 'current with old token') as { id: string };
     expect(staleCurrent.id).toBe(tenantA);
     const staleRefresh = await http(app).post('/api/v1/auth/refresh').send({ refreshToken: teacherRefreshA });
@@ -262,7 +231,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
       await pg.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantB]);
       const inB = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
       expect(inB.rows.map((r) => r.id)).toEqual([courseB]);
-      // Đường platform tường minh (cờ phiên) mới thấy cả hai.
       await pg.query(`SELECT set_config('app.platform', 'on', true)`);
       const all = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
       expect(all.rows.map((r) => r.id).sort()).toEqual([courseA, courseB].sort());
@@ -275,9 +243,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   });
 
   it('(7) N2 (TENANT-1): site admin là thành viên nhưng KHÔNG có vai trong cây tenant → bị chặn như người thường', async () => {
-    // Một site admin thứ hai: manager tại context HỆ THỐNG (quyền
-    // platform đầy đủ) + thành viên của tenant A, nhưng không một gán
-    // vai nào neo trong cây A.
     const support = await createUserViaApi(app, adminZero);
     const contexts = await must(await http(app).get('/api/v1/access/contexts').set(auth(adminZero)), 'list contexts') as { id: string; contextLevel: number; instanceId: string | null }[];
     const systemCtx = contexts.find((c) => c.contextLevel === 10);
@@ -290,16 +255,10 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
 
     const supportLogin = await login(app, support.username, STRONG_PASSWORD);
     const pair = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantA}`).set(auth(supportLogin.accessToken)), 'support switch to A') as { accessToken: string };
-    // Trong cây A: lối tắt site admin đã tắt — các bề mặt check
-    // capability TẠI context trong cây (category:manage tại context
-    // tenant/context danh mục) chặn thẳng tay dù actor là site
-    // admin, vì không có vai neo tại chỗ.
     const createCat = await http(app).post('/api/v1/courses/categories').set(auth(pair.accessToken)).send({ name: 'Danh mục N2 không được phép' });
     expect(createCat.status).toBe(403);
     const patchCat = await http(app).patch(`/api/v1/courses/categories/${categoryA}`).set(auth(pair.accessToken)).send({ name: 'Đổi tên trái phép' });
     expect(patchCat.status).toBe(403);
-    // Ngoài cây tenant, tài khoản vẫn có quyền xem registry từ platform,
-    // nhưng không xem được membership nếu không có vai trong tenant A.
     const tenants = await http(app).get('/api/v1/tenants').set(auth(supportLogin.accessToken));
     expect(tenants.status).toBe(200);
     const membersFromPlatform = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(supportLogin.accessToken));
@@ -310,7 +269,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     const pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
     const marker = `tenant_spec_${Date.now().toString(36)}`;
-    // Hai notification của cùng giáo viên, mỗi cái thuộc một tenant.
     await pg.query(
       `insert into notifications (user_id_to, subject, full_message, small_message, component, event_type, tenant_id)
        values ($1, $2, 'x', 'x', 'core_spec', 'tenant_spec', $3), ($1, $4, 'x', 'x', 'core_spec', 'tenant_spec', $5)`,
@@ -322,17 +280,14 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
       await pg.query(`GRANT SELECT ON course, notifications TO ${role}`);
       await pg.query('BEGIN');
       await pg.query(`SET ROLE ${role}`);
-      // Không đặt GUC nào: fail-closed — 0 dòng, KHÔNG lỗi.
       const noGuc = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
       expect(noGuc.rows).toEqual([]);
       const noGucNotif = await pg.query<{ subject: string }>(
         `SELECT subject FROM notifications WHERE event_type = 'tenant_spec' AND subject LIKE $1`, [`${marker}%`]);
       expect(noGucNotif.rows).toEqual([]);
-      // GUC rỗng '': N3 — không được ném lỗi ép kiểu uuid, vẫn 0 dòng.
       await pg.query(`SELECT set_config('app.tenant_id', '', true)`);
       const emptyGuc = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
       expect(emptyGuc.rows).toEqual([]);
-      // GUC tenant A: chỉ notification của A lộ ra ở tầng SQL.
       await pg.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantA]);
       const notifA = await pg.query<{ subject: string }>(
         `SELECT subject FROM notifications WHERE event_type = 'tenant_spec' AND subject LIKE $1`, [`${marker}%`]);
@@ -346,7 +301,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   });
 
   it('(9) notifications chéo tenant ở bề mặt API (TENANT-1): phiên A chỉ thấy thông báo của A, phiên B chỉ thấy của B', async () => {
-    // Dùng lại hai notification đã gieo ở ca (8) cho giáo viên.
     const teacherLogin = await login(app, teacherUsername, STRONG_PASSWORD);
     const itemsIn = async (token: string) => {
       const res = await must(await http(app).get('/api/v1/notifications/items?eventType=tenant_spec&limit=50').set(auth(token)), 'notification items') as { items: { subject: string }[] };
@@ -362,10 +316,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   });
 
   it('(10) đáp ứng người dùng của tenant chỉ gồm đúng 7 trường hồ sơ, không chứa passwordHash', async () => {
-    // Hợp đồng hình dạng của bề mặt người dùng tenant: đúng 7 trường
-    // phía tiêu thụ cần — thừa hay thiếu một trường đều là đổi hợp
-    // đồng. Trước đợt sửa này cả hai đáp ứng trả nguyên dòng `users`
-    // (15 trường, gồm `passwordHash`).
     const expectedKeys = ['deleted', 'email', 'firstName', 'id', 'lastName', 'suspended', 'username'];
 
     const list = await http(app).get(`/api/v1/tenants/${tenantA}/users`).set(auth(adminZero));
@@ -377,13 +327,11 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     }
     expect(JSON.stringify(list.body)).not.toContain('passwordHash');
     expect(JSON.stringify(list.body)).not.toContain('password_hash');
-    // Các trường cần thiết giữ đúng giá trị như trước khi sửa.
     const teacherRow = rows.find((r) => r.id === teacherId);
     expect(teacherRow?.username).toBe(teacherUsername);
     expect(teacherRow?.suspended).toBe(false);
     expect(teacherRow?.deleted).toBe(false);
 
-    // POST tạo người dùng ngay trong tenant: đáp ứng cùng hình dạng chiếu.
     const username = uniqueName('tuser');
     const created = await http(app).post(`/api/v1/tenants/${tenantA}/users`).set(auth(adminZero)).send({
       username, email: `${username}@example.com`, password: STRONG_PASSWORD, firstName: 'Tenant', lastName: 'User',
@@ -398,7 +346,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(JSON.stringify(created.body)).not.toContain('passwordHash');
     expect(JSON.stringify(created.body)).not.toContain('password_hash');
 
-    // Người vừa tạo xuất hiện trong danh sách GET với cùng hình dạng.
     const after = await must(await http(app).get(`/api/v1/tenants/${tenantA}/users`).set(auth(adminZero)), 'list tenant users after create') as Record<string, unknown>[];
     const createdRow = after.find((r) => r.id === createdBody.id);
     expect(createdRow).toBeDefined();
@@ -406,10 +353,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   });
 
   it('(11) quét sâu các bề mặt trả dữ liệu người dùng: không bề mặt nào chứa passwordHash', async () => {
-    // Tiêu chí toàn cục của đợt sửa: `passwordHash` không được xuất
-    // hiện trong BẤT KỲ đáp ứng HTTP nào — quét đệ quy theo khoá ở
-    // mọi mức lồng trên các bề mặt tiêu biểu trả dữ liệu người dùng,
-    // kèm quét dạng chuỗi cho dạng snake_case của tên cột.
     const containsKeyDeep = (value: unknown, key: string): boolean => {
       if (Array.isArray(value)) return value.some((v) => containsKeyDeep(v, key));
       if (value && typeof value === 'object') {

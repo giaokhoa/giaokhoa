@@ -7,29 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 
-/**
- * Trình sửa cây điều kiện availability cho section/course module.
- *
- * Cây giữ đúng hình dạng JSON phía API (khớp `availability-tree` ở tầng availability của backend, gốc Moodle core_availability): nút là `{ op: '&' | '|' | '!&' | '!|', c: [...], show?, showc? }`, lá là `{ type, ...tham số }` với sáu loại lá mà backend có evaluator:
- * - `date`: `{ d: '>=' | '<', t: epoch giây }`
- * - `grade`: `{ id: gradeItemId, min?, max? }` (min/max là phần trăm)
- * - `completion`: `{ id: cmId, state }` (1 hoàn thành, 2 đạt, 3 không đạt)
- * - `group`: `{ id: groupId }`, `grouping`: `{ id: groupingId }`
- * - `profile`: `{ field, operator: eq|contains|notempty|isempty, value? }`
- *
- * Lá thuộc loại lạ (plugin ngoài sáu loại trên) được giữ nguyên vẹn khi lưu và chỉ cho xoá — trình sửa không đoán cấu trúc của chúng. Component khởi tạo mô hình từ `value` tại thời điểm mount; nơi dùng phải truyền `key` riêng cho từng section/module để đổi mục tiêu là dựng lại state.
- */
 
-/** Toán tử của một nút cây availability. */
 export type AvailabilityOp = '&' | '|' | '!&' | '!|';
 
-/** Điều kiện lá: `type` quyết định các tham số còn lại. */
 export interface AvailabilityLeafModel {
   type: string;
   [key: string]: unknown;
 }
 
-/** Nút cây availability: toán tử, điều kiện con, cờ hiện thông tin ở gốc (`show`) và theo từng con (`showc`). */
 export interface AvailabilityNodeModel {
   op: AvailabilityOp;
   c: AvailabilityChildModel[];
@@ -39,7 +24,6 @@ export interface AvailabilityNodeModel {
 
 export type AvailabilityChildModel = AvailabilityNodeModel | AvailabilityLeafModel;
 
-/** Một lựa chọn id + nhãn cho các ô chọn (nhóm, grouping, module, mục điểm). */
 export interface AvailabilityOption {
   id: string;
   name: string;
@@ -49,13 +33,11 @@ const OPS: AvailabilityOp[] = ['&', '|', '!&', '!|'];
 const LEAF_TYPES = ['date', 'grade', 'completion', 'group', 'grouping', 'profile'] as const;
 const STANDARD_PROFILE_FIELDS = ['username', 'firstName', 'lastName', 'email'] as const;
 
-/** Phân biệt nút cây (có op + mảng c) với điều kiện lá. */
 export function isAvailabilityNode(child: AvailabilityChildModel): child is AvailabilityNodeModel {
   const node = child as AvailabilityNodeModel;
   return typeof node.op === 'string' && Array.isArray(node.c);
 }
 
-/** Chuẩn hoá một lá đã biết về đúng khoá chính tắc mà backend đọc (d/t cho date, id cho completion/group/grouping, field/operator/value cho profile); lá lạ giữ nguyên. */
 function normalizeLeaf(raw: Record<string, unknown>): AvailabilityLeafModel {
   switch (raw.type) {
     case 'date': {
@@ -92,7 +74,6 @@ function normalizeLeaf(raw: Record<string, unknown>): AvailabilityLeafModel {
   }
 }
 
-/** Chuẩn hoá đệ quy một nút cây thô từ API; op lạ rơi về '&', lá con giữ thứ tự và cờ showc/show như bản gốc. */
 function normalizeNode(raw: Record<string, unknown>): AvailabilityNodeModel {
   const children = Array.isArray(raw.c) ? raw.c : [];
   const node: AvailabilityNodeModel = {
@@ -107,9 +88,6 @@ function normalizeNode(raw: Record<string, unknown>): AvailabilityNodeModel {
   return node;
 }
 
-/**
- * Đưa cây availability thô từ API (hoặc null) về mô hình sửa được; trả null khi đầu vào trống hoặc không phải một nút cây hợp lệ.
- */
 export function availabilityToModel(raw: unknown): AvailabilityNodeModel | null {
   if (raw === null || raw === undefined || typeof raw !== 'object') return null;
   const record = raw as Record<string, unknown>;
@@ -117,21 +95,16 @@ export function availabilityToModel(raw: unknown): AvailabilityNodeModel | null 
   return normalizeNode(record);
 }
 
-/**
- * Đưa mô hình về payload gửi API: cây gốc không còn điều kiện con nào thì coi như không hạn chế (null), khớp cách backend lưu `availability`.
- */
 export function availabilityToPayload(model: AvailabilityNodeModel | null): unknown {
   if (!model || model.c.length === 0) return null;
   return model;
 }
 
-/** Thay danh sách con của một nút, đồng thời căn lại mảng `showc` cho khớp số con (mặc định hiện lý do). */
 function withChildren(node: AvailabilityNodeModel, children: AvailabilityChildModel[]): AvailabilityNodeModel {
   const showc = children.map((_, i) => node.showc?.[i] ?? true);
   return { ...node, c: children, showc };
 }
 
-/** Áp một hàm biến đổi lên nút tại đường dẫn (dãy chỉ số con từ gốc) và trả cây mới — không đột biến cây cũ. */
 function updateAtPath(
   node: AvailabilityNodeModel,
   path: number[],
@@ -146,7 +119,6 @@ function updateAtPath(
   return { ...node, c: children };
 }
 
-/** Định dạng epoch giây thành giá trị cho ô `datetime-local` theo giờ địa phương của trình duyệt. */
 function secondsToLocalInput(seconds: number): string {
   const date = new Date(seconds * 1000);
   if (Number.isNaN(date.getTime())) return '';
@@ -154,7 +126,6 @@ function secondsToLocalInput(seconds: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** Các danh sách lựa chọn mà trình sửa cần từ trang chứa (theo đúng khoá học đang sửa). */
 export interface AvailabilityEditorContext {
   groups: AvailabilityOption[];
   groupings: AvailabilityOption[];
@@ -169,7 +140,6 @@ interface LeafEditorProps {
   onChange: (next: AvailabilityLeafModel) => void;
 }
 
-/** Form sửa tham số của một điều kiện lá theo đúng loại; lá lạ chỉ hiện thông báo giữ nguyên. */
 function LeafEditor({ leaf, idPrefix, ctx, onChange }: LeafEditorProps) {
   const { t } = useTranslation('app');
   switch (leaf.type) {
@@ -454,7 +424,6 @@ interface NodeEditorProps {
   onRemoveSelf: (() => void) | null;
 }
 
-/** Một nút cây đệ quy: chọn toán tử, cờ show/showc, danh sách con và các nút thêm điều kiện/nhóm con. */
 function NodeEditor({ node, path, isRoot, ctx, onUpdate, onRemoveSelf }: NodeEditorProps) {
   const { t } = useTranslation('app');
   const [newLeafType, setNewLeafType] = useState<string>('date');
@@ -469,7 +438,6 @@ function NodeEditor({ node, path, isRoot, ctx, onUpdate, onRemoveSelf }: NodeEdi
     profile: t('availabilityLeafProfile'),
   };
 
-  /** Lá mặc định cho từng loại, bám đúng tham số tối thiểu mà evaluator phía backend cần. */
   function defaultLeaf(type: string): AvailabilityLeafModel {
     switch (type) {
       case 'date':
@@ -644,17 +612,10 @@ function NodeEditor({ node, path, isRoot, ctx, onUpdate, onRemoveSelf }: NodeEdi
 }
 
 export interface AvailabilityEditorProps extends AvailabilityEditorContext {
-  /** Cây availability thô hiện tại từ API (null = chưa có hạn chế). */
   value: unknown;
-  /** Gọi mỗi lần cây thay đổi, với payload đúng hình dạng API (null khi cây rỗng). */
   onChange: (next: unknown) => void;
 }
 
-/**
- * Trình sửa cây availability hoàn chỉnh cho một section hoặc một course
- * module: giữ state mô hình nội bộ khởi tạo từ `value`, mọi thay đổi đều
- * phát ra qua `onChange` dưới dạng payload JSON khớp cây phía API.
- */
 export function AvailabilityEditor({
   value,
   onChange,
@@ -667,8 +628,6 @@ export function AvailabilityEditor({
   const ctx: AvailabilityEditorContext = { groups, groupings, modules, gradeItems };
 
   function handleUpdate(path: number[], next: AvailabilityNodeModel) {
-    // NodeEditor con gọi lên với đường dẫn tích luỹ từ gốc kèm nút mới của
-    // chính nó — áp thay thế tại đúng đường dẫn đó lên mô hình gốc.
     const updated = updateAtPath(model, path, () => next);
     setModel(updated);
     onChange(availabilityToPayload(updated));

@@ -1,16 +1,9 @@
 import { z } from 'zod';
 import { searchIndexItemSchema, type SearchIndexItem, uuidIdSchema } from '@giaokhoa/contracts';
 
-/**
- * Validation của Search dùng Zod qua Standard Schema:
- * schema nền ở `@giaokhoa/contracts`, file này chỉ re-export và extend cho nhu cầu riêng của server.
- */
 export { searchIndexItemSchema };
 export type IndexItemDto = SearchIndexItem;
 
-/**
- * Schema chèn tài liệu thô — EXTEND từ schema nền ở contracts: các field `title/content/contextId/ownerId` chỉ tồn tại phía server (indexer nội bộ và kiểm thử index sót), không thuộc bề mặt contract công khai.
- */
 export const indexRawDocumentSchema = searchIndexItemSchema.extend({
   title: z.string().min(1),
   content: z.string(),

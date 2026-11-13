@@ -7,23 +7,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Lát #174-A (issue #174, khép ghi nhận `badge_awarded` phía worker):
- * đường cấp huy hiệu nền trước đây GHI THẲNG vào bảng `notifications` ngoài hàm luật phân phối chung (lớp G10) — không áp chính sách admin
- * (NB-7), không áp tuỳ chọn người dùng, không ghi dispatch log, và
- * không thể áp ghi đè tắt tiếng theo khoá (NB-4). Sau lát này `BadgeAwardProcessor` phát qua `NotificationDeliveryService` như hai đường NB-6. Oracle hành vi = luật `notify()` phía API sau NB-4:
- *
- * - Huy hiệu thuộc khoá bị người nhận tắt tiếng: assertion VẪN được
- *   cấp, nhưng không sinh thông báo; dispatch log có đúng trạng thái `skipped-course-mute` cho provider `badge_awarded`.
- * - Huy hiệu thuộc khoá khác / huy hiệu cấp site: thông báo tới bình
- *   thường, dispatch log `delivered`.
- * - Chạy lại job: không cấp trùng, không phát trùng (idempotent như
- *   trước — đường phát mới không phá bất biến này).
- *
- * Fixture theo đúng khuôn `engagement-jobs.spec.ts`: user/khoá/lớp tự tạo với hậu tố duy nhất trên tenant `worker-fixture`, khoá dạy thật phải có class_id (CHECK course_class_required_check, CLASS-0).
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắt tiếng theo khoá NB-4)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -38,8 +21,6 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
   let openBadgeId = '';
   let siteBadgeId = '';
 
-  // Lớp fixture cho tenant worker-fixture (chủ lớp là user fixture
-  // riêng) — mỗi lần gọi dựng một lớp mới, theo khuôn engagement-jobs.
   async function fixtureClassId(): Promise<string> {
     const ownerId = '01980000-0000-7000-8000-00000000c1a5';
     await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
@@ -88,7 +69,6 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
     }
     mutedCourseId = await fixtureCourse(`wk174am${suffix}`);
     openCourseId = await fixtureCourse(`wk174ao${suffix}`);
-    // Cả hai user đều hoàn thành cả hai khoá → đủ tiêu chí cho cả ba huy hiệu.
     for (const userId of [mutedUser, openUser]) {
       for (const courseId of [mutedCourseId, openCourseId]) {
         await db.insertInto('course_completions').values({ user_id: userId, course: courseId, status: 'complete', time_started: new Date(), time_completed: new Date() }).execute();
@@ -97,7 +77,6 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
     mutedBadgeId = await mkBadge(`WK174A muted-course badge ${suffix}`, 2, mutedCourseId, mutedCourseId);
     openBadgeId = await mkBadge(`WK174A open-course badge ${suffix}`, 2, openCourseId, openCourseId);
     siteBadgeId = await mkBadge(`WK174A site badge ${suffix}`, 1, null, openCourseId);
-    // Người nhận thứ nhất tắt tiếng khoá muted (khoá tuỳ chọn NB-4).
     await db.insertInto('user_preferences').values({ user_id: mutedUser, name: `notif.course.${mutedCourseId}`, value: 'mute' }).execute();
   });
 
@@ -106,17 +85,12 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
   it('huy hiệu của khoá bị tắt tiếng: assertion đã cấp, thông báo giữ lại, log gửi ghi skipped-course-mute', async () => {
     const processor = context.get(BadgeAwardProcessor);
     const result = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: mutedUser, trigger: 'test-174a' } } as never);
-    // Cả ba huy hiệu đều đủ tiêu chí và đều được CẤP cho người này
-    // (result.issued là id các assertion vừa ghi — khẳng định theo
-    // bảng badgeIssued bên dưới mới là đối chiếu theo huy hiệu).
     expect(result.issued).toHaveLength(3);
     const issued = await db.selectFrom('badge_issued').selectAll().where('user_id', '=', mutedUser).execute();
     expect((issued as { badge_id: string }[]).map((r) => r.badge_id)).toEqual(expect.arrayContaining([mutedBadgeId, openBadgeId, siteBadgeId]));
 
     const subjects = (await badgeNotificationsOf(mutedUser)).map((n) => n.subject);
-    // Huy hiệu của khoá bị mute: KHÔNG có thông báo.
     expect(subjects.some((s) => s.includes('muted-course badge'))).toBe(false);
-    // Hai huy hiệu còn lại tới bình thường (mute là theo khoá, không theo người).
     expect(subjects.some((s) => s.includes('open-course badge'))).toBe(true);
     expect(subjects.some((s) => s.includes('site badge'))).toBe(true);
 

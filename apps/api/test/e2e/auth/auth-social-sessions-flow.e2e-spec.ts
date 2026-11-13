@@ -5,24 +5,9 @@ import { generate } from 'otplib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD, uniqueName } from '../../support/identity-access-helpers';
 
-/**
- * Đợt Auth: đăng nhập xã hội (auth_oauth2), MFA trên luồng session-cookie, và quản lý phiên của tôi (report_usersessions).
- *
- * Oracle:
- * - Moodle `auth/oauth2/tests/auth_test.php::test_oauth2_complete_login`
- *   và `auth/oauth2/classes/api.php` (bản ghi linked_login, create_new_confirmed_account, khớp theo subject của issuer rồi tới email).
- * - Ngữ nghĩa factor_totp của Moodle `tool_mfa` — một nhân tố TOTP đã xác nhận
- *   phải được thoả mãn trước khi BẤT KỲ lần đăng nhập nào hoàn tất, kể cả luồng session-cookie (khoảng trống mà đợt này khép lại).
- * - Moodle `report/usersessions` (locallib.php + tests/lib_test.php):
- *   người dùng thấy các phiên của chính mình và có thể chấm dứt các phiên khác.
- *
- * Provider chỉ được giả lập tại biên HTTP của nó: một máy chủ HTTP cục bộ đóng vai các endpoint token + userinfo của Google/Facebook (nối qua các ghi đè env OAUTH_*_URL); mọi bước bên trong hệ thống này — trạng thái authorize, callback, khớp/tạo tài khoản, đăng nhập liên kết, bàn giao (handoff), phiên — đều chạy thật.
- */
 
-/** Hồ sơ userinfo giả lập theo authorization code: test đăng ký hồ sơ, máy chủ giả trả về khi code được đổi và userinfo được gọi. */
 const profilesByCode = new Map<string, Record<string, unknown>>();
 
-/** Máy chủ giả lập provider: POST /token đổi code → access token suy từ code; GET /userinfo trả hồ sơ đã đăng ký cho code đó. */
 function startMockProvider(): Promise<{ server: Server; baseUrl: string }> {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -65,12 +50,10 @@ function startMockProvider(): Promise<{ server: Server; baseUrl: string }> {
   });
 }
 
-/** Mã TOTP hiện tại cho secret (cùng thư viện otplib với server). */
 async function currentTotpCode(secret: string): Promise<string> {
   return generate({ secret });
 }
 
-/** Một mã 6 số chắc chắn không khớp cửa sổ kiểm chứng của secret. */
 async function wrongTotpCode(secret: string): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const valid = new Set<string>();
@@ -81,7 +64,6 @@ async function wrongTotpCode(secret: string): Promise<string> {
   throw new Error('no wrong-code candidate available');
 }
 
-/** Bật MFA cho user qua API, trả secret để sinh mã trong test. */
 async function enableMfaViaApi(app: INestApplication, accessToken: string): Promise<string> {
   const setup = await http(app).post('/api/v1/auth/mfa/totp/setup').set('Authorization', `Bearer ${accessToken}`);
   expect(setup.status).toBe(201);
@@ -100,10 +82,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
   beforeAll(async () => {
     const mock = await startMockProvider();
     provider = mock.server;
-    // Cấu hình issuer + trỏ điểm cuối provider vào máy chủ giả lập TRƯỚC
-    // khi dựng app (ConfigModule đọc env lúc khởi tạo). Tên biến bí mật
-    // được ghép từ mảnh khi gán để mã kiểm thử không chứa nguyên văn
-    // thông tin định danh của issuer.
     const envKey = (...parts: string[]): string => parts.join('_');
     process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-google-client-id';
     process.env[envKey('OAUTH', 'GOOGLE', 'CLIENT', 'SECRET')] = 'test-google-client-secret';
@@ -123,7 +101,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     provider.close();
   });
 
-  /** Chạy trọn luồng authorize → callback cho một code đã đăng ký hồ sơ; trả đáp ứng callback thô. */
   async function runCallback(issuer: 'google' | 'facebook', code: string, accessToken?: string) {
     const authorizeReq = http(app).get(`/api/v1/auth/oauth/${issuer}/${accessToken ? 'link' : 'authorize'}`);
     if (accessToken) authorizeReq.set('Authorization', `Bearer ${accessToken}`);
@@ -136,7 +113,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     return http(app).get(`/api/v1/auth/oauth/${issuer}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state!)}`);
   }
 
-  /** Đổi mã bàn giao trong Location của callback lấy đáp ứng đăng nhập. */
   async function exchangeHandoff(location: string) {
     const handoff = new URL(location, 'http://localhost').searchParams.get('handoff');
     expect(handoff).toBeTruthy();
@@ -162,29 +138,24 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     const callback = await runCallback('google', 'google-new');
     expect(callback.status).toBe(302);
     expect(callback.headers.location).toContain('/oauth/callback?handoff=');
-    // Cookie phiên được đặt như đăng nhập thường (cùng cơ chế phiên).
     const cookies = (callback.headers['set-cookie'] as unknown as string[]).join(';');
     expect(cookies).toContain('giaokhoa_session=');
 
     const body = await exchangeHandoff(callback.headers.location as string);
     expect(body.user.username).toBe(email.split('@')[0]);
-    // Mã bàn giao chỉ dùng được MỘT lần.
     const handoff = new URL(callback.headers.location as string, 'http://localhost').searchParams.get('handoff');
     const replay = await http(app).post('/api/v1/auth/oauth/handoff').send({ code: handoff });
     expect(replay.status).toBe(401);
     expect(replay.body.code).toBe('auth.oauth_handoff_invalid');
 
-    // Liên kết đã ghi; tài khoản không có mật khẩu.
     const links = await http(app).get('/api/v1/auth/oauth/links').set('Authorization', `Bearer ${body.accessToken}`);
     expect(links.status).toBe(200);
     expect(links.body.hasPassword).toBe(false);
     expect(links.body.links).toHaveLength(1);
     expect(links.body.links[0]).toMatchObject({ issuer: 'google', email });
-    // Không có mật khẩu ⇒ mọi mật khẩu đều sai ở luồng thường.
     const passwordLogin = await http(app).post('/api/v1/auth/token').send({ username: body.user.username, password: STRONG_PASSWORD });
     expect(passwordLogin.status).toBe(401);
 
-    // Lần đăng nhập Google tiếp theo đi theo LIÊN KẾT đã có (không tạo user mới).
     const again = await runCallback('google', 'google-new');
     const againBody = await exchangeHandoff(again.headers.location as string);
     expect(againBody.user.id).toBe(body.user.id);
@@ -228,7 +199,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
   });
 
   it('người đã đăng nhập có thể liên kết tài khoản facebook, và huỷ liên kết tôn trọng quy tắc phương thức đăng nhập cuối', async () => {
-    // User có mật khẩu liên kết Facebook (email provider khác email tài khoản vẫn được — chính user chứng minh sở hữu qua authorize).
     const user = await createUserViaApi(app, admin);
     const session = await login(app, user.username, STRONG_PASSWORD);
     profilesByCode.set('facebook-link', {
@@ -245,7 +215,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     const after = await http(app).get('/api/v1/auth/oauth/links').set('Authorization', `Bearer ${session.accessToken}`);
     expect(after.body.links).toHaveLength(0);
 
-    // User chỉ có OAuth (không mật khẩu): gỡ liên kết duy nhất bị chặn.
     const email = `${uniqueName('oauthonly')}@example.com`;
     profilesByCode.set('google-only', {
       sub: `g-${uniqueName('sub')}`, email, email_verified: true, given_name: 'Only', family_name: 'Oauth',
@@ -257,7 +226,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
       .set('Authorization', `Bearer ${oauthBody.accessToken}`);
     expect(blocked.status).toBe(400);
     expect(blocked.body.code).toBe('auth.last_login_method');
-    // Liên kết của người khác không gỡ được (404 như không tồn tại).
     const foreign = await http(app).delete(`/api/v1/auth/oauth/links/${oauthLinks.body.links[0].id}`)
       .set('Authorization', `Bearer ${session.accessToken}`);
     expect(foreign.status).toBe(404);
@@ -275,7 +243,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     expect(blocked.headers['set-cookie']).toBeUndefined();
     const challenge = blocked.body.challengeToken as string;
 
-    // Challenge của luồng session không dùng được ở endpoint verify của luồng token, và ngược lại.
     const crossToken = await http(app).post('/api/v1/auth/mfa/verify').send({ challengeToken: challenge, code: await currentTotpCode(secret) });
     expect(crossToken.status).toBe(401);
     expect(crossToken.body.code).toBe('auth.mfa_challenge_invalid');
@@ -294,7 +261,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     expect(me.status).toBe(200);
     expect(me.body.id).toBe(user.id);
 
-    // Và challenge của luồng token cũng không mở được phiên cookie.
     const tokenBlocked = await http(app).post('/api/v1/auth/token').send({ username: user.username, password: STRONG_PASSWORD });
     expect(tokenBlocked.body.mfaRequired).toBe(true);
     const crossSession = await http(app).post('/api/v1/auth/session/mfa/verify')
@@ -305,15 +271,11 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
 
   it('phiên của tôi: danh sách đánh dấu phiên hiện tại, phiên khác thu hồi được từng cái và hàng loạt (report_usersessions)', async () => {
     const user = await createUserViaApi(app, admin);
-    // Đăng nhập token qua /auth/token kèm User-Agent biết trước: họ token
-    // của lần đăng nhập này phải mang đúng thông tin máy khách đó.
     const firstRes = await http(app).post('/api/v1/auth/token')
       .set('User-Agent', 'Mozilla/5.0 (Token Browser)')
       .send({ username: user.username, password: STRONG_PASSWORD });
     expect(firstRes.status).toBe(201);
     const first = { accessToken: firstRes.body.accessToken as string, refreshToken: firstRes.body.refreshToken as string, userId: firstRes.body.user.id as string };
-    // Lần đăng nhập token thứ hai đi qua đường passport /auth/login để phủ
-    // cả hai đường cấp họ token.
     const secondRes = await http(app).post('/api/v1/auth/login')
       .set('User-Agent', 'Mozilla/5.0 (Passport Browser)')
       .send({ username: user.username, password: STRONG_PASSWORD });
@@ -342,33 +304,28 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     expect(webSessions[0]!.current).toBe(false);
     expect(webSessions[0]!.userAgent).toContain('Test Browser');
     expect(webSessions[0]!.ip).toBeTruthy();
-    // Mang cookie theo thì phiên web đó trở thành phiên hiện tại.
     const listWithCookie = await http(app).get('/api/v1/auth/sessions')
       .set('Authorization', `Bearer ${first.accessToken}`).set('Cookie', `giaokhoa_session=${webSessionId}`);
     const webNow = (listWithCookie.body.sessions as { id: string; current: boolean }[]).find((s) => s.id === webSessionId);
     expect(webNow!.current).toBe(true);
 
-    // Thu hồi phiên hiện tại qua route này bị từ chối (đăng xuất mới là đường đúng).
     const currentApi = apiSessions.find((s) => s.current)!;
     const revokeCurrent = await http(app).delete(`/api/v1/auth/sessions/${currentApi.id}`).set('Authorization', `Bearer ${first.accessToken}`);
     expect(revokeCurrent.status).toBe(400);
     expect(revokeCurrent.body.code).toBe('auth.cannot_revoke_current_session');
 
-    // Thu hồi một phiên web khác: phiên chết ngay.
     const revokeWeb = await http(app).delete(`/api/v1/auth/sessions/${webSessionId}`).set('Authorization', `Bearer ${first.accessToken}`);
     expect(revokeWeb.status).toBe(200);
     expect(revokeWeb.body.revoked).toBe(1);
     const deadMe = await http(app).get('/api/v1/auth/session/me').set('x-session-id', webSessionId);
     expect(deadMe.status).toBe(401);
 
-    // Thu hồi một phiên API khác: refresh token của nó chết theo family.
     const otherApi = apiSessions.find((s) => !s.current)!;
     const revokeApi = await http(app).delete(`/api/v1/auth/sessions/${otherApi.id}`).set('Authorization', `Bearer ${first.accessToken}`);
     expect(revokeApi.status).toBe(200);
     const deadRefresh = await http(app).post('/api/v1/auth/refresh').send({ refreshToken: second.refreshToken });
     expect(deadRefresh.status).toBe(401);
 
-    // Phiên của user khác không thu hồi được từ tài khoản này.
     const stranger = await createUserViaApi(app, admin);
     const strangerSession = await login(app, stranger.username, STRONG_PASSWORD);
     void strangerSession;
@@ -378,7 +335,6 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     expect(foreign.status).toBe(404);
     expect(foreign.body.code).toBe('auth.session_not_found');
 
-    // Huỷ mọi phiên khác: chỉ phiên hiện tại sống.
     const third = await login(app, user.username, STRONG_PASSWORD);
     void third;
     const bulk = await http(app).delete('/api/v1/auth/sessions/others').set('Authorization', `Bearer ${first.accessToken}`);

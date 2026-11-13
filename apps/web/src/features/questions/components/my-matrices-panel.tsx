@@ -1,8 +1,3 @@
-/**
- * Hai panel ma trận của trang ngân hàng câu hỏi: "Ma trận của tôi"
- * (bank ma trận cá nhân của giáo viên + form đề xuất đóng góp) và
- * section ma trận chung trong khu vực Ngân hàng hệ thống (chọn bank chung + lọc theo môn → danh sách ma trận, sao chép về bank cá nhân, hàng chờ đóng góp để duyệt tại dòng). Panel "của tôi" nhận dữ liệu trang đã nạp; panel hệ thống tự nạp danh sách + hàng chờ của bank đang chọn qua các hook của lib/questions-data vì state chọn bank là cục bộ của section. Đột biến đều qua hook của lib/questions-data; làm mới sau đột biến qua các hàm refresh của trang truyền xuống.
- */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -15,40 +10,22 @@ import { useBankMatrices, useBankMatrixContributions, useCopyMatrixToMyBank, use
 import type { BankLite, MatrixLite } from '../types/questions';
 import { matrixStatusKey } from '../utils/shared';
 
-/** Props của panel "Ma trận của tôi". */
 export interface MyMatricesPanelProps {
-  /** Các ma trận trong bank ma trận cá nhân (trang nạp bằng hook useBankMatrices). */
   myMatrices: MatrixLite[];
-  /** Các bank ma trận chung để chọn đích đề xuất đóng góp. */
   sharedMatrixBanks: BankLite[];
-  /** Danh sách môn để hiển thị tên môn của ma trận. */
   subjects: SubjectLite[];
-  /** Làm mới cụm bank ma trận + danh sách bank cá nhân (hàm của trang). */
   refreshMatrixBanks: () => void;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/** Props của panel ma trận chung (Ngân hàng hệ thống). */
 export interface SystemMatricesPanelProps {
-  /** Các bank ma trận chung để chọn bank đang xem. */
   sharedMatrixBanks: BankLite[];
-  /** Danh sách môn để hiển thị tên môn + lọc ma trận theo môn. */
   subjects: SubjectLite[];
-  /** Làm mới cụm bank ma trận + danh sách bank cá nhân (hàm của trang). */
   refreshMatrixBanks: () => void;
-  /** Làm mới danh sách + hàng chờ đóng góp của một bank chung (hàm của trang). */
   refreshSharedMatrices: (bankId: string) => void;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/**
- * Panel "Ma trận của tôi".
- *
- * @param props - Dữ liệu, hàm làm mới và bộ báo thông báo của trang.
- * @returns Danh sách ma trận cá nhân + form đề xuất đóng góp.
- */
 export function MyMatricesPanel({
   myMatrices,
   sharedMatrixBanks,
@@ -65,7 +42,6 @@ export function MyMatricesPanel({
 
   const subjectName = (subjectId: string) => subjects.find((s) => s.id === subjectId)?.name ?? '';
 
-  /** Xoá một ma trận của mình ngay tại dòng (§9). */
   async function deleteMyMatrix(matrixId: string) {
     if (!window.confirm(t('matrixDeleteConfirm'))) return;
     try {
@@ -77,7 +53,6 @@ export function MyMatricesPanel({
     }
   }
 
-  /** Đề xuất đóng góp một ma trận ready của mình lên bank ma trận chung. */
   async function proposeMatrixToBank(matrixId: string, targetBankId: string) {
     if (!matrixId || !targetBankId) return;
     try {
@@ -90,15 +65,6 @@ export function MyMatricesPanel({
 
   return (
     <>
-  {/* Khu vực RIÊNG — Ma trận của tôi (MB-1, issue #111): phân
-      biệt hẳn với Ngân hàng hệ thống. Danh sách ma trận của
-      chính giáo viên hiện THẲNG trong trang, không bọc thẻ
-      thu/mở — chốt 23:43 ngày 26/10/2026 (sổ quyết định mục
-      B); nút Ma trận mới + Nhập từ file nằm ở PageHeader,
-      Sửa/Xoá tại dòng. Dữ liệu nạp ngay khi vào trang qua các
-      query của component (trước đây mở thẻ còn gọi
-      refreshMatrixBanks — các đột biến trong trang vẫn tự
-      refresh như cũ). */}
   <div className="space-y-4">
         {myMatrices.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('dashboard:emptyTable')}</p>
@@ -181,12 +147,6 @@ export function MyMatricesPanel({
   );
 }
 
-/**
- * Panel ma trận chung trong khu vực Ngân hàng hệ thống.
- *
- * @param props - Dữ liệu, các hàm làm mới và bộ báo thông báo của trang.
- * @returns Section ma trận chung: chọn bank + lọc môn + danh sách + hàng chờ đóng góp.
- */
 export function SystemMatricesPanel({
   sharedMatrixBanks,
   subjects,
@@ -209,7 +169,6 @@ export function SystemMatricesPanel({
       !matrixSubjectFilter || m.subjectId === matrixSubjectFilter,
   );
 
-  /** Copy một ma trận chung về ngân hàng ma trận cá nhân (cầu nối hai khu vực, MB-1). */
   async function copyMatrixToMyBank(matrixId: string) {
     try {
       await copyMatrixMutation.mutateAsync(matrixId);
@@ -220,7 +179,6 @@ export function SystemMatricesPanel({
     }
   }
 
-  /** Duyệt/từ chối một đóng góp ma trận (từ chối hỏi lý do — bắt buộc). */
   async function reviewMatrixContribution(bankId: string, contributionId: string, approve: boolean) {
     try {
       if (approve) {

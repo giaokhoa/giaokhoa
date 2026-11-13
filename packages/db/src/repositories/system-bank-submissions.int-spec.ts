@@ -1,8 +1,3 @@
-/**
- * Tích hợp kho ngân hàng hệ thống riêng (#13): mọi chuyển trạng thái
- * duyệt được thực hiện bằng repository Kysely production trên PostgreSQL
- * thật, migration được áp từ rỗng; không giả lập transaction/khóa.
- */
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SystemBankPackage } from '@giaokhoa/contracts';

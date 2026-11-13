@@ -14,17 +14,6 @@ import { UndoRedo } from '@tiptap/extensions';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import './math.js';
 
-/**
- * Đảm bảo có một paragraph để viết tiếp ngay sau block đang được chọn
- * (công thức tách dòng, ảnh): nếu block tiếp theo đã là một paragraph
- * trống thì chỉ chuyển con trỏ vào đó; chưa có thì chèn một paragraph
- * trống mới. Dùng cho phím Enter khi một block nguyên tử đang được chọn —
- * mặc định ProseMirror không tạo được dòng mới từ vị trí đó.
- *
- * @param editor - Trình soạn thảo hiện tại.
- * @param nodeName - Tên node block đang xét (`blockMath` hoặc `image`).
- * @returns `true` nếu đã xử lý (có paragraph tiếp nối và con trỏ đã vào đó).
- */
 function ensureContinuationParagraph(editor: Editor, nodeName: string): boolean {
   const { selection, doc, schema } = editor.state;
   if (!(selection instanceof NodeSelection) || selection.node.type.name !== nodeName) {
@@ -58,7 +47,6 @@ function ensureContinuationParagraph(editor: Editor, nodeName: string): boolean 
   return true;
 }
 
-/** BlockMath có thêm phím Enter để xuống dòng viết tiếp sau công thức. */
 const ContinuableBlockMath = BlockMath.extend({
   addKeyboardShortcuts() {
     return {
@@ -67,10 +55,6 @@ const ContinuableBlockMath = BlockMath.extend({
   },
 });
 
-/**
- * Image có thêm phím Enter để xuống dòng viết tiếp sau ảnh, và tập thuộc tính bị thu đúng về hợp đồng contracts (`src`/`alt`/`title`):
- * extension gốc còn khai `width`/`height` — để chúng lọt vào tài liệu thì `richTextImageNodeSchema` (strictObject) sẽ từ chối tài liệu ở biên API, nên ở đây khai lại đúng ba thuộc tính của hợp đồng.
- */
 const ContinuableImage = Image.extend({
   addAttributes() {
     return {
@@ -86,22 +70,6 @@ const ContinuableImage = Image.extend({
   },
 });
 
-/**
- * Bộ extension Tiptap của hợp đồng rich text: node `doc`, `paragraph`,
- * `text`, các mark định dạng chữ cơ bản (`bold`, `italic`, `strike`,
- * `code`, `underline`), danh sách không thứ tự (`bulletList`/`listItem`),
- * công thức toán (`inlineMath`/`blockMath` của extension Mathematics,
- * render bằng KaTeX), ảnh (`image`), và lịch sử soạn thảo (`UndoRedo`
- * từ `@tiptap/extensions` — chỉ là hành vi soạn, không đổi hình dạng
- * tài liệu).
- *
- * Bộ này là nguồn sự thật duy nhất về hình dạng tài liệu mà trình soạn
- * thảo ({@link RichTextEditor}) và trình hiển thị chỉ-đọc
- * ({@link RichTextView}) cùng chấp nhận — khớp với
- * `richTextDocumentSchema` của `@giaokhoa/contracts`. Thêm node/mark mới là
- * thay đổi hợp đồng nội dung: phải nới schema ở contracts trong cùng feat
- * và có đường render tương ứng ở phía xem.
- */
 export const plainTextExtensions: Extensions = [
   Document,
   Paragraph,

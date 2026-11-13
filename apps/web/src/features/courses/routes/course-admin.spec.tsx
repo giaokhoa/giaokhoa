@@ -7,11 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { CourseAdminPage } from './course-admin';
 
-/**
- * Spec khu xây dựng khoá học (course builder) theo endpoint thật của controller Courses: section qua POST/PATCH/DELETE /courses/:id/sections[/:sectionId], module qua POST /courses/:id/modules và PATCH/DELETE /courses/:id/modules/:cmId, nội dung hiện có qua GET /courses/:id/content. Khu này chỉ render khi người dùng thuộc teaching của khoá — stub dưới đây khai ảnh chụp quyền
- * (GET /users/me/capabilities) của giáo viên có gán editingteacher tại
- * context khoá kèm grade:viewall và course:update, đúng nguồn PermissionsProvider dùng để phân loại teaching.
- */
 const TEACHER_ID = '01900000-0000-7000-8000-0000000000a2';
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';
 const CATEGORY_ID = '01900000-0000-7000-8000-000000000001';
@@ -93,9 +88,7 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lại mọi lời gọi; mô phỏng giáo viên của khoá COURSE_ID trên các điểm dò quyền. */
 
-/** Render trang quản trị khoá trong đúng khung provider của ứng dụng thật. */
 function renderCourseAdmin() {
   const router = createMemoryRouter([{ path: '/courses/:id/admin', element: <CourseAdminPage /> }], {
     initialEntries: [`/courses/${COURSE_ID}/admin`],
@@ -125,12 +118,6 @@ const COHORT_ROW = {
   visible: true,
 };
 
-/**
- * Stub cho giáo viên có thêm `course:managegroups` tại context khoá
- * và `cohort:manage` — đúng hai capability backend đòi cho khu
- * grouping và thành viên cohort. Trạng thái grouping/thành viên giữ trong
- * closure để các thao tác POST/DELETE phản ánh lại ở lần GET sau.
- */
 function stubFetchGroups(calls: RecordedCall[]) {
   let groupingList: { id: string; courseId: string; name: string; idNumber: string; description: string }[] = [];
   let groupingGroupList: (typeof GROUP_ROW)[] = [];
@@ -263,7 +250,6 @@ describe('Nhóm grouping và thành viên cohort (giáo viên có năng lực qu
     await userEvent.click(screen.getByRole('button', { name: 'Tạo grouping' }));
     const groupingRow = await screen.findByTestId(`grouping-${GROUPING_ID}`);
     await userEvent.click(within(groupingRow).getByRole('button', { name: 'Xem nhóm trong grouping' }));
-    // Select của @giaokhoa/ui: bấm trigger theo nhãn rồi bấm option theo chữ hiển thị.
     await userEvent.click(within(groupingRow).getByLabelText('Nhóm cần thêm vào grouping'));
     await userEvent.click(await screen.findByRole('option', { name: 'Nhóm 1' }));
     await userEvent.click(within(groupingRow).getByRole('button', { name: 'Thêm vào grouping' }));
@@ -318,16 +304,6 @@ describe('Nhóm grouping và thành viên cohort (giáo viên có năng lực qu
 const SUSPENDED_ID = '01900000-0000-7000-8000-000000000009';
 const ENROL_INSTANCE_ID = '01900000-0000-7000-8000-000000000300';
 
-/**
- * Stub cho khu quản trị NHÓM của khoá (GN-1/GN-3, issue #234): một nhóm
- * "Nhóm 1" có sẵn một thành viên; danh sách ghi danh của khoá gồm thành
- * viên đó (đang học), một học sinh đang học chưa thuộc nhóm và một học
- * sinh đã tạm khoá — bộ chọn thêm thành viên chỉ được hiện học sinh đang
- * ghi danh hiệu lực chưa thuộc nhóm. `manageGroups: false` mô phỏng giáo
- * viên không có `course:managegroups`: thấy nhóm/thành viên nhưng không
- * có công cụ quản lý. Trạng thái nhóm/thành viên/chế độ nhóm giữ trong
- * closure để các thao tác ghi phản ánh ở lần đọc sau.
- */
 function stubFetchGroupAdmin(calls: RecordedCall[], opts?: { manageGroups?: boolean }) {
   const manageGroups = opts?.manageGroups ?? true;
   let groupList = [{ ...GROUP_ROW }];
@@ -449,8 +425,6 @@ describe('Quản trị nhóm khoá học (GN-1/GN-3, issue #234)', () => {
     await userEvent.click(within(groupRow).getByRole('button', { name: 'Xem thành viên' }));
     await waitFor(() => expect(within(groupRow).getByText(new RegExp(MEMBER_ID))).toBeTruthy());
 
-    // Bộ chọn chỉ có học sinh đang ghi danh hiệu lực chưa thuộc nhóm:
-    // học sinh đã tạm khoá không xuất hiện.
     await userEvent.click(await within(groupRow).findByLabelText('Học sinh cần thêm vào nhóm'));
     expect(await screen.findByRole('option', { name: NEW_MEMBER_ID })).toBeTruthy();
     expect(screen.queryByRole('option', { name: SUSPENDED_ID })).toBeNull();
@@ -488,7 +462,6 @@ describe('Quản trị nhóm khoá học (GN-1/GN-3, issue #234)', () => {
     renderCourseAdmin();
 
     const groupRow = await screen.findByTestId(`group-${GROUP_ID}`);
-    // Nút Đổi tên chỉ hiện sau khi ảnh chụp quyền (course:managegroups) tải xong — chờ bất đồng bộ.
     await userEvent.click(await within(groupRow).findByRole('button', { name: 'Đổi tên' }));
     const nameInput = within(groupRow).getByLabelText('Tên mới của nhóm Nhóm 1');
     await userEvent.clear(nameInput);
@@ -522,7 +495,6 @@ describe('Quản trị nhóm khoá học (GN-1/GN-3, issue #234)', () => {
     renderCourseAdmin();
 
     await screen.findByTestId(`group-${GROUP_ID}`);
-    // Thẻ chế độ nhóm chỉ hiện sau khi ảnh chụp quyền tải xong — chờ bất đồng bộ.
     await userEvent.click(await screen.findByLabelText('Chế độ nhóm'));
     await userEvent.click(await screen.findByRole('option', { name: 'Nhóm tách biệt' }));
     await userEvent.click(screen.getByRole('checkbox', { name: /Ép buộc chế độ này/ }));

@@ -2,34 +2,11 @@ import { sql } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { EntryRow, QCategoryRow, QuestionBankRow, QuestionRow } from './questions';
 
-/**
- * Kho dữ liệu ngân hàng câu hỏi trên Kysely: quản lý bank, danh mục, đề xuất đóng góp và tra cứu ảnh hưởng tới đề/pin, giáo viên quản lý bank và YCCĐ của chương trình.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Cột đọc khai tường minh kèm bí danh camelCase
- *   (`'bank_id as bankId'`) dùng chung cho select và returning —
- *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
- * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL — hai nghĩa không được lẫn; điều kiện lọc động dựng bằng cách xâu chuỗi `.where` theo khuôn T-13, không truyền `undefined` vào điều kiện.
- * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
- *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường minh, như `buildBank` cấp id trước để dựng context) và lấy dòng qua `returning`.
- * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`QuestionBanksDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
- * - CTE đệ quy của `listOutcomeIdsForNode` giữ NGUYÊN VĂN thân
- *   truy vấn SQL của bản cũ trước chuyển đổi, chỉ đổi đường thực thi sang `sql` của Kysely: `QueryResult.rows` đã có kiểu tường minh
- *   (MT-15) nên bỏ được lớp ép kiểu `as unknown as { rows }` của
- *   bản cũ.
- *
- * Điểm chuyển tiếp C-7 đã được hấp thụ ở đợt access (#651):
- * giao dịch `buildBank` nay mở phía Kysely và ghi thẳng qua `insertBank` tại đây cùng `insertCategory` của repository câu hỏi.
- */
 
 export type { QuestionBankRow } from './questions';
 
-/** Dòng `question_categories` thuộc một bank (cùng hình dạng với `QCategoryRow` của repository câu hỏi). */
 export type BankCategoryRow = QCategoryRow;
 
-/** Dòng `question_bank_contributions`. */
 export interface ContributionRow {
   id: string;
   targetBankId: string;
@@ -48,20 +25,13 @@ export interface ContributionRow {
   updatedAt: Date;
 }
 
-/** Loại món của bank (bank_kind) — 'question' là mặc định của mọi luồng QB hiện hữu. */
 export const BANK_KINDS = ['question', 'exam', 'matrix'] as const;
 export type BankKind = typeof BANK_KINDS[number];
 
-/** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
 export type QuestionBanksDb = CentreDb | CentreTx;
-/** Handle giao dịch kho trung tâm (tham số bắt buộc của các thao tác đa bước). */
 export type QuestionBanksTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Giá trị ghi (hợp đồng công khai — khớp `$inferInsert` của repository cũ)
-// ---------------------------------------------------------------------------
 
-/** Giá trị chèn `question_banks` (id do phía gọi cấp trước khi cần dựng context trỏ về bank). */
 export interface NewQuestionBank {
   id?: string;
   tenantId?: string | null;
@@ -77,7 +47,6 @@ export interface NewQuestionBank {
   updatedAt?: Date;
 }
 
-/** Giá trị chèn `question_bank_contributions`. */
 export interface NewContribution {
   id?: string;
   targetBankId: string;
@@ -96,9 +65,6 @@ export interface NewContribution {
   updatedAt?: Date;
 }
 
-// ---------------------------------------------------------------------------
-// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
-// ---------------------------------------------------------------------------
 
 const QUESTION_BANK_COLUMNS = [
   'id', 'tenant_id as tenantId', 'name', 'bank_kind as bankKind', 'scope',
@@ -122,10 +88,6 @@ const CONTRIBUTION_COLUMNS = [
   'created_at as createdAt', 'updated_at as updatedAt',
 ] as const;
 
-/**
- * Cột của phép nối câu hỏi ↔ entry trong `listQuestionsWithEntryInCategories`:
- * bí danh mang tiền tố `q`/`entry` để hai bảng không đè tên cột lên nhau trong dòng phẳng của Kysely; phương thức tự lắp lại hình dạng lồng `{ q, entry }` của hợp đồng cũ trước khi trả.
- */
 const QUESTION_WITH_ENTRY_COLUMNS = [
   'q.id as qId', 'q.category as qCategory', 'q.qtype as qQtype',
   'q.created_by as qCreatedBy', 'q.modified_by as qModifiedBy',
@@ -146,9 +108,6 @@ const QUESTION_WITH_ENTRY_COLUMNS = [
   'entry.created_at as entryCreatedAt', 'entry.updated_at as entryUpdatedAt',
 ] as const;
 
-// ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
-// ---------------------------------------------------------------------------
 
 function bankInsertValues(v: NewQuestionBank) {
   return {
@@ -187,9 +146,6 @@ function contributionInsertValues(v: NewContribution) {
   };
 }
 
-/**
- * Ánh xạ patch của `question_bank_contributions`: mọi trường dòng có mặt trong patch (khác `undefined`) đều được ghi như bản cũ trải patch; `updated_at` luôn bị ghi đè bằng thời điểm cập nhật ở cuối, đúng thứ tự trải của bản cũ.
- */
 function contributionUpdateSet(patch: Partial<ContributionRow>) {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
@@ -210,7 +166,6 @@ function contributionUpdateSet(patch: Partial<ContributionRow>) {
   };
 }
 
-/** Ánh xạ patch của `question_bank_entries` — cùng quy ước trải patch + `updated_at` như trên. */
 function entryUpdateSet(patch: Partial<EntryRow>) {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
@@ -226,26 +181,18 @@ function entryUpdateSet(patch: Partial<EntryRow>) {
   };
 }
 
-/**
- * Kho dữ liệu lớp BANK của feat Ngân hàng câu hỏi chung (issue #70):
- * bank, category thuộc bank, đề xuất đóng góp, và các tra cứu tín hiệu (use_count từ exam_slots, đội ngũ giáo viên cho bank trường, tên hiển thị người dùng cho dòng ghi công).
- */
 export class QuestionBanksRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Handle gốc của repository (điểm mở giao dịch + truy vấn ngoài giao dịch). */
   db(): CentreDb {
     return this.handle;
   }
 
-  /** Mở giao dịch trên handle gốc và chạy `fn` với handle giao dịch. */
   transaction<T>(fn: (tx: QuestionBanksTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
-  // --- banks -------------------------------------------------------------------
 
-  /** Chèn bank mới (id do service cấp trước để dựng context trỏ về bank). */
   async insertBank(v: NewQuestionBank, tx?: QuestionBanksDb): Promise<QuestionBankRow> {
     const db = tx ?? this.handle;
     return db
@@ -255,7 +202,6 @@ export class QuestionBanksRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Bank theo id. */
   async getBank(id: string, tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -265,10 +211,6 @@ export class QuestionBanksRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Nhiều bank theo tập id trong một truy vấn (DL-04, issue #489):
-   * bản theo lô của `getBank` cho phép suy bank của nhiều category; thứ tự trả về không cam kết, caller tự tra theo id.
-   */
   async getBanksByIds(ids: string[], tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
     if (!ids.length) return [];
     const db = tx ?? this.handle;
@@ -279,11 +221,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /**
-   * Bank trường của NHIỀU tenant trong một truy vấn (DL-04, issue #489): bản theo lô của `getSchoolBank` — cùng điều kiện lọc
-   * (scope school + tenant + loại món), caller lấy dòng đầu tiên theo
-   * từng tenant như đường đọc lẻ lấy dòng đầu tiên của truy vấn.
-   */
   async listSchoolBanksByTenantIds(tenantIds: string[], kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
     if (!tenantIds.length) return [];
     const db = tx ?? this.handle;
@@ -296,9 +233,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /**
-   * Bank theo (scope, scope_ref_id) cho NHIỀU đích trong một truy vấn (DL-04, issue #489): bản theo lô của `getBankByScopeRef`, dùng cho phép suy bank khoá từ context của nhiều category.
-   */
   async listBanksByScopeRefs(scope: string, scopeRefIds: string[], kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
     if (!scopeRefIds.length) return [];
     const db = tx ?? this.handle;
@@ -311,7 +245,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /** Mọi bank (danh sách nhỏ — tầng service lọc theo quyền của từng actor). */
   async listBanks(tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
     const db = tx ?? this.handle;
     return db
@@ -322,7 +255,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /** Bank cá nhân của một chủ sở hữu cho một loại món (duy nhất theo ràng buộc partial unique (owner, kind)). */
   async getPersonalBank(ownerId: string, kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -334,7 +266,6 @@ export class QuestionBanksRepository {
       .executeTakeFirst();
   }
 
-  /** Bank trường duy nhất của MỘT tenant cho một loại món (TENANT-0, #168). */
   async getSchoolBank(tenantId: string, kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -346,7 +277,6 @@ export class QuestionBanksRepository {
       .executeTakeFirst();
   }
 
-  /** Bank platform (Ngân hàng hệ thống) duy nhất cho một loại món — tenant_id NULL. */
   async getPlatformBank(kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -357,7 +287,6 @@ export class QuestionBanksRepository {
       .executeTakeFirst();
   }
 
-  /** Tenant sở hữu một khoá học (điểm neo tenant cho bank khoá / đề / ma trận). */
   async getCourseTenantId(courseId: string, tx?: QuestionBanksDb): Promise<string | undefined> {
     const db = tx ?? this.handle;
     const row = await db
@@ -368,7 +297,6 @@ export class QuestionBanksRepository {
     return row?.tenantId;
   }
 
-  /** Bank theo (scope, scope_ref_id, kind) — bank tổ theo cohort, bank khoá theo course. */
   async getBankByScopeRef(scope: string, scopeRefId: string, kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -380,9 +308,7 @@ export class QuestionBanksRepository {
       .executeTakeFirst();
   }
 
-  // --- danh mục & câu hỏi của một bank -----------------------------------------
 
-  /** Category thuộc bank (bank_id tường minh), thứ tự tạo. */
   async listCategoriesOfBank(bankId: string, tx?: QuestionBanksDb): Promise<BankCategoryRow[]> {
     const db = tx ?? this.handle;
     const rows = await db
@@ -393,7 +319,6 @@ export class QuestionBanksRepository {
     return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
   }
 
-  /** Mọi câu hỏi nằm trong các category cho trước, kèm entry (trạng thái + latestVersion). */
   async listQuestionsWithEntryInCategories(categoryIds: string[], tx?: QuestionBanksDb): Promise<{ q: QuestionRow; entry: EntryRow }[]> {
     if (categoryIds.length === 0) return [];
     const db = tx ?? this.handle;
@@ -426,9 +351,7 @@ export class QuestionBanksRepository {
     }));
   }
 
-  // --- signals -------------------------------------------------------------------
 
-  /** Số slot đề đang tham chiếu từng câu hỏi (use_count — tín hiệu QB-4; slot nay nằm trên exam version). */
   async countSlotsByQuestionIds(questionIds: string[], tx?: QuestionBanksDb): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     if (questionIds.length === 0) return out;
@@ -443,9 +366,6 @@ export class QuestionBanksRepository {
     return out;
   }
 
-  /**
-   * Các version đề ĐANG CHỨA một câu hỏi (truy nguồn chiều ngược câu → đề): mỗi hàng là một exam version có slot trỏ tới câu — một đề có nhiều version chứa câu thì có nhiều hàng, để người soạn thấy đúng các bản đề bị ảnh hưởng khi sửa/rút câu.
-   */
   async listContainingExams(questionId: string, tx?: QuestionBanksDb): Promise<{ examId: string; examVersionId: string; version: number; name: string }[]> {
     const db = tx ?? this.handle;
     return db
@@ -461,7 +381,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /** Các LẦN GHIM đang dùng một câu hỏi (distinct, qua exam version của pin) — phục vụ rút câu + cấm xoá vật lý. */
   async listPinIdsUsingQuestion(questionId: string, tx?: QuestionBanksDb): Promise<string[]> {
     const db = tx ?? this.handle;
     const rows = await db
@@ -475,7 +394,6 @@ export class QuestionBanksRepository {
     return rows.map((r) => r.pinId);
   }
 
-  /** Số question attempt đã tồn tại cho một câu hỏi (cấm xoá vật lý khi > 0). */
   async countAttemptsOfQuestion(questionId: string, tx?: QuestionBanksDb): Promise<number> {
     const db = tx ?? this.handle;
     const row = await db
@@ -486,9 +404,7 @@ export class QuestionBanksRepository {
     return Number(row?.n ?? 0);
   }
 
-  // --- people ----------------------------------------------------------------------
 
-  /** Tên hiển thị của người dùng (cho dòng ghi công + bộ lọc tác giả). */
   async getUserDisplayNames(userIds: string[], tx?: QuestionBanksDb): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     const ids = [...new Set(userIds.filter(Boolean))];
@@ -506,10 +422,6 @@ export class QuestionBanksRepository {
     return out;
   }
 
-  /**
-   * Id mọi người dùng đang giữ ít nhất một role thuộc nhóm archetype cho
-   * trước ở bất kỳ context nào — đội ngũ giáo viên cho bank trường.
-   */
   async listUserIdsWithArchetypes(archetypes: string[], tx?: QuestionBanksDb): Promise<string[]> {
     const db = tx ?? this.handle;
     const rows = await db
@@ -522,7 +434,6 @@ export class QuestionBanksRepository {
     return rows.map((r) => r.userId);
   }
 
-  /** Mọi YCCĐ thuộc một node chương trình và các node con cháu của nó (CTE đệ quy trên cây node) — phục vụ lọc khám phá theo node (QB-4). */
   async listOutcomeIdsForNode(nodeId: string, tx?: QuestionBanksDb): Promise<string[]> {
     const db = tx ?? this.handle;
     const result = await sql<{ id: string }>`
@@ -536,7 +447,6 @@ export class QuestionBanksRepository {
     return result.rows.map((r) => r.id);
   }
 
-  /** Kiểm chứng nhanh một node chương trình có tồn tại (lọc khám phá theo node). */
   async outcomeIdsOfNode(nodeId: string, tx?: QuestionBanksDb): Promise<string[]> {
     const db = tx ?? this.handle;
     const rows = await db
@@ -547,9 +457,7 @@ export class QuestionBanksRepository {
     return rows.map((r) => r.id);
   }
 
-  // --- contributions -----------------------------------------------------------------
 
-  /** Chèn đề xuất đóng góp. */
   async insertContribution(v: NewContribution, tx?: QuestionBanksDb): Promise<ContributionRow> {
     const db = tx ?? this.handle;
     return db
@@ -559,7 +467,6 @@ export class QuestionBanksRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Đề xuất theo id. */
   async getContribution(id: string, tx?: QuestionBanksDb): Promise<ContributionRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -569,7 +476,6 @@ export class QuestionBanksRepository {
       .executeTakeFirst();
   }
 
-  /** Đề xuất thuộc một bank đích, lọc tuỳ chọn theo trạng thái/người đề xuất. */
   async listContributions(filter: { targetBankId: string; status?: string; proposerId?: string }, tx?: QuestionBanksDb): Promise<ContributionRow[]> {
     const db = tx ?? this.handle;
     let query = db
@@ -584,7 +490,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /** Cập nhật đề xuất (duyệt/từ chối). */
   async updateContribution(id: string, patch: Partial<ContributionRow>, tx?: QuestionBanksDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -594,9 +499,7 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  // --- misc ---------------------------------------------------------------------------
 
-  /** Xoá vật lý một câu hỏi — FK cascade dọn entry/version/answers/options/links (chỉ gọi sau khi qua guard slot/attempt). */
   async deleteQuestionRow(questionId: string, tx?: QuestionBanksDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -605,7 +508,6 @@ export class QuestionBanksRepository {
       .execute();
   }
 
-  /** Cập nhật entry (trạng thái rút câu QB-3). */
   async updateEntry(id: string, patch: Partial<EntryRow>, tx?: QuestionBanksDb): Promise<void> {
     const db = tx ?? this.handle;
     await db

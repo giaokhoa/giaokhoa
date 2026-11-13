@@ -3,9 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DataTable, type DataColumn } from '#components/data-table';
 
-/**
- * Spec của bảng dữ liệu dùng chung: ghim bốn cơ chế mà TanStack Table phải gánh cho mọi bảng của app — sắp xếp theo cột, lọc toàn bảng qua ô lọc ở thanh công cụ, phân trang, và ẩn/hiện cột qua menu Cột — để không trang nào phải tự chế lại logic bảng. Kèm hai biến thể chân bảng: mặc định hiện "Trang X / Y" và ẩn cụm nút khi chỉ có một trang; biến thể khoảng dòng (trang gọi truyền rangeInfo) hiện khoảng dòng đang hiển thị và luôn bày cụm nút kèm nút số trang. Kèm ca hồi quy chống tràn ở màn hẹp: với 7 trang, hàng chân bảng và cụm nút phải mang class cho phép xuống dòng để không nút nào bị cắt khuất khỏi bề rộng khả dụng.
- */
 
 interface Row {
   id: string;
@@ -44,7 +41,6 @@ const LABELS = {
   filterPlaceholder: 'Lọc trong bảng…',
 };
 
-/** Nhãn của biến thể chân bảng khoảng dòng: thêm rangeInfo vào bộ nhãn mặc định. */
 const RANGE_LABELS = {
   ...LABELS,
   rangeInfo: (from: number, to: number, total: number) => `Hiển thị ${from}–${to} trong ${total} dòng`,
@@ -68,8 +64,6 @@ describe('Khối DataTable (TanStack Table)', () => {
     expect(bodyRows(container)).toHaveLength(10);
     expect(screen.getByText('Trang 1 / 3')).toBeInTheDocument();
 
-    // Hai nút cùng nhãn trợ năng "Sau" (trang kế và trang cuối, theo
-    // đúng mẫu block); nút trang kế đứng trước trong DOM.
     await userEvent.click(screen.getAllByRole('button', { name: 'Sau' })[0]!);
 
     expect(bodyRows(container)).toHaveLength(10);
@@ -82,11 +76,9 @@ describe('Khối DataTable (TanStack Table)', () => {
     const firstCellText = () => bodyRows(container)[0]?.querySelectorAll('td')[1]?.textContent;
 
     await userEvent.click(screen.getByRole('button', { name: 'Điểm' }));
-    // Điểm nhỏ nhất trong dữ liệu là 0 (hàng r1: (0*7)%100).
     expect(firstCellText()).toBe('0');
 
     await userEvent.click(screen.getByRole('button', { name: 'Điểm' }));
-    // Điểm lớn nhất là 98 ((14*7)%100).
     expect(firstCellText()).toBe('98');
   });
 
@@ -95,13 +87,9 @@ describe('Khối DataTable (TanStack Table)', () => {
     await userEvent.type(screen.getByPlaceholderText('Lọc trong bảng…'), 'Học viên 2');
 
     const rows = bodyRows(container);
-    // Khớp "Học viên 20".."Học viên 25" = 6 hàng, một trang ("Học
-    // viên 02" không chứa chuỗi con "Học viên 2").
     expect(rows).toHaveLength(6);
     expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
     expect(screen.getByText('Học viên 25')).toBeInTheDocument();
-    // Chỉ một trang thì cụm nút chuyển trang ẩn hẳn, không bày các nút
-    // Trước/Sau vô hiệu như trước.
     expect(screen.queryAllByRole('button', { name: 'Sau' })).toHaveLength(0);
     expect(screen.queryAllByRole('button', { name: 'Trước' })).toHaveLength(0);
   });
@@ -116,11 +104,8 @@ describe('Khối DataTable (TanStack Table)', () => {
         getRowId={(r) => r.id}
       />,
     );
-    // Dòng khoảng dòng thay cho "Trang X / Y" của biến thể mặc định.
     expect(screen.getByText('Hiển thị 1–5 trong 5 dòng')).toBeInTheDocument();
     expect(screen.queryByText('Trang 1 / 1')).not.toBeInTheDocument();
-    // Khác biến thể mặc định (ẩn cụm nút khi một trang): nút số trang 1
-    // vẫn bày và các nút Trước/Sau ở trạng thái tắt.
     expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
     for (const button of screen.getAllByRole('button', { name: 'Sau' })) {
       expect(button).toBeDisabled();
@@ -159,20 +144,12 @@ describe('Khối DataTable (TanStack Table)', () => {
         totalRows={65}
       />,
     );
-    // 65 dòng ở cỡ trang 10 cho đúng 7 trang: khoảng dòng hiện tổng 65
-    // và đủ 7 nút số trang cùng các nút Trước/Sau — không nút nào bị
-    // lược khỏi cụm phân trang.
     expect(screen.getByText('Hiển thị 1–10 trong 65 dòng')).toBeInTheDocument();
     for (const page of ['1', '2', '3', '4', '5', '6', '7']) {
       expect(screen.getByRole('button', { name: page })).toBeInTheDocument();
     }
     expect(screen.getAllByRole('button', { name: 'Trước' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Sau' }).length).toBeGreaterThan(0);
-    // Ghim cơ chế chống tràn: hàng chân bảng và cụm nút phân trang đều
-    // mang class cho phép xuống dòng. jsdom không có engine bố cục nên
-    // ca này chỉ ghim cơ chế class, không khẳng định số đo px thật —
-    // bề rộng ở khung nhìn 320/360 px được kiểm ở nghiệm thu trình
-    // duyệt, không bịa số đo tại đây.
     const footerRow = screen.getByText('Hiển thị 1–10 trong 65 dòng').parentElement;
     expect(footerRow?.className).toContain('flex-wrap');
     expect(footerRow?.className).toContain('gap-2');

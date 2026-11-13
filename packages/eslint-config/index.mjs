@@ -1,6 +1,3 @@
-/**
- * Các preset ESLint dùng chung, không phụ thuộc đường dẫn workspace. Mỗi package tự chọn preset và khai tsconfigRootDir tại config của mình.
- */
 import js from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
 import globals from "globals";
@@ -20,6 +17,7 @@ export const javascript = {
   files: ["**/*.{js,mjs,cjs}"],
   extends: [js.configs.recommended],
   languageOptions: { globals: globals.node },
+  rules: { "no-empty": ["error", { allowEmptyCatch: true }] },
 };
 
 export const typescript = (tsconfigRootDir) => ({
@@ -29,7 +27,7 @@ export const typescript = (tsconfigRootDir) => ({
     parserOptions: { tsconfigRootDir },
   },
   rules: {
-    // Giữ quy ước TypeScript: tên bắt đầu bằng _ biểu thị biến/đối số được cố ý bỏ qua, thay vì tắt rule hay suppression cả file.
+    "no-empty": ["error", { allowEmptyCatch: true }],
     "@typescript-eslint/no-unused-vars": [
       "error",
       {
@@ -54,7 +52,6 @@ export const vitestTests = {
   ...vitest.configs.recommended,
   rules: {
     ...vitest.configs.recommended.rules,
-    // Vitest chấp nhận thông báo ở đối số thứ hai của expect.
     "vitest/valid-expect": ["error", { maxArgs: 2 }],
   },
 };
@@ -64,6 +61,5 @@ export const integrationTests = {
     "**/*.int-spec.{js,mjs,cjs,ts,tsx}",
     "**/*.e2e-spec.{js,mjs,cjs,ts,tsx}",
   ],
-  // Helper kiểm chứng HTTP/integration có thể nằm ngoài callback test.
   rules: { "vitest/no-standalone-expect": "off" },
 };

@@ -6,25 +6,7 @@ import { TestProviders } from '#test/providers';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 import { SearchPage } from '#features/platform/routes/platform-search';
 
-/**
- * Test cho trang kết quả tìm kiếm sau chốt 23:52 ngày 26/10/2026
- * (issue #303 — ô tìm kiếm giữa header là đường chính dẫn tới
- * trang này):
- *
- * - Vào trang bằng link `/search?q=abc` (đúng link ô giữa header
- *   tạo ra) → ô của trang điền sẵn "abc" và API tìm kiếm được gọi NGAY bằng đúng từ khoá đó, kết quả hiện ra không cần thao tác.
- * - Vào `/search` trần (không tham số) → không gọi API, ô trống —
- *   giữ nguyên trạng thái khởi đầu như trước.
- * - Form trong trang giữ hành vi cũ: gõ từ khoá khác + bấm "Tìm
- *   kiếm" thì chạy lại bằng từ khoá mới.
- * - Kết quả ĐIỀU HƯỚNG ĐƯỢC (chốt gộp tìm kiếm 27/10/2026): bấm
- *   một kết quả thì tới đúng trang của item đó theo loại — khoá học → /courses/:id, người dùng → /admin/users/:id/edit, học liệu → /content-bank/:id/edit (trước chốt này danh sách chỉ là chữ tĩnh không bấm được).
- * - Riêng kết quả người dùng, đích màn quản trị chỉ gắn theo
- *   quyền của NGƯỜI TÌM (điều kiện review của PR gộp tìm kiếm):
- *   người tìm có quyền quản trị người dùng (`user:update` tại context hệ thống) thì bấm được tới màn quản trị; người tìm không có quyền đó (học viên — vẫn nhận kết quả `users` từ API) thì kết quả hiện dạng thông tin, không có liên kết nào tới màn quản trị.
- */
 
-// Hình dạng kết quả khớp API thật: `area` là một trong ba area phía API đăng ký (courses/users/contentbank), `itemId` là định danh của chính item — bản cũ dùng area 'course' sai hợp đồng mà không lộ vì trang cũ chỉ in chữ tĩnh, không ánh xạ đích.
 const DOC = {
   id: 'doc-1',
   area: 'courses',
@@ -58,9 +40,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-/**
- * Hai người tìm mẫu cho các ca kết quả `users`: học viên (ảnh chụp quyền không có `user:update`) và quản trị người dùng (có đúng capability `user:update` tại context hệ thống — capability màn đích `/admin/users/:id/edit` tự gác, không cần cờ site admin).
- */
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-0000000000d4';
 const STUDENT_VIEWER = {
   profile: {
@@ -108,9 +87,6 @@ const USER_ADMIN_VIEWER = {
   },
 };
 
-/**
- * Stub fetch cho trang: mặc định không phiên (các ca không phụ thuộc quyền); truyền `viewer` thì có thêm phiên Better Auth + hồ sơ + ảnh chụp quyền của người tìm đó.
- */
 function stubFetch(docs: unknown[] = [DOC], viewer?: { profile: unknown; access: unknown }) {
   searchCalls = [];
   vi.stubGlobal(
@@ -135,7 +111,6 @@ function renderSearch(initialPath = '/search') {
   const router = createMemoryRouter(
     [
       { path: 'search', element: <SearchPage /> },
-      // Các route đích của kết quả: chỉ cần tồn tại để khẳng định pathname sau khi bấm kết quả.
       { path: 'courses/:id', element: <div data-testid="probe-target" /> },
       { path: 'admin/users/:userId/edit', element: <div data-testid="probe-target" /> },
       { path: 'content-bank/:id/edit', element: <div data-testid="probe-target" /> },
@@ -235,8 +210,6 @@ describe('trang kết quả tìm kiếm — chốt trình tự các lượt tìm
   };
 
   it('lượt tìm cũ trả về sau không ghi đè kết quả của lượt mới nhất', async () => {
-    // Cổng giữ lượt tìm "chậm" treo cho tới khi ca kiểm chứng thả
-    // ra — mô phỏng request của lượt đầu trả về sau lượt thứ hai.
     let releaseSlow!: () => void;
     const slowGate = new Promise<void>((resolve) => {
       releaseSlow = resolve;
@@ -260,10 +233,8 @@ describe('trang kết quả tìm kiếm — chốt trình tự các lượt tìm
     const user = userEvent.setup();
     const input = screen.getByLabelText('Từ khoá tìm kiếm');
 
-    // Lượt 1 (chậm) bắt đầu và treo ở cổng.
     await user.type(input, 'chậm');
     await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
-    // Lượt 2 (nhanh) chạy chồng lên và về trước: kết quả nhanh hiện.
     await user.clear(input);
     await user.type(input, 'nhanh');
     await user.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
@@ -273,7 +244,6 @@ describe('trang kết quả tìm kiếm — chốt trình tự các lượt tìm
       `/api/v1/search?q=${encodeURIComponent('nhanh')}`,
     ]);
 
-    // Thả lượt chậm về sau: kết quả của nó không được ghi đè.
     await act(async () => {
       releaseSlow();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -305,10 +275,8 @@ describe('trang kết quả tìm kiếm — kết quả điều hướng đượ
   it('người tìm không có quyền quản trị người dùng: kết quả người dùng hiện dạng thông tin, không liên kết tới màn quản trị', async () => {
     stubFetch([USER_DOC], STUDENT_VIEWER);
     renderSearch('/search?q=văn');
-    // Kết quả vẫn hiện đầy đủ thông tin (API trả cho mọi người tìm)…
     expect(await screen.findByText('Nguyễn Văn A')).toBeInTheDocument();
     expect(screen.getByText('vana học viên')).toBeInTheDocument();
-    // …nhưng không phải liên kết và không có neo nào tới màn quản trị.
     expect(screen.queryByTestId('search-result-doc-2')).not.toBeInTheDocument();
     expect(document.querySelector('a[href="/admin/users/user-1/edit"]')).toBeNull();
   });

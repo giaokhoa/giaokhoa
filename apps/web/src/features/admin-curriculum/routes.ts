@@ -2,9 +2,6 @@ import { type RouteConfig, relative } from '@react-router/dev/routes';
 
 const { index, prefix, route } = relative(import.meta.dirname);
 
-/**
- * Khu route của feature admin-curriculum: quản trị chương trình học (môn, chương trình, node, YCCĐ).
- */
 export default prefix('admin/curriculum', [
   index('routes/admin-curriculum.tsx'),
   route('subjects/new', 'routes/admin-curriculum-subject-new.tsx'),

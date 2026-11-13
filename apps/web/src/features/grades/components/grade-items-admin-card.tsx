@@ -1,6 +1,3 @@
-/**
- * Card quản trị mục điểm trên trang Điểm theo bài (pages/grades.tsx), chỉ render cho staff của khoá: sửa tên/thang điểm từng mục, đặt chính sách công bố, công bố/thu hồi công bố, xoá mục, và form tạo mục điểm nhập tay mới. State sửa mục, state form tạo và thông báo quản trị do file trang giữ; các thao tác ghi đi qua handler của trang (đột biến của features/grades/queries/course-grade) truyền xuống qua props.
- */
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,50 +9,28 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { ErrorAlert } from '#components/error-alert';
 
-/** Bản sửa tên/thang điểm đang soạn của một mục điểm. */
 export interface GradeItemEdit {
   itemName: string;
   gradeMax: string;
 }
 
-/** Props của card quản trị mục điểm. */
 export interface GradeItemsAdminCardProps {
-  /** Các mục điểm của khoá (từ lưới lớp hoặc từ điểm của người dùng). */
   items: GradeItem[];
-  /** Trạng thái công bố theo mục điểm (chính sách + đã công bố hay chưa). */
   publications: CourseActivityGrid['publications'];
-  /** Thông báo kết quả của khu quản trị (null khi chưa có). */
   adminMessage: string | null;
-  /** Bản sửa đang soạn theo id mục điểm. */
   itemEdits: Record<string, GradeItemEdit>;
-  /** Cập nhật bản sửa đang soạn. */
   onItemEditsChange: Dispatch<SetStateAction<Record<string, GradeItemEdit>>>;
-  /** Tên mục điểm mới trong form tạo. */
   newItemName: string;
-  /** Cập nhật tên mục điểm mới. */
   onNewItemNameChange: (value: string) => void;
-  /** Thang điểm của mục điểm mới trong form tạo. */
   newItemMax: string;
-  /** Cập nhật thang điểm của mục điểm mới. */
   onNewItemMaxChange: (value: string) => void;
-  /** Gửi form tạo mục điểm mới. */
   onCreateItem: (event: FormEvent) => Promise<void>;
-  /** Lưu sửa tên/thang điểm của một mục. */
   onSaveItemEdit: (item: GradeItem) => Promise<void>;
-  /** Xoá một mục điểm (trang hỏi xác nhận trước khi ghi). */
   onDeleteItem: (item: GradeItem) => Promise<void>;
-  /** Đặt chính sách công bố của một bài. */
   onSetPostingPolicy: (item: GradeItem, policy: 'auto' | 'manual') => Promise<void>;
-  /** Công bố / thu hồi công bố điểm của một bài. */
   onSetPublished: (item: GradeItem, published: boolean) => Promise<void>;
 }
 
-/**
- * Card quản trị mục điểm.
- *
- * @param props - Mục điểm, trạng thái công bố, state soạn thảo và các handler ghi của trang.
- * @returns Card danh sách mục điểm kèm thao tác quản trị và form tạo mục mới.
- */
 export function GradeItemsAdminCard({
   items,
   publications,

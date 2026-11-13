@@ -1,10 +1,3 @@
-/**
- * Kiểm chứng ảnh chụp gói chương trình trước khi duyệt hoặc cài.
- *
- * Các id và quan hệ phải tự chứa; checksum dùng thứ tự định danh ổn định
- * để không phụ thuộc thứ tự truy vấn PostgreSQL. Chỉ nhận tập nội dung
- * nguyên vẹn, không phục hồi một phần hoặc tự ghép id khác nhau.
- */
 import { createHash } from "node:crypto";
 import { richTextInputSchema } from "@giaokhoa/contracts";
 import type {
@@ -58,7 +51,6 @@ export interface ProgrammePackageItems {
   >;
 }
 
-/** Bỏ các khoá nội bộ của bảng ngân hàng khỏi checksum phát hành. */
 export function programmePackagePayload(
   items: ProgrammePackageItems,
   legacy = false,
@@ -103,7 +95,6 @@ export function programmePackagePayload(
   return { curricula, nodes, outcomes, mappings };
 }
 
-/** Tính checksum toàn vẹn cho dữ liệu phát hành, không tính id dòng bao bọc. */
 export function programmePackageChecksum(
   items: ProgrammePackageItems,
   legacy = false,
@@ -113,12 +104,6 @@ export function programmePackageChecksum(
     .digest("hex");
 }
 
-/**
- * Kiểm tra tất cả FK logic xuyên những bảng của gói (DB hệ thống
- * không có FK đến kho trung tâm), chu trình và checksum.
- *
- * @throws Error với lý do kỹ thuật để caller trả `system_bank.bad_package`.
- */
 export function assertProgrammePackageIntegrity(
   pkg: {
     version: string;
@@ -195,7 +180,6 @@ export function assertProgrammePackageIntegrity(
     invalid("package checksum mismatch");
 }
 
-/** Xếp node cha trước con theo quan hệ đã được kiểm chứng. */
 export function programmeNodesParentsFirst(items: ProgrammePackageItems) {
   const byId = new Map(items.nodes.map((node) => [node.nodeId, node]));
   const depth = (id: string): number => {

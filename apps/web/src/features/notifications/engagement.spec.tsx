@@ -5,11 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { NotificationsPage } from './routes/notifications';
 
-/**
- * Test web cho trung tâm thông báo (Testing Library): nhóm theo ngữ cảnh, lọc theo nhóm học, mở một thông báo thì đánh dấu đã đọc và đi sâu vào ngữ cảnh. Tuỳ chọn thông báo của khu Cài đặt được kiểm ở settings-notifications.spec.tsx.
- *
- * File này là nửa notifications của `pages/engagement.spec.tsx` cũ, tách theo miền khi tổ chức lại apps/web theo mô hình features/ (issue #500); nửa badges nằm ở feature badges.
- */
 function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
   vi.stubGlobal(
     'fetch',
@@ -87,18 +82,15 @@ describe('Trung tâm thông báo v2 (issue #51)', () => {
     });
     renderNotificationsPage();
 
-    // Một dòng gộp duy nhất cho cả hai thông báo điểm, kèm số lượng.
     const subject = await screen.findByText('Điểm mới 2');
     expect(subject).toBeInTheDocument();
     expect(screen.getByText(/2 thông báo/)).toBeInTheDocument();
     expect(screen.queryByText('Điểm mới 1')).not.toBeInTheDocument();
 
-    // Mở rộng tại chỗ (§9): chi tiết từng mục tải qua /notifications/items.
     await userEvent.click(screen.getByRole('button', { name: 'Mở rộng: Điểm mới 2' }));
     expect(await screen.findByText('Nội dung điểm 1')).toBeInTheDocument();
     expect(calls.some((c) => c.url.startsWith('/api/v1/notifications/items') && c.url.includes('eventType=grade_updated'))).toBe(true);
 
-    // Xoá ngay tại dòng của mục: DELETE đúng id và mục biến mất.
     await userEvent.click(screen.getByRole('button', { name: 'Xoá thông báo: Điểm mới 2' }));
     await waitFor(() => expect(screen.queryByText('Nội dung điểm 2')).not.toBeInTheDocument());
     expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/v1/notifications/01900000-0000-7000-8000-000000000102')).toBe(true);
@@ -152,7 +144,6 @@ describe('Trung tâm thông báo v2 (issue #51)', () => {
     );
 
     await userEvent.click(await screen.findByText('Điểm mới duy nhất'));
-    // Đã gọi đánh dấu đọc cho đúng mục, và router đã sang trang điểm.
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/notifications/01900000-0000-7000-8000-000000000201/read')).toBe(true));
     expect(await screen.findByText('Trang điểm khoá')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/courses/course-a/grades');

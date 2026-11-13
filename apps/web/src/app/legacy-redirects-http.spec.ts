@@ -10,13 +10,6 @@ import { loader as legacyContentBank } from '#features/content-bank/routes/legac
 import { loader as legacyContentBankNew } from '#features/content-bank/routes/legacy-contentbank-new';
 import { loader as legacyContentBankEdit } from '#features/content-bank/routes/legacy-contentbank-edit';
 
-/**
- * Kiểm tra response HTTP của các URL chuyển hướng thuần theo framework:
- * - request SSR phải nhận 302/Location trước khi hydrate;
- * - query được giữ ở các họ URL có quy ước giữ query, còn các URL
- *   ma trận và ngân hàng hệ thống giữ đúng hành vi không chuyển query;
- * - toàn bộ redirect phải thay thế lịch sử phía trình duyệt.
- */
 const CASES = [
   { path: '/exam-papers?bank=my', to: '/exams?bank=my', loader: legacyExamPapers },
   { path: '/exam-papers/new?bank=system', to: '/exams/new?bank=system', loader: legacyExamPaperNew },

@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { blankRecalledContent, type MessageRow } from '@giaokhoa/messaging';
 import { isWithinRecallWindow } from './messaging.service';
 
-/**
- * Kiểm chứng đơn vị cho hai luật thuần của vòng đời tin nhắn theo vai (issue #33): biên cửa sổ THU HỒI và vô hiệu nội dung khi trình bày một tin đã thu hồi. Phần nghiệp vụ đầy đủ (quyền theo vai, dấu vết moderator_action, realtime) nằm ở spec e2e messaging-message-lifecycle.
- */
 describe('isWithinRecallWindow (cửa sổ thu hồi)', () => {
   const sentAt = new Date('2026-10-25T00:00:00.000Z');
 
@@ -70,7 +67,6 @@ describe('blankRecalledContent (vô hiệu nội dung tin đã thu hồi)', () =
     expect(blanked.seq).toBe(7);
     expect(blanked.recalledAt).toBe(recalledAt);
     expect(blanked.recalledBy).toBe(baseRow.userIdFrom);
-    // Dòng gốc trong DB không bị sửa tại chỗ.
     expect(row.fullMessage).toBe('nội dung gốc');
   });
 });

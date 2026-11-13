@@ -5,9 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { ExamPaperEditPage } from './exam-paper-editor';
 
-/**
- * Spec màn soạn đề sau khi chuyển khuôn TanStack Query (F-01 của #133): mở màn sửa thì form khởi tạo đúng từ view đề (tên + slot đã ghim kèm huy hiệu version), tìm câu trong ngân hàng rồi thêm vào đề được, và lưu khi CHỈ slots đổi thì chỉ gọi PUT slots — không gọi PATCH metadata (luật "chỉ gọi phần thật sự đổi" của màn soạn).
- */
 const PAPER_ID = '01900000-0000-7000-8000-0000000000e1';
 const Q1 = '01900000-0000-7000-8000-0000000000q1'.replace('q', 'a');
 const Q2 = '01900000-0000-7000-8000-0000000000q2'.replace('q', 'a');
@@ -106,19 +103,15 @@ describe('Exam paper editor (F-01 của #133)', () => {
     stubFetch(calls);
     renderPage();
 
-    // Form khởi tạo từ view đề: tên đề + slot đã ghim hiện đúng.
     expect(await screen.findByDisplayValue('Đề giữa kỳ')).toBeInTheDocument();
     expect(await screen.findByText(/Câu một/)).toBeInTheDocument();
     expect(screen.getByText('ghim v2')).toBeInTheDocument();
 
-    // Tìm câu theo từ khoá và thêm vào đề.
     await userEvent.type(screen.getByPlaceholderText('Tìm câu trong ngân hàng…'), 'hai');
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong ngân hàng' }));
     expect(await screen.findByText('Câu hai')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Thêm vào đề' }));
 
-    // Lưu: chỉ slots đổi nên chỉ PUT slots (hai câu, điểm mặc định 1
-    // cho câu mới), tuyệt đối không PATCH metadata.
     await userEvent.click(screen.getByRole('button', { name: 'Lưu' }));
     expect(await screen.findByText('DANH SÁCH ĐỀ')).toBeInTheDocument();
     const put = calls.find((c) => c.method === 'PUT' && c.url === `/api/v1/exams/${PAPER_ID}/slots`);
@@ -134,14 +127,6 @@ describe('Exam paper editor (F-01 của #133)', () => {
   });
 });
 
-/**
- * Ghim đề vào khoá ngay tại màn soạn: form ghim chỉ mở khi đề
- * `ready` và view đề mang cờ deploy; thao tác gọi đúng endpoint
- * exam-pins của hộp ghim ở trang ngân hàng (chọn khoá → chương tự
- * chọn chương đầu → ghim), thành công thì lần ghim mới hiện ngay
- * trong thẻ từ cùng nguồn danh sách lần ghim của đề; API từ chối
- * thì báo kèm lý do và không sinh lần ghim.
- */
 function stubPinFetch(calls: RecordedCall[], opts: { deploy: boolean; status?: string; failPin?: boolean }) {
   let pinned = false;
   const view = {
@@ -199,18 +184,14 @@ describe('Trình sửa đề — ghim vào khoá học từ trình sửa', () =>
     renderPage();
 
     expect(await screen.findByDisplayValue('Đề giữa kỳ')).toBeInTheDocument();
-    // Form ghim hiện dù đề chưa có lần ghim nào.
     await userEvent.selectOptions(await screen.findByLabelText('Chọn khoá học'), COURSE_ID);
-    // Chương đầu tiên của khoá đích tự được chọn khi nội dung khoá về.
     await waitFor(() =>
       expect((screen.getByLabelText('Chọn chương') as HTMLSelectElement).value).toBe(SECTION_ID),
     );
     await userEvent.click(screen.getByRole('button', { name: 'Ghim vào khoá' }));
 
-    // Đúng thao tác exam-pins dùng chung với hộp ghim ở trang ngân hàng.
     const post = calls.find((c) => c.method === 'POST' && c.url === `/api/v1/courses/${COURSE_ID}/exam-pins`);
     expect(post?.body).toEqual({ sectionId: SECTION_ID, examId: PAPER_ID, variantCount: 1, requestId: expect.any(String) });
-    // Báo thành công kèm phiên bản đã ghim + lần ghim mới hiện tại chỗ.
     expect(await screen.findByText('Đã ghim đề vào khoá (phiên bản v3).')).toBeInTheDocument();
     await waitFor(() => expect(document.body.textContent).toContain('Khoá Toán 5 · v3'));
   });
@@ -223,7 +204,6 @@ describe('Trình sửa đề — ghim vào khoá học từ trình sửa', () =>
     expect(await screen.findByDisplayValue('Đề giữa kỳ')).toBeInTheDocument();
     expect(screen.queryByLabelText('Chọn khoá học')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ghim vào khoá' })).not.toBeInTheDocument();
-    // Chưa có lần ghim + không được ghim → thẻ lần ghim không hiện.
     expect(screen.queryByText('Các lần ghim của đề')).not.toBeInTheDocument();
   });
 

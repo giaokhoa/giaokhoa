@@ -7,18 +7,11 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
 
-/**
- * K0b (issue #67) — nạp dữ liệu SGK "Kết nối tri thức với cuộc sống"
- * (Toán 1) vào cây sách + ánh xạ sang chương trình GDPT 2018.
- * Oracle: file dataset đã kiểm chứng nguyên văn với mục lục in trong cuốn SGK Toán 1 (Tập 1 + Tập 2) và mục lục Sách giáo viên Toán 1 của NXB Giáo dục Việt Nam (nguồn khai ở Bước 0 trên issue #67) — bản sao vendor tại `src/modules/books/book-data/`. Spec đối chiếu TỪNG bản ghi qua API cây sách: đúng chủ đề/tựa bài/thứ tự, ánh xạ đúng mã bản ghi chương trình, và YCCĐ của bài đúng bằng hợp YCCĐ của các node chương trình được ánh xạ (đọc từ cây chương trình, truy vết qua source_ref chứa mã bản ghi). Kèm khẳng định phủ định của issue:
- * không node SGK nào lọt vào cây chương trình chuẩn.
- */
 
 interface BookRecord {
   id: string; volume: number; chapter: string; chapter_number: number;
   lesson: string; lesson_number: number | null; program_records: string[];
 }
-/** Node của một YCCĐ dạng Tiptap doc trong dataset (doc/paragraph/text + bulletList/listItem cho ý con). */
 interface OutcomeDocNode {
   type: string;
   text?: string;
@@ -40,9 +33,6 @@ const programFile = JSON.parse(
   readFileSync(join(process.cwd(), 'src/modules/curriculum/program-data/program-toan.json'), 'utf8'),
 ) as { records: ProgramRecord[] };
 
-/**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
- */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];
   const walk = (node: OutcomeDocNode): void => {
@@ -56,7 +46,6 @@ function docOutcomeText(doc: OutcomeDoc): string {
   return lines.join('\n').trim();
 }
 
-/** Các dòng YCCĐ kỳ vọng của một bản ghi (phần tử dạng doc trích text bằng docOutcomeText). */
 function outcomeTexts(r: ProgramRecord): string[] {
   if (r.outcomes.length > 0) {
     return r.outcomes.map((o) => (typeof o === 'string' ? o : docOutcomeText(o)));
@@ -64,7 +53,6 @@ function outcomeTexts(r: ProgramRecord): string[] {
   if (r.outcome_text.trim().length > 0) return [r.outcome_text];
   return [];
 }
-/** YCCĐ kỳ vọng của một bài: hợp theo thứ tự ánh xạ, khử trùng theo nội dung (khớp quy tắc của BookService). */
 function expectedLessonOutcomes(record: BookRecord): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -141,23 +129,16 @@ describe('K0b book import (verified Toán 1 TOC → book tree + programme mappin
     expect(plainStatus.body.code).toBe('access.capability_denied');
     const plainImport = await http(app).post('/api/v1/books/dataset-import').set(bearer(plainToken)).send({ datasetKey: 'sgk-toan-1' });
     expect(plainImport.status).toBe(403);
-    // Giáo viên hệ thống có curriculum:view nhưng không có curriculum:manage → đọc được, nạp bị từ chối.
     const teacherStatus = await http(app).get('/api/v1/books/dataset-import').set(bearer(teacherToken));
     expect(teacherStatus.status).toBe(200);
     const teacherImport = await http(app).post('/api/v1/books/dataset-import').set(bearer(teacherToken)).send({ datasetKey: 'sgk-toan-1' });
     expect(teacherImport.status).toBe(403);
-    // Dataset không có trong manifest → 404 tường minh.
     const bogus = await http(app).post('/api/v1/books/dataset-import').set(bearer(admin)).send({ datasetKey: 'sgk-ngu-van-1' });
     expect(bogus.status).toBe(404);
     expect(bogus.body.code).toBe('book.dataset_not_found');
   });
 
   it('từ chối nhập khi thiếu dataset chương trình, rồi nhập sau khi có', async () => {
-    // Thứ tự spec trong cùng DB không bảo đảm: nếu dataset chương trình
-    // chưa từng được nạp ở DB này, lượt nạp SGK phải lỗi cứng
-    // book_mapping_unresolved và KHÔNG ghi dở; nếu đã nạp rồi thì
-    // lượt nạp SGK chạy thẳng. Cả hai đường đều phải kết thúc ở trạng
-    // thái đã nạp xong chương trình rồi mới nạp SGK thành công.
     const probe = await http(app).get('/api/v1/curriculum/program-import').set(bearer(admin));
     const toanRow = (probe.body as { datasetKey: string; importedRecords: number }[]).find((r) => r.datasetKey === 'toan');
     if ((toanRow?.importedRecords ?? 0) === 0) {
@@ -189,7 +170,6 @@ describe('K0b book import (verified Toán 1 TOC → book tree + programme mappin
     expect(tree.book.title).toBe('Toán 1');
     expect(tree.book.grade).toBe(1);
 
-    // Chủ đề: đúng số lượng, đúng tựa + tập theo thứ tự dataset.
     const expectedChapters: { title: string; volume: number }[] = [];
     for (const r of bookFile.records) {
       if (!expectedChapters.some((c) => c.title === r.chapter && c.volume === r.volume)) {
@@ -199,7 +179,6 @@ describe('K0b book import (verified Toán 1 TOC → book tree + programme mappin
     expect(tree.chapters.length).toBe(expectedChapters.length);
     expect(tree.chapters.map((c) => ({ title: c.title, volume: c.volume }))).toEqual(expectedChapters);
 
-    // Từng bài: đúng chủ đề, tựa, số bài, mã bản ghi, ánh xạ và YCCĐ.
     const allLessons = tree.chapters.flatMap((c) => c.lessons.map((l) => ({ chapter: c, lesson: l })));
     expect(allLessons.length).toBe(42);
     for (const record of bookFile.records) {
@@ -221,7 +200,6 @@ describe('K0b book import (verified Toán 1 TOC → book tree + programme mappin
         `${record.id} resolved outcomes`,
       ).toEqual(expectedLessonOutcomes(record));
     }
-    // Bài chưa ánh xạ duy nhất: "Tiết học đầu tiên" — không ánh xạ, không YCCĐ.
     const unmapped = allLessons.filter((x) => x.lesson.mappings.length === 0);
     expect(unmapped.length).toBe(1);
     expect(unmapped[0]!.lesson.title).toBe('Tiết học đầu tiên');
@@ -236,7 +214,6 @@ describe('K0b book import (verified Toán 1 TOC → book tree + programme mappin
     const tree = await http(app).get(`/api/v1/curriculum/curricula/${curriculum1!.id}/tree`).set(bearer(admin));
     expect(tree.status).toBe(200);
     const lessons = gradeOneLessons((tree.body as { nodes: ProgTreeNode[] }).nodes);
-    // Cây chuẩn lớp 1 vẫn đúng 12 node nội dung của dataset chương trình.
     expect(lessons.length).toBe(programFile.records.filter((r) => r.grade === 1).length);
     const programTitles = new Set(lessons.map((l) => l.title));
     for (const record of bookFile.records) {

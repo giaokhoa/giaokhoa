@@ -10,13 +10,11 @@ import { TenantsModule } from '../tenants/tenants.module';
 import { CoursesController } from './courses.controller';
 import { CoursesService } from './courses.service';
 
-/** Facade của CoursesModule: CoursesService. Phụ thuộc Access, CustomFields, Availability (report §3.12). */
 @Module({
   imports: [AccessModule, CustomFieldsModule, AvailabilityModule, EventsModule, TenantsModule, SpaceRoutingModule],
   controllers: [CoursesController],
   providers: [
     {
-      // Dùng handle Kysely định tuyến theo không gian để toàn bộ truy vấn khoá học giữ đúng ngữ cảnh tenant/GUC/RLS.
       provide: CoursesRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new CoursesRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
@@ -25,5 +23,4 @@ import { CoursesService } from './courses.service';
   ],
   exports: [CoursesService],
 })
-/** Module khoá học. */
 export class CoursesModule {}

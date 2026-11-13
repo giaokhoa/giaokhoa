@@ -5,9 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { AdminUsersPage } from '../components/admin-users';
 
-/**
- * Spec đợt trình bày của trang danh sách người dùng (issue #561) trên hợp đồng của đợt 1 (issue #560): bốn thẻ thống kê đếm thật theo trạng thái, thanh công cụ một thẻ hai hàng (tìm kiếm, lọc trạng thái, lọc vai trò ở ngữ cảnh hệ thống, cỡ trang 10/25/50/100), cột Vai trò bày theo mô hình gán theo ngữ cảnh (vai tại hệ thống + số gán ở ngữ cảnh khác + liên kết sang trang vai trò lọc theo người dùng), sắp xếp phía server theo hợp đồng, chân bảng khoảng dòng và hộp thoại xác nhận xoá dựng bằng component Dialog thay cho `window.confirm`. Mọi lọc/sắp xếp/phân trang đều kiểm chứng qua tham số thật của các lời gọi API đã ghi lại, không qua trạng thái nội bộ của component.
- */
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-000000000010';
 const TENANT_CONTEXT_ID = '01900000-0000-7000-8000-000000000020';
 const ROLE_ADMIN_ID = '01900000-0000-7000-8000-0000000000b1';
@@ -41,7 +38,6 @@ function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-/** Bộ dữ kiện mẫu: 2 đang hoạt động, 1 bị khoá, 1 đã xoá; A giữ vai quản trị ở hệ thống + vai giáo viên ở trung tâm, B giữ vai giáo viên ở hệ thống. */
 function fixtureUsers(): FixtureUser[] {
   return [
     {
@@ -129,7 +125,6 @@ function stubFetch(calls: RecordedCall[], users: FixtureUser[], assignments = FI
         return !u.deleted;
       });
       if (search !== '') {
-        // Ngữ nghĩa tìm kiếm của bộ giả lập khớp API thật: ilike riêng từng trường, khớp khi BẤT KỲ trường nào chứa từ khoá — không ghép các trường thành một chuỗi (chuỗi ghép sẽ khớp cả truy vấn xuyên trường mà API thật không khớp).
         filtered = filtered.filter((u) => {
           const fields = [u.username, u.firstName, u.lastName, `${u.firstName} ${u.lastName}`, u.email ?? ''];
           return fields.some((field) => field.toLowerCase().includes(search));
@@ -232,7 +227,6 @@ function setup(overrides?: { users?: FixtureUser[]; assignments?: typeof FIXTURE
   return { calls, users };
 }
 
-/** Các lời gọi GET danh sách người dùng đã ghi lại (không gồm các lời gọi đọc một hồ sơ). */
 function userListCalls(calls: RecordedCall[]) {
   return calls.filter((c) => c.method === 'GET' && c.url.startsWith('/api/v1/users?'));
 }
@@ -246,7 +240,6 @@ afterEach(() => {
 describe('Trang danh sách người dùng — trình bày đợt 2', () => {
   it('hiển thị bốn thẻ thống kê bằng số đếm thật theo trạng thái, đủ các cột mới và chân bảng khoảng dòng', async () => {
     setup();
-    // Thẻ render nhãn ngay, giá trị về theo truy vấn đếm — chờ số thật của thẻ tổng rồi mới đối chiếu các thẻ còn lại.
     await waitFor(() => {
       expect(screen.getByTestId('stat-card-total')).toHaveTextContent('4');
     });
@@ -256,12 +249,10 @@ describe('Trang danh sách người dùng — trình bày đợt 2', () => {
     for (const header of ['Người dùng', 'Vai trò', 'Trạng thái', 'Ngày tham gia', 'Lần đăng nhập cuối', 'Thao tác']) {
       expect(screen.getByRole('columnheader', { name: new RegExp(header) })).toBeTruthy();
     }
-    // Danh sách mặc định ẩn tài khoản đã xoá: 3 dòng và chân bảng khớp.
     expect(await screen.findByText('An Nguyễn')).toBeTruthy();
     expect(screen.getByText('Bình Trần')).toBeTruthy();
     expect(screen.queryByText('Cư Đỗ')).toBeNull();
     expect(screen.getByText('Đang hiện 1 đến 3 trong 3')).toBeTruthy();
-    // Người chưa từng đăng nhập hiện trạng thái rỗng rõ ràng ở cột lần đăng nhập cuối.
     const rowB = screen.getByText('Bình Trần').closest('tr') as HTMLElement;
     expect(within(rowB).getByText('Chưa đăng nhập')).toBeTruthy();
     expect(within(rowB).getByText('Bị khoá')).toBeTruthy();
@@ -274,7 +265,6 @@ describe('Trang danh sách người dùng — trình bày đợt 2', () => {
     expect(within(rowA).getByText('+1 gán ở ngữ cảnh khác')).toBeTruthy();
     const link = within(rowA).getByRole('link', { name: 'Xem tại trang vai trò' });
     expect(link.getAttribute('href')).toBe(`/admin/roles?userId=${USER_A_ID}`);
-    // B giữ vai giáo viên ngay tại hệ thống nên không có dòng gán ngữ cảnh khác.
     const rowB = screen.getByText('Bình Trần').closest('tr') as HTMLElement;
     expect(await within(rowB).findByText('Giáo viên')).toBeTruthy();
     expect(within(rowB).queryByText(/gán ở ngữ cảnh khác/)).toBeNull();
@@ -290,7 +280,6 @@ describe('Trang danh sách người dùng — trình bày đợt 2', () => {
     const rowC = screen.getByText('Cư Đỗ').closest('tr') as HTMLElement;
     expect(rowC.textContent).not.toContain('@');
     expect(within(rowC).getByText('Đã xoá')).toBeTruthy();
-    // Tài khoản đã xoá không còn nút Xoá.
     expect(within(rowC).queryByRole('button', { name: 'Xoá' })).toBeNull();
   });
 
@@ -317,14 +306,10 @@ describe('Trang danh sách người dùng — trình bày đợt 2', () => {
   it('kết hợp đồng thời tìm kiếm, lọc trạng thái, lọc vai trò hệ thống và cỡ trang chỉ hiện đúng người khớp cả bốn điều kiện', async () => {
     const { calls } = setup();
     await screen.findByText('An Nguyễn');
-    // Đặt cỡ trang trước khi bật lọc vai trò để lời gọi danh sách
-    // mang đúng cỡ trang mới; các bước sau vẫn giữ cỡ trang đó.
     await userEvent.selectOptions(screen.getByLabelText('Số dòng mỗi trang'), '25');
     await waitFor(() => {
       expect(userListCalls(calls).some((c) => c.url.includes('pageSize=25'))).toBe(true);
     });
-    // Từ khoá 'n' khớp A, B, D theo từng trường; lọc trạng thái đang
-    // hoạt động còn A, D; lọc vai trò quản trị tại hệ thống còn A.
     await userEvent.type(screen.getByLabelText('Tìm người dùng'), 'n');
     await userEvent.selectOptions(screen.getByLabelText('Trạng thái'), 'active');
     await userEvent.selectOptions(screen.getByLabelText('Vai trò hệ thống'), ROLE_ADMIN_ID);
@@ -373,7 +358,6 @@ describe('Trang danh sách người dùng — trình bày đợt 2', () => {
     });
     expect(screen.getByText('Đang hiện 1 đến 1 trong 1')).toBeTruthy();
     expect(screen.queryByText('Người Dùng 000')).toBeNull();
-    // Lượt quét đã chạm tới trang 2 ở cỡ trần 100 thì mới thấy người giữ vai ở vị trí 102.
     expect(
       userListCalls(calls).some((c) => c.url.includes('page=2') && c.url.includes('pageSize=100')),
     ).toBe(true);

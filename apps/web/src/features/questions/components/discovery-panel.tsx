@@ -1,6 +1,3 @@
-/**
- * Panel khám phá ngân hàng câu hỏi chung (section "system-questions" của khu vực Ngân hàng hệ thống): tìm câu theo bank/từ khoá/loại, xem trước nội dung, sao chép một câu về bank cá nhân và hàng chờ đóng góp câu của bank đang chọn để duyệt tại dòng. Toàn bộ state của section là cục bộ (bank đang chọn, từ khoá, loại, kết quả tìm, câu đang xem trước) nên panel tự giữ và tự nạp hàng chờ qua hook của lib/questions-data; việc tìm chạy qua queryClient.fetchQuery với query options của lib (đúng nhịp tải theo thao tác như khi còn trong trang). Sao chép xong làm mới qua hàm refresh của trang.
- */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,22 +13,12 @@ import { questionDetailQueryOptions, questionDiscoveryQueryOptions, useBankQuest
 import type { BankLite, DiscoveryItemLite } from '../types/questions';
 import { plainText, QTYPE_LABEL_KEYS, QTYPES, questionExcerpt } from '../utils/shared';
 
-/** Props của panel khám phá ngân hàng câu hỏi chung. */
 export interface DiscoveryPanelProps {
-  /** Các bank câu hỏi chung để chọn phạm vi tìm + đích của hàng chờ đóng góp. */
   sharedBanks: BankLite[];
-  /** Làm mới cụm bank câu hỏi + danh sách bank cá nhân (hàm của trang). */
   refreshBanks: () => void;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/**
- * Panel khám phá ngân hàng câu hỏi chung.
- *
- * @param props - Dữ liệu, hàm làm mới và bộ báo thông báo của trang.
- * @returns Section khám phá: bộ lọc tìm + kết quả + xem trước + hàng chờ đóng góp câu.
- */
 export function DiscoveryPanel({ sharedBanks, refreshBanks, setMessage }: DiscoveryPanelProps) {
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();
@@ -61,7 +48,6 @@ export function DiscoveryPanel({ sharedBanks, refreshBanks, setMessage }: Discov
     }
   }
 
-  /** Copy một câu về ngân hàng cá nhân của mình (cầu nối hai khu vực). */
   async function copyToMyBank(questionId: string) {
     try {
       await copyQuestionMutation.mutateAsync(questionId);
@@ -87,7 +73,6 @@ export function DiscoveryPanel({ sharedBanks, refreshBanks, setMessage }: Discov
     }
   }
 
-  /** Xem trước một câu trong trang khám phá ngân hàng chung. */
   async function previewDiscoveryItem(questionId: string) {
     try {
       const view = await queryClient.fetchQuery(questionDetailQueryOptions(questionId));

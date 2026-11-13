@@ -14,13 +14,6 @@ import { archiveClass, deleteClass, fetchClasses } from '../api/classes';
 import type { ClassListItem } from '../types/classes';
 import { queryKeys } from '#lib/query-keys';
 
-/**
- * Danh sách lớp của người gọi (CLASS-1, issue #184) — chuẩn giao diện đã chốt: danh sách dùng thu/mở (khuôn CollapsibleSection dùng chung của web), tạo mới là màn riêng (/classes/new), sửa là màn riêng
- * (/classes/:id/edit). Dữ liệu từ GET /classes (API tự giới hạn theo
- * liên hệ của người gọi: lớp của tôi + lớp tôi được phân quyền) và mỗi dòng mang cờ khả năng do server suy cho đúng người gọi: nút "Tạo lớp" chỉ hiện khi người gọi có khả năng tạo lớp; trong phần mở của mỗi dòng, Sửa/Lưu trữ hiện theo cờ sửa của chính lớp đó, Xoá theo cờ xoá — học viên chỉ còn thấy lối vào trang chi tiết ("Danh sách học sinh"). Vẽ theo cờ chỉ để đúng vai; gác quyền thật vẫn ở API
- * (mọi thao tác ghi đều bị API kiểm capability và trả 403 với người
- * không có quyền). Xoá/lưu trữ là thao tác có xác nhận vì đổi vòng đời lớp.
- */
 export function ClassesPage() {
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();
@@ -58,7 +51,6 @@ export function ClassesPage() {
     deleteMutation.mutate(cls.id);
   }
 
-  // Khả năng tạo lớp neo tại tenant nên giống nhau ở mọi dòng của đáp số; danh sách rỗng thì không có dòng nào mang cờ — nút tạo lớp không hiện (mặc định an toàn), người có quyền vẫn vào thẳng /classes/new được như trước.
   const canCreateClass = (classesQuery.data ?? []).some((cls) => cls.canCreate);
 
   return (
@@ -143,7 +135,6 @@ export function ClassesPage() {
 
 export default ClassesPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

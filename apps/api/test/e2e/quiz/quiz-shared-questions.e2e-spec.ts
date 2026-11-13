@@ -1,9 +1,3 @@
-/**
- * Luồng giáo viên ghép câu công bố và local rồi giao bằng snapshot trung tâm.
- * Oracle questionusagebyactivity_test của Moodle: ghim dữ kiện chấm tại lượt,
- * chấm tự động khi nộp, essay chờ chấm tay, xem lại theo mặt nạ và công bố điểm.
- * Mọi hành động sản phẩm qua HTTP AppModule thật; SQL chỉ dựng lỗi và hậu kiểm.
- */
 import { VersioningType, type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -34,10 +28,6 @@ import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 
-/**
- * Nest dùng provider cấu hình theo environment của fixture, tránh cache validate lúc
- * nạp AppModule. Chỉ thay cấu hình kết nối; toàn bộ guard/service/HTTP là ứng dụng thật.
- */
 async function createSnapshotTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ConfigService).useValue(new ConfigService(validateEnv({ ...process.env }))).compile();
@@ -85,7 +75,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
   const centreName = `giaokhoa_test_shared_centre_${suffix}`;
   const bankName = `giaokhoa_test_shared_bank_${suffix}`;
 
-  /** Người dùng có phiên riêng; chuyển tenant qua HTTP để giữ đủ guard/ALS/RLS. */
   async function session(user: { username: string }, tenantId?: string) {
     const token = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
     if (!tenantId) return token;
@@ -145,14 +134,12 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     for (const [key, value] of Object.entries(originalEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   });
 
-  /** Phát hành qua HTTP để giữ đúng hợp đồng version và checksum. */
   async function publish(qtype: string, pkg: SystemBankPackage) {
     const response = await http(app).post('/api/v1/system-bank/questions').set(bearer(admin)).send({ qtype, package: pkg });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as { question: { id: string }; version: { id: string; checksum: string } };
   }
 
-  /** Soạn đề trộn từ tham chiếu tường minh; đưa đề về ready qua cùng API của UI. */
   async function paper(questionIds: string[]) {
     const created = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`).set(bearer(teacher)).send({
       name: 'Đề trộn nguồn chung và riêng', totalScore: questionIds.length + 1,
@@ -206,7 +193,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     await app.get<ObjectStorage>(OBJECT_STORAGE).delete(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash));
     const newer = await http(app).post(`/api/v1/system-bank/questions/${sa.question.id}/versions`).set(bearer(admin)).send({ package: { ...emptyPackage(), answers: [{ answer: doc('Sai mới'), isCorrect: true, feedback: null, sortOrder: 0 }] } });
     expect(newer.status).toBe(201);
-    /** Tắt kết nối bank tại ứng dụng thứ hai, cùng kho trung tâm và file đích đã chụp. */
     delete process.env.SYSTEM_BANK_DATABASE_URL;
     offlineApp = await createSnapshotTestApp();
     expect(offlineApp.get(SystemBankConnection).isConfigured).toBe(false);
@@ -345,18 +331,15 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       return res.body as { cmId: string };
     };
 
-    // Crash ngay trước ready: grade item đã có; không thêm bản sao.
     await centre.query("UPDATE exam_pins SET preparation_state = 'preparing' WHERE id = $1", [pinId]);
     await retry();
     expect((await centre.query('SELECT count(*)::int AS n FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].n).toBe(1);
 
-    // Crash sau tạo cm nhưng trước grade item: chỉ điền grade item còn thiếu.
     await centre.query('DELETE FROM grade_items WHERE item_instance = $1', [cmId]);
     await centre.query("UPDATE exam_pins SET preparation_state = 'preparing' WHERE id = $1", [pinId]);
     await retry();
     expect((await centre.query('SELECT count(*)::int AS n FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].n).toBe(1);
 
-    // Crash sau insert pin/snapshot nhưng trước tạo cm: tìm lại theo instance.
     await centre.query('DELETE FROM grade_items WHERE item_instance = $1', [cmId]);
     await centre.query("UPDATE exam_pins SET cm_id = NULL, preparation_state = 'preparing' WHERE id = $1", [pinId]);
     await centre.query('DELETE FROM course_modules WHERE id = $1', [cmId]);
@@ -364,13 +347,10 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect((await centre.query('SELECT count(*)::int AS n FROM course_modules WHERE instance_id = $1', [pinId])).rows[0].n).toBe(1);
     expect((await centre.query('SELECT count(*)::int AS n FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].n).toBe(1);
 
-    // Crash trước khi lưu JSON snapshot: chạy lại chuẩn bị, không nhân pin.
     await centre.query("UPDATE exam_pins SET question_snapshots = NULL, preparation_state = 'preparing' WHERE id = $1", [pinId]);
     await retry();
     expect((await centre.query('SELECT jsonb_array_length(question_snapshots) AS n FROM exam_pins WHERE id = $1', [pinId])).rows[0].n).toBe(2);
 
-    // File staging còn từ một lần cập nhật version bị ngắt: chỉ xóa file
-    // thuộc staging, không chạm file snapshot đã công bố của pin khác.
     const original = (await centre.query("SELECT * FROM files WHERE file_area = 'exam_snapshot' ORDER BY id LIMIT 1")).rows[0];
     expect(original).toBeDefined();
     const pendingId = randomUUID();
@@ -411,8 +391,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
   }, 90_000);
 
   it('không cho dùng câu ready ở bank personal của đồng nghiệp, vẫn dùng được bank chung có quyền', async () => {
-    // Giáo viên B cùng trung tâm, sở hữu bank personal B; giáo viên A
-    // có thể biết UUID nhưng không được đọc/copy đáp án từ bank B.
     const colleague = await createUserViaApi(app, admin);
     await seedTenantMembershipFixture(app, tenantA, colleague.id);
     const systemId = await systemContextId(app, admin);
@@ -434,14 +412,11 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
         newExam: { name: 'Ghim câu riêng bị cấm', slots: [{ questionId: privateId }] } });
     expect(deniedNewPin.status, JSON.stringify(deniedNewPin.body)).toBe(404);
 
-    // Bank trường dùng chung: thành viên có quyền vẫn tạo đề trộn được.
     const listed = await http(app).get('/api/v1/question-banks?kind=question').set(bearer(colleagueToken));
     expect(listed.status).toBe(200);
     const sharedBank = (listed.body as { scope: string; defaultCategoryId: string | null; contextId: string }[])
       .find((item) => item.scope === 'school');
     expect(sharedBank?.defaultCategoryId).toBeTruthy();
-    // Bank trường chỉ cho thành viên dùng/copy; cấp quyền lead tường
-    // minh cho giáo viên B để có thể soạn câu làm nguồn kiểm thử.
     await assignRole(app, admin, colleague.id, await roleIdByShortname(app, admin, 'qbanklead'), sharedBank!.contextId);
     const sharedQuestion = await http(app).post('/api/v1/questions').set(bearer(colleagueToken)).send({
       categoryId: sharedBank!.defaultCategoryId, qtype: 'multichoice',
@@ -475,7 +450,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       .set(bearer(teacher)).send({ name: uniqueName('Mục khác để retry') });
     expect(otherSection.status, JSON.stringify(otherSection.body)).toBe(201);
 
-    // Mô phỏng crash sau bước tạo CM và grade, trước cập nhật trạng thái ready.
     await centre.query("UPDATE exam_pins SET preparation_state = 'preparing' WHERE id = $1", [pinId]);
     const before = await centre.query('SELECT question_snapshots, cm_id FROM exam_pins WHERE id = $1', [pinId]);
 
@@ -522,8 +496,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const questionId = created.body.question.id as string;
 
-    // Giáo viên chỉ quản lý khoá đích, bị chặn quyền đọc câu nguồn
-    // ở context khoá khác, kể cả khi biết UUID câu đã ready.
     const teacherRole = await roleIdByShortname(app, admin, 'teacher');
     await tenantAls.run({ tenantId: tenantA }, () =>
       app.get(RolesService).setCapabilityOverride(teacherRole, 'question:useall', sourceContext, -1000));
@@ -561,8 +533,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       .set(bearer(teacher)).send({ name: uniqueName('Section retry crash sớm') });
     expect(alternative.status, JSON.stringify(alternative.body)).toBe(201);
 
-    // Crash giả lập sau khi ghi intent nhưng trước CM và snapshot: cố
-    // tình giữ request_id/pin.id, không để CM làm dấu neo section.
     await centre.query('DELETE FROM grade_items WHERE item_instance = $1', [cmId]);
     await centre.query('UPDATE exam_pins SET cm_id = NULL, question_snapshots = NULL, preparation_state = \'preparing\' WHERE id = $1', [pinId]);
     await centre.query('DELETE FROM course_modules WHERE id = $1', [cmId]);
@@ -602,7 +572,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     let offline: INestApplication | undefined;
     const dbSecret = 'Test-only-shared-14!';
     const cpUrl = await buildTestDatabase({ adminUrl, database: cpName, store: 'control-plane' });
-    /** URL test gắn đúng role riêng của trung tâm, không tái dùng role postgres cho HTTP. */
     const urlFor = (space: SpaceProvisionResult) => {
       const url = new URL(adminUrl); url.pathname = `/${space.databaseName}`;
       url.username = space.connectionRole; url.password = dbSecret; return url.toString();
@@ -628,7 +597,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       const loginB = await http(routed).post('/api/v1/auth/token').set('Host', hostB).send({ username: 'admin14', password: STRONG_PASSWORD });
       expect(loginA.status).toBe(201); expect(loginB.status).toBe(201);
       const tokenA = loginA.body.accessToken as string; const tokenB = loginB.body.accessToken as string;
-      /** Quản trị vận hành không có quyền nghiệp vụ ngầm; fixture gán vai quản lý thật tại kho A. */
       await routed.get(SpaceDatabaseService).withSpaceKysely(a.slug, async () => {
         const roles = routed!.get(RolesService); const contexts = routed!.get(ContextsService);
         const role = await roles.getRoleByShortname('manager');
@@ -672,7 +640,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       const dbA = new Client({ connectionString: urlFor(a) }); const dbB = new Client({ connectionString: urlFor(b) });
       await dbA.connect(); await dbB.connect();
       try {
-        /** Truy vấn hậu kiểm dùng GUC tenant thật; role của kho không được vượt RLS. */
         await dbA.query("SELECT set_config('app.tenant_id', $1, false)", [a.tenantId]);
         await dbB.query("SELECT set_config('app.tenant_id', $1, false)", [b.tenantId]);
         const files = await dbA.query("SELECT storage_domain FROM files WHERE file_area = 'exam_snapshot'");

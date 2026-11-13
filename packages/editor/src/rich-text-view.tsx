@@ -4,22 +4,10 @@ import type { RichTextBlockNode, RichTextDocument } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
 import { renderMathHtml } from './math.js';
 
-/**
- * Thuộc tính của {@link RichTextView}.
- */
 export interface RichTextViewProps {
-  /** Tài liệu rich text cần hiển thị; `null` hoặc rỗng thì không hiển thị gì. */
   value: RichTextDocument | null;
 }
 
-/**
- * Một block có nội dung để hiển thị hay không: paragraph cần chữ hoặc một
- * công thức; blockMath cần mã LaTeX; ảnh tự nó đã là nội dung; danh sách
- * cần ít nhất một mục có nội dung.
- *
- * @param block - Block cần kiểm tra.
- * @returns `true` nếu block có nội dung hiển thị.
- */
 function blockHasContent(block: RichTextBlockNode): boolean {
   switch (block.type) {
     case 'paragraph':
@@ -37,24 +25,10 @@ function blockHasContent(block: RichTextBlockNode): boolean {
   }
 }
 
-/**
- * Kiểm tra tài liệu có nội dung nào để hiển thị hay không.
- *
- * @param value - Tài liệu cần kiểm tra.
- * @returns `true` nếu tài liệu rỗng và không nên render gì.
- */
 function isEmptyDocument(value: RichTextDocument): boolean {
   return !value.content.some(blockHasContent);
 }
 
-/**
- * Render một tài liệu KHÔNG chứa `statementList` bằng static renderer
- * của Tiptap theo bộ extension của hợp đồng; hai node công thức được
- * ánh xạ thủ công sang KaTeX (xem {@link RichTextView}).
- *
- * @param value - Tài liệu thuần cần render.
- * @returns React element của tài liệu.
- */
 function renderPlainDocument(value: RichTextDocument): ReactNode {
   return renderToReactElement({
     extensions: plainTextExtensions,
@@ -86,27 +60,6 @@ function renderPlainDocument(value: RichTextDocument): ReactNode {
   });
 }
 
-/**
- * Hiển thị chỉ-đọc một tài liệu rich text mà không tạo instance trình soạn
- * thảo: dùng static renderer của Tiptap (`renderToReactElement` từ
- * `@tiptap/static-renderer/pm/react`) theo đúng bộ extension của hợp đồng.
- *
- * Riêng hai node công thức được ánh xạ thủ công: static renderer mặc định
- * chỉ cho ra thẻ chứa `data-latex` mà không có hình công thức, nên ở đây
- * render thẳng bằng KaTeX (`trust: false`, một công thức lỗi không làm
- * sập cả trang). Ảnh và danh sách đi qua `renderHTML` của extension.
- *
- * Tài liệu thân câu đúng/sai chùm (TF-A) mang node `statementList` —
- * node này KHÔNG thuộc bộ extension hiển thị thuần, nên tài liệu được
- * tách tại các `statementList`: các block thường render bằng static
- * renderer như trên, mỗi danh sách mệnh đề render thành một `<ol>` mà
- * từng mệnh đề là một {@link RichTextView} đệ quy trên nội dung của
- * chính mệnh đề đó (hiển thị đủ thân câu + 4 mệnh đề cho bề mặt xem
- * tĩnh chung; bề mặt làm bài/xem lại có trình bày riêng theo mệnh đề).
- *
- * @param props - Thuộc tính: tài liệu cần hiển thị.
- * @returns React element của tài liệu, hoặc `null` khi tài liệu rỗng.
- */
 export function RichTextView({ value }: RichTextViewProps): ReactNode {
   if (!value || isEmptyDocument(value)) {
     return null;

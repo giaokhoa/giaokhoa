@@ -1,22 +1,4 @@
-/**
- * Helper THUẦN dựng các câu lệnh ĐẢM BẢO 3 bảng vệ tinh của Ngân hàng hệ thống tồn tại trong KHO NGHIỆP VỤ (issue #585): tách phần dựng câu SQL khỏi phần thực thi (script `system-bank-centre-tables-setup.ts`) để kiểm chứng bằng unit test không cần database thật. Theo mẫu `system-bank-provision.ts` cùng module.
- *
- * Vì sao cần bước ensure này (vòng sửa theo phán quyết trên PR #612):
- * - Ba bảng vệ tinh — `system_question_imports` (dòng nhập bản chụp +
- *   truy vết nguồn), `system_bank_event_receipts` (vết trung tâm đã nhận sự kiện) và `outcome_package_installs` (vết bản cài gói YCCĐ) — sống trong kho nghiệp vụ của trung tâm, được khai trong schema `@giaokhoa/db` và được tạo bởi file baseline `packages/db/migrations/centre/20261025163710_baseline/migration.sql`.
- * - Ba bảng được NỐI VÀO CUỐI file baseline sau khi baseline đã phát
- *   hành. bộ máy cũ bỏ qua cả thư mục baseline trên các database đã áp nó (production, preview), nên các database đó KHÔNG bao giờ nhận được 3 bảng qua đường migration — trong khi luồng sửa câu hỏi
- *   (`QuestionsService`) cập nhật `system_question_imports` trong
- *   cùng transaction của MỌI lần sửa câu: bảng vắng là mọi lần sửa câu đều gãy, không riêng tính năng ngân hàng.
- * - Bước ensure bù đúng phần đó: chạy trong chuỗi migrate NGAY SAU
- *   migration của kho nghiệp vụ, tạo đúng những gì còn thiếu. Mọi câu đều idempotent (`IF NOT EXISTS`, khoá ngoại canh bằng tra cứu `pg_constraint`) nên trên database mới (baseline đã tạo đủ) bước này là no-op, và chạy lặp ở mỗi lần stack khởi động là an toàn.
- *
- * Kỷ luật đồng bộ: nội dung DDL ở đây (cột, ràng buộc, tên index, khoá ngoại) PHẢI khớp từng chữ với khối tạo 3 bảng ở cuối file baseline — đổi schema của bảng vệ tinh thì sửa cả hai nơi trong cùng một lượt. Bảng tạo bởi role migration được role runtime thừa hưởng quyền dữ kiện qua `ALTER DEFAULT PRIVILEGES` (issue #586) nên tầng ứng dụng dùng được ngay, không cần bước cấp quyền riêng.
- */
 
-/**
- * Các câu lệnh đảm bảo 3 bảng vệ tinh tồn tại trong kho nghiệp vụ, theo thứ tự: tạo bảng → tạo index → gắn khoá ngoại (khoá ngoại của `system_question_imports` trỏ `question(id)` nên phải đứng sau khi cả bảng vệ tinh lẫn bảng `question` của baseline đã có mặt). Mọi câu đều chạy lặp an toàn.
- */
 export function buildCentreSatelliteEnsureStatements(): string[] {
   return [
     `CREATE TABLE IF NOT EXISTS "outcome_package_installs" (
@@ -55,7 +37,6 @@ export function buildCentreSatelliteEnsureStatements(): string[] {
 		ALTER TABLE "system_question_imports" ADD CONSTRAINT "system_question_imports_question_id_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "question"("id") ON DELETE CASCADE;
 	END IF;
 END $$`,
-    // Bảng vệ tinh do phiên bản trước tạo có thể chưa có checksum.
     `ALTER TABLE "outcome_package_installs" ADD COLUMN IF NOT EXISTS "package_checksum" text NOT NULL DEFAULT ''`,
   ];
 }

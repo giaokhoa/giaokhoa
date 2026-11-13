@@ -1,15 +1,3 @@
-/**
- * Endpoint hooks gắn chính sách lockout vào các đường sign-in credential của Better Auth (điểm 2.4 trong hồ sơ Giai đoạn 2 của issue #7): cùng một `LoginLockoutService`, cùng một bảng `login_attempts` với hệ legacy — không tồn tại hai hệ đếm.
- *
- * - `before`: với `/sign-in/username` và `/sign-in/email`, tài khoản
- *   đang bị khoá thì từ chối TRƯỚC khi endpoint kiểm mật khẩu, bằng đúng mã lỗi `auth.locked_out` của hệ legacy (kể cả khi mật khẩu gửi lên là đúng — semantics của cổng legacy trong `AuthService.validateCredentials`).
- * - `after`: ghi lần thử vào `login_attempts`, phân biệt thành
- *   công/thất bại qua `ctx.context.returned`: là `APIError` 401 của chính endpoint (sai mật khẩu / không có credential) thì ghi thất bại; đáp ứng thường (endpoint đã cấp phiên) thì ghi thành công. Lỗi do chính cổng `before` ném (mã `auth.locked_out`) và mọi lỗi không phải kiểm chứng danh tính (400 thiếu trường, 403 Origin…) KHÔNG ghi — khớp legacy: lần bị khoá không tự ghi thêm attempt, và username không tồn tại cũng không ghi (phân giải định danh không ra user thì tầng service tự bỏ qua).
- *
- * Việc ghi attempt không bao giờ được làm hỏng luồng đăng nhập: lỗi ở đường ghi chỉ được log, không ném ngược vào đáp ứng.
- *
- * IP ghi kèm lấy theo đúng quy ước của dự án (common/client-ip): IP khách thật là phần tử PHẢI NHẤT của `X-Forwarded-For` (chặng proxy ở biên nối thêm vào phía phải), chuẩn hoá qua `normalizeIpAddress`.
- */
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { normalizeIpAddress } from '../../../common/client-ip';
 import {
@@ -45,7 +33,6 @@ function clientIpOf(headers: Headers | undefined): string | undefined {
   return normalizeIpAddress(parts[parts.length - 1]);
 }
 
-/** Đáp ứng của endpoint có phải là thất bại kiểm chứng danh tính (sai mật khẩu / không có credential) hay không. */
 function isCredentialFailure(returned: unknown): boolean {
   if (!(returned instanceof APIError)) return false;
   if (returned.body?.code === AUTH_LOCKED_OUT_CODE) return false;

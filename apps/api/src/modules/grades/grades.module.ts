@@ -14,11 +14,6 @@ import { CourseGradeExportsController, CourseGradeItemsController, CourseGradebo
 import { LegacyGradesCourseController, LegacyGradesPhantomController } from './legacy-grades.controller';
 import { GradesService } from './grades.service';
 
-/**
- * Module điểm theo bài: cung cấp GradesService, dùng Courses/Enrol/Access/Completion để kiểm tra ngữ cảnh và quyền, đồng thời đăng ký evaluator cho các luồng đánh giá.
- *
- * GradesRepository nhận handle Kysely định tuyến `routedKysely`. Các luồng `setGrade`, `recordActivityGrade` và `updateGrade` ghi điểm, lịch sử và outbox trong cùng transaction để không công bố sự kiện trước khi dữ liệu được commit.
- */
 @Module({
   imports: [
     AccessModule, CoursesModule, EnrolModule, CompletionModule, EventsModule, UsersModule, CurriculumModule, SpaceRoutingModule,
@@ -34,5 +29,4 @@ import { GradesService } from './grades.service';
   ],
   exports: [GradesService],
 })
-/** Module điểm theo bài. */
 export class GradesModule {}

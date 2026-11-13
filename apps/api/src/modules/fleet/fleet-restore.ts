@@ -1,9 +1,3 @@
-/**
- * CLI phục hồi trọn kho trong môi trường cô lập. Chỉ tạo database MỚI
- * và thư mục file MỚI do người vận hành chỉ định; không tự liên kết
- * tài khoản, cập nhật registry hay đưa dữ kiện vào kho B/công cộng.
- * Manifest và mọi file được xác minh trước thao tác tạo database.
- */
 import { existsSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { Client } from 'pg';
@@ -14,7 +8,6 @@ import { readVerifiedSpaceArchive, restoreArchiveFilesToLocalDir, verifyRestored
 import { parseRoleEndpoint } from './runtime-roles';
 import { runRuntimeRolesSetup } from './runtime-roles-setup';
 
-/** Tìm bản chụp đã hoàn tất mới nhất của đúng kho; không chọn tệp sidecar. */
 function newestBackup(dir: string): string {
   const files = readdirSync(dir)
     .filter((name) => parseBackupFileName(name) !== null)
@@ -33,12 +26,6 @@ export type FleetRestoreOptions = {
   log?: (message: string) => void;
 };
 
-/**
- * Phục hồi từ manifest trong database mới và vùng file mới.
- * @returns Tên đích và số file đã khôi phục.
- * @throws Error nếu đích chồng kho sống, tệp lỗi, hoặc tạo/kiểm tra
- * database thất bại; đích dở được xoá, nguồn không hề bị ghi.
- */
 export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
   database: string;
   filesDir: string;
@@ -54,8 +41,6 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
   if (!/^[a-z][a-z0-9_]{2,62}$/.test(options.targetDatabase) || !/^[0-9a-f-]{36}$/.test(options.expectedSpaceId)) {
     throw new Error('invalid target database or expected space id');
   }
-  // Restore dùng role RIÊNG của staging, không tái sử dụng credential
-  // production. Khai hai URL qua env để bí mật không lộ trong argv.
   const migratorUrl = env.FLEET_RESTORE_MIGRATION_URL;
   const runtimeUrl = env.FLEET_RESTORE_RUNTIME_URL;
   if (!migratorUrl || !runtimeUrl) {
@@ -122,8 +107,6 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
     connected = true;
     const db = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [options.targetDatabase]);
     if (db.rowCount !== 0) throw new Error('restore target database already exists');
-    // Tuyệt đối không đổi mật khẩu/tư thế quyền của role đã tồn tại:
-    // các role staging phải mới, không thuộc database sống nào.
     const existingRoles = await admin.query(
       'SELECT rolname FROM pg_roles WHERE rolname = ANY($1::text[])',
       [[migrator.role, runtime.role]],
@@ -138,8 +121,6 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
     await check.connect();
     try {
       await verifyRestoredFileMetadata(check, archive.manifest);
-      // Chỉ miền legacy được đổi về miền riêng của chính A trong
-      // database ĐÍCH đã phục hồi; database nguồn giữ nguyên.
       const count = await restoreArchiveFilesToLocalDir(archive.files, options.expectedSpaceId, staging);
       if (count !== archive.manifest.files.length) throw new Error('not all files were restored');
       const ownDomain = 'space-' + options.expectedSpaceId;
@@ -149,15 +130,11 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
     } finally {
       await check.end();
     }
-    // Chuyển sở hữu về role migration và cấp quyền tối thiểu cho
-    // runtime như kho thật (CONNECT, bảng, sequence, hàm, default ACL).
     await runRuntimeRolesSetup({
       ...env,
       MIGRATION_DATABASE_URL: migratorUrl,
       RUNTIME_DATABASE_URL: runtimeUrl,
     });
-    // Không dùng admin để báo xanh giả: xác nhận chính role runtime
-    // không-superuser đọc được dữ liệu restore dưới cơ chế RLS.
     const probe = new Client({ connectionString: runtimeUrl });
     try {
       await probe.connect();
@@ -179,8 +156,6 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
       await admin
         .query('DROP DATABASE IF EXISTS ' + quoteIdentifier(options.targetDatabase) + ' WITH (FORCE)')
         .catch(() => undefined);
-      // Role staging là role mới do lệnh này sở hữu; dọn nếu bất kỳ
-      // bước restore/quyền/kiểm tra nào hỏng để không để lại quyền mở.
       for (const role of [runtime.role, migrator.role]) {
         await admin.query('DROP ROLE IF EXISTS ' + quoteIdentifier(role)).catch(() => undefined);
       }
@@ -193,7 +168,6 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
   }
 }
 
-/** Điểm vào CLI, xác nhận nguồn bằng ID sổ, đích phải trống và tách biệt. */
 if (require.main === module) {
   const args = new Map<string, string>();
   for (let i = 2; i < process.argv.length; i += 2) {

@@ -6,12 +6,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { BadgesPage } from './routes/badges';
 
-/**
- * Test web cho trang huy hiệu (Testing Library): danh sách "huy hiệu của tôi" hiển thị các assertion đã cấp của chính người gọi.
- *
- * File này là nửa badges của `pages/engagement.spec.tsx` cũ, tách theo miền khi tổ chức lại apps/web theo mô hình features/
- * (issue #500); nửa notifications nằm ở feature notifications.
- */
 const PROFILE = {
   id: '01900000-0000-7000-8000-000000000007',
   username: 'learner7',
@@ -48,8 +42,6 @@ describe('Trang huy hiệu', () => {
     stubFetch((url) => {
       if (isGetSessionUrl(url)) return baSessionBody({ id: PROFILE.id, username: PROFILE.username });
       if (url === '/api/v1/users/me') return PROFILE;
-      // Điểm dò quyền của PermissionsProvider: học viên thường bị từ chối
-      // (404 → probe null) nên panel quản trị phải ẩn, phần của tôi vẫn hiện.
       if (url === '/api/v1/courses') return [];
       if (url === '/api/v1/badges')
         return [
@@ -70,7 +62,6 @@ describe('Trang huy hiệu', () => {
             status: 3,
           },
         ];
-      // Shape thật của GET /badges/mine: IssuedRow kèm badge lồng bên trong.
       if (url === '/api/v1/badges/mine')
         return [
           {
@@ -118,7 +109,6 @@ describe('Trang huy hiệu', () => {
         </PermissionsProvider>
       </TestProviders>,
     );
-    // Chờ chính danh sách đã cấp (nó tải sau khi hồ sơ auth được phân giải).
     expect(await screen.findByText(/Old honour \(đã thu hồi\)/)).toBeInTheDocument();
     expect(screen.getByText(/bản ghi abcdef012345/)).toBeInTheDocument();
     expect(screen.queryByText('Quản trị huy hiệu')).not.toBeInTheDocument();

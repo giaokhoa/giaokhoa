@@ -1,35 +1,13 @@
-/**
- * Repository của cụm HUY HIỆU trên Kysely.
- *
- * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc module huy hiệu — `badge` (định nghĩa huy hiệu), `badge_criteria`
- * (bộ tiêu chí), `badge_issued` (bản ghi cấp phát, bằng chứng bất
- * biến kèm bản chụp jsonb) và `badge_manual_award` (lượt trao thủ công) — tập trung ở đây. Luật nghiệp vụ (đánh giá tiêu chí, gác quyền, thông báo trao huy hiệu) nằm ở tầng service phía ứng dụng; repository chỉ nhận handle để service ghép các thao tác ghi vào một transaction khi cần bất biến nguyên tử (đặt lại bộ tiêu chí, cấp huy hiệu + ghi outbox).
- *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài trả/nhận hình dạng camelCase qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Ba cột jsonb của cụm
- * (`badge_criteria.params`, `badge_issued.snapshot`,
- * `badge_issued.evidence`) không mang hình dạng `$type` ở phía bộ máy cũ nên kiểu công khai ở biên là `unknown` như trước, và mọi lần ghi đều đi qua helper serialize `::jsonb` duy nhất trong file này (driver `pg` hiểu MẢNG cấp cao nhất là mảng PostgreSQL thay vì JSON — xem sổ tay).
- *
- * Hai điểm giữ nguyên hành vi của đường cũ trước chuyển đổi, có chủ đích:
- * - `insertIssued`/`insertManualAward`: khi insert bỏ qua vì
- *   trùng khoá tự nhiên không trả dòng nào, dòng đã có được đọc lại qua HANDLE GỐC của repository — không qua handle giao dịch được truyền vào — đúng như code cũ đọc qua `this.db` thay vì `tx`.
- * - `countIssued` đếm bằng cách đọc các dòng rồi lấy độ dài ở
- *   tầng ứng dụng, không đổi thành truy vấn `count(*)` ở database.
- *
- * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
- */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
 
-/** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type RepoDb = CentreDb | CentreTx;
 
-/** Một dòng định nghĩa huy hiệu. */
 export interface BadgeRow {
   id: string;
   name: string;
   description: string;
-  /** 1 = huy hiệu site, 2 = huy hiệu khoá học. */
   type: number;
   courseId: string | null;
   issuerName: string;
@@ -46,7 +24,6 @@ export interface BadgeRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một huy hiệu mới (đã qua kiểm chứng ở tầng service). */
 export interface NewBadge {
   id?: string;
   name: string;
@@ -67,7 +44,6 @@ export interface NewBadge {
   updatedAt?: Date;
 }
 
-/** Một dòng tiêu chí trong bộ tiêu chí của một huy hiệu; `params` là cấu hình riêng của loại tiêu chí. */
 export interface CriteriaRow {
   id: string;
   badgeId: string;
@@ -77,7 +53,6 @@ export interface CriteriaRow {
   description: string;
 }
 
-/** Dữ kiện ghi một tiêu chí mới. */
 export interface NewCriteria {
   id?: string;
   badgeId: string;
@@ -87,9 +62,6 @@ export interface NewCriteria {
   description?: string;
 }
 
-/**
- * Một dòng bản ghi cấp phát huy hiệu: bằng chứng bất biến rằng một user đã đạt huy hiệu, kèm bản chụp (`snapshot`) của huy hiệu + tiêu chí tại thời điểm cấp và `evidence` của lần cấp. Thu hồi không xoá dòng, chỉ lật cờ `revoked`.
- */
 export interface IssuedRow {
   id: string;
   badgeId: string;
@@ -105,7 +77,6 @@ export interface IssuedRow {
   issuerNotified: boolean;
 }
 
-/** Dữ kiện ghi một bản ghi cấp phát mới. */
 export interface NewIssued {
   id?: string;
   badgeId: string;
@@ -121,7 +92,6 @@ export interface NewIssued {
   issuerNotified?: boolean;
 }
 
-/** Một dòng lượt trao thủ công (bằng chứng một tiêu chí thủ công đã được đáp ứng theo quyết định của người giữ vai trò). */
 export interface ManualAwardRow {
   id: string;
   badgeId: string;
@@ -131,7 +101,6 @@ export interface ManualAwardRow {
   dateMet: Date;
 }
 
-/** Dữ kiện ghi một lượt trao thủ công mới. */
 export interface NewManualAward {
   id?: string;
   badgeId: string;
@@ -141,7 +110,6 @@ export interface NewManualAward {
   dateMet?: Date;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng huy hiệu. */
 const BADGE_COLUMNS = [
   'id',
   'name',
@@ -162,7 +130,6 @@ const BADGE_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng tiêu chí. */
 const BADGE_CRITERIA_COLUMNS = [
   'id',
   'badge_id as badgeId',
@@ -172,7 +139,6 @@ const BADGE_CRITERIA_COLUMNS = [
   'description',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng cấp phát. */
 const BADGE_ISSUED_COLUMNS = [
   'id',
   'badge_id as badgeId',
@@ -188,7 +154,6 @@ const BADGE_ISSUED_COLUMNS = [
   'issuer_notified as issuerNotified',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng trao thủ công. */
 const BADGE_MANUAL_AWARD_COLUMNS = [
   'id',
   'badge_id as badgeId',
@@ -198,17 +163,10 @@ const BADGE_MANUAL_AWARD_COLUMNS = [
   'date_met as dateMet',
 ] as const;
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — helper serialize duy nhất của file này cho mọi lần ghi jsonb
- * (khuôn của pilot: driver `pg` tự stringify object thường nhưng
- * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type json`). Khác pilot ở một điểm:
- * ba cột jsonb của cụm này không mang hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
- */
 function jsonbValue(value: unknown): RawBuilder<JsonValue> {
   return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
 }
 
-/** Ánh xạ dữ kiện ghi huy hiệu (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
 function badgeInsertValues(values: NewBadge): Insertable<CentreDB['badge']> {
   const row: Insertable<CentreDB['badge']> = { name: values.name };
   if (values.id !== undefined) row.id = values.id;
@@ -230,11 +188,6 @@ function badgeInsertValues(values: NewBadge): Insertable<CentreDB['badge']> {
   return row;
 }
 
-/**
- * Ánh xạ một patch cập nhật huy hiệu (camelCase) sang set update
- * (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa
- * trường nào thì chỉ trường đó đổi (quy tắc T-4).
- */
 function badgeUpdateSet(patch: Partial<BadgeRow>): Updateable<CentreDB['badge']> {
   const set: Updateable<CentreDB['badge']> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -256,12 +209,6 @@ function badgeUpdateSet(patch: Partial<BadgeRow>): Updateable<CentreDB['badge']>
   return set;
 }
 
-/**
- * Ánh xạ dữ kiện ghi tiêu chí (camelCase) sang values insert
- * (snake_case), LOẠI mọi trường `undefined` (T-4); cột `params`
- * jsonb đi qua helper serialize. Biến tích luỹ khai kiểu
- * `InsertObject` vì values chứa trường biểu thức (theo sổ tay).
- */
 function criteriaInsertValues(values: NewCriteria): InsertObject<CentreDB, 'badge_criteria'> {
   const row: InsertObject<CentreDB, 'badge_criteria'> = {
     badge_id: values.badgeId,
@@ -274,12 +221,6 @@ function criteriaInsertValues(values: NewCriteria): InsertObject<CentreDB, 'badg
   return row;
 }
 
-/**
- * Ánh xạ dữ kiện ghi bản ghi cấp phát (camelCase) sang values
- * insert (snake_case), LOẠI mọi trường `undefined` (T-4); hai cột
- * jsonb `snapshot`/`evidence` đi qua helper serialize. Biến tích
- * luỹ khai kiểu `InsertObject` vì values chứa trường biểu thức.
- */
 function issuedInsertValues(values: NewIssued): InsertObject<CentreDB, 'badge_issued'> {
   const row: InsertObject<CentreDB, 'badge_issued'> = {
     badge_id: values.badgeId,
@@ -298,12 +239,6 @@ function issuedInsertValues(values: NewIssued): InsertObject<CentreDB, 'badge_is
   return row;
 }
 
-/**
- * Ánh xạ một patch cập nhật bản ghi cấp phát (camelCase) sang set
- * update (snake_case), LOẠI mọi trường `undefined` (T-4); hai cột
- * jsonb đi qua helper serialize. Bảng này không có cột
- * `updated_at` nên set là đúng patch, không kèm mốc làm mới.
- */
 function issuedUpdateSet(patch: Partial<IssuedRow>): UpdateObject<CentreDB, 'badge_issued'> {
   const set: UpdateObject<CentreDB, 'badge_issued'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -321,7 +256,6 @@ function issuedUpdateSet(patch: Partial<IssuedRow>): UpdateObject<CentreDB, 'bad
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi lượt trao thủ công (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
 function manualAwardInsertValues(values: NewManualAward): Insertable<CentreDB['badge_manual_award']> {
   const row: Insertable<CentreDB['badge_manual_award']> = {
     badge_id: values.badgeId,
@@ -334,40 +268,30 @@ function manualAwardInsertValues(values: NewManualAward): Insertable<CentreDB['b
   return row;
 }
 
-/**
- * Repository huy hiệu trên Kysely: huy hiệu, tiêu chí, bản ghi cấp
- * phát và cấp thủ công của kho trung tâm.
- */
 export class BadgesRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Instance gốc của repository. */
   private db(): CentreDb {
     return this.handle;
   }
 
-  /** Mở một transaction trên kho trung tâm qua handle của repository. */
   async transaction<T>(fn: (tx: CentreTx) => Promise<T>): Promise<T> {
     return this.db().transaction().execute(fn);
   }
 
-  /** Chèn huy hiệu. */
   async insertBadge(values: NewBadge, db: RepoDb = this.db()): Promise<BadgeRow> {
     const rows = await db.insertInto('badge').values(badgeInsertValues(values)).returning(BADGE_COLUMNS).execute();
     return rows[0]!;
   }
 
-  /** Lấy huy hiệu theo id. */
   async getBadge(id: string, db: RepoDb = this.db()): Promise<BadgeRow | undefined> {
     return db.selectFrom('badge').select(BADGE_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
-  /** Liệt kê huy hiệu, theo id tăng dần. */
   async listBadges(db: RepoDb = this.db()): Promise<BadgeRow[]> {
     return db.selectFrom('badge').select(BADGE_COLUMNS).orderBy('id', 'asc').execute();
   }
 
-  /** Cập nhật huy hiệu; mốc `updated_at` luôn được làm mới ở đây như đường cũ trước đây. */
   async updateBadge(id: string, patch: Partial<BadgeRow>, db: RepoDb = this.db()): Promise<void> {
     await db
       .updateTable('badge')
@@ -376,7 +300,6 @@ export class BadgesRepository {
       .execute();
   }
 
-  /** Thêm một tiêu chí vào bộ tiêu chí của huy hiệu. */
   async insertCriteria(values: NewCriteria, db: RepoDb = this.db()): Promise<CriteriaRow> {
     const rows = await db
       .insertInto('badge_criteria')
@@ -386,7 +309,6 @@ export class BadgesRepository {
     return rows[0]!;
   }
 
-  /** Tiêu chí của huy hiệu, theo id tăng dần. */
   async listCriteria(badgeId: string, db: RepoDb = this.db()): Promise<CriteriaRow[]> {
     return db
       .selectFrom('badge_criteria')
@@ -396,17 +318,10 @@ export class BadgesRepository {
       .execute();
   }
 
-  /** Xoá toàn bộ tiêu chí của huy hiệu (đặt lại bộ tiêu chí). */
   async deleteCriteria(badgeId: string, db: RepoDb = this.db()): Promise<void> {
     await db.deleteFrom('badge_criteria').where('badge_id', '=', badgeId).execute();
   }
 
-  /**
-   * Ghi bản ghi cấp phát huy hiệu cho user. Trùng cặp
-   * (badge, user) thì insert là no-op và dòng đã cấp được đọc lại
-   * qua handle gốc — cấp hai lần cho cùng một user chỉ cho một
-   * bản ghi, như hành vi đường cũ trước chuyển đổi.
-   */
   async insertIssued(values: NewIssued, db: RepoDb = this.db()): Promise<IssuedRow> {
     const rows = await db
       .insertInto('badge_issued')
@@ -425,12 +340,10 @@ export class BadgesRepository {
     return existing!;
   }
 
-  /** Lấy bản ghi cấp phát theo id. */
   async getIssued(id: string, db: RepoDb = this.db()): Promise<IssuedRow | undefined> {
     return db.selectFrom('badge_issued').select(BADGE_ISSUED_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
-  /** Tìm bản ghi cấp phát của user cho một huy hiệu. */
   async findIssued(badgeId: string, userId: string, db: RepoDb = this.db()): Promise<IssuedRow | undefined> {
     return db
       .selectFrom('badge_issued')
@@ -441,7 +354,6 @@ export class BadgesRepository {
       .executeTakeFirst();
   }
 
-  /** Bản ghi cấp phát của một huy hiệu, theo id tăng dần. */
   async listIssuedForBadge(badgeId: string, db: RepoDb = this.db()): Promise<IssuedRow[]> {
     return db
       .selectFrom('badge_issued')
@@ -451,7 +363,6 @@ export class BadgesRepository {
       .execute();
   }
 
-  /** Huy hiệu đã cấp cho user, theo id tăng dần. */
   async listIssuedForUser(userId: string, db: RepoDb = this.db()): Promise<IssuedRow[]> {
     return db
       .selectFrom('badge_issued')
@@ -461,7 +372,6 @@ export class BadgesRepository {
       .execute();
   }
 
-  /** Số lần huy hiệu đã được cấp (đếm ở tầng ứng dụng trên các dòng đọc về, như đường cũ). */
   async countIssued(badgeId: string, db: RepoDb = this.db()): Promise<number> {
     const rows = await db
       .selectFrom('badge_issued')
@@ -471,17 +381,10 @@ export class BadgesRepository {
     return rows.length;
   }
 
-  /** Cập nhật bản ghi cấp phát (ví dụ thu hồi: lật cờ `revoked` + mốc thu hồi). */
   async updateIssued(id: string, patch: Partial<IssuedRow>, db: RepoDb = this.db()): Promise<void> {
     await db.updateTable('badge_issued').set(issuedUpdateSet(patch)).where('id', '=', id).execute();
   }
 
-  /**
-   * Ghi một lần cấp thủ công. Chỉ số duy nhất của bảng là bộ ba
-   * (badge, recipient, issuer) nhưng dòng đã có được đọc lại theo
-   * cặp (badge, recipient) — giữ nguyên bất đối xứng này của
-   * đường cũ trước chuyển đổi.
-   */
   async insertManualAward(values: NewManualAward, db: RepoDb = this.db()): Promise<ManualAwardRow> {
     const rows = await db
       .insertInto('badge_manual_award')
@@ -500,7 +403,6 @@ export class BadgesRepository {
     return existing!;
   }
 
-  /** Tìm bản ghi cấp thủ công theo cặp (huy hiệu, người nhận). */
   async findManualAward(badgeId: string, recipientId: string, db: RepoDb = this.db()): Promise<ManualAwardRow | undefined> {
     return db
       .selectFrom('badge_manual_award')

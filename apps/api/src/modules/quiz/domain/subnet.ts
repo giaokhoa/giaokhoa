@@ -1,9 +1,5 @@
 import { isIP } from 'node:net';
 
-/**
- * Đối chiếu IP khách với danh sách subnet kiểu Moodle `quiz.subnet`:
- * các mục cách nhau bằng dấu phẩy, mỗi mục là một IP đơn hoặc một mạng CIDR (IPv4 hoặc IPv6), ví dụ `10.0.0.0/8, 192.168.1.20, 2001:db8::/32`. Địa chỉ IPv4-mapped IPv6 (::ffff:10.0.0.1) được chuẩn hoá về IPv4 trước khi so để một khách không lách qua dạng biểu diễn khác.
- */
 
 function ipToBytes(ip: string): number[] | null {
   const kind = isIP(ip);
@@ -19,7 +15,6 @@ function ipToBytes(ip: string): number[] | null {
     const [head, tail] = addr.split('::');
     const headParts = head ? head.split(':').filter((p) => p.length > 0) : [];
     const tailParts = tail ? tail.split(':').filter((p) => p.length > 0) : [];
-    // Hỗ trợ dạng cuối là IPv4 nhúng (1.2.3.4) trong địa chỉ IPv6 đầy đủ.
     const expand = (parts: string[]): number[] => {
       const out: number[] = [];
       for (const p of parts) {
@@ -53,7 +48,6 @@ function bytesToBigInt(bytes: number[]): bigint {
 
 export interface SubnetEntry { base: bigint; bits: number; totalBits: number }
 
-/** Phân tích một mục subnet; null khi mục không hợp lệ. */
 export function parseSubnetEntry(raw: string): SubnetEntry | null {
   const entry = raw.trim();
   if (!entry) return null;
@@ -71,14 +65,12 @@ export function parseSubnetEntry(raw: string): SubnetEntry | null {
   return { base: bytesToBigInt(bytes), bits, totalBits };
 }
 
-/** Danh sách subnet có hợp lệ không (mọi mục đều phân tích được, ít nhất một mục). */
 export function isValidSubnetList(subnet: string): boolean {
   const parts = subnet.split(',');
   if (!parts.some((p) => p.trim().length > 0)) return false;
   return parts.every((p) => parseSubnetEntry(p) !== null);
 }
 
-/** IP khách có nằm trong ít nhất một mục của danh sách subnet không. */
 export function ipMatchesSubnetList(ip: string, subnet: string): boolean {
   const ipBytes = ipToBytes(ip);
   if (!ipBytes) return false;

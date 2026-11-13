@@ -27,11 +27,6 @@ import questionsRoutes from '../features/questions/routes';
 import quizzesRoutes from '../features/quizzes/routes';
 import settingsRoutes from '../features/settings/routes';
 
-/**
- * Bản đồ route của app (React Router framework mode): file này chỉ còn vai trò GỘP — mọi trang đều nằm dưới một layout không đường dẫn (`shell.tsx`) tự chọn khung công khai hay khung đã đăng nhập theo phiên, giữ đúng hành vi của router cũ; từng khu route do feature sở hữu khai ở config riêng `features/<feature>/routes.ts`
- * (dùng `relative()`/`prefix()` của framework) và được trải vào
- * layout tại đây theo đúng thứ tự khai báo gốc. Mỗi trang là một route module riêng thuộc về feature của nó để framework tự chia chunk theo route. Hai trang uỷ quyền MCP của feature auth nằm ngoài shell (khối `standaloneRoutes`).
- */
 export default [
   layout('app/shell.tsx', [
     ...dashboardRoutes,

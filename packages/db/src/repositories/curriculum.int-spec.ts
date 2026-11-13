@@ -4,13 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { CurriculumRepository, type LearningOutcomeRow } from './curriculum';
 
-/**
- * Spec tích hợp của CurriculumRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm được dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật của môi trường test; mọi ca chạy qua repository production — không mô phỏng handle.
- *
- * Spec này là nơi CHỐT THỬ NGHIỆM T-14 (chiếu toàn bảng trong select) cho điểm đo duy nhất của repo: `searchOutcomes` của bản bộ máy cũ chiếu `select({ outcome: learningOutcomes, … })` — Kysely không có chiếu-gộp-cả-bảng nên bản mới liệt kê tường minh MỌI cột của bảng YCCĐ dưới tiền tố `outcome…` rồi lồng lại thành object `outcome` trong mã; ca T-14 dưới đây khoá hình dạng kết quả bằng deep-equal với chính dòng đọc thẳng từ repository.
- * (Ca T-13 — hợp điều kiện động — được khoá qua
- * `countGuardedReferences` và lọc `listOutcomes`.)
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
@@ -35,7 +28,6 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB).catch(() => undefined);
 });
 
-/** Dựng một cây tối thiểu môn → chương trình → node → YCCĐ và trả các dòng đã tạo. */
 async function seedTree(slug: string) {
   const subject = await repo.insertSubject({ contextId: CONTEXT_ID, name: `Môn ${slug}`, slug });
   const curriculum = await repo.insertCurriculum({ subjectId: subject.id, grade: 3 });
@@ -80,8 +72,6 @@ describe('CurriculumRepository (Kysely)', () => {
     const results = await repo.searchOutcomes({ query: 't14-search', limit: 10 });
     expect(results).toHaveLength(1);
     const [hit] = results;
-    // Deep-equal với chính dòng repository đọc thẳng: mọi cột của
-    // bảng YCCĐ phải có mặt dưới khoá `outcome`, không thừa không thiếu.
     expect(hit!.outcome).toEqual(outcome);
     expect(Object.keys(hit!.outcome).sort()).toEqual(Object.keys(outcome as LearningOutcomeRow).sort());
     expect(hit!.nodeTitle).toBe(node.title);
@@ -120,13 +110,11 @@ describe('CurriculumRepository (Kysely)', () => {
 
   it('T-13: countGuardedReferences đếm đúng từng bề mặt khi chỉ một phía có dữ kiện', async () => {
     const { subject, curriculum, node, outcome } = await seedTree('guard-count');
-    // Ánh xạ sách trỏ vào YCCĐ (phía outcomeIds).
     const [book] = await db.insertInto('books').values({ title: 'Sách G6' }).returning(['id']).execute();
     const [bookNode] = await db.insertInto('book_nodes')
       .values({ book_id: book!.id, title: 'Bài G6' }).returning(['id']).execute();
     await db.insertInto('book_mappings')
       .values({ book_node_id: bookNode!.id, learning_outcome_id: outcome.id, position: 1 }).execute();
-    // Ô ma trận neo node (phía nodeIds).
     const [matrix] = await db.insertInto('exam_matrices').values({
       name: 'Ma trận G6', subject_id: subject.id, curriculum_id: curriculum.id, context_id: CONTEXT_ID,
     }).returning(['id']).execute();
@@ -137,7 +125,6 @@ describe('CurriculumRepository (Kysely)', () => {
       matrix_id: matrix!.id, matrix_version_id: version!.id, curriculum_node_id: node.id,
       cognitive_level: 'biet', qtype: 'multichoice', question_count: 1, cell_score: 1,
     }).execute();
-    // Liên kết câu hỏi ↔ YCCĐ (phía outcomeIds của đếm questionOutcomes).
     const [category] = await db.insertInto('question_categories').values({
       name: 'Danh mục G6', context_id: CONTEXT_ID,
     }).returning(['id']).execute();

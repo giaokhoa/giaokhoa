@@ -12,9 +12,6 @@ import { FeedbackMessages } from './feedback-messages';
 import { SubmissionFileView } from './submission-file';
 import { dateLabel } from '../utils/shared';
 
-/**
- * Phía học sinh: xem trạng thái bài nộp, tải tệp/ảnh vào bản nháp, chốt nộp (sau hạn vẫn nộp được — máy chủ đánh dấu trễ), mở lại khi chưa bị trả bài; sau khi giáo viên TRẢ bài thì thấy điểm/mức + lời phê + dấu chấm trên bài của mình + kết quả rubric + hội thoại phản hồi. Id của chính học sinh (cho hội thoại phản hồi) đọc từ cache TanStack qua `currentUserQueryOptions` (CN-13, issue #493).
- */
 export function StudentPanel({ data, reload }: { data: AssignmentForUserView; reload: () => Promise<void> }) {
   const { t } = useTranslation('app');
   const { assignment, mySubmission: mine, rubric } = data;

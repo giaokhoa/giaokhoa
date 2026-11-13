@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapWithConcurrencyLimit } from './space-sweep';
 
-/**
- * Ca đơn vị của bộ giới hạn đồng thời cho vòng quét nhiều trung tâm (issue #582): khoá ba tính chất — không bao giờ vượt trần việc chạy đồng thời, mọi phần tử đều được xử lý đúng một lần, và lỗi của một lượt chạy được truyền ra cho bên gọi. Các việc giả được giữ treo bằng promise điều khiển bằng tay để thứ tự xen kẽ là xác định.
- */
 describe('Bộ giới hạn đồng thời của vòng quét nhiều trung tâm', () => {
   it('không bao giờ chạy quá trần đồng thời và xử lý mọi phần tử đúng một lần', async () => {
     const items = [1, 2, 3, 4, 5, 6];
@@ -22,10 +19,8 @@ describe('Bộ giới hạn đồng thời của vòng quét nhiều trung tâm'
         });
       });
     });
-    // Nhường một nhịp để các worker bắt đầu: đúng 2 việc đang chạy.
     await new Promise((resolve) => setImmediate(resolve));
     expect(running).toBe(2);
-    // Thả từng việc một: việc kế tiếp phải được bắt đầu ngay để lấp chỗ.
     while (release.length > 0) {
       release.shift()!();
       await new Promise((resolve) => setImmediate(resolve));

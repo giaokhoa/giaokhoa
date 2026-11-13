@@ -9,7 +9,6 @@ import {
   type CreateContentDto, type InsertContentDto, type ReviewContentDto, type UpdateContentDto, type UploadContentFileDto,
 } from './dto/content-bank.dto';
 
-/** Controller Content Bank / Kho học liệu (CB-1). */
 @ApiTags('contentbank')
 @Controller({ path: 'contentbank', version: '1' })
 export class ContentBankController {
@@ -18,7 +17,6 @@ export class ContentBankController {
   async create(@Body({ schema: createContentBankContentSchema }) dto: CreateContentDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.contentBank.create(actor.id, dto);
   }
-  /** Các không gian của Kho học liệu mà người dùng thấy: Của tôi / các tổ chuyên môn / Toàn trường. */
   @Get('spaces')
   async spaces(@CurrentUser() actor: AuthenticatedUser) {
     return this.contentBank.listSpaces(actor.id);
@@ -70,17 +68,14 @@ export class ContentBankController {
   async fileUrl(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.contentBank.signedUrl(actor.id, id);
   }
-  /** Gửi duyệt học liệu chia sẻ (scope tổ/trường) cho tổ trưởng. */
   @Post(':id/submit')
   async submit(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.contentBank.submitForReview(actor.id, id);
   }
-  /** Tổ trưởng duyệt/từ chối học liệu đang chờ duyệt. */
   @Post(':id/review')
   async review(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: reviewContentBankContentSchema }) dto: ReviewContentDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.contentBank.review(actor.id, id, dto);
   }
-  /** "Thêm từ kho": cắm học liệu vào một section của khoá bằng bản sao file. */
   @Post(':id/insert')
   async insert(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: insertContentBankContentSchema }) dto: InsertContentDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.contentBank.insertIntoCourse(actor.id, id, dto);

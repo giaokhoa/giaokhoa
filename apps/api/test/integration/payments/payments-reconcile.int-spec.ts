@@ -11,14 +11,6 @@ import {
 
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
 
-/**
- * Đối soát `reconcile` của Payments — ca tách nguyên văn từ `test/e2e/payments/payments-refund-lifecycle.e2e-spec.ts`
- * (issue #483).
- *
- * Vì sao ca này thuộc tầng integration: act của ca gọi thẳng `PaymentsService.reconcile()` và assert đối chiếu kết quả với một phép đếm SQL độc lập chạy trên cùng dữ kiện — cả hai phía đều là bề mặt nội bộ, không có route HTTP nào phơi bày số liệu đối soát này. Các ca còn lại của file gốc (vòng đời hoàn tiền, hàng đợi needs_review) vẫn ở tầng e2e; riêng khẳng định hàng đợi trong file gốc đã được chuyển sang gọi HTTP `GET /payments/review-queue`.
- *
- * Fixture khoản thu succeeded dựng bằng đúng chuỗi helper của file gốc (tài khoản manual → khoá có phí → khoản thu → webhook succeeded) chạy qua HTTP như bước chuẩn bị; ca giữ nguyên số thứ tự "12." trong tiêu đề để đối chiếu 1-1 với file gốc.
- */
 describe('Payments: đối soát reconcile giữa service và SQL (integration)', () => {
   let app: INestApplication;
   let admin: string;
@@ -44,7 +36,6 @@ describe('Payments: đối soát reconcile giữa service và SQL (integration)'
     return res.body.active === true;
   }
 
-  /** Khoản thu enrol_fee 100.000 trên gateway manual đã succeeded qua webhook — fixture gốc của các ca hoàn tay. */
   async function manualSucceededPayment() {
     const manual = await http(app).post('/api/v1/payments/accounts').set('Authorization', `Bearer ${admin}`)
       .send({ name: `Manual ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, gateway: 'manual' });
@@ -84,9 +75,6 @@ describe('Payments: đối soát reconcile giữa service và SQL (integration)'
 
     expect(await payments.reconcile()).toEqual(await countViaSql());
 
-    // Thêm một khoản thu succeeded mới bằng fixture chuẩn của spec:
-    // cả hai nguồn đếm phải dịch đúng — tổng +1, succeeded +1, khoản
-    // pending chưa có mã ngoài không đổi.
     const before = await countViaSql();
     await manualSucceededPayment();
     const after = await payments.reconcile();

@@ -8,19 +8,6 @@ import {
 import { ExamDossiersService } from '../../../src/modules/exams/exam-dossiers.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 
-/**
- * Lát S4 của issue #228 — đường đóng góp DUY NHẤT của đề nâng lên khuôn QB-4 đầy đủ, đối chiếu các tiêu chí đã chốt trong issue:
- *  - mode 'update': đề xuất bản mới cho một đề đã có trong bank
- *    đích — thiếu targetExamId → 400 exam.contribution_target_required; đích không nằm trong bank đích → 400 exam.contribution_target_not_in_bank; nguồn không phải bản sao suy từ đích → 400 exam.contribution_not_derived; hợp lệ → duyệt tạo VERSION MỚI trên chính danh tính đề đích
- *    (result_exam_id = đề đích), mốc duyệt ghi vào sổ mốc duyệt.
- *  - bộ hồ sơ đính kèm (withDossier): đề không gắn ma trận → 400
- *    exam.contribution_dossier_requires_matrix; có bộ hồ sơ + tenant/bank đích bật cấu hình cấp duyệt 2 → duyệt cấp 1 chỉ sang pending_board (đề chưa vào bank), cổng cấp 2 chặn người không có exam:moderate tại context hệ thống (403 exam.contribution_board_forbidden), ban giám hiệu duyệt mới chốt — bản vào bank là PHIÊN BẢN ĐÃ GHIM ở trạng thái ready; từ chối cấp 2 giữ vết cả hai cấp; cấu hình tắt → một cấp chốt.
- *  - chống trùng cho ma trận: đề xuất ghi content_hash và
- *    near_duplicate_of khi bank đích có ma trận trùng nội dung; duyệt đóng góp mà bank đích đã có bản copy suy từ chính ma trận nguồn → 409 quiz.matrix_duplicate_in_bank.
- *  - chuyển đổi hồ sơ treo (ExamDossiersService.convertLegacyDossiers):
- *    pending/pending_board → đóng góp mang bộ hồ sơ + lịch sử mốc duyệt (idempotent theo source_dossier_id); draft → đóng băng
- *    (không sinh đóng góp); approved/rejected → giữ lịch sử.
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -50,7 +37,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     adminId = me.body.id as string;
     pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
-    // Công tắc cấp 2 mặc định TẮT khi bắt đầu (site-config là toàn cục).
     await http(app).delete('/api/v1/site-config/exam/requireboardapproval').set(bearer(admin));
   }, 120_000);
   afterAll(async () => {
@@ -112,7 +98,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     const q1 = await createQuestion(owner.token, qBank.defaultCategoryId!, 'S4-1 câu 1');
     const q2 = await createQuestion(owner.token, qBank.defaultCategoryId!, 'S4-1 câu 2');
 
-    // Đề gốc vào bank trường qua mode 'new' như thường lệ.
     const paper = await createPaper(owner.token, eBank.id, 'Đề gốc S4-1', [{ questionId: q1 }]);
     await setPaperStatus(owner.token, paper.paper.id, 'ready');
     const proposeNew = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
@@ -123,13 +108,9 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(approveNew.status, JSON.stringify(approveNew.body)).toBe(201);
     const targetId = (approveNew.body as ContributionBody).resultExamId!;
     expect(targetId).toBeTruthy();
-    // Bản copy duyệt đóng góp hạ cánh ready ngay tại bank đích (quy
-    // tắc hoàn thiện: duyệt đóng góp đạt là đường vào bank ở dạng đã
-    // hoàn thiện) — dùng thẳng làm đề đích cho bản đề xuất cập nhật.
     const targetView = await http(app).get(`/api/v1/exams/${targetId}`).set(bearer(admin));
     expect((targetView.body as PaperBody).paper.status).toBe('ready');
 
-    // Giáo viên copy đề đích về bank cá nhân → bản sao suy từ đích, sửa nội dung (thêm câu 2).
     const copy = await http(app).post(`/api/v1/exams/${targetId}/copy`).set(bearer(owner.token)).send({});
     expect(copy.status, JSON.stringify(copy.body)).toBe(201);
     const working = copy.body as PaperBody;
@@ -139,19 +120,16 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       .send({ slots: [{ questionId: q1 }, { questionId: q2 }] });
     expect(edited.status, JSON.stringify(edited.body)).toBeLessThan(300);
 
-    // Cổng 1: mode update thiếu targetExamId.
     const noTarget = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
       .send({ examId: working.paper.id, mode: 'update' });
     expect(noTarget.status).toBe(400);
     expect((noTarget.body as { code?: string }).code).toBe('exam.contribution_target_required');
 
-    // Cổng 2: targetExamId không nằm trong bank đích (đề gốc ở bank cá nhân).
     const wrongBank = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
       .send({ examId: working.paper.id, mode: 'update', targetExamId: paper.paper.id });
     expect(wrongBank.status).toBe(400);
     expect((wrongBank.body as { code?: string }).code).toBe('exam.contribution_target_not_in_bank');
 
-    // Cổng 3: nguồn không phải bản sao suy từ đề đích.
     const stray = await createPaper(owner.token, eBank.id, 'Đề lạc S4-1', [{ questionId: q1 }]);
     await setPaperStatus(owner.token, stray.paper.id, 'ready');
     const notDerived = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
@@ -159,7 +137,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(notDerived.status).toBe(400);
     expect((notDerived.body as { code?: string }).code).toBe('exam.contribution_not_derived');
 
-    // Hợp lệ → pending; gửi trùng khi đang chờ → 409.
     const propose = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
       .send({ examId: working.paper.id, mode: 'update', targetExamId: targetId, note: 'Bản cập nhật thêm câu 2' });
     expect(propose.status, JSON.stringify(propose.body)).toBe(201);
@@ -171,7 +148,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(dup.status).toBe(409);
     expect((dup.body as { code?: string }).code).toBe('exam.contribution_duplicate_pending');
 
-    // Duyệt → version MỚI trên chính danh tính đề đích (không sinh đề mới trong bank).
     const approve = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions/${contribution.id}/approve`)
       .set(bearer(admin)).send({});
     expect(approve.status, JSON.stringify(approve.body)).toBe(201);
@@ -184,7 +160,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(targetBody.version.version).toBe(2);
     expect(targetBody.slots.map((s) => s.questionId)).toEqual([q1, q2]);
 
-    // Vết mốc duyệt: hàng chờ của người duyệt mang mốc cấp 1 của lần duyệt này.
     const queue = await http(app).get(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(admin));
     const queued = (queue.body as ContributionBody[]).find((c) => c.id === contribution.id)!;
     expect(queued.reviews).toHaveLength(1);
@@ -198,7 +173,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     const schoolBank = await mkSchoolBank('exam');
     const q1 = await createQuestion(owner.token, qBank.defaultCategoryId!, 'S4-2 câu 1');
 
-    // Ma trận (qua API của admin): môn + chương trình + cây ĐVK tối thiểu để dựng bản đặc tả.
     const contexts = await http(app).get('/api/v1/access/contexts').set(bearer(admin));
     const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
     const subj = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
@@ -213,7 +187,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(matrixRes.status, JSON.stringify(matrixRes.body)).toBeLessThan(300);
     const matrixId = (matrixRes.body as { id: string }).id;
 
-    // Đề KHÔNG gắn ma trận: withDossier bị chặn riêng.
     const plain = await createPaper(owner.token, eBank.id, 'Đề thường S4-2', [{ questionId: q1 }]);
     await setPaperStatus(owner.token, plain.paper.id, 'ready');
     const noMatrix = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
@@ -221,7 +194,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(noMatrix.status).toBe(400);
     expect((noMatrix.body as { code?: string }).code).toBe('exam.contribution_dossier_requires_matrix');
 
-    // Đề gắn ma trận (tạo với matrixId — version mang matrixId như đề sinh từ ma trận).
     async function mkMatrixPaper(name: string): Promise<PaperBody> {
       const res = await http(app).post(`/api/v1/exams/banks/${eBank.id}/exams`).set(bearer(owner.token))
         .send({ name, examKind: 'midterm', matrixId, slots: [{ questionId: q1 }] });
@@ -235,7 +207,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     const on = await http(app).put('/api/v1/site-config/exam/requireboardapproval').set(bearer(admin)).send({ value: true });
     expect([200, 201]).toContain(on.status);
     try {
-      // Đóng góp kèm bộ hồ sơ: bộ ba ghim ngay tại lúc đề xuất.
       const official = await mkMatrixPaper('Đề giữa kỳ S4-2');
       const propose = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
         .send({ examId: official.paper.id, withDossier: true, note: 'Hồ sơ giữa kỳ' });
@@ -244,7 +215,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       expect(contribution.dossierExamVersionId).toBe(official.version.id);
       expect(contribution.dossierMatrixId).toBe(matrixId);
 
-      // Cấp 1 duyệt → chỉ sang pending_board, đề CHƯA vào bank đích.
       const level1 = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions/${contribution.id}/approve`)
         .set(bearer(admin)).send({});
       expect(level1.status, JSON.stringify(level1.body)).toBe(201);
@@ -254,13 +224,11 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       const inBankBefore = await http(app).get(`/api/v1/exams/banks/${schoolBank.id}/exams`).set(bearer(admin));
       expect((inBankBefore.body as { derivedFromExamId: string | null }[]).some((p) => p.derivedFromExamId === official.paper.id)).toBe(false);
 
-      // Người không có exam:moderate tại context hệ thống không qua được cổng cấp 2 — đường alias cũ giữ nguyên mã lỗi này.
       const ownerBoard = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions/${contribution.id}/board-approve`)
         .set(bearer(owner.token)).send({});
       expect(ownerBoard.status).toBe(403);
       expect((ownerBoard.body as { code?: string }).code).toBe('exam.contribution_board_forbidden');
 
-      // Ban giám hiệu (site admin) duyệt cấp 2 qua đường canonical hợp nhất `approve` → chốt: bản ghim vào bank ở ready.
       const board = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions/${contribution.id}/approve`)
         .set(bearer(admin)).send({});
       expect(board.status, JSON.stringify(board.body)).toBe(201);
@@ -271,12 +239,10 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       const landed = await http(app).get(`/api/v1/exams/${done.resultExamId}`).set(bearer(admin));
       expect((landed.body as PaperBody).paper.status).toBe('ready');
       expect((landed.body as PaperBody).paper.derivedFromExamId).toBe(official.paper.id);
-      // Vết hai cấp độc lập trong hàng chờ.
       const queue = await http(app).get(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(admin));
       const queued = (queue.body as ContributionBody[]).find((c) => c.id === contribution.id)!;
       expect(queued.reviews!.map((r) => [r.level, r.decision])).toEqual([[1, 'approved'], [2, 'approved']]);
 
-      // Từ chối ở cấp 2: lý do bắt buộc, vết cấp 1 giữ nguyên.
       const official2 = await mkMatrixPaper('Đề giữa kỳ S4-2 (bộ 2)');
       const propose2 = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
         .send({ examId: official2.paper.id, withDossier: true });
@@ -296,7 +262,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       expect(queued2.reviews!.map((r) => [r.level, r.decision])).toEqual([[1, 'approved'], [2, 'rejected']]);
       expect(queued2.reviews![1]!.reason).toContain('kế hoạch kiểm tra');
 
-      // Đường alias cũ `board-approve` vẫn duyệt cấp 2 như trước, kèm header sắp bỏ (issue #345, giai đoạn 2).
       const official3 = await mkMatrixPaper('Đề giữa kỳ S4-2 (bộ 3)');
       const propose3 = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
         .send({ examId: official3.paper.id, withDossier: true });
@@ -313,7 +278,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       await http(app).delete('/api/v1/site-config/exam/requireboardapproval').set(bearer(admin));
     }
 
-    // Cấu hình TẮT: đóng góp kèm bộ hồ sơ vẫn duyệt MỘT cấp như QB-4.
     const official3 = await mkMatrixPaper('Đề giữa kỳ S4-2 (bộ 3)');
     const propose3 = await http(app).post(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(owner.token))
       .send({ examId: official3.paper.id, withDossier: true });
@@ -329,7 +293,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     const matrixBank = await bankOfKind(owner.token, 'matrix', 'personal', owner.id);
     const schoolMatrixBank = await mkSchoolBank('matrix');
 
-    // Môn/chương trình/ĐVK tối thiểu + ma trận có một ô.
     const contexts = await http(app).get('/api/v1/access/contexts').set(bearer(admin));
     const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
     const subj = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
@@ -349,7 +312,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     const ready = await http(app).patch(`/api/v1/exam-matrices/${matrixId}`).set(bearer(owner.token)).send({ status: 'ready' });
     expect(ready.status, JSON.stringify(ready.body)).toBe(200);
 
-    // Đề xuất lần 1: bank đích chưa có ma trận trùng → near_duplicate_of trống, hash đã ghi.
     const propose1 = await http(app).post(`/api/v1/exam-matrices/${matrixId}/contributions`).set(bearer(owner.token))
       .send({ targetBankId: schoolMatrixBank.id });
     expect(propose1.status, JSON.stringify(propose1.body)).toBe(201);
@@ -361,9 +323,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(approve1.status, JSON.stringify(approve1.body)).toBe(201);
     const landedId = (approve1.body as { resultMatrixId: string }).resultMatrixId;
 
-    // Đề xuất lần 2 (sau khi lần 1 đã chốt): bank đích nay có bản
-    // copy CÙNG NỘI DUNG → near_duplicate_of trỏ đúng bản đã vào
-    // bank; duyệt lần 2 bị chặn 409 vì bản đó suy từ chính nguồn.
     const propose2 = await http(app).post(`/api/v1/exam-matrices/${matrixId}/contributions`).set(bearer(owner.token))
       .send({ targetBankId: schoolMatrixBank.id });
     expect(propose2.status, JSON.stringify(propose2.body)).toBe(201);
@@ -386,7 +345,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     await setPaperStatus(owner.token, paper.paper.id, 'ready');
     const draftPaper = await createPaper(owner.token, eBank.id, 'Đề nháp hồ sơ S4-4', [{ questionId: q1 }]);
 
-    // Gieo hồ sơ ở bốn trạng thái đúng hình thái dữ liệu trước khi cắt đường.
     async function insertDossier(examId: string, status: string, pinned: boolean): Promise<string> {
       const idRes = await pg.query('select uuidv7() as id');
       const dossierId = (idRes.rows[0] as { id: string }).id;
@@ -415,7 +373,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect(report.converted).toBeGreaterThanOrEqual(2);
     expect(report.draftsFrozen).toBeGreaterThanOrEqual(1);
 
-    // Hai đóng góp sinh ra đúng trạng thái + bộ hồ sơ đã ghim + neo về hồ sơ gốc.
     const cPending = await pg.query(
       'select id, status, mode, dossier_exam_version_id, content_hash from exam_contributions where source_dossier_id = $1', [dPending]);
     expect(cPending.rows).toHaveLength(1);
@@ -425,19 +382,16 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
       'select id, status from exam_contributions where source_dossier_id = $1', [dBoard]);
     expect(cBoard.rows).toHaveLength(1);
     expect((cBoard.rows[0] as { status: string }).status).toBe('pending_board');
-    // Lịch sử mốc duyệt của hồ sơ pending_board đã sang sổ mốc duyệt của đóng góp.
     const copiedReviews = await pg.query(
       'select level, reviewer_id, decision from exam_contribution_reviews where contribution_id = $1',
       [(cBoard.rows[0] as { id: string }).id],
     );
     expect(copiedReviews.rows).toHaveLength(1);
     expect(copiedReviews.rows[0]).toMatchObject({ level: 1, reviewer_id: adminId, decision: 'approved' });
-    // Draft và approved không sinh đóng góp.
     for (const d of [dDraft, dApproved]) {
       const none = await pg.query('select count(*)::int as n from exam_contributions where source_dossier_id = $1', [d]);
       expect((none.rows[0] as { n: number }).n).toBe(0);
     }
-    // Hàng chờ của bank đích thấy cả hai đóng góp đã chuyển đổi.
     const queue = await http(app).get(`/api/v1/exams/banks/${schoolBank.id}/contributions`).set(bearer(admin));
     const queuedIds = (queue.body as ContributionBody[]).map((c) => c.id);
     expect(queuedIds).toContain((cPending.rows[0] as { id: string }).id);
@@ -447,7 +401,6 @@ describe('Exam contributions S4 (issue #228): QB-4 đầy đủ cho đề + ch�
     expect((queuedSourceIds.rows as { source_dossier_id: string }[]).map((r) => r.source_dossier_id))
       .toEqual(expect.arrayContaining([dPending, dBoard]));
 
-    // Chạy lại: không nhân đôi đóng góp lẫn mốc duyệt.
     const report2 = await runConversion();
     expect(report2.alreadyConverted).toBeGreaterThanOrEqual(2);
     const again = await pg.query(

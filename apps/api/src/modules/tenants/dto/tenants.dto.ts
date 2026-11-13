@@ -11,9 +11,6 @@ import {
   type UpdateTenantMember,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation của module Tenants dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất. Tạo người dùng trong tenant dùng lại đúng `createUserSchema` của bề mặt users (user là thực thể TOÀN CỤC; tenant chỉ thêm membership).
- */
 export { addTenantMemberSchema, createTenantSchema, createUserSchema, updateTenantMemberSchema, updateTenantSchema };
 export type CreateTenantDto = CreateTenant;
 export type UpdateTenantDto = UpdateTenant;

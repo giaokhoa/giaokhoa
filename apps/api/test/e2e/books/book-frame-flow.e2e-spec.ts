@@ -9,15 +9,11 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { courseContextId } from '../../support/engagement-helpers';
 
-/**
- * K0b (issue #67) — nạp khung SGK vào khoá bằng chính cơ chế nạp khung của K0a: giáo viên có course:update TẠI CONTEXT KHOÁ (mô hình seed teacher1, không vai hệ thống) đọc được bề mặt chọn khung SGK qua forCourseId, nạp các chủ đề thành section — mỗi mục bài truy về được YCCĐ chương trình qua bản chụp neo kép. Học sinh đã ghi danh thấy cấu trúc khoá bình thường (section + mục bài + YCCĐ) nhưng bị chặn ở mọi bề mặt quản trị ánh xạ/SGK; giáo viên khoá khác bị chặn với khoá không phải của mình. Oracle YCCĐ: dataset chương trình + dataset SGK đã kiểm chứng (hợp YCCĐ của các node được ánh xạ, khử trùng theo thứ tự ánh xạ) — cùng quy tắc với spec nạp SGK.
- */
 
 interface BookRecord {
   id: string; volume: number; chapter: string; chapter_number: number;
   lesson: string; lesson_number: number | null; program_records: string[];
 }
-/** Node của một YCCĐ dạng Tiptap doc trong dataset (doc/paragraph/text + bulletList/listItem cho ý con). */
 interface OutcomeDocNode {
   type: string;
   text?: string;
@@ -37,9 +33,6 @@ const programFile = JSON.parse(
   readFileSync(join(process.cwd(), 'src/modules/curriculum/program-data/program-toan.json'), 'utf8'),
 ) as { records: ProgramRecord[] };
 
-/**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
- */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];
   const walk = (node: OutcomeDocNode): void => {
@@ -53,7 +46,6 @@ function docOutcomeText(doc: OutcomeDoc): string {
   return lines.join('\n').trim();
 }
 
-/** Các dòng YCCĐ kỳ vọng của một bản ghi (phần tử dạng doc trích text bằng docOutcomeText). */
 function outcomeTexts(r: ProgramRecord): string[] {
   if (r.outcomes.length > 0) {
     return r.outcomes.map((o) => (typeof o === 'string' ? o : docOutcomeText(o)));
@@ -75,7 +67,6 @@ function expectedLessonOutcomes(record: BookRecord): string[] {
   }
   return out;
 }
-/** Các bản ghi của một chủ đề theo thứ tự sách. */
 function chapterRecords(chapter: string, volume: number): BookRecord[] {
   return bookFile.records.filter((r) => r.chapter === chapter && r.volume === volume);
 }
@@ -156,10 +147,8 @@ describe('Khung sách K0b (chương SGK → section khoá học với neo kép)'
     const ownTree = await http(app).get(`/api/v1/books/${bookId}/tree?forCourseId=${courseA}`).set(bearer(teacherA));
     expect(ownTree.status).toBe(200);
 
-    // Giáo viên khoá B đọc bề mặt SGK cho khoá A → 403.
     const otherTree = await http(app).get(`/api/v1/books/${bookId}/tree?forCourseId=${courseA}`).set(bearer(teacherB));
     expect(otherTree.status).toBe(403);
-    // Học sinh: mọi bề mặt quản trị SGK/ánh xạ đều 403, kể cả kèm forCourseId của khoá mình học.
     const studentBooks = await http(app).get(`/api/v1/books?subjectId=${subjectId}&forCourseId=${courseA}`).set(bearer(studentA));
     expect(studentBooks.status).toBe(403);
     const studentTree = await http(app).get(`/api/v1/books/${bookId}/tree`).set(bearer(studentA));
@@ -174,14 +163,12 @@ describe('Khung sách K0b (chương SGK → section khoá học với neo kép)'
     expect(chapter1).toBeTruthy();
     expect(chapter3).toBeTruthy();
 
-    // Học sinh không nạp được khung; giáo viên khoá khác cũng không.
     const byStudent = await http(app).post(`/api/v1/courses/${courseA}/book-frame`).set(bearer(studentA))
       .send({ bookId, chapterNodeIds: [chapter1.id] });
     expect(byStudent.status).toBe(403);
     const byOther = await http(app).post(`/api/v1/courses/${courseA}/book-frame`).set(bearer(teacherB))
       .send({ bookId, chapterNodeIds: [chapter1.id] });
     expect(byOther.status).toBe(403);
-    // Node bài (không phải chủ đề) không phải đơn vị chọn được → 400.
     const lessonId = chapter1.lessons[0]!.id;
     const badUnit = await http(app).post(`/api/v1/courses/${courseA}/book-frame`).set(bearer(teacherA))
       .send({ bookId, chapterNodeIds: [lessonId] });
@@ -195,7 +182,6 @@ describe('Khung sách K0b (chương SGK → section khoá học với neo kép)'
     expect(created.length).toBe(2);
     expect(created.map((s) => s.name)).toEqual([chapter1.title, chapter3.title]);
 
-    // Đối chiếu từng section qua nội dung khoá (đọc từ bản chụp neo).
     const content = await http(app).get(`/api/v1/courses/${courseA}/content`).set(bearer(teacherA));
     expect(content.status).toBe(200);
     const sections = (content.body as { sections: ContentSection[] }).sections
@@ -229,7 +215,6 @@ describe('Khung sách K0b (chương SGK → section khoá học với neo kép)'
     const first = sections.find((s) => s.name === 'Các số từ 0 đến 10');
     expect(first).toBeTruthy();
     expect(first!.bookFrame!.items.map((i) => i.title)).toContain('Các số 0, 1, 2, 3, 4, 5');
-    // Mục bài truy được về YCCĐ ngay trong nội dung học sinh thấy.
     const bai1 = first!.bookFrame!.items.find((i) => i.title === 'Các số 0, 1, 2, 3, 4, 5');
     expect(bai1!.outcomes.length).toBeGreaterThan(0);
   });

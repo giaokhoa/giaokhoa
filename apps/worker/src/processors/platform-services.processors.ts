@@ -7,37 +7,11 @@ import { tenantAls } from '../db/tenant-als';
 import { resolveDefaultTenantId } from '../db/default-tenant';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 
-/**
- * Các processor platform services của worker. Mỗi processor là bản song sinh (twin) của
- * logic API tương ứng, chạy trên cùng bảng: backup, restore, search reindex,
- * analytics run, report schedule, privacy export/delete, payment
- * reconciliation/webhook. Tất cả đều idempotent theo khoá nghiệp vụ của job.
- *
- * @remarks
- * Mọi truy vấn của các processor trong file này đi qua handle Kysely
- * định tuyến (`SpaceDatabaseService.routedKysely`): các processor chạy
- * trong ngữ cảnh platform tường minh (xem TENANT-1 ở từng `process`)
- * nên handle vào kho chung — cùng đích kho với handle bộ máy cũ định
- * tuyến trước đây. Các cột jsonb khi ghi (`archive`, `detail`,
- * `indicators`, `data`, `last_result`, `manifest`, `result`,
- * payload outbox) đi qua serialize tường minh + `::jsonb` theo khuôn
- * pilot (driver `pg` hiểu mảng cấp cao nhất là mảng PostgreSQL nếu
- * không serialize); khoá bên trong các giá trị jsonb là khoá dữ kiện
- * đã lưu nên giữ nguyên camelCase như trước.
- */
 
-/** Backup: dựng archive (format riêng v1) cho job backup đang pending và ghi các bước contributor. */
 @Processor('backup')
-/**
- * Xử lý job sao lưu khoá học nền.
- */
 export class BackupProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
-  /**
-   * Xử lý một job của queue tương ứng.
-   */
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; sections?: number; cms?: number }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -51,7 +25,6 @@ export class BackupProcessor extends WorkerHost {
     if (!row) return { status: 'missing' };
     if (row.status === 'completed') return { status: 'duplicate' };
     const scope = row.scope ?? 'course';
-    // Question bank bám context: khoá → context của khoá; site → context hệ thống.
     const contexts = await db
       .selectFrom('context')
       .select(['id', 'context_level as contextLevel', 'instance_id as instanceId'])
@@ -87,11 +60,6 @@ export class BackupProcessor extends WorkerHost {
         })
         .execute();
     }
-    // Archive dùng CHUNG định dạng giaokhoa-backup v1 với API: bản tóm
-    // tắt của worker mang đủ các section contributor mới (questions/badges/
-    // calendar) bên cạnh các section cũ; attempts/usages của question bank
-    // và assertions của badge KHÔNG bao giờ vào archive (dữ liệu vận hành /
-    // bằng chứng lịch sử của khoá gốc).
     const extended = {
       questions: { categories: qCategories.length, questions: qRows.length, entries: qEntries.length, versions: qVersions.length },
       badges: { badges: badges.length, criteria: criteria.length },
@@ -130,17 +98,10 @@ export class BackupProcessor extends WorkerHost {
   }
 }
 
-/** Restore: với job restore pending mang archive ở trường archive, sao chép section/cm sang course đích và ghi id mapping. */
 @Processor('restore')
-/**
- * Xử lý job khôi phục khoá học nền.
- */
 export class RestoreProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; mapped?: number }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -155,8 +116,6 @@ export class RestoreProcessor extends WorkerHost {
     if (row.status === 'completed') return { status: 'duplicate' };
     const targetId = row.targetCourseId;
     if (!targetId || !row.courseId) {
-      // Restore mức site không có khoá nguồn/đích: bản twin này chỉ xử lý
-      // restore mức khoá; restore site chạy đồng bộ ở API (không qua queue).
       await db
         .updateTable('backup_jobs')
         .set({ status: 'failed', error: 'restore job has no target course' })
@@ -199,17 +158,10 @@ export class RestoreProcessor extends WorkerHost {
   }
 }
 
-/** Search reindex: dựng lại tài liệu courses/users/contentbank từ dữ liệu gốc; user suspended/deleted bị loại. */
 @Processor('search-reindex')
-/**
- * Xử lý job dựng lại chỉ mục tìm kiếm.
- */
 export class SearchReindexProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(_job: Job<Record<string, never>>): Promise<{ indexed: number }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(_job));
   }
 
@@ -281,17 +233,10 @@ export class SearchReindexProcessor extends WorkerHost {
   }
 }
 
-/** Analytics run: model students_at_risk — chỉ ghi prediction/insight, không chạm grades/enrol. */
 @Processor('analytics-run')
-/**
- * Xử lý job chạy mô hình phân tích (insights).
- */
 export class AnalyticsRunProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ courseId: string }>): Promise<{ predictions: number; insights: number }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -328,7 +273,6 @@ export class AnalyticsRunProcessor extends WorkerHost {
     const grades = items.length
       ? await db.selectFrom('grade_grades').select(['user_id as userId', 'item_id as itemId', 'final_grade as finalGrade']).where('item_id', 'in', items.map((i) => i.id)).execute()
       : [];
-    // Người nhận: user có assignment với role archetype staff tại course context hoặc tổ tiên.
     const assignments = await db.selectFrom('role_assignments').select(['role_id as roleId', 'user_id as userId']).execute();
     const roles = await db.selectFrom('role').select(['id', 'archetype']).execute();
     const staffRoleIds = new Set(roles.filter((r) => ['manager', 'editingteacher', 'teacher'].includes(r.archetype ?? '')).map((r) => r.id));
@@ -373,15 +317,7 @@ export class AnalyticsRunProcessor extends WorkerHost {
   }
 }
 
-/** Report schedule: chạy báo cáo enrolments dưới danh tính người tạo (đếm dòng enrolment) + notification + lưu lastResult. */
 @Processor('report-schedule')
-/**
- * Xử lý job báo cáo theo lịch: sinh báo cáo và gửi notification (nội dung từ catalog i18n).
- * Thông báo đi qua hàm luật phân phối dùng chung ({@link NotificationDeliveryService},
- * NB-6): trước lát này processor insert thẳng vào bảng notifications —
- * không kiểm đình chỉ, không kiểm tuỳ chọn, không ghi dispatch log; nay áp
- * đúng luật như `notify()` phía API cho kênh trong-app.
- */
 export class ReportScheduleProcessor extends WorkerHost {
   constructor(
     private readonly i18n: I18nService,
@@ -389,9 +325,6 @@ export class ReportScheduleProcessor extends WorkerHost {
     private readonly spaceDb: SpaceDatabaseService,
   ) { super(); }
   async process(job: Job<{ scheduleId: string }>): Promise<{ rows: number; status: string }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -420,19 +353,8 @@ export class ReportScheduleProcessor extends WorkerHost {
       })
       .where('id', '=', schedule.id)
       .execute();
-    /**
-     * Text thông báo tra trong catalog i18n theo ngôn ngữ của người nhận:
-     * worker chạy ngoài request context nên truyền `locale` tường minh vào
-     * `I18nService.t()` (mẫu dịch ngoài request của docs @nestjs/i18n). Hệ
-     * thống chưa lưu locale riêng cho từng user nên dùng locale mặc định 'vi';
-     * khi có user preference về ngôn ngữ, chỉ cần thay hằng số này.
-     */
     const recipientLocale = 'vi';
     const subject = this.i18n.t('platform.reportReadySubject', { locale: recipientLocale });
-    // TENANT-1 (#196): báo cáo chưa mang tenant riêng — notification
-    // gắn tenant mặc định của người tạo lịch theo membership (người
-    // sẽ đọc thông báo), truyền xuống hàm luật dùng chung để dòng
-    // thông báo + dispatch log mang đúng tenant.
     const tenantId = await resolveDefaultTenantId(this.spaceDb.routedKysely, schedule.createdBy);
     await this.delivery.deliverInApp(schedule.createdBy, 'report_scheduled', {
       subject,
@@ -445,17 +367,10 @@ export class ReportScheduleProcessor extends WorkerHost {
   }
 }
 
-/** Privacy: export ghi manifest theo subsystem; delete lan qua các bảng đã khai trong schema worker và ẩn danh user. */
 @Processor('privacy')
-/**
- * Xử lý job quyền riêng tư (xuất/xoá dữ liệu cá nhân).
- */
 export class PrivacyProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ requestId: string }>): Promise<{ status: string; subsystems: string[] }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -532,17 +447,10 @@ export class PrivacyProcessor extends WorkerHost {
   }
 }
 
-/** Payment reconciliation + webhook twin: đối soát tối giản và xử lý webhook idempotent theo external tx. */
 @Processor('payment-reconciliation')
-/**
- * Xử lý job đối soát thanh toán.
- */
 export class PaymentReconciliationProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ paymentId?: string; externalTransactionId?: string; status?: string }>): Promise<{ status: string; duplicate?: boolean; succeeded?: number }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 

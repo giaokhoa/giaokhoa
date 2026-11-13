@@ -7,9 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { LearningPlanPage } from './learning-plan';
 
-/**
- * Spec khu quản lý competency trong trang kế hoạch học tập: tạo framework phải POST đúng body của `createCompetencyFrameworkSchema` trong contracts (`scale: { values, proficient }`), và hàng đợi duyệt phải gọi POST /plans/:id/approve cho plan đang ở trạng thái đang duyệt (3) sau khi chọn người dùng. Phần người học xem plan của mình giữ nguyên.
- */
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
 const LEARNER_ID = '01900000-0000-7000-8000-000000000007';
 const PLAN_ID = '01900000-0000-7000-8000-0000000000p1'.replace('p', 'b');
@@ -36,7 +33,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lại mọi lời gọi và phục vụ dữ liệu competency tối thiểu. */
 function stubFetch(calls: RecordedCall[]) {
   vi.stubGlobal(
     'fetch',
@@ -91,12 +87,6 @@ const EXPORT_DOC = {
   competencies: [],
 };
 
-/**
- * Stub cho khu import/export framework: danh sách có sẵn một framework,
- * export trả tài liệu mẫu, import tạo framework mới — riêng tài liệu có
- * shortName BROKEN bị API từ chối bằng Problem Details 400 mang `detail`
- * toàn vẹn để khẳng định trang hiện nguyên văn lỗi của API.
- */
 function stubFetchExport(calls: RecordedCall[]) {
   vi.stubGlobal(
     'fetch',
@@ -144,7 +134,6 @@ function stubFetchExport(calls: RecordedCall[]) {
   );
 }
 
-/** Render trang kế hoạch trong đúng khung provider của ứng dụng thật. */
 function renderPage() {
   const router = createMemoryRouter([{ path: '/learning-plan', element: <LearningPlanPage /> }], {
     initialEntries: ['/learning-plan'],
@@ -204,7 +193,6 @@ describe('Trang kế hoạch học tập — quản trị năng lực', () => {
     );
     expect(createObjectURL).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
-    // Thông báo thao tác nay là Alert của @giaokhoa/ui (role="alert").
     expect(await screen.findByRole('alert')).toHaveTextContent('Đã xuất framework "FW1"');
   });
 
@@ -263,15 +251,6 @@ describe('Trang kế hoạch học tập — quản trị năng lực', () => {
   });
 });
 
-/**
- * Khu quản trị năng lực sau khi chuyển khuôn TanStack Query (lượt
- * riêng cuối của F-01 trong #133): các khẳng định ở đây khoá phần cơ
- * chế mới mà các ca trên chưa phủ — đột biến tạo framework phải làm
- * mới danh sách qua invalidate (framework mới hiện ngay không cần tải
- * lại trang), lỗi tải danh sách framework phải hiện đúng thông báo
- * lỗi của khu quản trị, và thao tác duyệt phải làm mới cả hai danh
- * sách của hàng đợi.
- */
 describe('Trang kế hoạch học tập — quản trị năng lực (chuyển đổi TanStack Query)', () => {
   afterEach(() => {
     cleanup();
@@ -279,11 +258,6 @@ describe('Trang kế hoạch học tập — quản trị năng lực (chuyển 
     localStorage.clear();
   });
 
-  /**
-   * Stub có trạng thái cho khu quản trị: danh sách framework rỗng cho
-   * tới khi POST tạo thành công thì GET trả về framework vừa tạo;
-   * tuỳ chọn `failFrameworks` làm GET danh sách framework trả 500.
-   */
   function stubFetchAdminState(calls: RecordedCall[], opts: { failFrameworks?: boolean } = {}) {
     let created = false;
     vi.stubGlobal(
@@ -342,7 +316,6 @@ describe('Trang kế hoạch học tập — quản trị năng lực (chuyển 
     await userEvent.type(screen.getByLabelText(/Chỉ số các mức được coi là đạt/), '1');
     await userEvent.click(screen.getByRole('button', { name: 'Tạo framework' }));
 
-    // Hàng framework mới chỉ có thể hiện nếu danh sách được nạp lại sau đột biến.
     expect(await screen.findByRole('button', { name: 'Xem competency' })).toBeInTheDocument();
     const frameworkGets = calls.filter((c) => c.url === '/api/v1/competencies/frameworks' && c.method === 'GET');
     expect(frameworkGets.length).toBeGreaterThanOrEqual(2);
@@ -381,13 +354,6 @@ describe('Trang kế hoạch học tập — quản trị năng lực (chuyển 
   });
 });
 
-/**
- * Phần NGƯỜI HỌC của trang kế hoạch sau khi chuyển khuôn TanStack
- * Query (F-01 của #133): danh sách kế hoạch của chính người dùng hiện
- * đúng trạng thái, mở xem được chi tiết năng lực, yêu cầu duyệt cả kế
- * hoạch và gửi một năng lực đi duyệt đều gọi đúng endpoint và hiện
- * dòng xác nhận như bản fetch thủ công.
- */
 describe('Trang kế hoạch học tập — phía học viên', () => {
   afterEach(() => {
     cleanup();

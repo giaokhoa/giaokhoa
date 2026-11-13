@@ -6,35 +6,9 @@ import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { SpaceDatabaseService } from '../db/routing/space-database.service';
 import { AuthMailProcessor, type AuthMailSentMarker } from './auth-mail.processor';
 
-/**
- * Kiểm chứng hành vi của consumer mail auth trên hàng đợi ở worker
- * (issue #517) qua các hệ quả quan sát được — mail nào thật sự tới
- * transport, job nào bị bỏ qua, lỗi nào được ném lại cho cơ chế thử lại của hàng đợi:
- *
- * - Job hợp lệ được dựng nội dung bằng template dùng chung và gửi
- *   đúng một lần qua transport phía worker.
- * - PHÁT LẠI cùng một sự kiện (cùng `outboxId`) không gửi mail lần
- *   hai — tính idempotent theo `outboxId` là hàng rào chống tác dụng phụ trùng ngoài cửa sổ chống trùng bằng `jobId` của BullMQ, nên ca phát lại là ca trung tâm của spec này.
- * - Hai lượt xử lý ĐỒNG THỜI cùng một sự kiện cũng chỉ gửi đúng
- *   một mail: hàng rào là lease ĐANG XỬ LÝ chiếm nguyên tử trước khi gửi; lượt thua không được kết thúc như đã xử lý (mail có thể chưa hề được gửi) mà ném tín hiệu hẹn thử lại `DelayedError` của BullMQ.
- * - Lượt giữ lease CHẾT trước khi gửi (không nhả lease) thì mail
- *   không mất: lease tự hết hạn và lượt xử lý lại chiếm lại được lease để gửi — ca khôi phục sau sập này ghim đúng cửa sổ mà cơ chế một khoá (chiếm dấu trước khi gửi và giữ luôn làm dấu đã xử lý) từng để mất mail im lặng.
- * - Cửa sổ kết quả kiểm tra thành cũ: một lượt đọc dấu đã gửi là
- *   chưa có rồi bị giữ lại TRƯỚC khi chiếm lease, trong lúc lượt khác gửi trọn, ghi dấu và nhả lease — lượt đầu chiếm lại lease vừa nhả mà dựa vào kết quả kiểm tra cũ thì gửi lần hai dù không hề có lỗi nào xảy ra. Hàng rào vì vậy phải đọc lại dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport; ca xen kẽ có điều phối thứ tự dưới đây ghim đúng cửa sổ này.
- * - Nhả lease có kiểm tra chủ sở hữu: token sai không xoá được
- *   lease của lượt khác.
- * - Lỗi gửi tạm thời không để lại dấu đã gửi: job bị ném lỗi cho
- *   hàng đợi thử lại và lần xử lý sau gửi được, tổng cộng vẫn đúng một mail.
- * - Payload hỏng thì job kết thúc lặng (không gửi, không ném) để
- *   không chặn hàng đợi; môi trường chưa cấu hình Resend thì coi như đã xử lý như đường consumer cũ.
- *
- * Transport và hàng rào hai trạng thái đều là bản giả trong bộ nhớ theo đúng bề mặt processor dùng; đường Redis thật của hàng rào được kiểm chứng ở spec tích hợp `test/integration/mail/auth-mail-queue.int-spec.ts`.
- */
 
-/** Transport giả: ghi lại mọi mail được yêu cầu gửi; chế độ lỗi/bỏ qua điều khiển được theo ca. */
 class FakeMailer {
   readonly sent: WorkerMailMessage[] = [];
-  /** Số lần `send` được gọi, kể cả lần lỗi và lần bỏ qua. */
   calls = 0;
   mode: 'sent' | 'skipped' | 'throw' = 'sent';
 
@@ -47,12 +21,8 @@ class FakeMailer {
   }
 }
 
-/**
- * Transport giả có cổng chặn: mọi lượt `send` treo lại cho tới khi test mở cổng — dùng để ép hai lượt xử lý ĐỒNG THỜI cùng một sự kiện chồng lấn lên nhau tại đúng cửa sổ gửi, tái hiện đường đua chống trùng (job bị nhận xử lý lại trong khi lượt trước còn đang gửi).
- */
 class GatedMailer {
   readonly sent: WorkerMailMessage[] = [];
-  /** Số lần `send` được gọi — mỗi lượt xử lý tới được transport đều tăng biến này. */
   calls = 0;
   private open!: () => void;
   private readonly gate = new Promise<void>((resolve) => {
@@ -66,22 +36,11 @@ class GatedMailer {
     return { status: 'sent', providerId: 'fake-resend-id' };
   }
 
-  /** Mở cổng: mọi lượt gửi đang treo hoàn tất. */
   openGate(): void {
     this.open();
   }
 }
 
-/**
- * Hàng rào hai trạng thái giả trong bộ nhớ, đúng hợp đồng
- * {@link AuthMailSentMarker}: dấu ĐÃ GỬI là một tập khoá riêng;
- * lease ĐANG XỬ LÝ mang token chủ sở hữu và mốc hết hạn theo đồng
- * hồ thật (hạn lease rút ngắn được qua tham số dựng để test mô
- * phỏng được lease hết hạn). `claimProcessing` kiểm tra-và-ghi
- * trong một khối đồng bộ không có điểm chờ ở giữa, nên nguyên tử
- * đúng như `SET ... NX` phía Redis trên vòng lặp sự kiện đơn
- * luồng; nhả lease chỉ xoá khi token khớp.
- */
 class FakeSentMarker implements AuthMailSentMarker {
   private readonly sent = new Set<string>();
   private readonly leases = new Map<string, { ownerToken: string; expiresAt: number }>();
@@ -112,16 +71,6 @@ class FakeSentMarker implements AuthMailSentMarker {
   }
 }
 
-/**
- * Hàng rào giả có cổng chặn ở lượt chiếm lease ĐẦU TIÊN: lượt gọi
- * `claimProcessing` đầu tiên được báo hiệu qua `firstClaimParked`
- * rồi treo lại cho tới khi test mở cổng; mọi thao tác còn lại uỷ
- * thác nguyên vẹn cho bản giả trong bộ nhớ. Dùng để ép lịch xen
- * kẽ xác định: lượt A đọc dấu đã gửi (chưa có) rồi bị giữ ngay
- * trước khi chiếm lease, trong lúc lượt B chạy trọn chu trình
- * gửi — đúng cửa sổ mà kết quả kiểm tra dấu đọc trước khi chiếm
- * lease trở nên cũ.
- */
 class FirstClaimGatedMarker implements AuthMailSentMarker {
   private readonly inner = new FakeSentMarker();
   private claimCalls = 0;
@@ -130,7 +79,6 @@ class FirstClaimGatedMarker implements AuthMailSentMarker {
     this.openClaimGate = resolve;
   });
   private signalFirstClaimParked!: () => void;
-  /** Giải quyết khi lượt chiếm lease đầu tiên đã bị giữ ở cổng. */
   readonly firstClaimParked = new Promise<void>((resolve) => {
     this.signalFirstClaimParked = resolve;
   });
@@ -156,7 +104,6 @@ class FirstClaimGatedMarker implements AuthMailSentMarker {
     return this.inner.releaseProcessing(outboxId, ownerToken);
   }
 
-  /** Mở cổng: lượt chiếm lease đầu tiên đang bị giữ được tiếp tục. */
   releaseFirstClaim(): void {
     this.openClaimGate();
   }
@@ -165,7 +112,6 @@ class FirstClaimGatedMarker implements AuthMailSentMarker {
 const RESET_URL = 'http://localhost:5173/reset-password/token-abc?callbackURL=%2Freset-password';
 const DEFAULT_OUTBOX_ID = '0191e8f2-7c3a-7b21-9f00-000000000517';
 
-/** Dựng một job như relay phát: dữ liệu là toàn bộ dòng outbox đã chuẩn hoá. */
 function makeJob(
   payload: Record<string, unknown> | null,
   outboxId: string = DEFAULT_OUTBOX_ID,
@@ -185,13 +131,6 @@ function makeJob(
   } as Job<OutboxEventJobData>;
 }
 
-/**
- * Bộ chạy job THẬT với khung định tuyến không có sổ phía sau
- * (issue #582): các job của spec này không mang slug trung tâm
- * nên bộ chạy luôn mở ngữ cảnh platform như đường xử lý trước
- * đợt này — spec khoá hành vi của processor, không khoá định
- * tuyến kho (định tuyến có spec riêng của bộ chạy và của relay).
- */
 function makeJobRunner(): SpaceJobRunner {
   return new SpaceJobRunner({
     resolveTarget: async () => {
@@ -253,12 +192,6 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     const processor = new AuthMailProcessor(mailer as unknown as ResendMailService, new FakeSentMarker(), makeJobRunner());
     const job = makeJob({ kind: 'password_reset', to: 'user@example.com', url: RESET_URL });
 
-    // Hai lượt xử lý cùng một job chạy chồng lấn: lượt thứ hai bắt
-    // đầu khi lượt thứ nhất còn đang treo ở transport (cổng chưa
-    // mở) — đúng tình huống job bị nhận xử lý lại sau khi mất khoá
-    // BullMQ trong lúc lượt đầu chưa gửi xong. Lượt thứ hai không
-    // chiếm được lease nên phải ném tín hiệu hẹn thử lại
-    // DelayedError thay vì trả duplicate như thể mail đã gửi.
     const first = processor.process(job);
     let secondSettled = false;
     const second = processor.process(job).then(
@@ -272,9 +205,6 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
       },
     );
 
-    // Chờ tới khi đường đua bộc lộ: hoặc cả hai lượt cùng tới được
-    // transport (hàng rào thủng — ca này phải đỏ), hoặc lượt thứ
-    // hai đã bị hàng rào chặn lại và kết thúc trước khi gửi.
     await vi.waitFor(() => {
       expect(mailer.calls >= 2 || secondSettled).toBe(true);
     });
@@ -299,23 +229,13 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     const processor = new AuthMailProcessor(mailer as unknown as ResendMailService, marker, makeJobRunner());
     const job = makeJob({ kind: 'password_reset', to: 'user@example.com', url: RESET_URL });
 
-    // Lượt A bắt đầu trước: đọc dấu đã gửi (chưa có) rồi bị cổng
-    // giữ lại ngay trước khi chiếm lease — kết quả kiểm tra của
-    // lượt A từ thời điểm này là dữ kiện cũ, không còn bảo đảm
-    // sự kiện chưa được gửi.
     const turnA = processor.process(job);
     await marker.firstClaimParked;
 
-    // Lượt B chạy trọn trong cửa sổ lượt A bị giữ: chiếm lease,
-    // gửi đúng một mail, ghi dấu đã gửi và nhả lease.
     const turnB = await processor.process(job);
     expect(turnB.status).toBe('sent');
     expect(mailer.calls).toBe(1);
 
-    // Mở cổng cho lượt A tiếp tục: lượt A chiếm được lease lượt
-    // B vừa nhả. Kết quả có hiệu lực phải là lần đọc lại dấu
-    // trong lúc đang giữ lease — dấu đã đứng nên lượt A kết
-    // thúc trùng lặp và transport không bị gọi lần hai.
     marker.releaseFirstClaim();
     const turnAResult = await turnA;
     expect(turnAResult.status).toBe('duplicate');
@@ -329,9 +249,6 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     const processor = makeProcessor(mailer, marker);
     const job = makeJob({ kind: 'password_reset', to: 'user@example.com', url: RESET_URL });
 
-    // Một lượt xử lý khác đang giữ lease của sự kiện này (đang
-    // trong cửa sổ gửi, chưa rõ kết quả) — lượt này không được
-    // coi là đã xử lý.
     const otherLease = await marker.claimProcessing(DEFAULT_OUTBOX_ID);
     expect(otherLease).not.toBeNull();
 
@@ -342,20 +259,14 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
 
   it('lượt giữ lease chết trước khi gửi (không nhả lease) thì sau khi lease hết hạn, lượt xử lý lại vẫn gửi được mail đúng một lần', async () => {
     const mailer = new FakeMailer();
-    // Hạn lease rút xuống 50ms để test mô phỏng được lease hết hạn
-    // trong thời gian ngắn — đúng trạng thái hệ thống tự tới khi
-    // TTL của lease trôi qua sau lúc tiến trình giữ lease chết.
     const marker = new FakeSentMarker(50);
     const processor = makeProcessor(mailer, marker);
     const job = makeJob({ kind: 'password_reset', to: 'user@example.com', url: RESET_URL });
 
-    // Lượt xử lý trước chiếm lease rồi chết ngay: không gửi,
-    // không nhả lease, không ghi dấu đã gửi.
     const deadLease = await marker.claimProcessing(DEFAULT_OUTBOX_ID);
     expect(deadLease).not.toBeNull();
     expect(mailer.calls).toBe(0);
 
-    // Chờ lease của lượt đã chết hết hạn, rồi hàng đợi phát lại job.
     await new Promise((resolve) => setTimeout(resolve, 90));
     const recovered = await processor.process(job);
 
@@ -363,7 +274,6 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     expect(mailer.calls).toBe(1);
     expect(mailer.sent).toHaveLength(1);
 
-    // Sau khi khôi phục, dấu đã gửi đã đứng: phát lại nữa thì bỏ qua.
     const replay = await processor.process(job);
     expect(replay.status).toBe('duplicate');
     expect(mailer.calls).toBe(1);
@@ -375,12 +285,9 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     const ownerToken = await marker.claimProcessing(DEFAULT_OUTBOX_ID);
     expect(ownerToken).not.toBeNull();
 
-    // Token không phải của chủ lease: lease phải còn nguyên — một
-    // lượt kết thúc muộn không được xoá lease của lượt đang giữ.
     await marker.releaseProcessing(DEFAULT_OUTBOX_ID, 'token-khong-phai-cua-chu-lease');
     expect(await marker.claimProcessing(DEFAULT_OUTBOX_ID)).toBeNull();
 
-    // Token đúng của chủ lease: nhả được, lượt khác chiếm lại được.
     await marker.releaseProcessing(DEFAULT_OUTBOX_ID, ownerToken as string);
     expect(await marker.claimProcessing(DEFAULT_OUTBOX_ID)).not.toBeNull();
   });

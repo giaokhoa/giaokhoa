@@ -14,9 +14,6 @@ import { ReportsPage } from './routes/platform-reports';
 import { SearchPage } from './routes/platform-search';
 import { TokensPage } from './routes/platform-tokens';
 
-/**
- * Platform web tests (Testing Library): global search hiển thị đúng kết quả đã lọc quyền mà server trả về, và user tự gửi được privacy request.
- */
 function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
   vi.stubGlobal(
     'fetch',
@@ -50,9 +47,6 @@ describe('Trang tìm kiếm (platform)', () => {
         ];
       return undefined;
     });
-    // SearchPage đọc tham số q qua useSearchParams nên phải render trong Router
-    // (đây là ca đỏ duy nhất của CI PR #305 trước khi sửa). Trang cũng đọc ảnh
-    // chụp quyền (đích của kết quả `users` phụ thuộc quyền người tìm) nên phải bọc TestProviders — đúng cây provider root.tsx luôn gắn trong app thật.
     const router = createMemoryRouter([{ path: 'search', element: <SearchPage /> }], {
       initialEntries: ['/search'],
     });
@@ -97,7 +91,6 @@ describe('Trang riêng tư (platform)', () => {
         ];
       return undefined;
     });
-    // PrivacyPage đọc dữ liệu qua TanStack Query (F-01 của #133) nên render trong TestProviders như mọi spec trang đã chuyển khuôn.
     render(
       <TestProviders>
         <PrivacyPage />
@@ -117,9 +110,6 @@ describe('Trang riêng tư (platform)', () => {
   });
 });
 
-/**
- * Cụm trang nền tảng sau khi chuyển khuôn TanStack Query (F-01 của #133): dữ liệu hiển thị giữ nguyên như bản fetch thủ công — insight kèm dòng học viên/khoá, job sao lưu xem được các bước, token thô chỉ hiện một lần khi tạo và thu hồi cập nhật danh sách, chạy báo cáo hiện đúng số dòng kết quả. Thêm ca khoá cho clientLoader: nạp trước đúng khoá trang sẽ đọc thì trang mở ra hiện dữ liệu ngay, không fetch trùng lần hai.
- */
 describe('Trang phân tích (platform)', () => {
   afterEach(() => {
     cleanup();

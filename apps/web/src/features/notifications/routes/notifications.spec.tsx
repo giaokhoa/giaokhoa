@@ -8,9 +8,6 @@ import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 import { NotificationsPage } from './notifications';
 
-/**
- * Spec F-01 cho trang thông báo: điểm hợp nhất cốt lõi là các thao tác đọc ở trang này phải LÀM MỚI khoá `notificationUnreadCount` dùng chung với huy hiệu chuông ở sidebar/header (trước đây trang fetch thủ công không hề invalidate nên huy hiệu giữ số cũ). Probe dưới đây đóng vai huy hiệu: một useQuery độc lập cùng khoá factory + cùng endpoint như app-sidebar.
- */
 const ITEM_ID = '01900000-0000-7000-8000-0000000000n1'.replace('n', 'a');
 
 function localDay(d: Date): string {
@@ -25,7 +22,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Huy hiệu chưa đọc mô phỏng sidebar: query độc lập, cùng khoá + endpoint thật. */
 function UnreadBadgeProbe() {
   const query = useQuery({
     queryKey: queryKeys.notificationUnreadCount,
@@ -79,9 +75,7 @@ function stubFetch(calls: RecordedCall[], state: { unread: number; allRead: bool
         return respond({});
       }
       if (url === '/api/v1/messages/preferences' && method === 'GET') {
-        // NB-7: học sinh nhận danh sách rỗng (phần tối thiểu).
         if (state.minimalPrefs) return respond([]);
-        // Mô hình v2 (NB-2): một dòng mỗi provider, nhãn từ registry.
         return respond([
           {
             provider: 'grade_updated', component: 'core_grades', group: 'learning',
@@ -110,7 +104,6 @@ function stubFetch(calls: RecordedCall[], state: { unread: number; allRead: bool
         });
       }
       if (url === '/api/v1/messages/preferences/courses' && method === 'GET') {
-        // Ghi đè theo khoá (NB-4): mọi khoá thuộc về kèm chế độ hiệu lực.
         return respond({ courses: state.courses });
       }
       if (url === '/api/v1/messages/preferences/courses' && method === 'PUT') {
@@ -158,8 +151,6 @@ describe('Trang thông báo — vô hiệu TanStack (F-01)', () => {
     await waitFor(() =>
       expect(calls.some((c) => c.url === '/api/v1/notifications/mark-read' && c.method === 'POST')).toBe(true),
     );
-    // Huy hiệu (query độc lập cùng khoá) chỉ về 0 được nếu mutation đã
-    // invalidate đúng khoá factory — đây là hành vi F-01 thêm vào.
     await waitFor(() => expect(screen.getByTestId('unread-badge')).toHaveTextContent('0'));
     expect(
       calls.filter((c) => c.url === '/api/v1/notifications/unread-count' && c.method === 'GET').length,
@@ -172,9 +163,7 @@ describe('Trang thông báo — vô hiệu TanStack (F-01)', () => {
     stubFetch(calls, state);
     renderPage();
 
-    // Trung tâm vẫn hiện danh sách thông báo như cũ.
     expect(await screen.findByText('Bài tập sắp đến hạn')).toBeInTheDocument();
-    // Tuỳ chọn + ngoại lệ theo khoá đã chuyển hẳn sang /settings/notifications.
     expect(screen.queryByText('Tuỳ chọn thông báo')).not.toBeInTheDocument();
     expect(screen.queryByText('Ngoại lệ theo khoá học')).not.toBeInTheDocument();
     expect(calls.some((c) => c.url.startsWith('/api/v1/messages/preferences'))).toBe(false);

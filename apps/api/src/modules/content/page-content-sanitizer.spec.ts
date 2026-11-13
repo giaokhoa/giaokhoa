@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isSafeExternalResourceUrl, sanitizePageContent } from './page-content-sanitizer';
 
-/**
- * Gác XSS lưu trữ của nội dung trang đọc (mod_page) và URL tài nguyên ngoài ở mức đơn vị: hàm làm sạch phải loại mọi cấu trúc thực thi
- * (thẻ script, thuộc tính sự kiện, URL nguy hiểm) trong khi giữ
- * nguyên định dạng học liệu hợp lệ — đổi allowlist theo hướng nới
- * (cho lại thẻ/thuộc tính thực thi) hoặc hướng siết quá tay (làm mất
- * định dạng hợp lệ) đều phải làm spec này đỏ. Luồng nghiệp vụ đầy đủ
- * (ghi qua API → học viên đọc/player) nằm ở
- * `test/content-page-xss.e2e-spec.ts`.
- */
 describe('Hàm sanitizePageContent', () => {
   it('loại thẻ script cùng toàn bộ nội dung của nó', () => {
     const out = sanitizePageContent('<p>Bài đọc</p><script>alert(1)</script>');
@@ -56,7 +47,6 @@ describe('Hàm sanitizePageContent', () => {
 
   it('style trình bày vô hại được giữ, biểu thức CSS nguy hiểm bị loại', () => {
     const out = sanitizePageContent('<p style="text-align: center; color: #ff0000; width: expression(alert(1))">Giữa</p>');
-    // Thư viện chuẩn hoá style thành dạng không khoảng trắng sau dấu hai chấm.
     expect(out).toContain('text-align:center');
     expect(out).toContain('color:#ff0000');
     expect(out).not.toContain('expression');
@@ -75,9 +65,6 @@ describe('Hàm sanitizePageContent', () => {
   });
 });
 
-/**
- * Scheme của URL tài nguyên ngoài: chỉ http/https là đích an toàn để phát vào href của trang học; parser URL của nền tảng phải bắt được cả biến thể lách bằng ký tự điều khiển.
- */
 describe('Hàm isSafeExternalResourceUrl', () => {
   it('chấp nhận URL http/https tuyệt đối, gồm đường nhúng YouTube/Vimeo', () => {
     expect(isSafeExternalResourceUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(true);

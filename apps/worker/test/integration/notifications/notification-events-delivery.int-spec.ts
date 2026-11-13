@@ -9,22 +9,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Consumer thông báo sự kiện ở worker (issue con #520 của #491) — mười bốn ca hành vi vốn ở e2e phía API chuyển nguyên sang tầng này, đi qua ĐƯỜNG THẬT của production: chèn dòng sự kiện outbox đúng hình dạng phía phát vẫn ghi → relay outbox duy nhất đóng dấu `publishedAt` và định tuyến vào hàng đợi `notification-events` → `NotificationEventsProcessor` (chống trùng theo outboxId) → `NotificationEventsHandlerService` tra DB và phát qua bề mặt dùng chung `NotificationDeliveryService.notify`.
- *
- * Ánh xạ ca (nguồn cũ → spec này), giữ nguyên khẳng định nghiệp vụ:
- *  - `notifications-providers-flow.e2e-spec.ts` (API): grade_updated
- *    (nội dung không chứa điểm số; item tổng không sinh bản thứ hai),
- *    course_completed, enrol_expiry_warning, activity_due_soon dạng đề, message_new (gộp theo conversation khi còn chưa đọc, nội dung không chứa text tin), assignment_created (+ người tắt tuỳ chọn thì không nhận), assignment_submitted (bản gộp P5 cập nhật số chờ chấm tại chỗ), assignment_returned (không điểm), exam_pinned, exam_pinned ghim lại (gộp khi chưa đọc, sinh bản mới sau khi đã đọc), quiz_attempt_finished (chỉ needsGrading, không preview, gộp), activity_due_soon dạng bài tập.
- *  - `notifications-course-overrides.e2e-spec.ts` (API): ca tắt
- *    tiếng theo khoá — thông báo thường bị chặn + dispatch log 'skipped-course-mute', khoá khác vẫn tới, hai loại P3 (điểm mới, sắp hết hạn ghi danh) của chính khoá bị mute vẫn tới, gỡ mute khôi phục.
- *  - `messaging-conversation-state.e2e-spec.ts` (API): cổng tắt
- *    tiếng conversation của `message_new` — thành viên đã tắt tiếng không nhận, thành viên đã chặn người gửi không nhận, bỏ tắt tiếng thì thông báo trở lại.
- *
- * Khác biệt bề mặt duy nhất so với e2e cũ: dữ kiện (khoá, ghi danh, item điểm, bài tập, lần ghim, conversation) được dựng bằng SQL qua kết nối quản trị của harness thay vì qua API, và khẳng định đọc ở tầng DB thay vì qua endpoint danh sách thông báo — đúng tiền lệ chuyển ca của issue #518. Sự kiện được chèn đúng hình dạng payload mà phía phát thật ghi (đã đối chiếu tại mã nguồn của từng phía phát).
- *
- * Cách ly bể digest email dùng chung: mọi người nhận fixture đặt tần suất email `immediate` cho cả chín provider có kênh email — nếu để mặc định theo nhóm ('daily'), dispatch email của các ca này sẽ nằm chờ `digest-queued` trong DB dùng chung và làm lệch khẳng định toàn cục của spec email; với `immediate`, dispatch vẫn đi trọn đường thật và chốt bằng dispatch log.
- */
 describe('Worker notification events delivery (chuyển consumer ở #520)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -37,7 +21,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
 
   const uid = (n: number) => `01900000-0000-7000-8000-${String(520000 + n * 37 + (suffix % 991)).padStart(12, '0')}`;
 
-  /** Chín provider có kênh email của consumer thông báo sự kiện. */
   const EMAIL_PROVIDERS = [
     'grade_updated', 'enrol_expiry_warning', 'activity_due_soon', 'assignment_assigned',
     'assignment_submitted', 'assignment_returned', 'quiz_available', 'quiz_attempt_finished',
@@ -58,7 +41,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     }
   }
 
-  /** Lớp fixture cho tenant worker-fixture (khoá dạy thật phải có class_id — cùng khuôn các spec worker khác). */
   async function fixtureClassId(): Promise<string> {
     const ownerId = '01980000-0000-7000-8000-00000000c1a5';
     await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
@@ -81,7 +63,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     }).execute();
   }
 
-  /** Gán vai editingteacher cho giáo viên tại context của khoá (path context hợp lệ như production). */
   async function makeTeacher(courseId: string, teacherId: string): Promise<void> {
     await sql`insert into context (id, context_level, instance_id, path, depth)
       select '01990000-0000-7000-8000-0000000000a1', 10, null, '/01990000-0000-7000-8000-0000000000a1', 1
@@ -96,7 +77,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     await sql`insert into role_assignments (role_id, user_id, context_id) values (${role[0]!.id}, ${teacherId}, ${courseCtxId})`.execute(db);
   }
 
-  /** Section + course module hiển thị cho một khoá; trả cmId. Section 0 của khoá là duy nhất nên lượt dựng module thứ hai cho cùng khoá dùng lại section đã có. */
   async function makeModule(courseId: string, component: string): Promise<string> {
     await sql`insert into course_sections (course, section) values (${courseId}, 0) on conflict (course, section) do nothing`.execute(db);
     const sec = await execRows<{ id: string }>(sql`select id from course_sections where course = ${courseId} and section = 0`);
@@ -110,7 +90,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     return row.id;
   }
 
-  /** Bank → đề → version → lần ghim tối thiểu bằng SQL như các fixture worker khác; time_close để trống để lượt quét hạn không chen vào. */
   async function makePin(courseId: string, examName: string): Promise<string> {
     const cmId = await makeModule(courseId, 'mod_quiz');
     const bank = await execRows<{ id: string }>(sql`insert into question_banks (name, bank_kind, scope, context_id, created_by, tenant_id) values ('NE520 bank', 'exam', 'personal', ${uid(900)}, ${uid(900)}, ${fixtureTenantId}) returning id`);
@@ -120,7 +99,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     return pin[0]!.id;
   }
 
-  /** Chèn một dòng sự kiện outbox đúng hình dạng phía phát; trả outboxId để chờ job. */
   async function emit(aggregate: string, type: string, payload: Record<string, unknown>): Promise<string> {
     const row = await db.insertInto('outbox_events').values({
       aggregate, type, tenant_id: fixtureTenantId,
@@ -129,7 +107,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     return row.id;
   }
 
-  /** Kích hoạt relay thật với ngữ cảnh platform rồi chờ job hoàn tất, không đợi lịch 5 giây. */
   async function waitJobCompleted(outboxId: string, timeoutMs = 90000): Promise<void> {
     await context.get(OutboxRelayScheduler).relayTick();
     const deadline = Date.now() + timeoutMs;
@@ -153,7 +130,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     return rows as NotifRow[];
   }
 
-  /** Chờ ít nhất một thông báo khớp điều kiện xuất hiện cho người nhận. */
   async function waitNotification(
     userId: string, eventType: string,
     predicate: (n: NotifRow) => boolean = () => true, timeoutMs = 90000,
@@ -216,8 +192,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     expect(notif.context_url).toBe(`/courses/${courseId}/grades`);
     expect(notif.tenant_id).toBe(fixtureTenantId);
 
-    // Sự kiện tính lại tổng (item tổng của khoá) bị cổng loại item
-    // chặn: job hoàn thành mà không sinh thông báo thứ hai.
     const totalItem = await execRows<{ id: string }>(sql`insert into grade_items (course_id, item_name, item_type, grade_max, posting_policy) values (${courseId}, 'Tổng khoá', 'course', 100, 'auto') returning id`);
     const totalEventId = await emit('grades', 'grade_updated', {
       courseId, itemId: totalItem[0]!.id, userId: student, rawGrade: 73.5, finalGrade: 73.5, actorId: teacher,
@@ -313,14 +287,11 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     expect(notifs[0]!.full_message).not.toContain(secret);
     expect(notifs[0]!.context_url).toBe(`/messages?conversation=${conversationId}`);
     expect(notifs[0]!.tenant_id).toBe(fixtureTenantId);
-    // Người gửi không nhận thông báo cho tin của chính mình.
     expect(await notificationsOf(sender, 'message_new')).toHaveLength(0);
 
-    // Tin thứ hai khi bản đầu còn chưa đọc: gộp — không sinh thêm.
     await sendMessage(2, 'tin thứ hai');
     expect(await notificationsOf(recipient, 'message_new')).toHaveLength(1);
 
-    // Đọc hết rồi có tin mới thì lại có thông báo mới chưa đọc.
     await sql`update notifications set time_read = now() where user_id_to = ${recipient} and event_type = 'message_new'`.execute(db);
     await sendMessage(3, 'tin thứ ba');
     const after = await notificationsOf(recipient, 'message_new');
@@ -346,9 +317,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     expect(first[0]!.subject).toContain('Bài tập NB-1 số 1');
     expect(await notificationsOf(student2, 'assignment_assigned')).toHaveLength(1);
 
-    // HS2 tắt tuỳ chọn popup của assignment_assigned (mô hình v2):
-    // bài tập sau không báo nữa — kết quả chốt là dispatch log
-    // 'skipped-preference' của chính HS2 trên sự kiện bài số 2.
     await db.insertInto('user_preferences').values({
       user_id: student2, name: 'message_provider_assignment_assigned_popup_v2', value: '0',
     }).onConflict((oc) => oc.columns(['user_id', 'name']).doUpdateSet({ value: '0' })).execute();
@@ -396,7 +364,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     await waitJobCompleted(event2Id);
     await waitNotification(teacher, 'assignment_submitted',
       (n) => n.full_message.includes('Có 2 bài nộp'));
-    // Bản gộp của giáo viên vẫn đúng một bản — chỉ nội dung được cập nhật.
     expect(await notificationsOf(teacher, 'assignment_submitted')).toHaveLength(1);
     const receipt2 = await notificationsOf(student2, 'assignment_submitted');
     expect(receipt2).toHaveLength(1);
@@ -458,12 +425,10 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     await waitJobCompleted(firstId);
     expect(await notificationsOf(student, 'quiz_available')).toHaveLength(1);
 
-    // Ghim lại khi bản đầu còn chưa đọc: handler gộp giữ đúng một bản.
     const secondId = await emit('exam_pin', 'exam_pinned', payload);
     await waitJobCompleted(secondId);
     expect(await notificationsOf(student, 'quiz_available')).toHaveLength(1);
 
-    // Đọc xong bản gộp, lần ghim tiếp theo sinh bản mới chưa đọc.
     await sql`update notifications set time_read = now() where user_id_to = ${student} and event_type = 'quiz_available'`.execute(db);
     const thirdId = await emit('exam_pin', 'exam_pinned', payload);
     await waitJobCompleted(thirdId);
@@ -499,9 +464,7 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
       (n) => n.full_message.includes('1 lượt làm bài'));
     expect(notif.context_url).toBe(`/courses/${courseId}/exams/${pinId}/results`);
 
-    // Sự kiện trùng trạng thái: bản gộp cập nhật tại chỗ, không thêm bản.
     await emitFinished({});
-    // Lượt tự chấm hết và lượt preview: không sinh thông báo nào.
     await emitFinished({ needsGrading: false });
     await emitFinished({ preview: true });
     expect(await notificationsOf(teacher, 'quiz_attempt_finished')).toHaveLength(1);
@@ -556,7 +519,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     expect(dueSoons.map((n) => n.context_url)).not.toContain(`/courses/${courseA}/exams/${quizA}`);
     await waitDispatchLog(student, 'activity_due_soon', 'skipped-course-mute');
 
-    // P3: điểm mới của chính khoá bị mute vẫn tới.
     const item = await execRows<{ id: string }>(sql`insert into grade_items (course_id, item_name, item_type, grade_max, posting_policy) values (${courseA}, 'Bài kiểm tra 15 phút', 'manual', 100, 'auto') returning id`);
     await sql`insert into grade_grades (item_id, user_id, final_grade, updated_at) values (${item[0]!.id}, ${student}, 61, now())`.execute(db);
     const gradeEvent = await emit('grades', 'grade_updated', {
@@ -567,7 +529,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     expect(gradeNotifs).toHaveLength(1);
     expect(gradeNotifs[0]!.context_url).toBe(`/courses/${courseA}/grades`);
 
-    // P3: sắp hết hạn ghi danh của chính khoá bị mute vẫn tới.
     const expiryEvent = await emit('enrol', 'enrol_expiry_warning', {
       userId: student, enrolmentId: uid(911), enrolId: uid(912), courseId: courseA,
       timeEnd: new Date(Date.now() + 3 * DAY).toISOString(),
@@ -575,7 +536,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     await waitJobCompleted(expiryEvent);
     expect(await notificationsOf(student, 'enrol_expiry_warning')).toHaveLength(1);
 
-    // Gỡ mute: lần phát kế tiếp của khoá A tới bình thường.
     await sql`update user_preferences set value = 'all' where user_id = ${student} and name = ${`notif.course.${courseA}`}`.execute(db);
     const quizA2 = uid(913);
     const restoredEvent = await emit('activity', 'activity_due_reminder', {
@@ -617,7 +577,6 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     expect(await notificationsOf(blockingMember, 'message_new')).toHaveLength(0);
     expect(await notificationsOf(normalMember, 'message_new')).toHaveLength(1);
 
-    // Bỏ tắt tiếng: tin kế tiếp sinh thông báo cho thành viên đó.
     await sql`update message_conversation_members set muted = false where conversation_id = ${conversationId} and user_id = ${mutedMember}`.execute(db);
     await sendMessage(2);
     expect(await notificationsOf(mutedMember, 'message_new')).toHaveLength(1);

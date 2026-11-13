@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -43,16 +43,9 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Bất biến dữ liệu phải có spec khoá: số bảng, số mặc định uuidv7, số policy RLS, index dẫn đầu cho FK — đếm lại trên baseline cuối và ghi con số thật, không nới khẳng định cho qua.
 - Đổi một quan hệ nghiệp vụ trong schema (vd lớp–khoá, tenant) mà spec ở apps/api vẫn xanh nguyên = test chưa bám nghiệp vụ; bổ sung/sửa spec trong cùng PR.
 
-## Chuẩn comment TSDoc
+## Không viết comment trong code
 
-Mọi code TypeScript viết mới hoặc sửa trong `packages/db` phải có comment **tiếng Việt theo chuẩn TSDoc**, chi tiết nhất có thể — luồng nghiệp vụ của dữ liệu phải nằm ngay trong code, để lần sửa sau dựa vào nội dung code đang có chứ không dựa vào trí nhớ của trợ lý. Chuẩn ngôn ngữ chung của repo: code bằng tiếng Anh (định danh, tên bảng/cột/hàm, chuỗi kỹ thuật); **comment — gồm cả comment luồng nghiệp vụ — bằng tiếng Việt**; mọi tài liệu bằng tiếng Việt:
-
-- Đầu mỗi file repository/runner Kysely: khối TSDoc mô tả miền dữ liệu, hình dạng đọc/ghi, bất biến giao dịch và nơi cấp handle. File `src/types/*.d.ts` là kết quả codegen từ DB thật, **không sửa tay để thêm TSDoc**; luật bảng/cột được kiểm chứng ở migration SQL và test invariant.
-- Mỗi repository, hàm truy cập dữ liệu hoặc hàm migration trọng yếu: TSDoc `/** ... */` tiếng Việt nêu mục đích, bất biến và ràng buộc (UUIDv7, `tenant_id` + RLS fail-closed, FK `restrict` với dữ liệu chuẩn GDPT), bên cấp transaction và lý do thiết kế. Không khai schema bảng bằng TypeScript viết tay.
-- Logic phức tạp (cột jsonb mang cấu hình, cột suy biến phục vụ truy vấn, khoá tự nhiên của dữ liệu chuẩn): comment nội tuyến tiếng Việt nói bước xử lý và **lý do** — không lặp lại điều code đã hiển nhiên.
-- Cú pháp/tag theo TSDoc (`@remarks`/`@example` khi cần); định danh và tên tag giữ tiếng Anh.
-- Sửa code thì căn cứ vào comment đang có trong code; thấy comment lệch code thật thì sửa comment **trong cùng lượt** với sửa code.
-- Đội đánh giá độc lập soi chuẩn này như một tiêu chí đạt — code thiếu comment đạt chuẩn là chưa đạt. Comment tiếng Anh còn tồn đọng trong package được dịch theo đợt riêng của chương trình sửa chuẩn ngôn ngữ toàn repo, không tự trộn việc dịch vào feat đang bay.
+Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.
 
 ## Sổ tay chuyển đổi repository sang Kysely
 

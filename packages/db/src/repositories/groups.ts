@@ -1,33 +1,10 @@
 import type { CentreDb, CentreTx } from '../client';
 
-/**
- * Kho dữ liệu nhóm trên Kysely: quản lý group, grouping, thành viên nhóm và cohort dùng cho phân nhóm theo ngữ cảnh.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
- *   select và returning — KHÔNG bật CamelCasePlugin.
- * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4).
- * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
- *   qua `id` và lấy id qua `returning`.
- * - Ba điểm `onConflictDoNothing` của bản cũ trước chuyển đổi (thêm thành
- *   viên nhóm, đưa nhóm vào grouping, thêm thành viên cohort) dùng `onConflict … doNothing()` tương đương; riêng `addCohortMember` suy luận "đã chèn thật hay chưa" từ độ dài của `returning` như bản cũ.
- *
- * `removeCohortMember` nhận handle tuỳ chọn (mặc định handle thường): đường gỡ thành viên TRONG transaction của bên gọi
- * (settle hoàn tiền — điểm nối C-8/C, đã đóng ở #656) truyền
- * transaction của bên gọi vào để việc gỡ và ghi sổ hoàn commit cùng nhau.
- *
- * Kiểu dòng công khai dùng camelCase, được ánh xạ tường minh từ các cột snake_case.
- */
 
-/** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
 export type GroupsDb = CentreDb | CentreTx;
-/** Handle giao dịch kho trung tâm. */
 export type GroupsTx = CentreTx;
 
-// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
-/** Dòng `course_groups`. */
 export interface GroupRow {
   id: string;
   courseId: string;
@@ -39,7 +16,6 @@ export interface GroupRow {
   updatedAt: Date;
 }
 
-/** Dòng `groups_members`. */
 export interface GroupMemberRow {
   id: string;
   groupId: string;
@@ -49,7 +25,6 @@ export interface GroupMemberRow {
   itemId: string | null;
 }
 
-/** Dòng `groupings`. */
 export interface GroupingRow {
   id: string;
   courseId: string;
@@ -60,7 +35,6 @@ export interface GroupingRow {
   updatedAt: Date;
 }
 
-/** Dòng `cohort`. */
 export interface CohortRow {
   id: string;
   tenantId: string;
@@ -74,18 +48,13 @@ export interface CohortRow {
   updatedAt: Date;
 }
 
-/** Dòng `cohort_members`. */
 export interface CohortMemberRow {
   cohortId: string;
   userId: string;
   timeAdded: Date;
 }
 
-// ---------------------------------------------------------------------------
-// Kiểu ghi vào (khớp `$inferInsert` của repository cũ)
-// ---------------------------------------------------------------------------
 
-/** Giá trị chèn `course_groups`. */
 export interface NewGroup {
   id?: string;
   courseId: string;
@@ -95,7 +64,6 @@ export interface NewGroup {
   enrolmentKey?: string | null;
 }
 
-/** Giá trị chèn `groupings`. */
 export interface NewGrouping {
   id?: string;
   courseId: string;
@@ -104,7 +72,6 @@ export interface NewGrouping {
   description?: string;
 }
 
-/** Giá trị chèn `cohort`. */
 export interface NewCohort {
   id?: string;
   tenantId: string;
@@ -116,9 +83,6 @@ export interface NewCohort {
   visible?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Danh sách cột đọc (dùng chung cho select và returning)
-// ---------------------------------------------------------------------------
 
 const GROUP_COLUMNS = [
   'id',
@@ -165,9 +129,6 @@ const COHORT_COLUMNS = [
 
 const COHORT_MEMBER_COLUMNS = ['cohort_id as cohortId', 'user_id as userId', 'time_added as timeAdded'] as const;
 
-// ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
-// ---------------------------------------------------------------------------
 
 function groupInsertValues(v: NewGroup) {
   return {
@@ -225,19 +186,13 @@ function cohortUpdateValues(v: Partial<NewCohort>) {
   };
 }
 
-/**
- * Kho dữ liệu nhóm: group, grouping, thành viên nhóm và cohort
- * (nhóm hệ thống/danh mục).
- */
 export class GroupsRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: GroupsTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
-  /** Chèn nhóm khoá học. */
   async insertGroup(v: NewGroup): Promise<GroupRow> {
     return this.handle
       .insertInto('course_groups')
@@ -246,7 +201,6 @@ export class GroupsRepository {
       .executeTakeFirstOrThrow() as Promise<GroupRow>;
   }
 
-  /** Lấy nhóm theo id. */
   async getGroup(id: string): Promise<GroupRow | undefined> {
     return this.handle
       .selectFrom('course_groups')
@@ -255,7 +209,6 @@ export class GroupsRepository {
       .executeTakeFirst() as Promise<GroupRow | undefined>;
   }
 
-  /** Liệt kê nhóm của khoá học. */
   async listGroups(courseId: string): Promise<GroupRow[]> {
     return this.handle
       .selectFrom('course_groups')
@@ -265,7 +218,6 @@ export class GroupsRepository {
       .execute() as Promise<GroupRow[]>;
   }
 
-  /** Cập nhật nhóm. */
   async updateGroup(id: string, v: Partial<NewGroup>): Promise<void> {
     await this.handle
       .updateTable('course_groups')
@@ -274,12 +226,10 @@ export class GroupsRepository {
       .execute();
   }
 
-  /** Xoá nhóm. */
   async deleteGroup(id: string): Promise<void> {
     await this.handle.deleteFrom('course_groups').where('id', '=', id).execute();
   }
 
-  /** Thêm thành viên vào nhóm (trùng thì bỏ qua). */
   async addMember(groupId: string, userId: string, component = '', itemId: string | null = null): Promise<void> {
     await this.handle
       .insertInto('groups_members')
@@ -288,7 +238,6 @@ export class GroupsRepository {
       .execute();
   }
 
-  /** Gỡ thành viên khỏi nhóm. */
   async removeMember(groupId: string, userId: string): Promise<void> {
     await this.handle
       .deleteFrom('groups_members')
@@ -297,7 +246,6 @@ export class GroupsRepository {
       .execute();
   }
 
-  /** Thành viên của một nhóm. */
   async listMembers(groupId: string): Promise<GroupMemberRow[]> {
     return this.handle
       .selectFrom('groups_members')
@@ -307,7 +255,6 @@ export class GroupsRepository {
       .execute() as Promise<GroupMemberRow[]>;
   }
 
-  /** Thành viên của nhiều nhóm (gộp). */
   async listMembersOfGroups(groupIds: string[]): Promise<GroupMemberRow[]> {
     if (!groupIds.length) return [];
     return this.handle
@@ -317,7 +264,6 @@ export class GroupsRepository {
       .execute() as Promise<GroupMemberRow[]>;
   }
 
-  /** Các nhóm user thuộc về trong khoá học. */
   async groupsOfUser(courseId: string, userId: string): Promise<GroupRow[]> {
     const memberRows = (await this.handle
       .selectFrom('groups_members')
@@ -334,7 +280,6 @@ export class GroupsRepository {
       .execute() as Promise<GroupRow[]>;
   }
 
-  /** User có là thành viên nhóm hay không. */
   async isMember(groupId: string, userId: string): Promise<boolean> {
     const row = await this.handle
       .selectFrom('groups_members')
@@ -345,7 +290,6 @@ export class GroupsRepository {
     return !!row;
   }
 
-  /** Chèn grouping (nhóm của các nhóm). */
   async insertGrouping(v: NewGrouping): Promise<GroupingRow> {
     return this.handle
       .insertInto('groupings')
@@ -354,7 +298,6 @@ export class GroupsRepository {
       .executeTakeFirstOrThrow() as Promise<GroupingRow>;
   }
 
-  /** Lấy grouping theo id. */
   async getGrouping(id: string): Promise<GroupingRow | undefined> {
     return this.handle
       .selectFrom('groupings')
@@ -363,7 +306,6 @@ export class GroupsRepository {
       .executeTakeFirst() as Promise<GroupingRow | undefined>;
   }
 
-  /** Liệt kê grouping của khoá học. */
   async listGroupings(courseId: string): Promise<GroupingRow[]> {
     return this.handle
       .selectFrom('groupings')
@@ -373,12 +315,10 @@ export class GroupsRepository {
       .execute() as Promise<GroupingRow[]>;
   }
 
-  /** Xoá grouping. */
   async deleteGrouping(id: string): Promise<void> {
     await this.handle.deleteFrom('groupings').where('id', '=', id).execute();
   }
 
-  /** Đưa nhóm vào grouping (trùng thì bỏ qua). */
   async addGroupToGrouping(groupingId: string, groupId: string): Promise<void> {
     await this.handle
       .insertInto('groupings_groups')
@@ -387,7 +327,6 @@ export class GroupsRepository {
       .execute();
   }
 
-  /** Gỡ nhóm khỏi grouping. */
   async removeGroupFromGrouping(groupingId: string, groupId: string): Promise<void> {
     await this.handle
       .deleteFrom('groupings_groups')
@@ -396,7 +335,6 @@ export class GroupsRepository {
       .execute();
   }
 
-  /** Các nhóm thuộc grouping. */
   async groupsInGrouping(groupingId: string): Promise<GroupRow[]> {
     const links = await this.handle
       .selectFrom('groupings_groups')
@@ -411,7 +349,6 @@ export class GroupsRepository {
       .execute() as Promise<GroupRow[]>;
   }
 
-  /** Chèn cohort; nhận handle giao dịch khi gọi trong transaction tạo lớp. */
   async insertCohort(v: NewCohort, tx?: GroupsDb): Promise<CohortRow> {
     const db = tx ?? this.handle;
     return db
@@ -421,7 +358,6 @@ export class GroupsRepository {
       .executeTakeFirstOrThrow() as Promise<CohortRow>;
   }
 
-  /** Lấy cohort theo id. */
   async getCohort(id: string): Promise<CohortRow | undefined> {
     return this.handle
       .selectFrom('cohort')
@@ -430,7 +366,6 @@ export class GroupsRepository {
       .executeTakeFirst() as Promise<CohortRow | undefined>;
   }
 
-  /** Liệt kê cohort. */
   async listCohorts(): Promise<CohortRow[]> {
     return this.handle
       .selectFrom('cohort')
@@ -439,7 +374,6 @@ export class GroupsRepository {
       .execute() as Promise<CohortRow[]>;
   }
 
-  /** Cập nhật cohort; nhận handle giao dịch khi gọi trong transaction tạo lớp. */
   async updateCohort(id: string, v: Partial<NewCohort>, tx?: GroupsDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -449,12 +383,10 @@ export class GroupsRepository {
       .execute();
   }
 
-  /** Xoá cohort. */
   async deleteCohort(id: string): Promise<void> {
     await this.handle.deleteFrom('cohort').where('id', '=', id).execute();
   }
 
-  /** Thêm thành viên cohort; trả `true` khi dòng thật sự được chèn (chưa là thành viên). */
   async addCohortMember(cohortId: string, userId: string): Promise<boolean> {
     const inserted = await this.handle
       .insertInto('cohort_members')
@@ -465,7 +397,6 @@ export class GroupsRepository {
     return inserted.length > 0;
   }
 
-  /** Gỡ thành viên cohort; trả `true` khi có dòng bị xoá. */
   async removeCohortMember(cohortId: string, userId: string, db: GroupsDb = this.handle): Promise<boolean> {
     const deleted = await db
       .deleteFrom('cohort_members')
@@ -476,7 +407,6 @@ export class GroupsRepository {
     return deleted.length > 0;
   }
 
-  /** Thành viên của cohort. */
   async listCohortMembers(cohortId: string): Promise<CohortMemberRow[]> {
     return this.handle
       .selectFrom('cohort_members')
@@ -486,7 +416,6 @@ export class GroupsRepository {
       .execute() as Promise<CohortMemberRow[]>;
   }
 
-  /** User có thuộc cohort hay không. */
   async isCohortMember(cohortId: string, userId: string): Promise<boolean> {
     const row = await this.handle
       .selectFrom('cohort_members')

@@ -1,6 +1,3 @@
-/**
- * Spec khoá các hàm thuần của pipeline cấp phát trung tâm (issue #583): mọi suy ra từ slug phải xác định (chạy lại cho ra cùng kết quả), vừa giới hạn của PostgreSQL, và mật khẩu/token phải giữ đúng tính chất an toàn đã cam kết trong code.
- */
 import { describe, expect, it } from 'vitest';
 import {
   CENTRE_DATABASE_PREFIX,

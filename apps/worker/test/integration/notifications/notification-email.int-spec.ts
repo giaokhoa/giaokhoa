@@ -11,28 +11,7 @@ import { SpaceJobRunner } from '../../../src/db/routing/space-job-runner';
 import { NotificationDigestProcessor } from '../../../src/processors/notification-digest.processor';
 import type { WorkerMailMessage, WorkerMailSendResult } from '../../../src/resend-mail.service';
 
-/**
- * Kênh email thật qua Resend + tổng hợp theo ngày (NB-5, issue #174).
- *
- * Spec chạy trên database test thật của worker, dựng hai processor bằng tay với TRANSPORT GIẢ ghi lại mọi bức mail được yêu cầu gửi — hành vi phải quan sát được ở đây là LUẬT PHÂN PHỐI EMAIL, không phải kết nối Resend thật (transport thật có spec hành vi riêng ở tầng fail-soft: môi trường test không cấu hình khoá thì bỏ qua có khai báo — ca đó khẳng định ở engagement-jobs.spec.ts):
- *
- * - Tần suất `immediate` → gửi ngay đúng một mail tới địa chỉ của
- *   người nhận, mang đúng tiêu đề/thân TỐI THIỂU HOÁ mà job mang theo (P4), dispatch log chốt `sent`.
- * - Tần suất `daily` → KHÔNG gửi; dispatch log chốt `digest-queued`.
- * - Người dùng tắt email theo loại (tuỳ chọn v2 = off) SAU khi job
- *   đã xếp hàng → lúc phát vẫn bị chặn `skipped-preference` (P2:
- *   kênh ngoài là quyền cá nhân tuyệt đối).
- * - Lượt quét digest gom các mục chờ của một người thành ĐÚNG MỘT
- *   email tổng hợp (thân chỉ gồm các tiêu đề sự kiện), chốt các mục thành `digest-sent`; người nhận đã bị đình chỉ thì các mục chốt `skipped-suspended` và không có mail nào; chạy lại lượt quét không gửi trùng; transport chưa cấu hình thì các mục GIỮ trạng thái chờ (không mất, không ghi nhận giả).
- * - Luật tại lúc tổng hợp (sửa theo phán quyết review vòng 2 của PR
- *   này): digest kiểm LẠI tuỳ chọn và chính sách site tại lúc gửi — người dùng tắt email theo loại sau khi xếp hàng thì mục chốt `skipped-preference`; admin tắt loại ở cấp site (NB-7) thì mục chốt `skipped-admin-disabled`; loại bắt buộc P2 được miễn trừ NB-7 như mọi đường phát; transport ném lỗi thì mục giữ trạng thái chờ và lượt quét không sập.
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production. Hai processor tự dựng bằng tay ở đây nhận đúng kết nối role thường của harness
- * (`harness.ordinaryDb`) — đó là phần xử lý cần kiểm chứng dưới
- * RLS; fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 
-/** Transport giả: 'sent' ghi lại mail; 'skipped' giả lập chưa cấu hình Resend; 'throw' giả lập Resend trả lỗi thật. */
 class FakeMail {
   readonly sent: WorkerMailMessage[] = [];
   mode: 'sent' | 'skipped' | 'throw' = 'sent';
@@ -44,9 +23,6 @@ class FakeMail {
   }
 }
 
-/**
- * I18n giả đọc ĐÚNG catalog thật `src/i18n/vi/platform.json`: khoá digest thiếu trong catalog thì spec đỏ tại đây thay vì lặng lẽ qua.
- */
 function buildFakeI18n() {
   const catalog = JSON.parse(
     readFileSync(join(__dirname, '../../../src/i18n/vi/platform.json'), 'utf-8'),
@@ -81,8 +57,6 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
   beforeAll(async () => {
     harness = await bootWorkerModuleAsOrdinaryRole();
     db = harness.adminDb;
-    // Các lượt test trước có thể thất bại giữa digest-queued và cleanup:
-    // xoá đúng fixture nb5 cũ để số đếm độc lập với lần chạy trước.
     await db.deleteFrom('notification_dispatch_log').where('dedupe_key', 'like', 'nb5-%').execute();
     const rows: Array<[string, string, boolean]> = [
       [userActive, `nb5-a-${suffix}`, false],
@@ -98,18 +72,12 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
     for (const [id, username, suspended] of rows) {
       await sql`insert into users (id, username, email, suspended, deleted) values (${id}, ${username}, ${`${username}@x.io`}, ${suspended}, false) on conflict (id) do nothing`.execute(db);
     }
-    // Người dùng đã tắt email của calendar_reminder ở tuỳ chọn v2.
     await db.insertInto('user_preferences').values({
       user_id: userPrefOff, name: 'message_provider_calendar_reminder_email_v2', value: 'off',
     }).onConflict((oc) => oc.doNothing()).execute();
-    // Người dùng đã tắt email của grade_updated ở tuỳ chọn v2 — ca
-    // digest tôn trọng tuỳ chọn tại lúc tổng hợp dùng người này.
     await db.insertInto('user_preferences').values({
       user_id: userDigestOff, name: 'message_provider_grade_updated_email_v2', value: 'off',
     }).onConflict((oc) => oc.doNothing()).execute();
-    // Hai processor tự dựng bằng tay phải chạy bằng kết nối role
-    // thường của harness — dùng `db` quản trị ở đây sẽ đưa phần xử
-    // lý cần kiểm chứng quay lại superuser và vô hiệu hoá lát #294.
     dispatch = new NotificationDispatchProcessor(harness.spaceDb, mail as never, new SpaceJobRunner(harness.spaceDb));
     digest = new NotificationDigestProcessor(harness.spaceDb, mail as never, buildFakeI18n() as never);
   });
@@ -174,15 +142,11 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
 
     const before = mail.sent.length;
     const sweep = await digest.process({} as never);
-    // Lượt quét này cũng gom luôn mục tần suất 'daily' của userActive
-    // từ ca kiểm trước (cùng database) — tổng: 2 người nhận, 4 mục.
     expect(sweep.usersSent).toBe(2);
     expect(sweep.itemsSent).toBe(4);
     expect(sweep.usersSkipped).toBe(1);
     expect((await logRow(`nb5-daily-${suffix}`)).status).toBe('digest-sent');
 
-    // Đúng một email cho người nhận digest, thân chỉ gồm các tiêu đề
-    // sự kiện đã tối thiểu hoá (P4) — không kèm thân chi tiết.
     const digestMails = mail.sent.slice(before).filter((m) => m.to === `nb5-d-${suffix}@x.io`);
     expect(digestMails).toHaveLength(1);
     expect(digestMails[0]!.to).toBe(`nb5-d-${suffix}@x.io`);
@@ -194,14 +158,9 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
     for (const key of [`nb5-dg1-${suffix}`, `nb5-dg2-${suffix}`, `nb5-dg3-${suffix}`]) {
       expect((await logRow(key)).status).toBe('digest-sent');
     }
-    // Người nhận bị đình chỉ: mục chốt skipped-suspended, không mail.
     expect((await logRow(`nb5-dg4-${suffix}`)).status).toBe('skipped-suspended');
     expect(mail.sent.some((m) => m.to === `nb5-s-${suffix}@x.io`)).toBe(false);
 
-    // Chạy lại lượt quét: không còn mục chờ của hai người trên (mục
-    // của ca 'daily frequency' ở trên thuộc userActive — lượt quét
-    // đầu đã gom cả mục đó; khẳng định ở đây là không có mail digest
-    // THỨ HAI nào cho userDigest và trạng thái các mục không đổi).
     const second = await digest.process({} as never);
     expect(mail.sent.filter((m) => m.to === `nb5-d-${suffix}@x.io`)).toHaveLength(1);
     expect(second.itemsSent).toBe(0);
@@ -222,9 +181,6 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
   });
 
   it('digest tôn trọng opt-out email theo provider đặt sau khi xếp hàng (luật lúc gửi)', async () => {
-    // Hai mục của grade_updated đã xếp hàng chờ; người nhận tắt
-    // email của grade_updated ở tuỳ chọn v2 → lượt tổng hợp phải
-    // chốt các mục skipped-preference và KHÔNG gửi mail nào cho họ.
     await seedQueued(userDigestOff, `nb5-dg6-${suffix}`, 'Có điểm mới: Sinh 6');
     await seedQueued(userDigestOff, `nb5-dg7-${suffix}`, 'Có điểm mới: Sử 6');
     const sweep = await digest.process({} as never);
@@ -235,10 +191,6 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
   });
 
   it('digest tôn trọng chính sách site (NB-7) lúc gửi, kèm ngoại lệ bắt buộc P2', async () => {
-    // Admin tắt grade_updated và cả admin_announcement ở cấp site
-    // SAU khi các mục đã xếp hàng: mục grade_updated bị chặn ở lúc
-    // tổng hợp; mục admin_announcement là loại bắt buộc P2 — chính
-    // sách site không chặn được nó ở bất kỳ đường phát nào.
     await db.insertInto('plugin_config').values({ plugin: 'notifications', name: 'provider_grade_updated_enabled', value: 'false' }).onConflict((oc) => oc.doNothing()).execute();
     await db.insertInto('plugin_config').values({ plugin: 'notifications', name: 'provider_admin_announcement_enabled', value: 'false' }).onConflict((oc) => oc.doNothing()).execute();
     try {
@@ -248,7 +200,6 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
       expect(sweep.itemsSuppressedAdmin).toBeGreaterThanOrEqual(1);
       expect((await logRow(`nb5-dg8-${suffix}`)).status).toBe('skipped-admin-disabled');
       expect(mail.sent.some((m) => m.to === `nb5-y-${suffix}@x.io`)).toBe(false);
-      // P2: vẫn gửi bình thường bất chấp công tắc site.
       expect((await logRow(`nb5-dg9-${suffix}`)).status).toBe('digest-sent');
       const mandatoryMail = mail.sent.filter((m) => m.to === `nb5-m-${suffix}@x.io`);
       expect(mandatoryMail).toHaveLength(1);

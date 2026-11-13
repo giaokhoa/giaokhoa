@@ -2,21 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MailMessage, MailSendResult } from './mail.types';
 
-/** Endpoint HTTP API của Resend (gửi một email). */
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
 
-/**
- * Transport gửi mail qua Resend (issue #7 chặng 2.5; quyết định ngày 26/10/2026: email hệ thống gửi qua Resend thay SMTP).
- *
- * Cấu hình qua env:
- * - `RESEND_API_KEY`: khoá API của Resend.
- * - `MAIL_FROM`: địa chỉ gửi, phải thuộc domain đã xác minh DNS.
- *
- * Fail-soft có khai báo khi thiếu cấu hình: không có khoá (hoặc không có địa chỉ gửi) thì `send` KHÔNG ném lỗi và KHÔNG gửi — nó ghi log cảnh báo (chỉ người nhận + tiêu đề, không ghi nội dung/mã bí mật) và trả `skipped` kèm lý do. Nhờ vậy app boot và mọi luồng auth chạy bình thường ở môi trường chưa được cấp khoá (test/review), còn production bật gửi thật chỉ bằng cách đặt hai biến env.
- *
- * Có cấu hình mà Resend trả lỗi (mạng/4xx/5xx) thì `send` NÉM Error:
- * lỗi gửi mail thật không được nuốt lặng — consumer outbox dựa vào đó để thử lại ở nhịp sau.
- */
 @Injectable()
 export class ResendMailService {
   private readonly logger = new Logger(ResendMailService.name);
@@ -37,7 +24,6 @@ export class ResendMailService {
     }
   }
 
-  /** Đã đủ cấu hình để gửi thật hay chưa (nơi gọi dùng để khai báo trạng thái). */
   get configured(): boolean {
     return this.apiKey !== null && this.from !== null;
   }

@@ -12,46 +12,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/component
 import { PageSkeleton } from '#components/page-skeleton';
 import { PageShell } from '#components/page-shell';
 
-/** Tên hiển thị của học sinh: Họ + Tên như hồ sơ người dùng. */
 function studentName(s: { firstName: string; lastName: string }): string {
   return `${s.lastName} ${s.firstName}`.trim();
 }
 
 
-/** Số điểm hiển thị theo ngôn ngữ (tối đa 2 chữ số thập phân, không ép 0). */
 function scoreLabel(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
 }
 
-/** Tiêu đề một khối trên bề mặt phụ huynh. */
 function BlockTitle({ children }: { children: string }) {
   return <h2 className="px-4 text-lg font-semibold lg:px-6">{children}</h2>;
 }
 
-/**
- * Bề mặt phụ huynh chỉ-xem (PH-1, issue #130): chọn con → 4 khối rút gọn
- * của research mục 4.3 (tóm tắt tuần; kết quả mới ĐÃ CÔNG BỐ từ mốc xem
- * của chính phụ huynh; thông báo lớp; tiến độ theo khoá) + kết quả học
- * tập đã công bố theo môn. Chỉ-xem về dữ liệu của con: trang không có
- * bất kỳ nút hành động nào thay con — dữ liệu đã qua cổng liên kết
- * giám hộ + cổng công bố phía server, trang chỉ trình bày. Ngoại lệ
- * duy nhất thuộc về chính phụ huynh: khối cài đặt tần suất digest
- * (PH-2, issue #159).
- *
- * Đường dẫn (chuẩn đường dẫn #221, lát R2): con đang xem do path
- * quyết định — `/guardian/students/:studentId`; gốc `/guardian`
- * hiện con đầu tiên trong danh sách liên kết. Link sâu digest PH-2
- * nay trỏ thẳng path theo con; các link cũ dạng
- * `/guardian?student=<id>` còn lưu trong thông báo đã phát được
- * trang này chuyển hướng thay thế sang path mới (id không thuộc
- * các con đang liên kết thì về gốc `/guardian`).
- */
-/**
- * Khối cài đặt digest của chính phụ huynh cho con đang chọn (PH-2,
- * issue #159): tần suất tổng hợp weekly (mặc định) | daily | off —
- * đây là tuỳ chọn của phụ huynh về thông báo gửi cho CHÍNH MÌNH,
- * không phải hành động thay con nên không phá tính chỉ-xem của bề mặt.
- */
 function DigestSettings({ studentId }: { studentId: string }) {
   const { t } = useTranslation('guardian');
   const preferenceQuery = useQuery(guardianDigestPreferenceQueryOptions(studentId));
@@ -97,16 +70,9 @@ export function GuardianPage() {
 
   const studentsQuery = useQuery(guardianMyStudentsQueryOptions());
   const students = studentsQuery.data ?? [];
-  // Con đang xem do path quyết định (chuẩn #221, lát R2): tham số
-  // :studentId của route con; ở gốc /guardian trang hiện con đầu
-  // tiên trong danh sách liên kết như hành vi trước lát.
   const params = useParams();
   const routeStudentId = params.studentId ?? null;
   const navigate = useNavigate();
-  // Lớp tương thích cho link cũ /guardian?student=<id>: phán quyết
-  // chỉ chốt khi danh sách con đã nạp xong (trước đó trang giữ
-  // trạng thái đang tải); id thuộc các con đang liên kết thì sang
-  // path mới của đúng con đó, id lạ thì về gốc /guardian bỏ query.
   const [searchParams] = useSearchParams();
   const legacyStudentId = searchParams.get('student');
   const studentsSettled = studentsQuery.isSuccess;
@@ -133,11 +99,6 @@ export function GuardianPage() {
       ]
     : [];
 
-  // Chuyển hướng thay thế của lớp tương thích (chỉ khi danh sách
-  // con đã nạp xong): link cũ ?student= hợp lệ → path theo con;
-  // path theo con trỏ tới con không thuộc liên kết → về gốc khu
-  // vực, tránh hiện dữ liệu của con khác dưới URL của con lạ (đọc
-  // dữ liệu vẫn do API gác theo liên kết như mọi đường khác).
   if (studentsSettled && !routeStudentId && legacyStudentId) {
     const legacyLinked = students.some((s) => s.student.id === legacyStudentId);
     return <Navigate to={legacyLinked ? `/guardian/students/${legacyStudentId}` : '/guardian'} replace />;
@@ -163,8 +124,6 @@ export function GuardianPage() {
         </div>
       ) : (
         <>
-          {/* Chọn con là điều hướng sang path của con đó (chuẩn
-              #221, lát R2) — URL luôn phản ánh đúng con đang xem. */}
           {students.length > 1 && (
             <div className="flex flex-wrap items-center gap-2 px-4 lg:px-6" role="group" aria-label={t('chooseChild')}>
               {students.map((entry) => (
@@ -192,7 +151,6 @@ export function GuardianPage() {
             <PageSkeleton className="flex flex-col gap-4 px-4 lg:px-6" testId="guardian-loading" rows={['h-24 w-full', 'h-48 w-full']} />
           ) : (
             <>
-              {/* Khối (a): tóm tắt tuần của con. */}
               <section className="flex flex-col gap-3">
                 <BlockTitle>{t('weeklyTitle')}</BlockTitle>
                 <p className="-mt-2 px-4 text-sm text-muted-foreground lg:px-6">
@@ -229,7 +187,6 @@ export function GuardianPage() {
                 </div>
               </section>
 
-              {/* Khối (b): kết quả mới đã công bố kể từ lần xem trước của phụ huynh. */}
               <section className="flex flex-col gap-3">
                 <BlockTitle>{t('newResultsTitle')}</BlockTitle>
                 <div className="px-4 lg:px-6">
@@ -260,7 +217,6 @@ export function GuardianPage() {
                 </div>
               </section>
 
-              {/* Khối (c): thông báo lớp của các khoá con ghi danh. */}
               <section className="flex flex-col gap-3">
                 <BlockTitle>{t('announcementsTitle')}</BlockTitle>
                 <div className="px-4 lg:px-6">
@@ -287,7 +243,6 @@ export function GuardianPage() {
                 </div>
               </section>
 
-              {/* Khối (d): tiến độ % theo khoá. */}
               <section className="flex flex-col gap-3">
                 <BlockTitle>{t('progressTitle')}</BlockTitle>
                 <div className="px-4 lg:px-6">
@@ -315,7 +270,6 @@ export function GuardianPage() {
                 </div>
               </section>
 
-              {/* Kết quả học tập đã công bố theo môn/khoá. */}
               <section className="flex flex-col gap-3">
                 <BlockTitle>{t('resultsTitle')}</BlockTitle>
                 <div className="flex flex-col gap-4 px-4 lg:px-6">
@@ -357,11 +311,8 @@ export function GuardianPage() {
 
 export default GuardianPage;
 
-// clientLoader (F-01, rà soát #133): prefetch danh sách con + bộ dữ
-// liệu của con đầu tiên vào QueryClient singleton, đúng khoá trang đọc.
 export { guardianPageClientLoader as clientLoader } from '../queries/guardians';
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { guardianKeyMeta } from '#lib/route-meta';
 export function meta() {

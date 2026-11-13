@@ -3,16 +3,6 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
-/**
- * Flow test cho stream SSE số thông báo chưa đọc
- * (GET /notifications/unread-count/stream):
- *  - mở stream → sự kiện `unread-count` đầu tiên là snapshot số hiện tại;
- *  - có thông báo mới → server đẩy số tăng qua Redis pub/sub;
- *  - đánh dấu đã đọc / đọc tất cả → server đẩy số giảm;
- *  - stream của user khác không nhận sự kiện của user này;
- *  - xác thực: Bearer header như mọi route khác, hoặc cookie phiên
- *    Better Auth qua chuỗi guard (GĐ5, issue #7). Ngoại lệ token qua query `access_token` cho route stream ĐÃ GỠ ở GĐ5 — token trong URL bị từ chối 401 ở mọi route; thiếu token thì 401.
- */
 
 interface StreamEvent { type: string; data: unknown }
 
@@ -24,7 +14,6 @@ interface StreamClient {
   close(): void;
 }
 
-/** Bộ đọc SSE tối thiểu trên fetch streaming: tách frame theo dòng trống, đọc cặp event:/data:. */
 async function openStream(url: string, headers: Record<string, string> = {}): Promise<StreamClient> {
   const controller = new AbortController();
   const res = await fetch(url, { headers, signal: controller.signal });
@@ -52,13 +41,12 @@ async function openStream(url: string, headers: Record<string, string> = {}): Pr
             if (line.startsWith('data:')) dataText += line.slice('data:'.length).trim();
           }
           if (dataText) {
-            try { events.push({ type, data: JSON.parse(dataText) as unknown }); } catch { /* frame không phải JSON: bỏ qua */ }
+            try { events.push({ type, data: JSON.parse(dataText) as unknown }); } catch {   }
           }
           boundary = buffer.indexOf('\n\n');
         }
       }
     } catch {
-      // Abort khi đóng stream là đường kết thúc bình thường của test.
     }
   })();
 
@@ -78,9 +66,6 @@ async function openStream(url: string, headers: Record<string, string> = {}): Pr
       throw new Error(`không nhận được sự kiện unread=${expected}; đã nhận: ${JSON.stringify(unreadEvents())}`);
     },
     async waitForUnreadAfter(index: number, expected: number, timeoutMs = 8000): Promise<void> {
-      // Chờ sự kiện MỚI (từ vị trí index trở đi) — vì lịch sử đã chứa sẵn
-      // các giá trị cũ (snapshot 0, lần tăng 1 trước đó), chờ theo giá
-      // trị đơn thuần sẽ khớp ngay sự kiện cũ và kết luận sai.
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (unreadEvents().slice(index).includes(expected)) return;
@@ -142,14 +127,6 @@ describe('Luồng SSE số thông báo chưa đọc', () => {
     await sendNotificationTo(userA.id, 'Huy hiệu cho A');
     await streamA.waitForUnread(1);
 
-    // Không cần chờ thêm cho "tín hiệu tới B": chu trình đã khép kín
-    // ở hai đầu chờ tường minh ngay trên đây. Lời gọi gửi thông báo
-    // trả về đồng bộ kênh popup 'delivered' (sendNotificationTo đã
-    // khẳng định), và stream của A đã hiện số 1 qua cùng một lần phát
-    // pub/sub — kênh unread-changed phát theo từng người dùng, một
-    // lần phát sai sang B (nếu có) đi qua đúng lần phát mà stream của
-    // A vừa nhận được. Sleep cố định 600ms ở đây trước đây không gắn
-    // với tín hiệu hoàn tất nào khác.
     expect(streamB.unreadEvents()).toEqual([0]);
   });
 

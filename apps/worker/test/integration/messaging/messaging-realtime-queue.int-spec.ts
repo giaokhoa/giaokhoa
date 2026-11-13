@@ -23,34 +23,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Phân phối realtime messaging ở worker (issue #521) — đường THẬT của production sau khi consumer chuyển khỏi tiến trình API:
- * dòng outbox (ghi như đường nghiệp vụ phía API vẫn ghi) → relay outbox duy nhất đóng dấu `publishedAt` và phát job vào hàng đợi `messaging-realtime` → `MessagingRealtimeProcessor` → luật phân phối dùng chung ở `@giaokhoa/messaging` → phát qua Redis adapter tới một Socket.IO server độc lập đóng vai phía API (gắn socket vào room đúng luật gateway: room riêng của user + room của các conversation, `data.userId` gắn lúc bắt tay).
- *
- * Các ca ở đây là nơi cư trú mới của các khẳng định phân phối vốn nằm ở e2e phía API (messaging-realtime-flow, messaging-message- lifecycle ca 6, messaging-block-visibility ca biên đã-đọc, messaging-quote ca 8) và ở spec neo watermark phía API
- * (messaging-outbox-reanchor) — cùng khẳng định hành vi quan sát
- * được, đổi cơ chế vận hành:
- *  - tin mới tới đúng room, `conversation.updated` mang số chưa đọc
- *    của CHÍNH từng thành viên;
- *  - `message.new` của tin trả lời mang đủ dữ kiện trích dẫn;
- *  - biên đã-đọc tới các thành viên còn lại;
- *  - thứ tự phát theo đúng thứ tự sự kiện;
- *  - thành viên đã bị gỡ khỏi conversation không nhận tin nữa và
- *    socket của họ bị đẩy khỏi room tại thời điểm phân phối (F1);
- *  - thu hồi: phía kia nhận `message.deleted` + `conversation.invalidate`,
- *    xem trước không lộ nội dung đã thu hồi;
- *  - xoá-phía-mình: chỉ chính người xoá nhận tín hiệu;
- *  - cổng chặn 1–1: sự kiện ghi TRƯỚC lúc chặn vẫn bị nén ở tầng
- *    phân phối (tin mới lẫn biên đã-đọc);
- *  - chống trùng/phát lại: cùng một sự kiện phân phối đúng một lần
- *    dù relay phát lại hay job được xử lý lại (dấu theo `outboxId`);
- *  - không watermark: cơ chế hàng đợi không giữ mốc `seq` nào, sự
- *    kiện ghi sau khi các dòng outbox của "đời trước" bị xoá sạch vẫn được phân phối (bài học issue #125 không còn đất tái diễn);
- *  - không lọt tenant: room có đoạn namespace tenant, socket ở
- *    tenant khác không nhận sự kiện dù trùng id conversation.
- *
- * Tín hiệu chốt của mỗi ca là dấu đã-phân-phối theo `outboxId` trong Redis (processor chỉ ghi dấu sau khi phân phối xong) — không sleep cố định nào thay cho tín hiệu trạng thái.
- */
 describe('Worker — phân phối realtime messaging qua hàng đợi (issue #521)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -74,7 +46,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     return event ? all.filter((e) => e.event === event) : all;
   }
 
-  /** Nối một client đóng vai một user: vào room riêng + room của các conversation như gateway phía API. */
   async function connectClient(clientKey: string, identity: { userId: string; tenantId: string | null; conversationIds: string[] }): Promise<ClientSocket> {
     const socket = clientIo(`http://127.0.0.1:${port}/messaging`, {
       auth: identity,
@@ -106,7 +77,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     throw new Error(`hết hạn chờ ${label} sau ${timeoutMs}ms`);
   }
 
-  /** Chờ processor ghi dấu đã-phân-phối cho một sự kiện — tín hiệu "lượt phân phối đã chốt". */
   async function waitDistributed(outboxId: string): Promise<void> {
     const deadline = Date.now() + 15000;
     for (;;) {
@@ -116,12 +86,10 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     }
   }
 
-  /** Khoảng lặng ngắn SAU khi lượt phân phối đã chốt để khẳng định "không nhận gì" trên trạng thái cuối. */
   async function settle(ms = 400): Promise<void> {
     await new Promise((resolve) => { setTimeout(resolve, ms); });
   }
 
-  // --- fixture -----------------------------------------------------
 
   async function makeUser(id: string): Promise<void> {
     await sql`insert into users (id, username, email, first_name, last_name, suspended, deleted) values (${id}, ${`u521-${id.slice(-8)}`}, ${`u521-${id.slice(-8)}@x.io`}, 'An', 'Nguyễn', false, false) on conflict (id) do nothing`.execute(db);
@@ -175,13 +143,11 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
   }
 
   async function insertOutbox(type: string, payload: Record<string, unknown>, tenantId: string | null): Promise<string> {
-    // Id của dòng outbox BẮT BUỘC là uuid v7 như production (mặc định của cột đều sinh v7): relay chuyển tiếp theo thứ tự id tăng dần, nên id ngẫu nhiên v4 sẽ làm thứ tự chuyển tiếp lệch khỏi thứ tự ghi — giữ v7 để ca thứ tự seq kiểm chứng đúng tiền đề của cơ chế thật.
     const id = uuidv7();
     await db.insertInto('outbox_events').values({ id, aggregate: 'messaging', type, payload: sql<JsonValue>`${JSON.stringify(payload)}::jsonb`, tenant_id: tenantId }).execute();
     return id;
   }
 
-  /** Ghi tin + sự kiện rồi kích hoạt nhịp relay thật với ngữ cảnh platform, không đợi lịch 5 giây. */
   async function sendAndDistribute(opts: {
     conversationId: string; userIdFrom: string; seq: number; text: string; tenantId: string | null;
     replyToMessageId?: string;
@@ -204,8 +170,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     queue = context.get(getQueueToken('messaging-realtime'));
     redis = new Redis(REDIS_URL);
 
-    // Socket.IO server độc lập đóng vai phía API: cùng Redis adapter,
-    // gắn socket vào room theo đúng luật gateway khi bắt tay.
     const pub = new Redis(REDIS_URL);
     const sub = pub.duplicate();
     httpServer = createServer();
@@ -237,7 +201,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const [a, b, c] = [randomUUID(), randomUUID(), randomUUID()];
     for (const u of [a, b, c]) await makeUser(u);
     const convId = await makeConversation({ type: 2, tenantId, memberIds: [a, b, c] });
-    // Hai tin có sẵn (không sự kiện): seq 1 của A, seq 2 của C. B đã đọc tới 1.
     await makeMessage({ conversationId: convId, userIdFrom: a, seq: 1, text: 'tin một' });
     await makeMessage({ conversationId: convId, userIdFrom: c, seq: 2, text: 'tin hai' });
     await setLastReadSeq(convId, b, 1);
@@ -253,7 +216,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     expect(newPayload.message.id).toBe(messageId);
     expect(newPayload.message.seq).toBe(3);
     expect(newPayload.message.fullMessage).toBe('tin ba mới');
-    // Số chưa đọc của CHÍNH từng người: B = 2 (seq 2, 3), A = 1 (seq 2 của C), C = 2 (seq 1, 3 của A).
     const updatedOf = (key: string) => eventsOf(key, 'conversation.updated')
       .map((e) => e.payload as { conversationId: string; unreadCount: number; message: { id: string } })
       .find((p) => p.conversationId === convId && p.message.id === messageId);
@@ -319,8 +281,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
 
     const m1 = await makeMessage({ conversationId: convId, userIdFrom: a, seq: 1, text: 'thứ nhất' });
     const e1 = await insertOutbox('message_sent', { conversationId: convId, messageId: m1, seq: 1, fromUserId: a }, tenantId);
-    // Chừa một nhịp thời gian rất ngắn để thứ tự id của hai dòng
-    // outbox (uuidv7 theo thời gian) khớp thứ tự ghi.
     await new Promise((resolve) => { setTimeout(resolve, 5); });
     const m2 = await makeMessage({ conversationId: convId, userIdFrom: a, seq: 2, text: 'thứ hai' });
     const e2 = await insertOutbox('message_sent', { conversationId: convId, messageId: m2, seq: 2, fromUserId: a }, tenantId);
@@ -342,22 +302,18 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     await connectClient('a4', { userId: a, tenantId, conversationIds: [convId] });
     await connectClient('b4', { userId: b, tenantId, conversationIds: [convId] });
 
-    // Sanity: còn là thành viên thì B nhận tin bình thường.
     await sendAndDistribute({ conversationId: convId, userIdFrom: a, seq: 1, text: 'trước khi gỡ', tenantId });
     await waitUntil(() => eventsOf('b4', 'message.new').length === 1, 10000, 'B nhận tin khi còn là thành viên');
 
-    // Gỡ B khỏi conversation (membership chốt lại ở DB).
     await db.deleteFrom('message_conversation_members')
       .where('conversation_id', '=', convId)
       .where('user_id', '=', b)
       .execute();
 
     await sendAndDistribute({ conversationId: convId, userIdFrom: a, seq: 2, text: 'sau khi gỡ', tenantId });
-    // A (còn là thành viên) nhận tin mới: lượt phân phối đã thật sự chạy.
     await waitUntil(() => eventsOf('a4', 'message.new').some((e) => (e.payload as { message: { seq: number } }).message.seq === 2), 10000, 'A nhận tin sau khi gỡ');
     await settle();
     expect(eventsOf('b4', 'message.new')).toHaveLength(1);
-    // Socket của B đã bị đẩy khỏi room của conversation.
     const sockets = await ioServer.of('/messaging').in(conversationRoom(tenantId, convId)).fetchSockets();
     expect(sockets.map((s) => (s.data as { userId?: string }).userId)).toEqual([a]);
   });
@@ -382,13 +338,11 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const deleted = eventsOf('b5', 'message.deleted')[0]!.payload as { conversationId: string; messageId: string; deletedBy: string };
     expect(deleted).toEqual({ conversationId: convId, messageId, seq: 1, deletedBy: a });
     await waitUntil(() => eventsOf('b5', 'conversation.invalidate').some((e) => (e.payload as { conversationId: string }).conversationId === convId), 10000, 'B nhận conversation.invalidate');
-    // Xem trước tin cuối (chính tin đã thu hồi) phải đã bị vô hiệu nội dung.
     const updated = eventsOf('b5', 'conversation.updated')
       .map((e) => e.payload as { message: { id: string; fullMessage: string } })
       .find((p) => p.message.id === messageId);
     expect(updated).toBeDefined();
     expect(updated!.message.fullMessage).toBe('');
-    // Không một sự kiện nào mang nội dung gốc tới B.
     expect(JSON.stringify(eventsOf('b5'))).not.toContain('nội dung bí mật sẽ thu hồi');
   });
 
@@ -424,8 +378,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     await connectClient('a7', { userId: a, tenantId, conversationIds: [convId] });
     await connectClient('b7', { userId: b, tenantId, conversationIds: [convId] });
 
-    // Biên đã-đọc của A được ghi vào outbox TRƯỚC, quan hệ chặn có
-    // SAU (consumer tiêu thụ sự kiện sau khi chặn đã hiệu lực).
     const outboxId = await insertOutbox('message_conversation_read', { conversationId: convId, userId: a, lastReadSeq: 1 }, tenantId);
     await db.insertInto('message_users_blocked').values({ user_id: a, blocked_user_id: b }).execute();
     await relay.relayTick();
@@ -468,10 +420,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     await waitUntil(() => eventsOf('b9', 'message.new').length === 1, 10000, 'B nhận tin lần đầu');
     const completedBefore = (await queue.getJobCounts('completed')).completed;
 
-    // Relay chạy lại: dòng đã có publishedAt nên không job mới nào sinh ra.
     await relay.relayTick();
-    // Processor xử lý lại đúng job đó (mô phỏng job bị phát lại
-    // ngoài cửa sổ chống trùng của hàng đợi): dấu theo outboxId chặn.
     const row = await db.selectFrom('outbox_events').selectAll().where('id', '=', outboxId).executeTakeFirst();
     const jobData: OutboxEventJobData = {
       outboxId,
@@ -501,9 +450,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const first = await sendAndDistribute({ conversationId: convId, userIdFrom: a, seq: 1, text: 'đời trước', tenantId });
     await waitUntil(() => eventsOf('b10', 'message.new').length === 1, 10000, 'B nhận tin đời trước');
 
-    // "Đời DB mới": toàn bộ dòng outbox của conversation này biến
-    // mất (như khi DB được dựng lại) — cơ chế hàng đợi không giữ
-    // watermark nào nên không có mốc cũ nào làm mù sự kiện mới.
     await db.deleteFrom('outbox_events').where(sql<boolean>`payload ->> 'conversationId' = ${convId}`).execute();
 
     const second = await sendAndDistribute({ conversationId: convId, userIdFrom: a, seq: 2, text: 'đời mới', tenantId });
@@ -522,8 +468,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     for (const u of [a, b, x]) await makeUser(u);
     const convId = await makeConversation({ type: 2, tenantId, memberIds: [a, b] });
     await connectClient('b11', { userId: b, tenantId, conversationIds: [convId] });
-    // Socket của X "vào room" của cùng conversationId nhưng ở đoạn
-    // tenant khác — room là một kênh khác hẳn.
     await connectClient('x11', { userId: x, tenantId: otherTenantId, conversationIds: [convId] });
 
     await sendAndDistribute({ conversationId: convId, userIdFrom: a, seq: 1, text: 'chỉ tenant mình', tenantId });
@@ -532,14 +476,6 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     expect(eventsOf('x11')).toEqual([]);
   });
 
-  /**
-   * Vũ trụ đếm chưa đọc chuẩn (issue #592): conversation đã tắt
-   * thông báo thì số chưa đọc realtime cũng bằng 0 — cùng luật
-   * với badge sidebar và danh sách (luật đếm duy nhất trong
-   * `countUnreadForConversation`), nên các bề mặt hội tụ ngay
-   * trong cùng một chu kỳ cập nhật thay vì lệch nhau tới 30–60s.
-   * Thành viên không tắt vẫn nhận đúng số chưa đọc thật.
-   */
   it('thành viên đã tắt thông báo nhận conversation.updated với unreadCount bằng 0, thành viên còn lại nhận đúng số', async () => {
     const tenantId = randomUUID();
     await makeTenant(tenantId);

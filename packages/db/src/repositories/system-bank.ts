@@ -1,41 +1,14 @@
-/**
- * Repository của kho NGÂN HÀNG HỆ THỐNG trên Kysely.
- *
- * Vai trò: mọi truy cập tới mười bảng của database kho ngân hàng
- * (câu hỏi hệ thống + phiên bản bất biến + liên kết YCCĐ của phiên
- * bản, sổ trung tâm đã nhập, nhật ký sự kiện append-only, và các bảng của gói YCCĐ hệ thống) tập trung ở đây. Kho ngân hàng là kho RIÊNG của platform — tách hẳn kho trung tâm: repository này chỉ giữ handle của kho ngân hàng do tầng ứng dụng cấp qua `SystemBankConnection` (adapter mỏng cấp pool), không bao giờ chạm handle định tuyến theo không gian của kho trung tâm, và phía trung tâm của module (bản chụp, vết sự kiện, bản cài gói) nằm ở repository riêng `system-bank-centre.ts` trên handle kho trung tâm. Hai kho không có transaction chung: các luồng nghiệp vụ dùng cả hai kho (nhập bản chụp, cài gói) bảo đảm thứ tự ghi lành tính ở tầng service, không gộp hai handle thành một.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Bên trong, truy vấn viết trên interface schema sinh bằng
- *   codegen: tên bảng/cột giữ nguyên snake_case của database.
- * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`source_question_id as sourceQuestionId`), giá trị ghi ánh xạ từng trường camelCase → snake_case. Kiểu dòng công khai khai ngay trong file này, KHÔNG import từ file schema bộ máy cũ (file đó bị xoá ở hạng mục gỡ bộ máy cũ).
- * - Giá trị `undefined` bị LOẠI khỏi values trước khi gọi builder
- *   (quy tắc T-4 đã đo ở pilot: dựa vào mặc định thư viện là đủ
- *   chạy nhưng repository loại tường minh để hành vi không phụ thuộc mặc định); mọi giá trị where là tham số bắt buộc.
- * - Mọi giá trị ghi vào cột jsonb đi qua helper `jsonbColumn`
- *   (serialize tường minh + `::jsonb`): driver `pg` hiểu MẢNG ở
- *   cấp cao nhất là mảng PostgreSQL chứ không phải tài liệu JSON
- *   (phát hiện của pilot).
- * - Chưa cấu hình (tầng ứng dụng chưa đặt
- *   `SYSTEM_BANK_DATABASE_URL`) thì handle là `null` và mọi thao tác ném lỗi chưa-cấu-hình mang mã `system_bank.not_configured` — ứng dụng vẫn khởi động, chỉ các đường kho ngân hàng báo 503. Package không phụ thuộc tầng ứng dụng nên hình dạng lỗi HTTP do tầng ứng dụng cấp qua hàm dựng lỗi lúc lắp ráp repository.
- */
 import { sql, type InsertObject, type RawBuilder } from 'kysely';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
 import type { SystemBankDb, SystemBankTx, SystemBankDB } from '../client';
 import type { Json } from '../types/system-bank-db';
 
-/** Handle giao dịch của kho ngân hàng — kiểu `Transaction<SystemBankDB>` của package. */
 export type SbTx = SystemBankTx;
-/** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type SbDb = SystemBankDb | SystemBankTx;
 
-/** Một dòng câu hỏi hệ thống (danh tính ổn định + metadata trạng thái). */
 export interface SystemQuestionRow {
   id: string;
-  /** multichoice | truefalse | shortanswer | essay. */
   qtype: string;
-  /** published | withdrawn. */
   status: string;
   withdrawnReason: string | null;
   withdrawnBy: string | null;
@@ -45,61 +18,47 @@ export interface SystemQuestionRow {
   updatedAt: Date;
 }
 
-/** Một dòng phiên bản nội dung bất biến của câu hệ thống (gói tự chứa + checksum). */
 export interface SystemQuestionVersionRow {
   id: string;
   questionId: string;
   version: number;
-  /** sha256 hex của JSON canonical của gói phiên bản. */
   checksum: string;
-  /** Tài liệu gói phiên bản tự chứa (hình dạng `SystemBankPackage` của contracts). */
   package: unknown;
   createdAt: Date;
 }
 
-/** Một dòng liên kết phiên bản ↔ YCCĐ nguồn (mỗi liên kết mang mức độ nhận thức riêng). */
 export interface SystemQuestionVersionOutcomeRow {
   id: string;
   versionId: string;
   outcomeId: string;
-  /** biet | hieu | van_dung | van_dung_cao. */
   cognitiveLevel: string;
   createdAt: Date;
 }
 
-/** Một dòng ghi nhận một trung tâm đã nhập một câu hệ thống. */
 export interface SystemQuestionImporterRow {
   id: string;
   sourceQuestionId: string;
-  /** Slug của trung tâm đã nhập (định danh địa chỉ trong sổ đăng ký). */
   centreSlug: string;
   importedAt: Date;
   importedBy: string | null;
 }
 
-/** Một dòng nhật ký sự kiện append-only của kho ngân hàng. */
 export interface SystemBankEventRow {
   id: string;
-  /** question_withdrawn. */
   type: string;
   sourceQuestionId: string;
   payload: unknown;
   createdAt: Date;
 }
 
-/** Một dòng đợt phát hành gói YCCĐ phía platform. */
 export interface SystemOutcomePackageRow {
   id: string;
-  /** Định danh phiên bản gói, duy nhất toàn kho. */
   version: string;
-  /** all | slug môn học. */
   scope: string;
-  /** sha256 hex của JSON canonical của toàn bộ items trong gói. */
   checksum: string;
   outcomeCount: number;
   createdBy: string | null;
   createdAt: Date;
-  /** Trạng thái gửi, phát hành hoặc từ chối. */
   status: string;
   centreSlug: string | null;
   reviewedBy: string | null;
@@ -107,7 +66,6 @@ export interface SystemOutcomePackageRow {
   rejectionReason: string | null;
 }
 
-/** Một chương trình trong gói YCCĐ (id nguồn giữ nguyên qua bản cài). */
 export interface SystemOutcomePackageCurriculumRow {
   id: string;
   packageId: string;
@@ -118,7 +76,6 @@ export interface SystemOutcomePackageCurriculumRow {
   grade: number;
 }
 
-/** Một node cây nội dung trong gói YCCĐ (id và id cha giữ nguyên id nguồn). */
 export interface SystemOutcomePackageNodeRow {
   id: string;
   packageId: string;
@@ -126,28 +83,23 @@ export interface SystemOutcomePackageNodeRow {
   curriculumId: string;
   parentId: string | null;
   title: string;
-  /** strand | topic | lesson. */
   kind: string;
   position: number;
   durationPeriods: number | null;
   durationPercent: number | null;
 }
 
-/** Một YCCĐ trong gói YCCĐ (id nguồn giữ nguyên qua bản cài). */
 export interface SystemOutcomePackageOutcomeRow {
   id: string;
   packageId: string;
   outcomeId: string;
   nodeId: string;
   position: number;
-  /** Tài liệu Tiptap của YCCĐ, nguyên trạng. */
   content: unknown;
-  /** program | derived. */
   sourceKind: string;
   sourceRef: string | null;
 }
 
-/** Một dòng ánh xạ mã YCCĐ cũ → mới trong gói YCCĐ (thông tin tham chiếu). */
 export interface SystemOutcomePackageMappingRow {
   id: string;
   packageId: string;
@@ -156,11 +108,7 @@ export interface SystemOutcomePackageMappingRow {
   note: string;
 }
 
-/**
- * Lỗi ném ra khi repository bị gọi mà chưa có handle (kho ngân hàng chưa được cấu hình). Package không phụ thuộc tầng ứng dụng nên lỗi mang mã ổn định `system_bank.not_configured` dạng thuần; tầng ứng dụng cấp hàm dựng lỗi riêng qua tham số khởi tạo của repository để giữ đúng hình dạng lỗi HTTP 503 của nó.
- */
 export class SystemBankNotConfiguredError extends Error {
-  /** Mã lỗi ổn định mà phía tiêu thụ dùng để nhận diện trạng thái chưa cấu hình. */
   readonly code = 'system_bank.not_configured';
 
   constructor() {
@@ -169,21 +117,10 @@ export class SystemBankNotConfiguredError extends Error {
   }
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (serialize + ép kiểu `::jsonb`) — khuôn duy nhất cho mọi đường
- * ghi jsonb của repository này, xem ghi chú ở đầu file về hành vi
- * mảng cấp cao nhất của driver `pg`.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu cột `T` ở tầng TypeScript.
- */
 function jsonbColumn<T>(value: unknown): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng câu hỏi hệ thống. */
 const SYSTEM_QUESTION_COLUMNS = [
   'id',
   'qtype',
@@ -196,7 +133,6 @@ const SYSTEM_QUESTION_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng phiên bản câu hệ thống. */
 const SYSTEM_QUESTION_VERSION_COLUMNS = [
   'id',
   'question_id as questionId',
@@ -206,7 +142,6 @@ const SYSTEM_QUESTION_VERSION_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng liên kết phiên bản ↔ YCCĐ. */
 const SYSTEM_QUESTION_VERSION_OUTCOME_COLUMNS = [
   'id',
   'version_id as versionId',
@@ -215,7 +150,6 @@ const SYSTEM_QUESTION_VERSION_OUTCOME_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng trung tâm đã nhập. */
 const SYSTEM_QUESTION_IMPORTER_COLUMNS = [
   'id',
   'source_question_id as sourceQuestionId',
@@ -224,7 +158,6 @@ const SYSTEM_QUESTION_IMPORTER_COLUMNS = [
   'imported_by as importedBy',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng nhật ký sự kiện. */
 const SYSTEM_BANK_EVENT_COLUMNS = [
   'id',
   'type',
@@ -233,7 +166,6 @@ const SYSTEM_BANK_EVENT_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng gói YCCĐ. */
 const SYSTEM_OUTCOME_PACKAGE_COLUMNS = [
   'id',
   'version',
@@ -249,7 +181,6 @@ const SYSTEM_OUTCOME_PACKAGE_COLUMNS = [
   'rejection_reason as rejectionReason',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng chương trình trong gói. */
 const SYSTEM_OUTCOME_PACKAGE_CURRICULUM_COLUMNS = [
   'id',
   'package_id as packageId',
@@ -260,7 +191,6 @@ const SYSTEM_OUTCOME_PACKAGE_CURRICULUM_COLUMNS = [
   'grade',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng node trong gói. */
 const SYSTEM_OUTCOME_PACKAGE_NODE_COLUMNS = [
   'id',
   'package_id as packageId',
@@ -274,7 +204,6 @@ const SYSTEM_OUTCOME_PACKAGE_NODE_COLUMNS = [
   'duration_percent as durationPercent',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng YCCĐ trong gói. */
 const SYSTEM_OUTCOME_PACKAGE_OUTCOME_COLUMNS = [
   'id',
   'package_id as packageId',
@@ -286,7 +215,6 @@ const SYSTEM_OUTCOME_PACKAGE_OUTCOME_COLUMNS = [
   'source_ref as sourceRef',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng ánh xạ trong gói. */
 const SYSTEM_OUTCOME_PACKAGE_MAPPING_COLUMNS = [
   'id',
   'package_id as packageId',
@@ -295,20 +223,12 @@ const SYSTEM_OUTCOME_PACKAGE_MAPPING_COLUMNS = [
   'note',
 ] as const;
 
-/**
- * Repository của kho ngân hàng hệ thống trên Kysely: mọi truy cập
- * tới database kho ngân hàng tập trung ở đây, qua đúng một handle
- * do tầng ứng dụng cấp. Handle `null` khi kho chưa cấu hình — mọi
- * thao tác khi đó ném lỗi do hàm dựng lỗi quyết định (mặc định
- * {@link SystemBankNotConfiguredError}).
- */
 export class SystemBankRepository {
   constructor(
     private readonly handle: SystemBankDb | null,
     private readonly notConfiguredError: () => Error = () => new SystemBankNotConfiguredError(),
   ) {}
 
-  /** Handle kho ngân hàng; ném lỗi chưa cấu hình khi kho chưa được cấu hình. */
   private db(): SystemBankDb {
     if (!this.handle) {
       throw this.notConfiguredError();
@@ -316,12 +236,6 @@ export class SystemBankRepository {
     return this.handle;
   }
 
-  /**
-   * Tạo câu hỏi hệ thống kèm phiên bản đầu tiên trong MỘT
-   * transaction kho ngân hàng: câu + version 1 + các liên kết
-   * YCCĐ của gói. `id` vắng thì database sinh uuidv7 (insert bỏ
-   * khoá chính); đường di trú truyền id gốc để giữ truy vết nguồn.
-   */
   async createQuestionWithFirstVersion(input: {
     id?: string;
     qtype: string;
@@ -337,9 +251,6 @@ export class SystemBankRepository {
           status: 'published',
           created_by: input.createdBy,
         };
-        // Id tường minh chỉ ghi khi bên gọi truyền (đường di trú);
-        // vắng thì cột vắng mặt trong câu lệnh để DEFAULT uuidv7()
-        // của database quyết định (quy tắc T-4 + phụ lục U).
         if (input.id !== undefined) questionValues.id = input.id;
         const [question] = await tx
           .insertInto('system_questions')
@@ -374,12 +285,6 @@ export class SystemBankRepository {
       });
   }
 
-  /**
-   * Tạo phiên bản mới cho câu đã có trong MỘT transaction: số
-   * phiên bản = max hiện tại + 1 (unique theo cặp câu + số), kèm
-   * các liên kết YCCĐ của gói mới. Nội dung phiên bản cũ không bị
-   * chạm tới.
-   */
   async createVersion(
     questionId: string,
     pkg: SystemBankPackage,
@@ -423,7 +328,6 @@ export class SystemBankRepository {
       });
   }
 
-  /** Đọc một câu hỏi hệ thống theo id (null khi không có). */
   async getQuestion(id: string): Promise<SystemQuestionRow | null> {
     const row = await this.db()
       .selectFrom('system_questions')
@@ -434,7 +338,6 @@ export class SystemBankRepository {
     return row ?? null;
   }
 
-  /** Đọc một phiên bản theo số phiên bản của câu (null khi không có). */
   async getVersionByNumber(questionId: string, version: number): Promise<SystemQuestionVersionRow | null> {
     const row = await this.db()
       .selectFrom('system_question_versions')
@@ -446,7 +349,6 @@ export class SystemBankRepository {
     return row ?? null;
   }
 
-  /** Liệt kê mọi phiên bản của một câu theo thứ tự số tăng dần. */
   async listVersions(questionId: string): Promise<SystemQuestionVersionRow[]> {
     return this.db()
       .selectFrom('system_question_versions')
@@ -456,7 +358,6 @@ export class SystemBankRepository {
       .execute();
   }
 
-  /** Đọc phiên bản mới nhất của một câu (null khi câu chưa có phiên bản nào). */
   async getLatestVersion(questionId: string): Promise<SystemQuestionVersionRow | null> {
     const row = await this.db()
       .selectFrom('system_question_versions')
@@ -468,10 +369,6 @@ export class SystemBankRepository {
     return row ?? null;
   }
 
-  /**
-   * Đánh dấu câu đã rút (metadata trạng thái, tách khỏi nội dung
-   * các phiên bản — các phiên bản cũ vẫn đọc lại nguyên vẹn).
-   */
   async markWithdrawn(
     id: string,
     input: { reason: string; by: string | null },
@@ -491,7 +388,6 @@ export class SystemBankRepository {
     return rows[0] ?? null;
   }
 
-  /** Ghi một dòng sự kiện append-only vào nhật ký kho ngân hàng. */
   async recordEvent(input: {
     type: string;
     sourceQuestionId: string;
@@ -510,13 +406,6 @@ export class SystemBankRepository {
     return event;
   }
 
-  /**
-   * Liệt kê các câu hỏi đang phát hành (kèm mọi phiên bản của mỗi
-   * câu) phục vụ khám phá: lọc theo dạng câu ở SQL; lọc theo
-   * YCCĐ/mức độ thực hiện trên tập id (kho ngân hàng ở quy mô
-   * trăm–nghìn câu nên lọc trong bộ nhớ trên id rồi mới phân trang
-   * là đủ và giữ phân trang đúng — không lọc sau phân trang).
-   */
   async listPublishedQuestionsWithVersions(filters: {
     qtype?: string;
     outcomeId?: string;
@@ -578,7 +467,6 @@ export class SystemBankRepository {
     return result;
   }
 
-  /** Liệt kê định danh các câu một trung tâm đã nhập (căn cứ suy tập sự kiện thuộc diện giao cho trung tâm đó). */
   async listImportedQuestionIds(centreSlug: string): Promise<string[]> {
     const rows = await this.db()
       .selectFrom('system_question_importers')
@@ -588,11 +476,6 @@ export class SystemBankRepository {
     return rows.map((row) => row.sourceQuestionId);
   }
 
-  /**
-   * Liệt kê sự kiện của một tập câu theo thứ tự ghi nhận (cũ
-   * trước, định danh làm khoá phụ cho thứ tự ổn định) — nguồn của
-   * đường giao thông báo phía trung tâm.
-   */
   async listEventsForQuestions(sourceQuestionIds: string[]): Promise<SystemBankEventRow[]> {
     if (sourceQuestionIds.length === 0) return [];
     return this.db()
@@ -604,7 +487,6 @@ export class SystemBankRepository {
       .execute();
   }
 
-  /** Liệt kê slug các trung tâm đã nhập một câu (căn cứ phát thông báo khi rút câu). */
   async listImporterSlugs(sourceQuestionId: string): Promise<string[]> {
     const rows = await this.db()
       .selectFrom('system_question_importers')
@@ -614,11 +496,6 @@ export class SystemBankRepository {
     return rows.map((row) => row.centreSlug);
   }
 
-  /**
-   * Ghi nhận một trung tâm đã nhập (upsert idempotent theo cặp
-   * câu + slug): insert-bỏ-qua-khi-trùng, nếu cặp đã có thì đọc
-   * lại dòng hiện hữu — dùng ở lát nhập bản chụp.
-   */
   async recordImporter(input: {
     sourceQuestionId: string;
     centreSlug: string;
@@ -647,7 +524,6 @@ export class SystemBankRepository {
     return existing;
   }
 
-  /** Tạo một gói YCCĐ kèm toàn bộ items trong MỘT transaction kho ngân hàng. */
   async createPackageWithItems(input: {
     version: string;
     scope: string;
@@ -693,9 +569,6 @@ export class SystemBankRepository {
           .returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
           .execute();
         if (!pkg) throw new Error('system bank: failed to create outcome package');
-        // Các insert mảng đều được chặn mảng rỗng ở tầng TS như
-        // đường cũ: `values([])` của Kysely là lỗi, và gói rỗng
-        // từng phần là trạng thái hợp lệ của gói.
         if (input.curricula.length > 0) {
           await tx
             .insertInto('system_outcome_package_curricula')
@@ -762,7 +635,6 @@ export class SystemBankRepository {
       });
   }
 
-  /** Đọc một gói theo định danh phiên bản (null khi chưa có). */
   async getPackageByVersion(version: string): Promise<SystemOutcomePackageRow | null> {
     const row = await this.db()
       .selectFrom('system_outcome_packages')
@@ -773,9 +645,6 @@ export class SystemBankRepository {
     return row ?? null;
   }
 
-  /**
-   * Chỉ khám phá gói đã duyệt; không rò rỉ bản gửi/từ chối cho trung tâm khác.
-   */
   async listPackages(): Promise<SystemOutcomePackageRow[]> {
     return this.db().selectFrom('system_outcome_packages')
       .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
@@ -783,24 +652,18 @@ export class SystemBankRepository {
       .orderBy('created_at', 'desc').execute();
   }
 
-  /** Hàng chờ duyệt của biên tập viên; không trả gói không thuộc quyền ở service. */
   async listPendingPackages(): Promise<SystemOutcomePackageRow[]> {
     return this.db().selectFrom('system_outcome_packages')
       .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
       .where('status', '=', 'pending').orderBy('created_at', 'asc').execute();
   }
 
-  /** Các gói gửi của chính trung tâm, bao gồm lịch sử quyết định. */
   async listCentrePackages(centreSlug: string): Promise<SystemOutcomePackageRow[]> {
     return this.db().selectFrom('system_outcome_packages')
       .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
       .where('centre_slug', '=', centreSlug).orderBy('created_at', 'desc').execute();
   }
 
-  /**
-   * Chốt trạng thái bằng khoá dòng trong một giao dịch ở kho hệ thống.
-   * Chỉ bản pending được quyết định; retry cùng quyết định là idempotent.
-   */
   async reviewPackage(version: string, actorId: string, approve: boolean, reason: string | null): Promise<SystemOutcomePackageRow | null> {
     return this.db().transaction().execute(async (tx) => {
       const row = await tx.selectFrom('system_outcome_packages')
@@ -821,7 +684,6 @@ export class SystemBankRepository {
     });
   }
 
-  /** Đọc toàn bộ items của một gói (để trung tâm cài đặt). */
   async getPackageItems(packageId: string): Promise<{
     curricula: SystemOutcomePackageCurriculumRow[];
     nodes: SystemOutcomePackageNodeRow[];

@@ -10,9 +10,6 @@ import {
   useUpdateRole,
 } from './admin-roles';
 
-/**
- * Spec tầng đột biến vai trò (issue #597, vòng sửa theo phán quyết điều phối, bổ sung vòng sửa 2): ba đột biến vai trò đều làm mới gốc bảng người dùng kèm vai trò và gốc ma trận toàn trang (trang Quyền độc lập bày danh sách vai). Kiểm chứng ở tầng hook vì tiền tố ma trận không quan sát được từ trang vai trò: gieo sẵn hai truy vấn rồi đếm lần gọi GET sau mỗi đột biến.
- */
 const ROLE_ID = '01900000-0000-7000-8000-0000000000b1';
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-000000000010';
 
@@ -53,11 +50,6 @@ function wrapper(client: QueryClient) {
   };
 }
 
-/**
- * Gieo hai truy vấn bằng observer thật (renderHook): chỉ gieo bằng
- * fetchQuery thì truy vấn không có observer nên invalidate chỉ đánh
- * dấu stale mà không tải lại — đếm lần gọi sẽ không tăng dù code đúng.
- */
 async function seedQueries(client: QueryClient, calls: RecordedCall[]) {
   const wrap = wrapper(client);
   renderHook(() => useCapabilityMatrix(SYSTEM_CONTEXT_ID), { wrapper: wrap });
@@ -88,7 +80,6 @@ describe('Đột biến vai trò — làm mới bảng người dùng kèm vai t
     const { result } = renderHook(() => useUpdateRole(), { wrapper: wrapper(client) });
     await result.current.mutateAsync({ roleId: ROLE_ID, draft: { name: 'Giáo viên mới', description: '' } });
 
-    // Lần tải lại sau invalidate chạy bất đồng bộ nên chờ cho tới khi cả hai đều tăng.
     await waitFor(() =>
       expect(countCalls(calls, '/api/v1/access/users-with-assignments')).toBeGreaterThan(usersBefore),
     );
@@ -108,7 +99,6 @@ describe('Đột biến vai trò — làm mới bảng người dùng kèm vai t
     const { result } = renderHook(() => useCreateRole(), { wrapper: wrapper(client) });
     await result.current.mutateAsync({ name: 'Vai trò mới', shortName: 'newrole' });
 
-    // Lần tải lại sau invalidate chạy bất đồng bộ nên chờ cho tới khi cả hai đều tăng.
     await waitFor(() =>
       expect(countCalls(calls, '/api/v1/access/users-with-assignments')).toBeGreaterThan(usersBefore),
     );
@@ -128,7 +118,6 @@ describe('Đột biến vai trò — làm mới bảng người dùng kèm vai t
     const { result } = renderHook(() => useDeleteRole(), { wrapper: wrapper(client) });
     await result.current.mutateAsync(ROLE_ID);
 
-    // Lần tải lại sau invalidate chạy bất đồng bộ nên chờ cho tới khi cả hai đều tăng.
     await waitFor(() =>
       expect(countCalls(calls, '/api/v1/access/users-with-assignments')).toBeGreaterThan(usersBefore),
     );

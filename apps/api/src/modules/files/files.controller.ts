@@ -11,18 +11,11 @@ import { questionImageMetaServerSchema, uploadMetaServerSchema, type QuestionIma
 
 @ApiTags('files')
 @Controller({ path: 'files', version: '1' })
-/**
- * API file: upload multipart, metadata, URL ký, tải xuống và xoá.
- */
 export class FilesController {
   constructor(private readonly files: FilesService) {}
 
-  // Không có @RequireCapability tại đây: các guard chạy trước khi interceptor multipart phân tích body, nên context đích được kiểm tra trong handler thay thế.
   @Post()
   @UseInterceptors(FileInterceptor('file'))
-  /**
-   * POST /files — tải file lên (multipart; metadata kiểm bằng schema Zod phía server).
-   */
   async upload(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: uploadMetaServerSchema }) meta: UploadMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.upload({
@@ -33,12 +26,8 @@ export class FilesController {
     return { id: row.id, contentHash: row.contentHash, fileSize: row.fileSize, fileName: row.fileName, contextId: row.contextId };
   }
 
-  // Cùng dạng guard như upload ở gốc: capability được kiểm tra trong handler vì context đích chỉ tồn tại sau khi phân tích multipart.
   @Post('question-image')
   @UseInterceptors(FileInterceptor('file'))
-  /**
-   * POST /files/question-image — tải MỘT ảnh nhúng cho nội dung câu hỏi vào context của bank đích. Trả `src` là định danh bền để editor chèn vào tài liệu; URL ký chỉ được phát khi phục vụ người đọc (resolveQuestionImageUrls).
-   */
   async uploadQuestionImage(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.uploadQuestionImage({
@@ -52,41 +41,26 @@ export class FilesController {
   }
 
   @Get(':id')
-  /**
-   * GET /files/:id — metadata của file.
-   */
   async get(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     const f = await this.files.getFile(id);
     await this.files.assertCanView(f, actor);
     return { id: f.id, contentHash: f.contentHash, fileSize: f.fileSize, fileName: f.fileName, contextId: f.contextId, component: f.component, fileArea: f.fileArea, mimeType: f.mimeType };
   }
 
-  /** Xin một URL tải xuống đã ký ngắn hạn — bị từ chối (403 Problem Details) nếu không có capability của context file. */
   @Post(':id/signed-url')
-  /**
-   * POST /files/:id/signed-url — tạo URL tải ký tạm thời.
-   */
   async signedUrl(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.files.createSignedUrl(id, actor.id, actor.username === 'guest');
   }
 
   @Delete(':id')
-  /**
-   * DELETE /files/:id — xoá file. Capability tại context của tệp kiểm
-   * tại đây; khoá bài nộp (sở hữu + trạng thái) do FilesService áp khi xoá vì actor được truyền xuống — tệp thuộc bài nộp đã chốt nộp/đã trả bài không bị xoá qua đường dùng chung này.
-   */
   async remove(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     const f = await this.files.getFile(id);
     await this.files.assertCanUpload(f.contextId, actor);
     return this.files.deleteFile(id, actor);
   }
 
-  /** Tải xuống đã ký: route public DUY NHẤT — việc sở hữu một chữ ký chưa hết hạn (được cấp sau khi kiểm tra capability) chính là thông tin xác thực. */
   @Public()
   @Get(':id/download')
-  /**
-   * GET /files/:id/download — tải nội dung (kiểm quyền hoặc chữ ký tạm thời).
-   */
   async download(@Param('id', { schema: uuidIdSchema }) id: string, @Query('sig') sig: string | undefined, @Res() res: Response) {
     const { file, data } = await this.files.readSignedContent(id, sig);
     res.setHeader('Content-Type', file.mimeType ?? 'application/octet-stream');
@@ -94,14 +68,10 @@ export class FilesController {
     res.send(data);
   }
 
-  /** Luồng stream có guard (thay thế cho URL đã ký): capability được kiểm tra trên chính context của file. */
   @Get(':id/content')
-  /**
-   * GET /files/content — phục vụ nội dung qua URL đã ký.
-   */
   async content(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     const probe = await this.files.getFile(id);
-    await this.files.createSignedUrl(id, actor.id, actor.username === 'guest'); // ném 403 khi không được phép
+    await this.files.createSignedUrl(id, actor.id, actor.username === 'guest');
     void probe;
     const { file, data } = await this.files.readContent(id);
     res.setHeader('Content-Type', file.mimeType ?? 'application/octet-stream');

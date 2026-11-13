@@ -1,6 +1,3 @@
-/**
- * Unit test cho gói phiên bản bất biến (issue #585): chuẩn hoá JSON và checksum SHA-256 phải ổn định và phát hiện được thay đổi nội dung.
- */
 import { describe, expect, it } from 'vitest';
 import {
   canonicalizeJson,

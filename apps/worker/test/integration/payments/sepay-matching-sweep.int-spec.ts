@@ -6,20 +6,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Đặc tả đường quét matching IPN SePay ở worker QUA NHỊP THẬT của module (issue con #539 của #522): boot `WorkerModule` bằng harness role thường (đúng hình dạng kết nối production — scheduler chạy bằng role không BYPASSRLS, ngữ cảnh platform tường minh), gieo payment + sự kiện provider bằng SQL, rồi chờ nhịp 1 giây của `SepayMatchingScheduler` quét và khớp. Không gọi tay tick, không dựng service bằng tay: nhịp, bề mặt matching dùng chung và ba adapter cổng đều là code production thật.
- *
- * Các ca ghim đúng hợp đồng nhịp quét + adapter mới:
- *
- * 1. Khớp đủ 3 điều kiện + đối chiếu đích → succeeded, ghi danh
- *    ACTIVE đúng một lần, outbox `payment_succeeded` đúng một dòng; các nhịp sau không nhân đôi (phát lại ở tầng nhịp).
- * 2. Sai số tiền → payment + sự kiện vào `needs_review`, không kích
- *    hoạt, không ghi danh.
- * 3. Sự kiện `processing` treo quá 60 giây được nhịp sau nhận lại
- *    và khớp (cửa sổ stale của claim).
- * 4. Sự kiện `debit` khớp dòng hoàn `approved` đủ 100% → refund
- *    settled, payment refunded, ghi danh SUSPENDED; phát lại cùng sự kiện debit (đưa dòng sự kiện về `received` như một lần redelivery của provider) không settle hai lần — nhận diện qua `settled_event_id` đã ghi. Ghi chú phân kỳ: người tạo yêu cầu hoàn trong ca này là người mua, không giữ capability `enrol:manage` — đường API sẽ chặn ở cổng capability của `setSuspended` và đẩy sự kiện về `needs_review`, còn adapter worker (tiến trình hệ thống tin cậy thực thi quyết định đã chốt) settle thẳng như đã ghi trong TSDoc của service và thân PR; ca này ghim hành vi worker đó, không ghim hành vi API.
- */
 describe('Điểm quét matching IPN SePay ở worker — nhịp thật của module', () => {
   let harness: OrdinaryWorkerModuleHarness;
   let pg: Client;
@@ -40,7 +26,6 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
     return id;
   }
 
-  /** Đồ thị khoá + instance thu phí cho một ca: khoá mới, context khoá mới, instance `fee` giá 100.000. */
   async function makeFeeCourse(): Promise<{ courseId: string; courseCtxId: string; instanceId: string }> {
     const courseId = uid();
     const courseCtxId = uid();
@@ -120,7 +105,6 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
     return (res.rows[0] as { c: number }).c;
   }
 
-  /** Chờ một điều kiện đúng, thăm dò mỗi 250 ms như các spec e2e payments. */
   async function waitFor(check: () => Promise<boolean>, label: string, timeoutMs = 12000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -184,7 +168,6 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
     expect(event?.match_status).toBe('matched');
     expect(event?.matched_payment_id).toBe(paymentId);
 
-    // Phát lại ở tầng nhịp: để thêm vài nhịp chạy qua rồi đếm lại — không nhân đôi.
     await new Promise((r) => setTimeout(r, 2500));
     expect(await outboxCount('payment_succeeded', paymentId)).toBe(1);
     expect(await enrolOutboxCount('user_enrolled', buyer)).toBe(1);
@@ -219,8 +202,6 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
       status: 'processing', receivedAt: new Date(Date.now() - 120_000),
     });
 
-    // Trạng thái payment có thể được commit trước khi event được đóng dấu matched;
-    // chờ cả hai để tránh đua nhịp scheduler với assertion trên event.
     await waitFor(async () =>
       (await paymentRow(paymentId))?.status === 'succeeded'
       && (await eventRow(eventId))?.match_status === 'matched', 'payment và event treo được khớp lại');
@@ -234,7 +215,6 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
     const { instanceId } = await makeFeeCourse();
     const code = `GKH539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
     const paymentId = await makePayment(buyer, instanceId, code);
-    // Payment đã succeeded và ghi danh đang ACTIVE — trạng thái trước khi hoàn tiền.
     await pg.query("UPDATE payments SET status = 'succeeded' WHERE id = $1", [paymentId]);
     await pg.query(
       "INSERT INTO user_enrolments (id, enrol_id, user_id, status, time_start) VALUES ($1, $2, $3, 0, now())",
@@ -264,9 +244,6 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
       (await pg.query('SELECT settled_at FROM payment_refunds WHERE id = $1', [refundId])).rows[0].settled_at as string,
     ).getTime();
 
-    // Phát lại cùng sự kiện debit: đưa dòng sự kiện về received như một
-    // lần redelivery của provider — nhịp sau nhận diện qua settled_event_id
-    // và chỉ đánh dấu matched lại, không settle lần hai.
     await pg.query("UPDATE payment_provider_events SET match_status = 'received', matched_payment_id = NULL WHERE id = $1", [eventId]);
     await waitFor(async () => (await eventRow(eventId))?.match_status === 'matched', 'sự kiện phát lại về matched');
     const refundAfter = await pg.query('SELECT status, settled_at FROM payment_refunds WHERE id = $1', [refundId]);

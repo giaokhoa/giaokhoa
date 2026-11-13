@@ -7,11 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { BadgesPage } from './badges';
 
-/**
- * Spec huy hiệu theo endpoint thật: "của tôi" qua GET /badges/mine (không còn đường ghép theo userId), kích hoạt qua POST /badges/:id/status với
- * { status: 1 } (không còn /activate), và danh sách đã cấp của một badge
- * qua GET /badges/:id/issued trong panel quản trị (canAdminister).
- */
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
 const BADGE_ID = '01900000-0000-7000-8000-000000000002';
 const ISSUED_USER_ID = '01900000-0000-7000-8000-000000000099';
@@ -37,7 +32,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lại mọi lời gọi; badge lật trạng thái sau khi POST /status thành công. */
 function stubFetch(calls: RecordedCall[], state: { badgeStatus: number }) {
   vi.stubGlobal(
     'fetch',
@@ -98,7 +92,6 @@ function stubFetch(calls: RecordedCall[], state: { badgeStatus: number }) {
   );
 }
 
-/** Render trang huy hiệu trong đúng khung provider của ứng dụng thật. */
 function renderBadges() {
   const router = createMemoryRouter([{ path: '/badges', element: <BadgesPage /> }], { initialEntries: ['/badges'] });
   render(
@@ -154,8 +147,6 @@ describe('Trang huy hiệu — endpoint thật', () => {
     const listCallsBefore = calls.filter((c) => c.url === '/api/v1/badges' && c.method === 'GET').length;
     await userEvent.click(activateButton);
 
-    // Đột biến làm mới truy vấn qua tiền tố khoá factory: danh sách được tải
-    // lại và nút Kích hoạt biến mất vì badge đã sang trạng thái hoạt động.
     await waitFor(() =>
       expect(calls.filter((c) => c.url === '/api/v1/badges' && c.method === 'GET').length).toBeGreaterThan(
         listCallsBefore,

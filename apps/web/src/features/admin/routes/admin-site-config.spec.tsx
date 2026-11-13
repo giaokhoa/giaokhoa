@@ -6,11 +6,6 @@ import type { SiteSetting } from '@giaokhoa/contracts';
 import { TestProviders } from '#test/providers';
 import { AdminSiteConfigPage } from './admin-site-config';
 
-/**
- * Spec trang cấu hình site: render setting từ GET /api/v1/site-config
- * (shape `SiteSetting` của contracts site-config ở branch backend), lưu
- * boolean phải PUT `{ value: true }` tới đúng URL /api/v1/site-config/:component/:name, và Đặt lại phải gửi DELETE tới cùng URL đó.
- */
 const SETTINGS: SiteSetting[] = [
   {
     component: 'core',
@@ -39,7 +34,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lại mọi lời gọi; audit trả rỗng để trang yên tĩnh. */
 function stubFetch(calls: RecordedCall[], settings: SiteSetting[] = SETTINGS) {
   vi.stubGlobal(
     'fetch',
@@ -56,7 +50,6 @@ function stubFetch(calls: RecordedCall[], settings: SiteSetting[] = SETTINGS) {
   );
 }
 
-/** Render trang cấu hình site qua router bộ nhớ trong khung provider của ứng dụng thật (trang đã chuyển sang TanStack Query ở F-01). */
 function renderPage() {
   const router = createMemoryRouter([{ path: '/admin/site-config', element: <AdminSiteConfigPage /> }], {
     initialEntries: ['/admin/site-config'],
@@ -95,7 +88,6 @@ describe('Trang cấu hình site của admin', () => {
 
     const checkbox = await screen.findByRole('checkbox', { name: 'Giá trị của core/messagingallusers' });
     await userEvent.click(checkbox);
-    // Nút Lưu của chính dòng messagingallusers (checkbox radix cũng là button nên chọn theo đúng nhãn "Lưu" trong cùng <li>).
     const row = checkbox.closest('li');
     expect(row).not.toBeNull();
     const saveByText = [...row!.querySelectorAll('button')].find((b) => b.textContent === 'Lưu');
@@ -123,19 +115,15 @@ describe('Trang cấu hình site của admin', () => {
     stubFetch(calls, notifSettings);
     renderPage();
 
-    // Mục riêng "Thông báo" với nhãn loại tử tế thay cho tên khoá thô.
     expect(await screen.findByRole('heading', { name: 'Thông báo' })).toBeInTheDocument();
     expect(screen.getByText('Điểm số thay đổi')).toBeInTheDocument();
     expect(screen.getByText('Sắp hết hạn ghi danh')).toBeInTheDocument();
-    // Loại bắt buộc P2: ghi chú rõ và công tắc bị khoá.
     expect(screen.getByText('Loại bắt buộc — không tắt được')).toBeInTheDocument();
     const mandatoryBox = screen.getByRole('checkbox', { name: 'Giá trị của notifications/provider_enrol_expiry_warning_enabled' });
-    // Checkbox của bộ UI (Base UI) thể hiện khoá bằng aria-disabled + data-disabled, không phải thuộc tính disabled gốc.
     expect(mandatoryBox).toHaveAttribute('aria-disabled', 'true');
     expect(mandatoryBox).toHaveAttribute('data-disabled');
     expect(mandatoryBox).toHaveAttribute('aria-checked', 'true');
 
-    // Loại thường: tắt được, Lưu gửi PUT { value: false } tới đúng URL chính sách.
     const box = screen.getByRole('checkbox', { name: 'Giá trị của notifications/provider_grade_updated_enabled' });
     expect(box).not.toBeDisabled();
     await userEvent.click(box);

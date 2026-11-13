@@ -1,7 +1,3 @@
-/**
- * Bất biến contract của grant hỗ trợ: chỉ thao tác đọc đã định
- * nghĩa, recipient xác định và thời gian ISO có offset.
- */
 import { describe, expect, it } from "vitest";
 import { createSupportGrantSchema, SUPPORT_SCOPES } from "./support-grants";
 

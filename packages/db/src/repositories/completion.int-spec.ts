@@ -10,17 +10,6 @@ import {
 } from '../test-support/tenant-context';
 import { CompletionRepository } from './completion';
 
-/**
- * Spec tích hợp của repository hoàn thành trên Kysely (issue #649).
- *
- * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production trong ngữ cảnh tenant qua pool gắn GUC như đường production.
- *
- * Các bất biến được khoá ở đây là hợp đồng của đường bộ máy cũ trước đây mà tầng service dựa vào:
- * - Ba thao tác ghi/đè khoá theo khoá duy nhất tự nhiên và nhánh cập
- *   nhật khi trùng chỉ chạm đúng tập cột đã chốt: đặc biệt `time_enrolled` của bản ghi hoàn thành khoá học KHÔNG nằm trong nhánh cập nhật (ghi đè không được viết lại mốc ghi danh).
- * - Đọc cấu hình của khoá chưa cấu hình trả mặc định `{ method: 1 }`.
- * - Các danh sách theo tập rỗng trả mảng rỗng mà không lỗi.
- */
 const TEST_DATABASE = 'giaokhoa_db_g649_completion';
 const TEST_ROLE = 'giaokhoa_db_g649_completion';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_completion_pw';
@@ -257,8 +246,6 @@ describe('CompletionRepository — tiêu chí, dấu thủ công, cấu hình v�
       expect(updated.id).toBe(inserted.id);
       expect(updated.status).toBe('complete');
       expect(updated.timeCompleted).toEqual(completedAt);
-      // time_enrolled không nằm trong nhánh cập nhật khi trùng khoá:
-      // giá trị truyền ở lượt ghi đè không được viết lại mốc ghi danh.
       expect(updated.timeEnrolled).toEqual(enrolledAt);
       expect(updated.reAggregate.getTime()).toBeGreaterThanOrEqual(inserted.reAggregate.getTime());
 

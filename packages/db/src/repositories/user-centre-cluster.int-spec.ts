@@ -9,21 +9,6 @@ import { SiteConfigRepository } from './site-config';
 import { TenantsRepository } from './tenants';
 import { UsersRepository } from './users';
 
-/**
- * Spec tích hợp của nhóm G1 chiến dịch Kysely (issue #641): năm repository của cụm người dùng và trung tâm (auth, users, tenants, centre-identity, site-config) chạy trên database kho trung tâm dựng từ rỗng bằng chính cầu nối migration của package, qua repository production — không mô phỏng handle.
- *
- * Ngoài đối chiếu hành vi từng repository, spec này chốt các điểm đo mà thân issue #641 phân bổ cho nhóm:
- * - Điểm nóng site-config: tương đương của upsert từng phần ở tầng
- *   platform (vị từ chỉ số duy nhất riêng phần trên `plugin_config`) — cập nhật đúng khi điều kiện đích khớp, dòng tenant trùng `(plugin, name)` không bị đường ghi platform chạm tới.
- * - T-13 (hai ca điều kiện động của nhóm): `users.search` (nhóm OR
- *   của từ khoá + lọc trạng thái + đếm khớp trang) và `site-config.listAudit` (có/không có khoá lọc).
- * - T-4: patch cập nhật mang trường `undefined` tường minh không
- *   được ghi đè giá trị đang có.
- * - U5: insert không truyền id nhận id UUIDv7 qua `returning`;
- *   insert có id tường minh giữ nguyên id.
- * - T-7 (mở rộng cho kho trung tâm): cùng một dòng đọc qua
- *   oracle độc lập (Kysely thô ngoài repository) và qua repository cho kiểu runtime khớp nhau ở các cột đại diện của cụm (timestamptz, jsonb — object lẫn mảng ở cấp trên cùng, boolean, uuid, text) và khẳng định bề mặt int8 của cụm: mười bốn bảng của cụm không có cột bigint nào (đo tại information_schema), nên luật int8-đọc-là-string không có bề mặt trong cụm này.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL
@@ -65,7 +50,6 @@ afterAll(async () => {
   await dropTestDatabase(adminUrl, CENTRE_DB).catch(() => undefined);
 });
 
-/** Tạo một user qua repository với username/email suy từ hậu tố cho trước. */
 async function makeUser(suffix: string, patch: { firstName?: string; lastName?: string } = {}) {
   return usersRepo.insertUser({
     username: `g641_${suffix}`,
@@ -143,14 +127,12 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
     expect(replacedPending?.secretEncrypted).toBe('secret-ma-hoa-2');
     expect(replacedPending?.confirmed).toBe(false);
 
-    // Confirm phải trùng với đúng secret đã kiểm; snapshot cũ không được bật nhầm.
     expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-1')).toBe(false);
     expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-2')).toBe(true);
     const confirmed = await authRepo.getTotpByUserId(user.id);
     expect(confirmed?.confirmed).toBe(true);
     expect(confirmed?.confirmedAt).toBeInstanceOf(Date);
 
-    // Mô phỏng setup đã đọc pending=false trước khi request khác confirm.
     const staleSetup = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-3');
     expect(staleSetup).toBeUndefined();
     expect(await authRepo.getTotpByUserId(user.id)).toEqual(confirmed);
@@ -171,14 +153,11 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
       activeSecretEncrypted: 'secret-nguon-A',
     });
 
-    // Mô phỏng request khác vừa chuyển active A thành C.
     await db.updateTable('user_totp')
       .set({ secret_encrypted: 'secret-active-C', confirmed: true, confirmed_at: new Date() })
       .where('user_id', '=', user.id)
       .execute();
     expect(await authRepo.stageTotpReplacement(user.id, 'secret-pending-D', 'secret-nguon-A')).toBe(false);
-    // Kể cả pending B còn nằm trong verification thì confirm B vẫn phải
-    // kiểm phiên bản nguồn A; tuyệt đối không được hoán đổi C.
     expect(await authRepo.activateTotpReplacement(user.id, original!)).toBe(false);
     expect((await authRepo.getTotpByUserId(user.id))?.secretEncrypted).toBe('secret-active-C');
 
@@ -197,9 +176,6 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
     expect(await authRepo.stageTotpReplacement(user.id, 'secret-pending-cu', 'secret-truoc-reset')).toBe(true);
     const beforeReset = await authRepo.getPendingTotpReplacement(user.id);
 
-    // Reset xóa factor active, tài khoản bật lại từ secret hoàn toàn khác.
-    // Ngay cả nếu pending cũ chưa được cleanup thì nó cũng không thể
-    // thay thế factor mới: CAS kiểm secret của thời điểm tái xác thực.
     await authRepo.deleteTotp(user.id);
     expect(await authRepo.getPendingTotpReplacement(user.id)).toBeUndefined();
     await authRepo.upsertPendingTotp(user.id, 'secret-sau-reset');
@@ -309,16 +285,13 @@ describe('UsersRepository — hồ sơ, transaction, tìm kiếm động (T-13) 
     const cuong = await usersRepo.insertUser({ username: 'timkiem_cuong', email: 'cuong@example.test', passwordHash: 'h', firstName: 'Cường', lastName: 'An' });
     await usersRepo.updateUser(cuong.id, { deleted: true, suspended: true });
 
-    // Từ khoá "timkiem" khớp cả ba qua username nhưng mặc định ẩn tài khoản đã xoá.
     const all = await usersRepo.search('timkiem', 1, 10);
     expect(all.total).toBe(2);
     expect(all.rows.map((r) => r.id).sort()).toEqual([an.id, binh.id].sort());
 
-    // Nhóm OR: từ khoá chỉ khớp qua họ (lastName) vẫn tìm thấy.
     const byName = await usersRepo.search('Nguyễn', 1, 10);
     expect(byName.rows.map((r) => r.id)).toContain(an.id);
 
-    // Lọc trạng thái: active loại tài khoản đình chỉ, suspended chỉ lấy đình chỉ, deleted chỉ lấy đã xoá.
     const active = await usersRepo.search('timkiem', 1, 10, { status: 'active' });
     expect(active.rows.map((r) => r.id)).toEqual([an.id]);
     const suspended = await usersRepo.search('timkiem', 1, 10, { status: 'suspended' });
@@ -326,7 +299,6 @@ describe('UsersRepository — hồ sơ, transaction, tìm kiếm động (T-13) 
     const deleted = await usersRepo.search('timkiem', 1, 10, { status: 'deleted' });
     expect(deleted.rows.map((r) => r.id)).toEqual([cuong.id]);
 
-    // Phân trang: tổng đếm giữ nguyên khi cắt trang.
     const page2 = await usersRepo.search('timkiem', 2, 1);
     expect(page2.total).toBe(2);
     expect(page2.rows).toHaveLength(1);
@@ -390,8 +362,6 @@ describe('TenantsRepository — vòng đời tenant, membership và cấu hình 
     const objectRow = await tenantsRepo.getConfigValue(tenantId, 'g641.object');
     expect(objectRow?.value).toEqual({ muc: [1, 2], bat: true });
 
-    // Mảng ở cấp cao nhất là ca driver pg xử lý khác object thường —
-    // helper serialize + ::jsonb của repository phải giữ nguyên giá trị.
     await tenantsRepo.upsertConfigValue(tenantId, 'g641.array', ['a', 'b']);
     const arrayRow = await tenantsRepo.getConfigValue(tenantId, 'g641.array');
     expect(arrayRow?.value).toEqual(['a', 'b']);
@@ -443,7 +413,6 @@ describe('CentreIdentityRepository — nhận diện, lời mời và danh sách
     const afterRevoke = await centreRepo.findInviteByTokenHash('hash-moi-2');
     expect(afterRevoke?.revokedAt).toBeInstanceOf(Date);
     expect(afterRevoke?.id).toBe(second[0]!.id);
-    // Lời mời đã dùng không bị thu hồi kéo theo.
     const usedAfter = await centreRepo.findInviteByTokenHash('hash-moi-1');
     expect(usedAfter?.revokedAt).toBeNull();
   });

@@ -3,27 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { QuestionsService } from '../../../src/modules/questions/questions.service';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
-/**
- * Dạng câu hỏi chuẩn + ngữ liệu (stimulus) — flow nghiệp vụ theo MÔ HÌNH GIAOKHOA (quyết 12:04 + 12:12 ngày 26/10/2026, đợt port #248):
- *  - Câu hỏi KHÔNG có tên; đáp án chỉ mang cờ đúng/sai nhị phân
- *    (`correct` ở payload, `isCorrect` ở view) — KHÔNG còn tỉ trọng
- *    fraction của đáp án; chấm tự động là nhị phân 1/0.
- *  - multichoice: đúng 4 lựa chọn, đúng MỘT đáp án đúng, chọn một đáp
- *    án; chọn nhiều đáp án bị chấm 0.
- *  - truefalse (TF-A): MỘT câu gồm thân chung + đúng 4 mệnh đề trong
- *    thân câu; đáp án Đ/S của từng mệnh đề ở `solution.answers` phía đáp án; chấm theo thang Đ–S của lần dùng.
- *  - shortanswer: khớp CHÍNH XÁC sau chuẩn hoá (hoa/thường theo
- *    useCase) — ký tự đại diện `*` đã bỏ hẳn (điểm quyết D-2).
- *  - essay: không tự chấm → needsgrading; guidance nằm ở bản ghi phía
- *    đáp án (`answerKey`) cùng lời giải mẫu, KHÔNG còn trên version.
- *  - Stimulus quanh ngữ liệu: mô hình theo repo tham chiếu giaokhoa
- *    (stimulus độc lập, bất biến khi đã được tham chiếu); nhiều câu
- *    (kể cả câu TF-A) cùng tham chiếu một stimulus và chấm độc lập,
- *    tính bất biến do chuỗi pin attempt → version → stimulus bảo đảm
- *    (không cần snapshot riêng).
- *  - Điểm tuyệt đối gắn lúc ra đề: maxMark của slot, fallback
- *    defaultMark của câu.
- */
 
 interface DocLike { content: { content?: { text?: string }[] }[] }
 const docText = (doc: DocLike) => (doc.content ?? []).map((p) => (p.content ?? []).map((t) => t.text ?? '').join('')).join('\n');
@@ -54,8 +33,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
   }
 
 
-  // Payload câu TF-A: thân là `stem`, 4 mệnh đề mang cùng giá trị
-  // `allValue`; response đúng toàn phần là JSON map cả 4 ý theo giá trị đó.
   const tfBody = (stem: string, allValue: boolean, stimulusId?: string) => ({
     qtype: 'truefalse',
     questionText: {
@@ -82,14 +59,7 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     return res as never;
   }
 
-  /** Chạy trọn một lượt làm cho một câu: usage 1 slot → start → submit → finish; trả attempt đã chốt. */
   async function runAttempt(questionId: string, response: string | null, maxMark?: number): Promise<Record<string, never>> {
-    // Mẫu dựng sau khi #60 (chủ sở hữu) + #55 (cổng tạo usage qua HTTP
-    // đòi question:useall) cùng có mặt: usage của lượt làm do hoạt động
-    // tạo ở tầng service với actor là chính học sinh — chủ sở hữu là học
-    // sinh nên start/submit/finish qua route thô bình thường; tạo qua
-    // HTTP bằng tài khoản học sinh bị cổng #55 chặn 404 (đúng chủ đích:
-    // usage thô qua HTTP là đường đọc đáp án, chỉ đội ngân hàng dùng).
     const created = await app.get(QuestionsService).createUsage(studentId, {
       component: 'mod_quiz', slots: [{ questionId, ...(maxMark !== undefined ? { maxMark } : {}) }],
     });
@@ -113,7 +83,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
       .send({ categoryId, content: 'Đọc đoạn văn sau và trả lời các câu hỏi.' });
     expect(stimRes.status).toBeLessThan(300);
     const stimulusId = stimRes.body.id as string;
-    // Nội dung chuỗi thuần được chuẩn hoá thành tài liệu Tiptap khi lưu.
     expect(docText(stimRes.body.content)).toBe('Đọc đoạn văn sau và trả lời các câu hỏi.');
     expect(stimRes.body.categoryId).toBe(categoryId);
 
@@ -124,7 +93,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     expect((q.body as { stimulus: { id: string } }).stimulus.id).toBe(stimulusId);
     expect((q.body as { latestVersion: { stimulusId: string } }).latestVersion.stimulusId).toBe(stimulusId);
 
-    // Đã có version tham chiếu: sửa và xoá đều bị cấm.
     const patch = await http(app).patch(`/api/v1/stimuli/${stimulusId}`).set('Authorization', `Bearer ${admin}`)
       .send({ content: 'Nội dung khác.' });
     expect(patch.status).toBe(400);
@@ -133,7 +101,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     expect(del.status).toBe(400);
     expect(del.body.code).toBe('stimulus_in_use');
 
-    // Stimulus chưa được tham chiếu: sửa và xoá tự do.
     const freeRes = await http(app).post('/api/v1/stimuli').set('Authorization', `Bearer ${admin}`)
       .send({ categoryId, content: 'Ngữ liệu nháp.' });
     const freeId = freeRes.body.id as string;
@@ -157,7 +124,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     });
     expect(res.status).toBe(400);
     expect((res.body as { code: string }).code).toBe('question.stimulus_category_mismatch');
-    // Học viên không có quyền tạo ngữ liệu/câu hỏi ở category hệ thống.
     const forbidden = await http(app).post('/api/v1/stimuli').set('Authorization', `Bearer ${studentToken}`)
       .send({ categoryId: catA, content: 'Lách quyền.' });
     expect(forbidden.status).toBe(403);
@@ -177,7 +143,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     for (const q of [q1, q2, q3]) expect(q.status).toBeLessThan(300);
     const ids = [q1, q2, q3].map((q) => (q.body as { question: { id: string } }).question.id);
 
-    // Usage chùm câu: dựng ở tầng service với actor là học sinh (như runAttempt).
     const created = await app.get(QuestionsService).createUsage(studentId, {
       component: 'mod_quiz', slots: ids.map((questionId) => ({ questionId })),
     });
@@ -211,7 +176,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     expect(q.status).toBeLessThan(300);
     const answers = (q.body as { answers: { id: string; answer: DocLike; isCorrect: boolean }[] }).answers;
     expect(answers).toHaveLength(4);
-    // Đáp án đúng nằm ở cờ isCorrect của đúng một dòng — view không còn fraction của đáp án.
     expect(answers.filter((a) => a.isCorrect)).toHaveLength(1);
     for (const a of answers) expect(a).not.toHaveProperty('fraction');
     const paris = answers.find((a) => docText(a.answer) === 'Paris')!;
@@ -219,12 +183,11 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     const right = await runAttempt((q.body as { question: { id: string } }).question.id, paris.id, 5);
     expect(right.state).toBe('gradedright');
     expect(right.fraction).toBe(1);
-    // Điểm tuyệt đối gắn lúc ra đề: slot ghi maxMark 5 (mặc định của câu là 1).
     expect(right.maxMark).toBe(5);
     const wrong = await runAttempt((q.body as { question: { id: string } }).question.id, london.id);
     expect(wrong.state).toBe('gradedwrong');
     expect(wrong.fraction).toBe(0);
-    expect(wrong.maxMark).toBe(1); // fallback defaultMark khi slot không ghi maxMark
+    expect(wrong.maxMark).toBe(1);
   });
 
   it('multichoice validation: không đúng 4 lựa chọn hoặc không đúng một đáp án đúng đều bị từ chối', async () => {
@@ -255,9 +218,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
       ],
     });
     expect(noneCorrect.status).toBe(400);
-    // Tầng nghiệp vụ cũng giữ đúng luật này cho các đường không qua
-    // HTTP (đây là cổng mà đường nạp nội bộ chạm phải): mã lỗi nghiệp
-    // vụ của service là question.bad_answer_data.
     const me = await http(app).get('/api/v1/users/me').set('Authorization', `Bearer ${admin}`);
     const svc = app.get(QuestionsService);
     await expect(svc.createQuestion(me.body.id as string, {
@@ -280,8 +240,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     expect(q.status).toBeLessThan(300);
     const qid = (q.body as { question: { id: string } }).question.id;
     const byText = new Map((q.body as { answers: { id: string; answer: DocLike }[] }).answers.map((a) => [docText(a.answer), a.id]));
-    // Chọn cả đáp án đúng lẫn đáp án sai trong một response → 0 điểm
-    // (ca này phải đỏ nếu engine quay lại cộng tỉ trọng từng phần).
     const both = await runAttempt(qid, `${byText.get('Paris')},${byText.get('London')}`);
     expect(both).toMatchObject({ state: 'gradedwrong', fraction: 0 });
     const only = await runAttempt(qid, `${byText.get('Paris')}`);
@@ -300,18 +258,13 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     });
     expect(q.status).toBeLessThan(300);
     const qid = (q.body as { question: { id: string } }).question.id;
-    // Không phân biệt hoa/thường khi useCase tắt.
     const exact = await runAttempt(qid, 'FROG');
     expect(exact).toMatchObject({ state: 'gradedright', fraction: 1 });
-    // Đáp án đúng hiển thị là đáp án được chấp nhận đầu tiên theo thứ tự lưu.
     expect((exact as unknown as { rightAnswer: string }).rightAnswer).toBe('frog');
-    // Mẫu 'F*og' KHÔNG còn khớp như wildcard: học sinh gõ nguyên văn
-    // 'F*og' hay 'Fat dog' đều không ăn điểm.
     const wild = await runAttempt(qid, 'F*og');
     expect(wild).toMatchObject({ state: 'gradedwrong', fraction: 0 });
     const fatDog = await runAttempt(qid, 'Fat dog');
     expect(fatDog).toMatchObject({ state: 'gradedwrong', fraction: 0 });
-    // Lệch một ký tự so với đáp án được chấp nhận → 0.
     const off = await runAttempt(qid, 'frogs');
     expect(off).toMatchObject({ state: 'gradedwrong', fraction: 0 });
   });
@@ -352,8 +305,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     expect(docText(body.options.graderInfo)).toContain('3 ý chính');
     expect(docText(body.options.responseTemplate)).toContain('Thân bài');
     expect(body.options.minWordLimit).toBe(10);
-    // Guidance + lời giải mẫu nằm ở bản ghi phía đáp án (answerKey),
-    // KHÔNG còn trên dòng version (quyết 12:12 ngày 26/10/2026).
     expect(docText(body.answerKey.guidance)).toBe('Đọc kỹ yêu cầu trước khi viết.');
     expect(docText(body.answerKey.solution.answer)).toContain('Ba ý chính');
     expect(body.latestVersion).not.toHaveProperty('guidance');
@@ -396,8 +347,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     });
     expect(q.status).toBeLessThan(300);
     expect(docText((q.body as { latestVersion: { questionText: DocLike } }).latestVersion.questionText)).toBe('Chọn đáp án đúng nhất\nCâu hỏi có hai đoạn.');
-    // Node image ĐÃ thuộc lát hợp đồng (QE-1 + nối files ở QE-2): tài liệu có
-    // ảnh hợp lệ phải được tạo và round-trip nguyên vẹn cả attrs.
     const imageDoc = {
       type: 'doc',
       content: [
@@ -411,8 +360,6 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     });
     expect(withImage.status).toBeLessThan(300);
     expect((withImage.body as { latestVersion: { questionText: unknown } }).latestVersion.questionText).toEqual(imageDoc);
-    // Node heading vẫn NGOÀI lát hợp đồng hiện tại (richTextDocumentSchema chỉ
-    // gồm paragraph, bulletList, blockMath, image) — hợp đồng tài liệu từ chối.
     const withHeading = await createQuestion({
       categoryId, qtype: 'multichoice', questionText: { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Tiêu đề' }] }] },
       answers: four,
@@ -439,9 +386,8 @@ describe('Dạng câu hỏi và ngữ liệu', () => {
     const v2Answers = edit.body.answers as { id: string; isCorrect: boolean; answer: DocLike }[];
     expect(v2Answers).toHaveLength(4);
     expect(v2Answers.map((a) => a.isCorrect)).toEqual([true, false, false, false]);
-    for (const a of v2Answers) expect(v1AnswerIds).not.toContain(a.id); // hàng mới, id mới
+    for (const a of v2Answers) expect(v1AnswerIds).not.toContain(a.id);
     expect(edit.body.options.shuffleAnswers).toBe(true);
-    // Lượt làm trên v2 dùng id đáp án của v2 và chấm đúng.
     const rightId = v2Answers.find((a) => docText(a.answer) === 'Đúng')!.id;
     expect(await runAttempt(qid, rightId)).toMatchObject({ state: 'gradedright', fraction: 1 });
   });

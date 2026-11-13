@@ -6,12 +6,10 @@ import { AccessModule } from '../access/access.module';
 import { EventLogController } from './event-log.controller';
 import { EventLogService } from './event-log.service';
 
-/** EventLogModule facade: đường đọc logstore (bảng event_log do infra/events ghi). */
 @Module({
   imports: [AccessModule, SpaceRoutingModule],
   controllers: [EventLogController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: EventLogRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new EventLogRepository(spaceDatabase.routedKysely),
@@ -21,5 +19,4 @@ import { EventLogService } from './event-log.service';
   ],
   exports: [EventLogService],
 })
-/** Module nhật ký sự kiện: truy vấn log hợp nhất theo quyền tại context. */
 export class EventLogModule {}

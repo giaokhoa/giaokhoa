@@ -5,9 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { CoursePage } from './course';
 
-/**
- * Spec ghi danh tự phục vụ trên trang khoá học: panel tự ghi danh cho người chưa ghi danh, đường thanh toán phí (chỉ tạo payment, không tự ghi danh) và nút tự đánh dấu hoàn thành thủ công. Stub fetch ghi lại mọi lời gọi để khẳng định đúng endpoint/phương thức/body thật.
- */
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';
 const USER_ID = '01900000-0000-7000-8000-0000000000a3';
 const SELF_ID = '01900000-0000-7000-8000-000000000201';
@@ -142,7 +139,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Handler có trạng thái: ghi danh lật cờ để content/completion mở ra như server thật. */
 function makeHandler(state: { enrolled: boolean; cmState: number; payments: unknown[] }, calls: RecordedCall[]) {
   return (url: string, init?: RequestInit): { status: number; body: unknown } | undefined => {
     const method = init?.method ?? 'GET';
@@ -206,7 +202,6 @@ function makeHandler(state: { enrolled: boolean; cmState: number; payments: unkn
   };
 }
 
-/** Stub fetch kiểu dashboard.spec: handler trả {status, body} hoặc undefined (404). */
 function stubFetch(handler: (url: string, init?: RequestInit) => { status: number; body: unknown } | undefined) {
   vi.stubGlobal(
     'fetch',
@@ -221,13 +216,10 @@ function stubFetch(handler: (url: string, init?: RequestInit) => { status: numbe
   );
 }
 
-/** Render trang khoá học tại đúng route /courses/:id. */
 function renderCourse() {
   const router = createMemoryRouter([{ path: '/courses/:id', element: <CoursePage /> }], {
     initialEntries: [`/courses/${COURSE_ID}`],
   });
-  // Trang đã chuyển sang TanStack Query (F-01 đợt 1, #133): render qua
-  // TestProviders để có QueryClient như cây provider thật ở root.
   render(
     <TestProviders>
       <RouterProvider router={router} />
@@ -247,8 +239,6 @@ describe('Trang khoá học — tự ghi danh và đóng phí', () => {
     stubFetch(makeHandler(state, calls));
     renderCourse();
 
-    // Panel ghi danh hiện ra (không còn lỗi access denied trơ trọi), chỉ
-    // gồm instance self/fee đang bật: manual và instance đã tắt bị lọc.
     expect(await screen.findByRole('button', { name: 'Ghi danh' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Thanh toán phí ghi danh' })).toBeInTheDocument();
     expect(screen.getByText(/Phí:/)).toHaveTextContent('VND');
@@ -274,8 +264,6 @@ describe('Trang khoá học — tự ghi danh và đóng phí', () => {
     expect(await screen.findByRole('button', { name: 'Thanh toán phí ghi danh' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Thanh toán phí ghi danh' }));
 
-    // Trạng thái thật từ /payments/me: pending = đang chờ cổng xác nhận,
-    // và người dùng vẫn chưa được vào nội dung khoá.
     await waitFor(() => expect(screen.getByText(/Thanh toán của tôi:/)).toBeInTheDocument());
     expect(screen.getByText(/Thanh toán của tôi:/)).toHaveTextContent('đang chờ xác nhận');
     expect(screen.getByText(/Đang chờ xác nhận từ cổng thanh toán/)).toBeInTheDocument();
@@ -294,7 +282,6 @@ describe('Trang khoá học — tự ghi danh và đóng phí', () => {
     renderCourse();
 
     const toggle = await screen.findByRole('button', { name: 'Đánh dấu hoàn thành' });
-    // Module không bật theo dõi hoàn thành (completion = 0) không có nút.
     expect(screen.getAllByRole('button', { name: /hoàn thành/ })).toHaveLength(1);
 
     await userEvent.click(toggle);

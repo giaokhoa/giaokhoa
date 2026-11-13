@@ -16,18 +16,13 @@ import '#config/i18n';
 import { assignmentQueryOptions, useAssignment } from '../queries/assignment';
 import { queryClient } from '#lib/query-client';
 
-/**
- * Trang hoạt động Bài tập nộp tệp/ảnh (mod_assign): một trang dùng chung theo cờ quyền mà API đã phân giải — học sinh nộp bài và xem kết quả sau khi trả bài; giáo viên xem danh sách bài nộp, chấm + thả dấu vector + trả bài (từng em/theo đợt); người quản lý sửa cài đặt và dựng bảng tiêu chí ngay tại trang.
- */
 export function AssignmentPage() {
   const { t } = useTranslation('app');
   const { id: courseId, assignmentId } = useParams();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader của route đã prefetch cùng khoá nên lần tải đầu thường có sẵn dữ liệu khi mount; trạng thái chờ chuẩn hoá trên isPending với skeleton sẵn có (F-14).
   const assignmentQuery = useAssignment(assignmentId);
   const data: AssignmentForUserView | null = assignmentQuery.data ?? null;
   const queryClientInstance = useQueryClient();
 
-  // Các panel con gọi reload sau mỗi hành động ghi: fetchQuery làm mới cache (trang tự render lại dữ liệu mới) và VẪN ném lỗi như luồng fetch thủ công trước đây để panel tự bắt và báo tại chỗ.
   const reload = useCallback(async () => {
     await queryClientInstance.fetchQuery(assignmentQueryOptions(assignmentId ?? ''));
   }, [queryClientInstance, assignmentId]);
@@ -92,16 +87,8 @@ export function AssignmentPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default AssignmentPage;
 
-/**
- * clientLoader (F-01 đợt 1 + bổ sung clientLoader, rà soát #133):
- * prefetch query chính vào QueryClient singleton dùng chung (đúng
- * khoá factory) trước khi component mount — điều hướng vào trang
- * không còn thác nước mount-rồi-fetch. prefetchQuery không ném lỗi:
- * tải hỏng thì component tự xử lý qua useQuery như trước.
- */
 export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
   if (params.assignmentId) {
     await queryClient.prefetchQuery(assignmentQueryOptions(params.assignmentId));
@@ -109,7 +96,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

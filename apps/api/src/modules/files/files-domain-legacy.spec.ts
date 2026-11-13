@@ -8,10 +8,6 @@ const TENANT_A = 'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa';
 const TENANT_B = 'bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb';
 const FILE_ID = 'cccccccc-cccc-7ccc-8ccc-cccccccccccc';
 
-/**
- * Context legacy của hai tenant trong CÙNG database: không được
- * dùng cờ legacy như một quyền đọc chung vượt host hoặc phiên.
- */
 describe('FilesService: miền legacy theo chủ context ở kho dùng chung', () => {
   function setup() {
     const file = {
@@ -27,8 +23,6 @@ describe('FilesService: miền legacy theo chủ context ở kho dùng chung', (
       select: () => query,
       where: () => query,
       executeTakeFirst: async () => {
-        // Tra cứu danh tính tenant trong scope platform trên handle đã
-        // định tuyến; tuyệt đối không nâng quyền caller ra ngoài đoạn này.
         expect(tenantAls.getStore()?.platform).toBe(true);
         const slug = tenantAls.getStore()?.spaceSlug;
         return slug === 'centre-a' ? { id: TENANT_A, kind: 'centre' }

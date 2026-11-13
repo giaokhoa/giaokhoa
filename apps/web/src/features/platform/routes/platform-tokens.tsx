@@ -11,9 +11,6 @@ import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useCreateWebserviceService, useCreateWebserviceToken, useRevokeWebserviceToken, useWebserviceServices, useWebserviceTokens } from '../queries/platform';
 
-/**
- * Quản trị integration tokens (platform services): service + token, token thô chỉ hiện một lần khi tạo. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `webserviceServices`/ `webserviceTokens`; `clientLoader` của route nạp trước cả hai danh sách). Như bản thủ công: lỗi của riêng danh sách token bị nuốt thành danh sách rỗng — chỉ lỗi danh sách dịch vụ mới làm trang báo lỗi; tạo service/token và thu hồi qua đột biến làm mới cả hai danh sách.
- */
 export function TokensPage() {
   const { t: tr } = useTranslation();
   const servicesQuery = useWebserviceServices();
@@ -134,15 +131,12 @@ export function TokensPage() {
   );
 }
 
-/** Route module gộp (issue #500): nội dung trang bên dưới vốn ở module pages riêng, phần khung route (biên lỗi + tiêu đề) vốn ở wrapper routes riêng — hai module nhập một theo bản đồ features/. */
 export { TokensPage as default };
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('tokensTitle');
 }
 
-// clientLoader (F-01, rà soát #133): nạp trước dữ liệu đúng khoá trang sẽ đọc.
 export { tokensPageClientLoader as clientLoader } from '../queries/platform';

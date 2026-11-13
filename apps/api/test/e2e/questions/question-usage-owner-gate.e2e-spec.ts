@@ -5,14 +5,6 @@ import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, r
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Issue #60 — cổng chủ sở hữu cho các route thao tác question usage thô:
- *  - người khác (không phải chủ usage) start/submit/finish qua route thô
- *    → 404 không-oracle, lượt của nạn nhân nguyên vẹn;
- *  - usage gắn lượt quiz đang `inprogress` bị khoá kênh thô kể cả với
- *    chính chủ (403 `question.usage_managed_by_quiz`) để đáp án đúng chỉ lộ qua luồng quiz sau khi nộp;
- *  - usage tự do của ngân hàng: chủ sở hữu vẫn làm trọn luồng như cũ.
- */
 describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
   let app: INestApplication;
   let admin: string;
@@ -40,7 +32,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
   }
 
 
-  // Câu TF-A của spec: thân + 4 mệnh đề đều ĐÚNG; response đúng là JSON map cả 4 ý true.
   const TF_TEXT = {
     type: 'doc',
     content: [
@@ -59,7 +50,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
   const TF_ALL_TRUE = JSON.stringify({ s1: true, s2: true, s3: true, s4: true });
   const TF_ALL_FALSE = JSON.stringify({ s1: false, s2: false, s3: false, s4: false });
   const TF_RIGHT_ANSWER = 'Đúng, Đúng, Đúng, Đúng';
-  /** Khoá + giáo viên + hai học sinh ghi danh + quiz 1 slot truefalse (đáp án đúng: true). */
   async function setup(): Promise<Scenario> {
     const cat = await createCategory(app, admin);
     const course = await createCourse(app, admin, cat.id);
@@ -93,13 +83,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
       });
     const questionId = qRes.body.question.id as string;
 
-    // Ngữ nghĩa review của Chặng 2 (issue #30): mặc định Moodle cho
-    // review_right_answer = 272 chỉ gồm cửa sổ "sau đó khi đề còn mở"
-    // (0x00100) + "sau khi đóng" (0x00010), KHÔNG gồm cửa sổ "ngay sau
-    // nộp" (0x01000) — nộp xong đáp án đúng chưa lộ ngay. Spec này cần
-    // khẳng định đáp án lộ qua luồng quiz ngay sau khi nộp nên ghim
-    // tường minh bitmask 4368 (gồm cửa sổ ngay-sau-nộp); cửa sổ "đang
-    // làm" (0x10000) vẫn tắt nên đáp án vẫn ẩn trong lúc làm như cũ.
     const draft = await createExamDraft(app, teacher, 'Gate quiz', 10);
     await addExamSlot(app, teacher, draft, { questionId });
     const pin = await pinExam(app, teacher, course.id, draft, { sectionId, reviewRightAnswer: 4368 });
@@ -107,7 +90,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     return { quizId, questionId, tokenA, tokenB, userIdA };
   }
 
-  /** Học sinh bắt đầu lượt quiz và trả lời TF-A (JSON 4 ý đúng) qua kênh quiz; trả view hiện tại. */
   async function startAndAnswer(token: string, quizId: string): Promise<QuizView> {
     const start = await http(app).post(`/api/v1/exam-pins/${quizId}/attempts`).set('Authorization', `Bearer ${token}`).send({});
     expect(start.status).toBe(201);
@@ -127,12 +109,10 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const usageId = view.attempt.usageId;
     const questionAttemptId = view.questions[0]!.questionAttemptId;
 
-    // (a) B submit đáp án vào attempt của A qua route thô → 404 attempt_not_found.
     const bSubmit = await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${questionAttemptId}/submit`)
       .set('Authorization', `Bearer ${s.tokenB}`).send({ response: TF_ALL_FALSE });
     expect(bSubmit.status).toBe(404);
     expect(bSubmit.body.code).toBe('question.attempt_not_found');
-    // B start / finish attempt của A → cùng 404.
     const bStartAttempt = await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${questionAttemptId}/start`)
       .set('Authorization', `Bearer ${s.tokenB}`);
     expect(bStartAttempt.status).toBe(404);
@@ -140,7 +120,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const bFinishAttempt = await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${questionAttemptId}/finish`)
       .set('Authorization', `Bearer ${s.tokenB}`);
     expect(bFinishAttempt.status).toBe(404);
-    // (b) B finish / start usage của A → 404 usage_not_found, giống hệt usage không tồn tại.
     const bFinish = await http(app).post(`/api/v1/question-usages/${usageId}/finish`).set('Authorization', `Bearer ${s.tokenB}`);
     expect(bFinish.status).toBe(404);
     expect(bFinish.body.code).toBe('question.usage_not_found');
@@ -152,7 +131,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     expect(ghost.status).toBe(404);
     expect(ghost.body.code).toBe(bFinish.body.code);
 
-    // Lượt của A nguyên vẹn: vẫn inprogress, đáp án TF-A còn nguyên, đáp án đúng chưa lộ.
     const after = await http(app).get(`/api/v1/quiz-attempts/${view.attempt.id}`).set('Authorization', `Bearer ${s.tokenA}`);
     expect(after.status).toBe(200);
     const afterView = after.body as QuizView;
@@ -160,7 +138,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     expect(afterView.questions[0]!.response).toBe(TF_ALL_TRUE);
     expect(afterView.questions[0]!.rightAnswer).toBeNull();
 
-    // A nộp bài qua luồng quiz bình thường: chốt điểm và đáp án mới lộ.
     const submit = await http(app).post(`/api/v1/quiz-attempts/${view.attempt.id}/submit`)
       .set('Authorization', `Bearer ${s.tokenA}`).send({});
     expect(submit.status).toBeLessThan(300);
@@ -176,13 +153,11 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const usageId = view.attempt.usageId;
     const questionAttemptId = view.questions[0]!.questionAttemptId;
 
-    // (c) Chính A finish sớm usage của mình qua route thô → 403, không kèm đáp án.
     const aFinish = await http(app).post(`/api/v1/question-usages/${usageId}/finish`).set('Authorization', `Bearer ${s.tokenA}`);
     expect(aFinish.status).toBe(403);
     expect(aFinish.body.code).toBe('question.usage_managed_by_quiz');
     expect(aFinish.body.attempts).toBeUndefined();
     expect(JSON.stringify(aFinish.body)).not.toContain('rightAnswer');
-    // A submit / finish attempt / start usage qua route thô → cùng khoá 403.
     const aSubmit = await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${questionAttemptId}/submit`)
       .set('Authorization', `Bearer ${s.tokenA}`).send({ response: TF_ALL_FALSE });
     expect(aSubmit.status).toBe(403);
@@ -193,14 +168,12 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const aStart = await http(app).post(`/api/v1/question-usages/${usageId}/start`).set('Authorization', `Bearer ${s.tokenA}`);
     expect(aStart.status).toBe(403);
 
-    // Lượt vẫn inprogress, đáp án của A không bị ghi đè bởi các lần gọi thô.
     const after = await http(app).get(`/api/v1/quiz-attempts/${view.attempt.id}`).set('Authorization', `Bearer ${s.tokenA}`);
     const afterView = after.body as QuizView;
     expect(afterView.attempt.state).toBe('inprogress');
     expect(afterView.questions[0]!.response).toBe(TF_ALL_TRUE);
     expect(afterView.questions[0]!.rightAnswer).toBeNull();
 
-    // Nộp qua quiz thì chốt bình thường và đáp án lộ đúng chính sách.
     const submit = await http(app).post(`/api/v1/quiz-attempts/${view.attempt.id}/submit`)
       .set('Authorization', `Bearer ${s.tokenA}`).send({});
     const submitted = submit.body as QuizView;
@@ -211,19 +184,12 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
 
   it('usage ngân hàng tự do: chủ sở hữu chạy đầy đủ luồng thô; người lạ nhận 404 và đường dẫn lệch không tìm thấy', async () => {
     const s = await setup();
-    // Mẫu dựng sau khi cổng tạo usage của #55 có mặt: tạo usage thô qua
-    // HTTP đòi `question:useall` (usage thô là đường đọc đáp án) nên học
-    // sinh không tự tạo qua HTTP được nữa; usage tự do của A do hoạt
-    // động tạo ở tầng service với actor là chính A — đúng mô hình mà
-    // assertCanCreateUsage của #55 ghi. Mọi assertion hành vi của cổng
-    // chủ sở hữu bên dưới giữ nguyên.
     const created = await app.get(QuestionsService).createUsage(s.userIdA, {
       component: 'mod_quiz', slots: [{ questionId: s.questionId }],
     });
     const usageId = created.usage.id as string;
     const attemptId = created.attempts[0].id as string;
 
-    // B thao tác usage của A → 404 ở cả hai cấp.
     const bStart = await http(app).post(`/api/v1/question-usages/${usageId}/start`).set('Authorization', `Bearer ${s.tokenB}`);
     expect(bStart.status).toBe(404);
     expect(bStart.body.code).toBe('question.usage_not_found');
@@ -234,7 +200,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const bFinish = await http(app).post(`/api/v1/question-usages/${usageId}/finish`).set('Authorization', `Bearer ${s.tokenB}`);
     expect(bFinish.status).toBe(404);
 
-    // Đường dẫn lệch (attempt của usage này đặt dưới usage khác của chính A) → 404 attempt_not_found.
     const other = await app.get(QuestionsService).createUsage(s.userIdA, {
       component: 'mod_quiz', slots: [{ questionId: s.questionId }],
     });
@@ -244,7 +209,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     expect(mismatched.status).toBe(404);
     expect(mismatched.body.code).toBe('question.attempt_not_found');
 
-    // Chủ sở hữu chạy trọn luồng thô như cũ: start → submit → finish → gradedright kèm đáp án.
     const started = await http(app).post(`/api/v1/question-usages/${usageId}/start`).set('Authorization', `Bearer ${s.tokenA}`);
     expect(started.status).toBeLessThan(300);
     const submitted = await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${attemptId}/submit`)

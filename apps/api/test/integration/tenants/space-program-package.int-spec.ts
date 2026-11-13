@@ -10,20 +10,6 @@ import { SpaceProgramPackageService } from '../../../src/modules/tenants/space-p
 import { CENTRE_PROGRAM_PACKAGE_KEY } from '../../../src/modules/tenants/centre-provision';
 import { PROGRAM_DUMP_VERSION } from '../../../src/modules/curriculum/program-dump';
 
-/**
- * Ca tích hợp của BƯỚC CÀI GÓI YCCĐ VÀO KHO ĐÍCH (Phần A, issue #587 — A5): gọi trực tiếp `SpaceProgramPackageService` (không qua HTTP) với một trung tâm kiểm chứng ở kho riêng dựng riêng cho đợt này — database mới trên cùng cụm test, baseline nghiệp vụ, sổ đăng ký ở database control plane riêng. Sổ ghi nhận cài đặt nguồn nằm ở kho chung (database nghiệp vụ test dùng chung của tầng này); kho đích bắt đầu chưa có dữ kiện chương trình.
- *
- * Các ca khoá đúng yêu cầu A5:
- * (1) lượt đầu cài gói trung tâm bằng đúng cơ chế cài gói đã có
- *     (restore artifact dump khi kho đích chưa có dữ kiện chương
- *     trình), ghi dòng bản cài vào kho đích và chuyển sổ nguồn sang kho đích — trừ khoá gói trung tâm (dòng đích là căn cứ, không bị dòng nguồn ghi đè);
- * (2) chạy lại an toàn: lượt thứ hai không restore, không ghi lại
- *     dòng bản cài, không chuyển lại khoá đã có, bản cài sau lượt vẫn khớp phiên bản artifact hiện hành;
- * (3) trung tâm còn ở kho chung thì bước này từ chối fail-closed
- *     thay vì cài chồng lên kho chung.
- * (4) bản cài đã có trong kho đích lệch phiên bản/checksum so với
- *     artifact hiện hành thì bước này từ chối thay vì ghi đè lặng lẽ, và dòng bản cài lệch được giữ nguyên.
- */
 const CP_DATABASE = 'giaokhoa_test_cp_587b';
 const CP_ROLE = 'giaokhoa_cp_test_587b';
 const CP_PASSWORD = 'cp-test-587b';
@@ -171,8 +157,6 @@ describe('Bước cài gói YCCĐ vào kho đích (tích hợp)', () => {
       await cpDb.destroy();
     }
 
-    // Dòng tenant có ở cả hai kho (trạng thái sau di trú phần
-    // tenant); sổ nguồn chỉ có ở kho chung.
     const tenantValues = [TENANT_ID, CENTRE_A_SLUG, 'Trung tâm A (spec 587b)', 'school', 'active'];
     await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -237,8 +221,6 @@ describe('Bước cài gói YCCĐ vào kho đích (tích hợp)', () => {
       version: '1.0',
       checksum: 'checksum-goi-phu',
     });
-    // Dòng gói trung tâm ở kho đích là bản vừa cài, không bị dòng
-    // nguồn cũ ghi đè.
     expect(installs.find((row) => row.packageKey === CENTRE_PROGRAM_PACKAGE_KEY)).toMatchObject({
       version: PROGRAM_DUMP_VERSION,
     });
@@ -253,9 +235,6 @@ describe('Bước cài gói YCCĐ vào kho đích (tích hợp)', () => {
   });
 
   it('bản cài đã có lệch phiên bản/checksum thì bước cài từ chối thay vì ghi đè', async () => {
-    // Ghi đè dòng bản cài ở kho đích thành bản lệch — nhánh
-    // fail-closed này chỉ chạm tới khi bản cài đã có mà không khớp
-    // artifact hiện hành.
     await withClient(centreAUrl(), async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       await client.query(
@@ -264,7 +243,6 @@ describe('Bước cài gói YCCĐ vào kho đích (tích hợp)', () => {
       );
     });
     await expect(service.installIntoSpace(CENTRE_A_SLUG, TENANT_ID)).rejects.toThrow(/refusing to overwrite/);
-    // Dòng lệch được giữ nguyên, không bị ghi đè lặng lẽ.
     const installs = await listInstalls(centreAUrl());
     expect(installs.find((row) => row.packageKey === CENTRE_PROGRAM_PACKAGE_KEY)).toMatchObject({
       version: '0.0-lech',

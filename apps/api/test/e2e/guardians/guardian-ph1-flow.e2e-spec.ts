@@ -7,11 +7,6 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 import { createGradeItem, setGrade } from '../../support/assessment-helpers';
 
-/**
- * PH-1 — Bề mặt phụ huynh chỉ-xem (issue #130, Đợt 6): 4 khối rút gọn
- * (research phụ huynh/HS mục 4.3) + kết quả đã công bố theo môn, trên nền
- * PH-0 (cổng công bố + liên kết giám hộ + audit) và DASH1 (hàm kết quả mới đã công bố dùng chung). Nguyên tắc cứng mục 5.1: chỉ-xem, chỉ con mình (đoán ID → 404 đồng nhất), chỉ dữ liệu ĐÃ CÔNG BỐ (chưa công bố vắng tuyệt đối cả trong JSON thô), không xếp hạng/so sánh, không hiện 0 thay cho chưa chấm.
- */
 describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
   let app: INestApplication;
   let admin: string;
@@ -48,7 +43,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
   }, 120000);
   afterAll(async () => { await closeWorkerRelayDriver(); await pg.end(); await app.close(); });
 
-  /** Khoá mới + học sinh ghi danh + giáo viên editingteacher tại context khoá. */
   async function courseWithPeople() {
     const course = await createCourse(app, admin, catId);
     const sectionId = await getFirstSectionId(app, admin, course.id);
@@ -65,14 +59,12 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     return { course, sectionId, student, studentToken, teacher };
   }
 
-  /** Người dùng phụ huynh mới + token (chưa có liên kết nào). */
   async function freshGuardian() {
     const user = await createUserViaApi(app, admin);
     const token = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
     return { user, token };
   }
 
-  /** Giáo viên của khoá xác lập liên kết giám hộ → 201, trả link id. */
   async function link(teacher: string, guardianId: string, studentId: string): Promise<string> {
     const res = await http(app).post('/api/v1/guardian-links').set('Authorization', `Bearer ${teacher}`)
       .send({ guardianUserId: guardianId, studentUserId: studentId, relationship: 'Cha' });
@@ -120,7 +112,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     expect(sub.status).toBe(201);
   }
 
-  /** Biên tuần UTC (thứ Hai 00:00 → Chủ nhật 23:59:59.999) — cùng thuật toán phía server. */
   function weekBounds(now: Date): { start: Date; end: Date } {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
@@ -128,7 +119,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
   }
 
   async function flushRelay() {
-    // Xả qua relay của worker (issue #523: relay phía API đã gỡ).
     await flushWorkerRelay();
   }
 
@@ -137,7 +127,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     const { user: guardian, token: guardianToken } = await freshGuardian();
     await link(teacher, guardian.id, student.id);
 
-    // --- Khối (a): ba việc với hạn/quá hạn khác nhau; kỳ vọng tính động theo biên tuần.
     const now = new Date();
     const { start, end } = weekBounds(now);
     const inWeek = (d: Date) => d >= start && d <= end;
@@ -163,8 +152,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
       overdue: fixtures.filter((f) => statusOf(f) === 'overdue').length,
     };
 
-    // --- Khối (c): gieo thẳng notifications — 1 thông báo lớp của khoá này,
-    // 1 thông báo ĐIỂM của khoá này (phải bị loại), 1 thông báo của khoá khác.
     const seedNotif = async (subject: string, eventType: string, contextUrl: string | null) => {
       await pg.query(
         `insert into notifications (user_id_from, user_id_to, subject, full_message, small_message, component, event_type, context_url, context_url_name, created_at, time_read)
@@ -177,14 +164,12 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     const other = await courseWithPeople();
     await seedNotif('Thông báo khoá khác', 'announcement', `/courses/${other.course.id}`);
 
-    // --- Khối (d): bật theo dõi hoàn thành cho đúng module quiz + ghi nhận con đã hoàn thành.
     await pg.query('update course_modules set completion = case when id = $1 then 1 else 0 end where course = $2', [quiz.cmId, course.id]);
     await pg.query(
       'insert into course_modules_completion (course_module_id, user_id, completion_state) values ($1, $2, 1)',
       [quiz.cmId, student.id],
     );
 
-    // --- Khối (b): item manual chấm TRƯỚC lần xem đầu — lần đầu không dội "mới".
     const manualItem = await createGradeItem(app, admin, course.id, { itemName: 'Điểm manual PH1', gradeMax: 10 });
     await setGrade(app, admin, manualItem.id, student.id, 6, 'Bí mật chưa công bố');
     const policy = await http(app).put(`/api/v1/grade-items/${manualItem.id}/posting-policy`)
@@ -198,7 +183,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     expect(firstBody.previousSeenAt).toBeNull();
     expect(firstBody.newResults).toEqual([]);
 
-    // Khối tuần khớp kỳ vọng động; các việc được liệt kê đúng quy tắc (trong tuần ∪ quá hạn).
     expect(firstBody.weekly).toMatchObject(expected);
     for (const f of fixtures) {
       const listed = firstBody.weekly.items.find((i) => i.cmId === f.cmId);
@@ -209,21 +193,16 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
       }
     }
 
-    // Khối thông báo: chỉ thông báo lớp của khoá này; thông báo điểm bị
-    // loại tuyệt đối (kể cả chuỗi chủ đề trong JSON thô).
     expect(firstBody.announcements.map((a) => a.subject)).toContain('Thông báo lớp PH1');
     expect(JSON.stringify(firstBody)).not.toContain('Điểm mới PH1');
     expect(JSON.stringify(firstBody)).not.toContain('Thông báo khoá khác');
 
-    // Khối tiến độ: quiz đã hoàn thành 1/1 → 100%.
     const prog = firstBody.courseProgress.find((p) => p.courseId === course.id);
     expect(prog).toMatchObject({ total: 1, completed: 1, percent: 100 });
 
-    // Item manual chưa công bố: vắng tuyệt đối khỏi payload + JSON thô.
     expect(JSON.stringify(firstBody)).not.toContain(manualItem.id);
     expect(JSON.stringify(firstBody)).not.toContain('Bí mật chưa công bố');
 
-    // Công bố item manual + chấm thêm item auto SAU mốc → lần xem sau có cả hai.
     const autoItem = await createGradeItem(app, admin, course.id, { itemName: 'Điểm auto PH1', gradeMax: 10 });
     await setGrade(app, teacher, autoItem.id, student.id, 7);
     const publish = await http(app).post(`/api/v1/grade-items/${manualItem.id}/publish`)
@@ -234,7 +213,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     expect(secondBody.previousSeenAt).not.toBeNull();
     expect(new Set(secondBody.newResults.map((r) => r.itemId))).toEqual(new Set([manualItem.id, autoItem.id]));
 
-    // Xem tiếp: mốc đã lăn — không còn gì mới.
     const third = await overview(guardianToken, student.id);
     expect((third.body as Overview).newResults).toEqual([]);
   }, 180000);
@@ -244,10 +222,8 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     const { user: guardian, token: guardianToken } = await freshGuardian();
     await link(teacher, guardian.id, student.id);
 
-    // Bài A: chấm với chính sách auto (mặc định) → công bố ngay.
     const autoItem = await createGradeItem(app, admin, course.id, { itemName: 'Kiểm tra 15 phút PH1', gradeMax: 10 });
     await setGrade(app, teacher, autoItem.id, student.id, 8);
-    // Bài B: chính sách manual, đã chấm nhưng CHƯA công bố.
     const manualItem = await createGradeItem(app, admin, course.id, { itemName: 'Bài chưa công bố PH1', gradeMax: 10 });
     await setGrade(app, teacher, manualItem.id, student.id, 5);
     const policy = await http(app).put(`/api/v1/grade-items/${manualItem.id}/posting-policy`)
@@ -260,11 +236,9 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     const courseView = body1.courses.find((c) => c.courseId === course.id)!;
     expect(courseView.activities).toHaveLength(1);
     expect(courseView.activities[0]).toMatchObject({ itemId: autoItem.id, itemName: 'Kiểm tra 15 phút PH1', finalGrade: 8 });
-    // Bài chưa công bố vắng tuyệt đối — kể cả trong JSON thô.
     expect(JSON.stringify(body1)).not.toContain('Bài chưa công bố PH1');
     expect(JSON.stringify(body1)).not.toContain(manualItem.id);
 
-    // Công bố bài B → PH thấy cả hai bài.
     const pubItem = await http(app).post(`/api/v1/grade-items/${manualItem.id}/publish`)
       .set('Authorization', `Bearer ${teacher}`).send({});
     expect([200, 201]).toContain(pubItem.status);
@@ -281,25 +255,19 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     const { user: guardian2, token: guardian2Token } = await freshGuardian();
     await link(other.teacher, guardian2.id, other.student.id);
 
-    // PH của con khác tấn công đoán ID con mình → 404 đúng mã, cả 2 đường.
     for (const res of [await overview(guardian2Token, mine.student.id), await results(guardian2Token, mine.student.id)]) {
       expect(res.status).toBe(404);
       expect(res.body.code).toBe('guardian.student_not_found');
     }
-    // Người lạ không liên kết nào → 404.
     const stranger = await freshGuardian();
     expect((await overview(stranger.token, mine.student.id)).status).toBe(404);
-    // Học sinh tự gọi bề mặt PH cho chính mình → 404 (không phải liên kết giám hộ).
     expect((await overview(mine.studentToken, mine.student.id)).status).toBe(404);
-    // studentId không tồn tại → 404 cùng mã (không lộ sự tồn tại).
     const ghost = await overview(guardianToken, '01900000-0000-7000-8000-00000000dead');
     expect(ghost.status).toBe(404);
     expect(ghost.body.code).toBe('guardian.student_not_found');
-    // Chưa đăng nhập → 401.
     const anon = await http(app).get(`/api/v1/guardian/students/${mine.student.id}/overview`);
     expect(anon.status).toBe(401);
 
-    // Chỉ-xem: mọi đường ghi tới path PH-1 → 404.
     const post = await http(app).post(`/api/v1/guardian/students/${mine.student.id}/overview`)
       .set('Authorization', `Bearer ${guardianToken}`).send({});
     expect(post.status).toBe(404);
@@ -307,7 +275,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
       .set('Authorization', `Bearer ${guardianToken}`);
     expect(del.status).toBe(404);
 
-    // Chủ liên kết xem được + audit có đủ hai surface.
     expect((await overview(guardianToken, mine.student.id)).status).toBe(200);
     expect((await results(guardianToken, mine.student.id)).status).toBe(200);
     await flushRelay();
@@ -319,7 +286,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     expect(items.some((i) => i.payload?.surface === 'ph1_overview')).toBe(true);
     expect(items.some((i) => i.payload?.surface === 'ph1_results')).toBe(true);
 
-    // Thu hồi liên kết → mất quyền xem ngay ở cả hai đường.
     const revoked = await http(app).delete(`/api/v1/guardian-links/${linkId}`).set('Authorization', `Bearer ${mine.teacher}`);
     expect(revoked.status).toBe(200);
     expect((await overview(guardianToken, mine.student.id)).status).toBe(404);
@@ -341,10 +307,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     expect((myStudents.body as { student: { id: string } }[]).map((x) => x.student.id).sort())
       .toEqual([a.student.id, b.student.id].sort());
 
-    // Xem con A lần đầu (tạo mốc), chấm thêm điểm mới → bề mặt con A thấy
-    // điểm mới đó. (Khối "mới" dùng chung cơ chế DASH1: điểm cũ cùng khoá
-    // có thể mọc lại khi trọng số tổng hợp đổi — khiếm khuyết đã ghi nhận
-    // trên issue #130 để xử lý ở engine điểm, không khoá cứng tại đây.)
     expect((await overview(guardianToken, a.student.id)).status).toBe(200);
     const itemA2 = await createGradeItem(app, admin, a.course.id, { itemName: 'Điểm mới của con A', gradeMax: 10 });
     await setGrade(app, admin, itemA2.id, a.student.id, 9);
@@ -353,7 +315,6 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
     expect(newA.map((r) => r.itemId)).toContain(itemA2.id);
     expect(newA.every((r) => r.courseId === a.course.id)).toBe(true);
 
-    // Bề mặt con B: không chứa bất kỳ dữ liệu nào của khoá/con A.
     const viewB = await overview(guardianToken, b.student.id);
     expect(viewB.status).toBe(200);
     expect((viewB.body as Overview).newResults).toEqual([]);

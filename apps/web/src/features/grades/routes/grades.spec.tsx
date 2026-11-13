@@ -74,10 +74,6 @@ function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
   );
 }
 
-/**
- * Render trang điểm theo bài trong đúng khung provider của ứng dụng thật: trang đọc `usePermissions()` để chỉ hiện khu quản trị cho staff của khoá. Test học viên không đặt token đăng nhập:
- * PermissionsProvider kết luận không phải staff mà không gọi thêm endpoint nào — khu quản trị không xuất hiện.
- */
 function renderGradebook() {
   const router = createMemoryRouter([{ path: '/courses/:id/grades', element: <GradebookPage /> }], {
     initialEntries: [`/courses/${COURSE_ID}/grades`],
@@ -110,12 +106,9 @@ describe('Gradebook page — điểm theo bài của học sinh (issue #224)', (
     expect(screen.getByText('85 / 100')).toBeInTheDocument();
     expect(screen.getByText('Làm tốt')).toBeInTheDocument();
     expect(screen.getByText('Đã công bố')).toBeInTheDocument();
-    // Bài manual chưa công bố: điểm bị che, chỉ hiện trạng thái.
     expect(screen.getByText('Kiểm tra miệng')).toBeInTheDocument();
     expect(screen.getByText('Chưa công bố')).toBeInTheDocument();
-    // Không còn điểm tổng khoá ở bất kỳ dạng nào.
     expect(screen.queryByText(/Tổng điểm/)).not.toBeInTheDocument();
-    // Không phải staff: khu quản trị không được render.
     expect(screen.queryByText('Quản trị sổ điểm')).not.toBeInTheDocument();
     expect(screen.queryByText('Bảng điểm lớp theo bài')).not.toBeInTheDocument();
   });
@@ -167,13 +160,6 @@ describe('Gradebook administration — giáo viên của khoá (issue #224)', ()
     body: unknown;
   }
 
-  /**
-   * Stub fetch cho giáo viên của khoá: ảnh chụp quyền khai gán
-   * editingteacher tại context khoá kèm grade:viewall nên trang kết
-   * luận là staff. Mọi lời gọi được ghi lại để khẳng định URL/method/
-   * body đúng controller phía API. `items`/`publications` tuỳ biến
-   * lưới lớp cho từng ca (xuất vnEdu cần nhiều bài đã công bố).
-   */
   function stubTeacherFetch(
     calls: RecordedCall[],
     opts?: { reportItems?: unknown[]; publications?: Record<string, unknown> },
@@ -284,7 +270,6 @@ describe('Gradebook administration — giáo viên của khoá (issue #224)', ()
     stubTeacherFetch(calls);
     renderAsTeacher();
 
-    // Form tạo mục có id tường minh (nhiều ô cùng nhãn "Tên mục điểm"/"Điểm tối đa" ở các dòng sửa).
     const nameInput = await waitFor(() => {
       const el = document.getElementById('grade-item-name');
       if (!el) throw new Error('form tạo mục chưa render');
@@ -300,7 +285,6 @@ describe('Gradebook administration — giáo viên của khoá (issue #224)', ()
       expect(calls.some((c) => c.url === `/api/v1/courses/${COURSE_ID}/grade-items` && c.method === 'POST')).toBe(true),
     );
     const createCall = calls.find((c) => c.url === `/api/v1/courses/${COURSE_ID}/grade-items` && c.method === 'POST');
-    // Đúng createGradeItemSchema của mô hình mới: chỉ itemName + gradeMax, không còn categoryId.
     expect(createCall?.body).toEqual({ itemName: 'Midterm', gradeMax: 100 });
   });
 
@@ -322,7 +306,6 @@ describe('Gradebook administration — giáo viên của khoá (issue #224)', ()
     stubTeacherFetch(calls);
     renderAsTeacher();
 
-    // Hai form (nhập điểm + lịch sử) dùng chung nhãn select: chọn ở form lịch sử qua nút của nó.
     const itemTriggers = await screen.findAllByLabelText('Mục điểm');
     await userEvent.click(itemTriggers[itemTriggers.length - 1]!);
     await userEvent.click(await screen.findByRole('option', { name: 'Quiz 1' }));
@@ -349,7 +332,6 @@ describe('Gradebook administration — giáo viên của khoá (issue #224)', ()
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     renderAsTeacher();
 
-    // Gợi ý mặc định theo tên bài: 15 phút → thường xuyên, giữa kỳ → giữa kỳ, cuối kỳ → cuối kỳ.
     await screen.findByRole('button', { name: 'Tải Excel vnEdu' });
     await userEvent.click(screen.getByRole('button', { name: 'Tải Excel vnEdu' }));
 
@@ -388,7 +370,6 @@ describe('Gradebook administration — giáo viên của khoá (issue #224)', ()
     await screen.findByRole('button', { name: 'Tải Excel vnEdu' });
     await userEvent.click(screen.getByRole('button', { name: 'Tải Excel vnEdu' }));
 
-    // Bài giữa kỳ chưa công bố bị loại khỏi ánh xạ → thiếu đúng 1 mục giữa kỳ → chặn tại UI, không gọi API.
     expect(await screen.findByText(/Cần ít nhất 1 mục thường xuyên/)).toBeInTheDocument();
     expect(calls.some((c) => String(c.url).includes('/grade-exports'))).toBe(false);
   });

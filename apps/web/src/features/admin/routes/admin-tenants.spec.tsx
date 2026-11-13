@@ -6,9 +6,6 @@ import { TestProviders } from '#test/providers';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 import { AdminTenantsPage } from './admin-tenants';
 
-/**
- * Spec trang quản trị tenant theo đúng các tiêu chí nghiệm thu của bề mặt này: người quản trị nền tảng thấy danh sách mọi tenant, tạo trường học kho chung (không tạo trung tâm kho riêng qua form) và đọc membership của tenant đang chọn; người chỉ có capability xem phía platform không thấy điều khiển ghi; chủ trung tâm chỉ làm việc với tenant hiệu lực của mình (trang không nạp danh sách platform) và quản lý được membership trong tenant đó; vai trò xem phía tenant không có điều khiển ghi; người không có capability tenant không thấy dữ liệu quản trị và trang không gọi endpoint tenant nào; lỗi 403 ở thao tác ghi hiện thông báo và không đổi trạng thái hiển thị thành công giả. Huy hiệu trạng thái của thẻ tenant hiệu lực đi theo trường `status` của DTO tenant đầy đủ mà endpoint current trả về; người chỉ có capability tại một tenant khác với tenant hiệu lực thấy trạng thái cấm ở khu thành viên thay vì khung chờ treo.
- */
 
 const ME_ID = '01900000-0000-7000-8000-0000000000d1';
 const SYS_CTX_ID = '01900000-0000-7000-8000-0000000000e1';
@@ -65,11 +62,9 @@ interface RecordedCall {
 interface AccessOptions {
   systemCaps?: string[];
   tenantCaps?: string[] | null;
-  /** Tenant mà gán vai cấp tenant trỏ tới; mặc định là tenant Alpha — cũng là tenant hiệu lực mà stub `/tenants/current` trả về. */
   capsTenantId?: string;
 }
 
-/** Ảnh chụp quyền theo kịch bản vai: capability hệ thống và/hoặc capability tại context của một tenant. */
 function accessView({ systemCaps = [], tenantCaps = null, capsTenantId = TENANT_A_ID }: AccessOptions) {
   const contexts = [
     { contextId: SYS_CTX_ID, contextLevel: 10, contextPath: '/1', capabilities: systemCaps },
@@ -93,13 +88,9 @@ function accessView({ systemCaps = [], tenantCaps = null, capsTenantId = TENANT_
 
 interface StubOptions extends AccessOptions {
   failAddMember?: boolean;
-  /** Trạng thái vòng đời của tenant hiệu lực mà stub `/tenants/current` trả về; mặc định theo `TENANT_A` (đang hoạt động). */
   currentTenantStatus?: string;
 }
 
-/**
- * Stub toàn bộ bề mặt API mà trang và hai provider nền chạm tới. Membership của Alpha là trạng thái có thể đổi trong bộ nhớ stub để PATCH đổi trạng thái có hiệu lực quan sát được sau khi trang làm mới truy vấn, đúng như server thật xác nhận rồi trang mới hiển thị.
- */
 function stubFetch(calls: RecordedCall[], options: StubOptions) {
   const tenants = [TENANT_A, TENANT_B];
   let membersA = [
@@ -139,8 +130,6 @@ function stubFetch(calls: RecordedCall[], options: StubOptions) {
         tenants.push(created);
         return respond(created, 201);
       }
-      // Endpoint current trả DTO tenant đầy đủ như danh sách platform
-      // (cùng `toTenantDto` phía API), không phải hình dạng rút gọn.
       if (url === '/api/v1/tenants/current')
         return respond({ ...TENANT_A, status: options.currentTenantStatus ?? TENANT_A.status });
       if (url === `/api/v1/tenants/${TENANT_A_ID}/members` && method === 'GET') return respond(membersA);
@@ -176,7 +165,6 @@ function stubFetch(calls: RecordedCall[], options: StubOptions) {
   );
 }
 
-/** Render trang qua router bộ nhớ trong khung provider của ứng dụng thật. */
 function renderPage() {
   const router = createMemoryRouter([{ path: '/admin/tenants', element: <AdminTenantsPage /> }], {
     initialEntries: ['/admin/tenants'],
@@ -202,22 +190,16 @@ describe('Trang quản trị tenant', () => {
 
     expect(await screen.findByText('Trung tâm Alpha')).toBeInTheDocument();
     expect(screen.getByText('Trung tâm Beta')).toBeInTheDocument();
-    // Mặc định chọn tenant đầu tiên: membership của Alpha hiện, của Beta không.
     expect(await screen.findByText('membera')).toBeInTheDocument();
     expect(screen.queryByText('memberb')).not.toBeInTheDocument();
 
-    // Đổi tenant đang chọn: membership và hồ sơ chuyển đúng sang Beta.
     await userEvent.click(screen.getByRole('button', { name: /Trung tâm Beta/ }));
     expect(await screen.findByText('memberb')).toBeInTheDocument();
     expect(screen.queryByText('membera')).not.toBeInTheDocument();
     expect(calls.some((c) => c.url === `/api/v1/tenants/${TENANT_B_ID}/members` && c.method === 'GET')).toBe(true);
 
-    // Không có nút tạo trung tâm kho riêng trên form legacy; UI phải
-    // hướng dẫn sử dụng pipeline cấp phát của người vận hành.
     expect(screen.getByText(/Trung tâm giáo dục mới phải được vận hành cấp database/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tạo trung tâm' })).not.toBeInTheDocument();
-    // Chỉ tạo trường học dùng shared; không gửi kind=center hoặc plan
-    // khi người quản trị chưa chọn gói.
     await userEvent.type(screen.getByLabelText('Tên trung tâm'), 'Trường Gamma');
     await userEvent.type(screen.getByLabelText('Mã định danh (slug)'), 'truong-gamma');
     await userEvent.click(screen.getByRole('button', { name: 'Tạo trường học' }));
@@ -249,19 +231,14 @@ describe('Trang quản trị tenant', () => {
     renderPage();
 
     expect(await screen.findByText('Trung tâm Alpha')).toBeInTheDocument();
-    // Huy hiệu trạng thái của thẻ tenant đi theo trường `status` của
-    // DTO đầy đủ mà endpoint current trả về: đang hoạt động thì hiện
-    // "Đang hoạt động" (khẳng định khoanh trong đúng thẻ tenant).
     const tenantCard = screen.getByText('Trung tâm Alpha').closest('div');
     expect(tenantCard).not.toBeNull();
     expect(within(tenantCard!).getByText('Đang hoạt động')).toBeInTheDocument();
     expect(await screen.findByText('membera')).toBeInTheDocument();
-    // Chế độ tenant không bao giờ gọi danh sách platform và không thấy tenant khác.
     expect(calls.some((c) => c.url === '/api/v1/tenants')).toBe(false);
     expect(calls.some((c) => c.url === '/api/v1/tenants/current')).toBe(true);
     expect(screen.queryByText('Trung tâm Beta')).not.toBeInTheDocument();
 
-    // Thêm thành viên có sẵn vào đúng tenant hiệu lực.
     await userEvent.type(screen.getByLabelText('ID người dùng'), MEMBER_B_ID);
     await userEvent.click(screen.getByRole('button', { name: 'Thêm thành viên' }));
     await waitFor(() =>
@@ -271,7 +248,6 @@ describe('Trang quản trị tenant', () => {
     expect(addPost?.body).toEqual({ userId: MEMBER_B_ID });
     expect(await screen.findByText('Đã thêm thành viên vào trung tâm.')).toBeInTheDocument();
 
-    // Tạo người dùng mới trong tenant.
     await userEvent.type(screen.getByLabelText('Tên đăng nhập'), 'newuser1');
     await userEvent.type(screen.getByLabelText('Email'), 'new@example.com');
     await userEvent.type(screen.getByLabelText('Mật khẩu'), 'secret-password');
@@ -283,8 +259,6 @@ describe('Trang quản trị tenant', () => {
     expect(createPost?.body).toMatchObject({ username: 'newuser1', email: 'new@example.com', password: 'secret-password' });
     expect(await screen.findByText('Đã tạo người dùng và thêm vào trung tâm.')).toBeInTheDocument();
 
-    // Đổi trạng thái membership: PATCH đúng đường và trạng thái mới hiện sau khi server xác nhận.
-    // Sau bước thêm ở trên có hai thành viên active nên nút được lấy trong đúng hàng của membera.
     const memberRow = screen.getByText('membera').closest('tr');
     expect(memberRow).not.toBeNull();
     await userEvent.click(within(memberRow!).getByRole('button', { name: 'Tạm dừng' }));
@@ -327,11 +301,7 @@ describe('Trang quản trị tenant', () => {
     stubFetch(calls, { tenantCaps: ['tenant:viewall'], capsTenantId: TENANT_B_ID });
     renderPage();
 
-    // Thẻ tenant hiệu lực vẫn hiện từ endpoint current...
     expect(await screen.findByText('Trung tâm Alpha')).toBeInTheDocument();
-    // ...nhưng khu thành viên hiện trạng thái cấm (không treo khung
-    // chờ vô hạn) và trang không gọi endpoint thành viên/người dùng
-    // của tenant hiệu lực, vì người dùng không có quyền tại tenant đó.
     expect(
       await screen.findByText('Bạn không có capability quản trị tenant cho phạm vi này.'),
     ).toBeInTheDocument();
@@ -345,9 +315,6 @@ describe('Trang quản trị tenant', () => {
     stubFetch(calls, { systemCaps: ['question:add'] });
     renderPage();
 
-    // Chờ theo mẫu waitFor + truy vấn đồng bộ: trạng thái cấm chỉ hiện
-    // sau khi cả hai truy vấn nền của provider quyền settle; nội dung
-    // khẳng định giữ nguyên, chỉ đổi cơ chế chờ cho bền dưới tải.
     await waitFor(
       () => {
         expect(screen.getByText('Bạn không có capability quản trị tenant cho phạm vi này.')).toBeInTheDocument();
@@ -370,7 +337,6 @@ describe('Trang quản trị tenant', () => {
     expect(
       await screen.findByText('Không thể thêm thành viên (lỗi quyền, tenant không hoạt động hoặc người dùng không tồn tại).'),
     ).toBeInTheDocument();
-    // Thành viên mới không xuất hiện và thành viên cũ giữ nguyên trạng thái.
     expect(screen.queryByText('memberb')).not.toBeInTheDocument();
     expect(screen.getAllByText('Đang hoạt động').length).toBeGreaterThan(0);
   });

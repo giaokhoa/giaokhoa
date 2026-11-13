@@ -1,10 +1,3 @@
-/**
- * Luồng công bố câu hỏi trung tâm theo ba actor:
- * - Giáo viên lưu câu trong bank riêng như trước.
- * - Quản trị trung tâm chụp phiên bản, nội dung/đáp án/media rồi gửi.
- * - Biên tập viên hệ thống kiểm tra hàng chờ và duyệt/từ chối.
- * Mọi thao tác duyệt ghi vào kho ngân hàng; nguồn ở trung tâm không bị sửa.
- */
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { systemBankPackageSchema, type SystemBankPackage } from '@giaokhoa/contracts';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
@@ -29,11 +22,6 @@ export class SystemBankSubmissionsService {
     private readonly media: SystemBankMediaService,
   ) {}
 
-  /**
-   * Gác quản trị TRUNG TÂM tại context tenant, không dùng quyền
-   * quản trị platform. Không có tenant hiệu lực trả 403 trước khi đọc câu.
-   * @returns Slug trung tâm đã được xác minh.
-   */
   private async centreManager(actorId: string): Promise<{ tenantId: string; centreSlug: string }> {
     const tenantId = tenantAls.getStore()?.tenantId;
     if (!tenantId) {
@@ -51,20 +39,11 @@ export class SystemBankSubmissionsService {
     return { tenantId, centreSlug };
   }
 
-  /**
-   * Biên tập viên có quyền systembank:review tại context hệ thống,
-   * tách biệt quyền quản trị tenant dùng để gửi. Cổng luôn chạy trước
-   * khi lấy package có đáp án khỏi kho ngân hàng.
-   */
   private async editor(actorId: string): Promise<void> {
     const system = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'systembank:review', system.id);
   }
 
-  /**
-   * Chụp đúng một version câu tại thời điểm gửi; không trả bản chụp
-   * từ kho nguồn sau khi đã ghi. Không phát hành ở thao tác này.
-   */
   async submit(actorId: string, questionId: string, license?: string): Promise<SystemQuestionSubmissionRow> {
     const { tenantId, centreSlug } = await this.centreManager(actorId);
     const view = await this.questions.getQuestion(questionId);
@@ -113,9 +92,6 @@ export class SystemBankSubmissionsService {
       sourceVersionNumber: view.latestVersion.version,
       qtype: view.question.qtype, package: pkg, checksum: checksumPackage(pkg), submittedBy: actorId,
     });
-    // Bản đã bị từ chối là terminal cho phiên bản nguồn này; retry
-    // không đổi được snapshot/giấy phép. Chỉnh câu để sinh version mới
-    // rồi gửi lại, giữ lịch sử quyết định của bản cũ bất biến.
     if (submitted.status === 'rejected') {
       throw new ConflictException({
         message: 'Rejected source version cannot be submitted again; create a new version',
@@ -125,11 +101,6 @@ export class SystemBankSubmissionsService {
     return submitted;
   }
 
-  /**
-   * Liệt kê các câu sẵn sàng gửi thuộc bank riêng của trung tâm hiện tại,
-   * bao gồm bank cá nhân của giáo viên khác để quản trị không cần chép UUID.
-   * Chỉ trả metadata phục vụ bộ chọn; không chuyển đáp án qua API này.
-   */
   async listSources(actorId: string): Promise<Array<{
     id: string; qtype: string; questionText: unknown; version: number;
   }>> {
@@ -150,19 +121,16 @@ export class SystemBankSubmissionsService {
     return sources;
   }
 
-  /** Quản trị chỉ xem lịch sử của trung tâm hiệu lực, không thấy hàng chờ B. */
   async listMine(actorId: string): Promise<SystemQuestionSubmissionRow[]> {
     const { centreSlug } = await this.centreManager(actorId);
     return this.repo.listForCentre(centreSlug);
   }
 
-  /** Chỉ biên tập viên hệ thống được xem các bản gửi chưa duyệt. */
   async listPending(actorId: string): Promise<SystemQuestionSubmissionRow[]> {
     await this.editor(actorId);
     return this.repo.listPending();
   }
 
-  /** Cổng người xem gói chờ duyệt không cấp cho học sinh hoặc trung tâm khác. */
   async getForReview(actorId: string, id: string): Promise<SystemQuestionSubmissionRow> {
     await this.editor(actorId);
     const row = await this.repo.get(id);
@@ -170,20 +138,11 @@ export class SystemBankSubmissionsService {
     return row;
   }
 
-  /**
-   * Đọc byte ảnh trong bản chụp để biên tập viên thực sự xem được ảnh.
-   * Cổng editor chạy trước khi tìm hash trong manifest; không cấp URL
-   * công khai hay đọc file nguồn thuộc vòng đời trung tâm.
-   */
   async readReviewMedia(actorId: string, id: string, hash: string) {
     const row = await this.getForReview(actorId, id);
     return this.media.readPreview(systemBankPackageSchema.parse(row.package), hash);
   }
 
-  /**
-   * Duyệt idempotent: checksum của gói chờ phải còn khớp trước khi ghi;
-   * repository khoá một transaction và không tạo hai phiên bản khi retry.
-   */
   async approve(actorId: string, id: string): Promise<SystemQuestionSubmissionRow> {
     const row = await this.getForReview(actorId, id);
     if (row.status === 'rejected') {
@@ -208,7 +167,6 @@ export class SystemBankSubmissionsService {
     }
   }
 
-  /** Từ chối kèm lý do, không phát hành bất kỳ version nào. */
   async reject(actorId: string, id: string, reason: string): Promise<SystemQuestionSubmissionRow> {
     await this.editor(actorId);
     const row = await this.repo.reject(id, actorId, reason);

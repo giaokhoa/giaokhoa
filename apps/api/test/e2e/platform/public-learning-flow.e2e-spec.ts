@@ -15,11 +15,6 @@ import http from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 
-/**
- * Better Auth và công tắc khu công cộng phải có giá trị trước import
- * AppModule: ConfigModule kiểm chứng môi trường khi module được nạp.
- * Các import AppModule/CLI đều được trì hoãn tới beforeAll.
- */
 const ROOT_HOST = 'giaokhoa.test';
 const ROOT_ORIGIN = 'http://' + ROOT_HOST;
 const SFX = Math.random().toString(36).slice(2, 8);
@@ -51,8 +46,6 @@ setTestEnv('BETTER_AUTH_ENABLED', 'true');
 setTestEnv('BETTER_AUTH_SECRET', ROOT_SECRET);
 setTestEnv('BETTER_AUTH_URL', ROOT_ORIGIN);
 setTestEnv('BETTER_AUTH_TRUSTED_ORIGINS', ROOT_ORIGIN);
-// Bảy lượt đăng ký trong suite để kiểm chứng cả hai failure/retry;
-// production giữ hạn mức mặc định 5/phút.
 setTestEnv('RATE_LIMIT_REGISTRATION_PER_MINUTE', '7');
 
 function clusterUrl(db: string, username?: string, password?: string): string {
@@ -303,8 +296,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       username, email, password: PASSWORD, firstName: 'Tên',
       lastName: 'Injected failure', role: 'student',
     };
-    // Trigger chỉ cản thao tác UPDATE last_name (sau khi transaction
-    // tạo user + credential của Better Auth đã commit). DB test riêng.
     await withClient(storeUrl(publicSpace), async (db) => {
       await db.query("CREATE FUNCTION reject_public_lastname() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN " +
         "IF NEW.username LIKE 'lastname8%' AND NEW.last_name = 'Injected failure' THEN " +
@@ -360,7 +351,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
     expect(other).toBeDefined();
     expect(other?.current).toBe(false);
 
-    // Chỉ logout được phiên hiện tại; endpoint revoke từ chối xoá nó.
     const cannotRevokeCurrent = await http(web).delete('/api/v1/auth/sessions/' + current!.id)
       .set('Host', ROOT_HOST).set('Cookie', cookie1);
     expect(cannotRevokeCurrent.status).toBe(400);
@@ -377,7 +367,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       .set('Host', ROOT_HOST).set('Cookie', cookie1);
     expect(device1Ok.status).toBe(200);
 
-    // Không lộ hoặc thu hồi phiên của user khác trong cùng kho.
     const teacherSignIn = await http(web).post('/api/v1/auth/sign-in/username')
       .set('Host', ROOT_HOST).set('Origin', ROOT_ORIGIN)
       .send({ username: TEACHER_USERNAME, password: PASSWORD });
@@ -425,10 +414,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       .set('Host', CENTRE_HOST).set('Cookie', publicCookie);
     expect(wrong.status).toBe(401);
 
-    // Cùng hợp đồng JWT của trung tâm: claim centre_id phải khớp
-    // định danh đăng ký của kho công cộng. Đăng ký BA tự phục vụ
-    // không ghi password_hash cũ; luồng web đăng nhập bằng cookie,
-    // vì vậy ở đây ký token kiểm chứng biên JWT bằng JwtService thật.
     const jwt = app.get(JwtService);
     publicJwt = await jwt.signAsync({
       sub: publicUserId, username: LEARNER_USERNAME,
@@ -471,9 +456,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
   });
 
   it('HTTP tải file legacy sau nâng cấp tại đúng host trung tâm/công cộng, chữ ký không dùng chéo dù trùng file id', async () => {
-    // Tái hiện metadata trước migration: cả hai kho đều có cùng id và
-    // contentHash nhưng chủ sở hữu context khác nhau. Byte vật lý chưa
-    // được di trú nên vẫn ở thư mục hash cũ.
     const fileId = uuidv7();
     const bytes = Buffer.from('legacy-hosts-8-' + SFX);
     const hash = createHash('sha256').update(bytes).digest('hex');
@@ -491,8 +473,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
             'SELECT id, path, depth FROM context WHERE context_level = 20 AND instance_id = $1', [space.tenantId],
           );
           expect(parent.rows).toHaveLength(1);
-          // files:view có mức tối thiểu 50; dựng context khoá con của
-          // đúng tenant để kiểm cả metadata đã qua cổng capability.
           const child = uuidv7();
           await db.query(
             'INSERT INTO context (id,context_level,instance_id,path,depth) VALUES ($1,50,$2,$3,$4)',
@@ -504,8 +484,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
             [fileId, hash, child, 'core_user', 'profile', 'legacy.txt', bytes.length, 'legacy'],
           );
           if (space.slug === CENTRE_SLUG) {
-            // Cấp files:view đúng cách cho tài khoản kiểm thử tại
-            // context con; không hạ yêu cầu capability của endpoint.
             const manager = await db.query<{ id: string }>(
               "SELECT id FROM role WHERE short_name = 'manager'",
             );
@@ -543,7 +521,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       const wrongPublic = await download(ROOT_HOST, centreSig);
       expect(wrongCentre.status).toBe(401);
       expect(wrongPublic.status).toBe(401);
-      // Quyền metadata vẫn do capability tại context quyết định.
       const centreMeta = await http(app.getHttpServer()).get('/api/v1/files/' + fileId)
         .set('Host', CENTRE_HOST).set('Authorization', 'Bearer ' + centreJwt);
       expect(centreMeta.status, JSON.stringify(centreMeta.body)).toBe(200);
@@ -628,8 +605,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
     const teacherAuth = { Cookie: cookieOf(teacher) };
     const learnerAuth = { Cookie: publicCookie };
 
-    // Lớp giáo viên tự tạo liên kết học viên bằng định danh có thật
-    // trong KHO CÔNG CỘNG (email trùng ở trung tâm A nhưng là user khác).
     const roster = await http(web).post('/api/v1/classes/' + classId + '/roster/identity')
       .set('Host', ROOT_HOST).set(teacherAuth)
       .send({ fullName: 'Học viên công cộng', email: ADMIN_EMAIL });
@@ -721,8 +696,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
   });
 
   it('P2: đăng ký quá hạn mức IP nhận 429 trước khi xử lý payload', async () => {
-    // Các ca trước gửi 7 lần POST đăng ký cùng IP (limit test 7/phút).
-    // Lần thứ tám phải bị throttler từ chối, kể cả body không hợp lệ.
     const excessive = await http(app.getHttpServer()).post('/api/v1/auth/public/register')
       .set('Host', ROOT_HOST).send({});
     expect(excessive.status, JSON.stringify(excessive.body)).toBe(429);
@@ -748,8 +721,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       FLEET_RESTORE_RUNTIME_URL: clusterUrl(stagingDb, runtimeRole, 'E2eRestore12!'),
       FLEET_RESTORE_MIGRATION_URL: clusterUrl(stagingDb, migratorRole, 'E2eRestore12!'),
     };
-    // Các ca trước đã đình chỉ admin A: mở lại tài khoản chỉ trong
-    // database kiểm thử trước khi chụp, rồi nghiệm thu staging sau cùng.
     await withClient(storeUrl(centreSpace), (db) =>
       db.query('UPDATE users SET suspended = false WHERE username = $1', [CENTRE_ADMIN_USERNAME]));
     const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;
@@ -772,8 +743,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
           [centreSpace.tenantId, 'Danh mục phục hồi'],
         );
       });
-      // Danh mục fixture tạo trực tiếp cần context cấp 40 bên dưới
-      // context tenant; API chặn tạo course nếu chỉ có dòng danh mục.
       await withClient(storeUrl(centreSpace), async (db) => {
         const parent = await db.query<{ id: string; path: string; depth: number }>(
           'SELECT id, path, depth FROM context WHERE context_level = 20 AND instance_id = $1',
@@ -804,7 +773,6 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
         .set('Host', CENTRE_HOST).set(manager).send({ fullName: 'Học viên A', email: studentEmail });
       expect(roster.status, JSON.stringify(roster.body)).toBe(201);
       expect(roster.body.outcome).toBe('created');
-      // Luồng roster tạo user + mật khẩu tạm thật, không bỏ qua cổng user:create.
       const student = { body: { id: roster.body.userId } };
       const studentLogin = await http(app.getHttpServer()).post('/api/v1/auth/token')
         .set('Host', CENTRE_HOST)

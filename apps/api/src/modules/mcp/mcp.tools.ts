@@ -51,15 +51,11 @@ import type { McpActor } from './mcp.context';
 export interface McpToolDeps {
   questions: QuestionsService;
   banks: QuestionBanksService;
-  /** Đường đóng góp duy nhất của đề cho nhánh examIds của submit_contribution (issue #228). */
   exams: ExamsService;
-  /** Hàng chờ đóng góp ma trận cho nhánh matrixIds của submit_contribution (issue #228). */
   matrixBanks: MatrixBanksService;
-  /** Tra YCCĐ cho tool search_curriculum_outcomes (lát MCP-1) — cùng facade CurriculumService mà REST dùng. */
   curriculum: CurriculumService;
   idempotency: McpIdempotencyRepository;
   outbox: OutboxService;
-  /** Origin công khai của API (PRM/`reviewUrl`); rỗng khi chưa cấu hình — reviewUrl khi đó là đường dẫn tương đối. */
   publicBaseUrl: string;
 }
 
@@ -94,15 +90,6 @@ function errorShape(error: unknown): { code: string; message: string } {
   return { code: 'mcp.internal_error', message: error instanceof Error ? error.message : 'Internal error' };
 }
 
-/**
- * Lỗi schema Zod của payload tạo câu: schema mới kiểm luật đáp án theo
- * qtype ngay tại parse (multichoice đúng 4 lựa chọn + đúng một đáp án
- * đúng, shortanswer không đáp án sai...) nên lỗi này là lỗi nghiệp vụ
- * của payload, KHÔNG phải lỗi nội bộ — dịch sang
- * `question.bad_answer_data` kèm fieldPath từ issue đầu tiên. Chỉ dùng
- * ở hai đường tạo (lõi đơn + nhóm ngữ liệu); đường đọc giữ nguyên
- * `errorShape` để lỗi parse view vẫn là lỗi nội bộ.
- */
 function asZodIssue(error: unknown): { message: string; fieldPath: string } | null {
   if (typeof error !== 'object' || error === null) return null;
   const issues = (error as { issues?: unknown }).issues;
@@ -112,7 +99,6 @@ function asZodIssue(error: unknown): { message: string; fieldPath: string } | nu
   return { message: first.message, fieldPath: `/${first.path.join('/')}` };
 }
 
-/** Mã lỗi nghiệp vụ của tầng service → trường payload gây lỗi, để model tự sửa đúng chỗ (research Phần 3.3). */
 const FIELDPATH_BY_CODE: Record<string, string> = {
   'question.bad_answer_data': '/answers',
   'question.qtype_not_supported': '/qtype',
@@ -121,23 +107,10 @@ const FIELDPATH_BY_CODE: Record<string, string> = {
   'question.invalid_category': '/categoryId',
 };
 
-/**
- * Logger của tầng tools (code ngoài class nên khai cấp module với
- * context dạng chuỗi, cùng tiền lệ `new Logger('Worker')` ở
- * apps/worker): lỗi hạ tầng quanh tools ghi qua đây ở mức error.
- */
 const logger = new Logger('McpTools');
 
-/**
- * Ghi vết MỌI lần tools/call vào event_log qua outbox (cùng đường mirror
- * của hệ thống — research Phần 2.3): ai (user + client), tool nào, kết
- * quả gì, từ IP nào. Lỗi ghi vết KHÔNG được làm hỏng tool — chỉ ghi log
- * qua Logger để vận hành thấy.
- */
 async function auditCall(deps: McpToolDeps, actor: McpActor, tool: string, details: Record<string, unknown>): Promise<void> {
   try {
-    // objectId: khoá chuẩn hoá của EventLogWriter cho aggregate lạ —
-    // trỏ tới đối tượng chính của lần gọi (câu hỏi trước, bank sau).
     const objectId =
       (typeof details.questionId === 'string' ? details.questionId : null) ??
       (typeof details.existingQuestionId === 'string' ? details.existingQuestionId : null) ??
@@ -161,18 +134,6 @@ async function auditCall(deps: McpToolDeps, actor: McpActor, tool: string, detai
   }
 }
 
-/**
- * Dịch câu đúng/sai chùm TF-A ở biên MCP sang hình payload tạo của
- * REST (lát P5, điểm quyết D-1): đầu vào MCP là thân câu (chuỗi thuần)
- * + đúng 4 mệnh đề, mỗi mệnh đề `{text, correct}` với `correct` là giá
- * trị Đúng/Sai của chính mệnh đề đó. Đầu ra là tài liệu thân câu
- * (paragraph thân + statementList chốt đuôi, id mệnh đề `s1`..`s4`
- * theo quy ước của các test TF-A) + `solution.answers` phủ đúng tập
- * mệnh đề; `answers` rỗng vì TF-A KHÔNG có dòng answers. Trả `null`
- * khi sai hình (sai số mệnh đề, mệnh đề rỗng, thiếu giá trị Đúng/Sai)
- * — caller dịch thành `question.bad_answer_data`, không tự đoán giá trị
- * cho mệnh đề thiếu.
- */
 function buildTruefalseContent(
   questionText: string,
   answers: McpCreateQuestionInput['answers'],
@@ -181,7 +142,6 @@ function buildTruefalseContent(
   if (list.length !== TRUE_FALSE_STATEMENT_COUNT) return null;
   const statements = list.map((a, index) => ({ id: `s${index + 1}`, text: a.text, value: a.correct }));
   if (statements.some((s) => !s.text.trim() || typeof s.value !== 'boolean')) return null;
-  // Kiểm tra trên đã loại mọi value thiếu — ép kiểu có căn cứ để dựng tài liệu.
   const checked = statements as { id: string; text: string; value: boolean }[];
   const doc: RichTextDocument = {
     type: 'doc',
@@ -203,14 +163,6 @@ function buildTruefalseContent(
   };
 }
 
-/**
- * Đáp án kèm cờ đúng/sai cụ thể cho một payload MCP — đúng cách
- * QuestionsService lưu `isCorrect` (`correct === true` mới là đúng):
- * multichoice vắng `correct` = không đúng; shortanswer vắng `correct`
- * = được chấp nhận (mọi đáp án liệt kê của shortanswer đều được chấp
- * nhận — ghi chú hợp đồng MCP). Dùng CHUNG cho băm chống trùng và cho
- * payload gửi service, để hai đường không bao giờ lệch nhau.
- */
 function normalizeMcpAnswers(
   qtype: string,
   answers: McpCreateQuestionInput['answers'],
@@ -222,22 +174,6 @@ function normalizeMcpAnswers(
   }));
 }
 
-/**
- * Dữ kiện băm chống trùng QB-4 cho một payload MCP chưa lưu — phải
- * khớp đúng cặp (thân câu thuần + đáp án kèm cờ) mà version ĐÃ lưu
- * sinh hash, nếu không trùng exact không bao giờ khớp:
- * - multichoice/shortanswer/essay: thân câu như gửi + đáp án đã chuẩn
- *   hoá cờ (essay không có đáp án nên mảng rỗng khớp version đã lưu);
- * - truefalse TF-A: dữ kiện băm là từng mệnh đề kèm giá trị Đúng/Sai
- *   của chính mệnh đề đó (issue #316), ghép từ tài liệu + solution do
- *   `buildTruefalseContent` dựng bằng ĐÚNG hàm dùng chung
- *   `truefalseHashAnswers` với đường version đã lưu — hai câu TF-A
- *   cùng chữ nhưng khác Đ/S ở một mệnh đề cho hash khác nhau ở cả
- *   hai đường.
- * Trả `null` khi câu TF-A sai hình (caller đã chặn trước bằng lỗi
- * `bad_answer_data` ở đường tạo; đường soi trùng không ghi thì quy
- * về verdict `none`).
- */
 function duplicateCheckInput(
   qtype: string,
   questionText: string,
@@ -260,13 +196,6 @@ type GateOutcome =
   | { kind: 'ok'; bank: BankRow; category: CategoryRow }
   | { kind: 'error'; code: string; message: string; fieldPath?: string };
 
-/**
- * Lớp 4 dùng chung của mọi tool GHI câu (create_question, batch, nhóm
- * ngữ liệu): đích ghi CHỈ là bank CÁ NHÂN của chính chủ token (bank
- * của người khác/bank chung coi như không tồn tại — không lộ thông
- * tin), category phải thuộc bank đó, và capability `add` tại context
- * của bank phải đạt — cùng cổng mà create_question của MCP-0 đã giữ.
- */
 async function gatePersonalBankWrite(
   deps: McpToolDeps,
   actor: McpActor,
@@ -306,7 +235,6 @@ async function gatePersonalBankWrite(
   return { kind: 'ok', bank, category };
 }
 
-/** Hình một câu ở biên MCP sau lớp nội dung (dùng chung cho create đơn, batch và nhóm ngữ liệu). Câu hỏi không có trường tên — nhãn hiển thị là trích đoạn nội dung. */
 interface DraftItemPayload {
   qtype: McpCreateQuestionInput['qtype'];
   questionText: string;
@@ -323,23 +251,12 @@ type CreateCoreOutcome =
   | { kind: 'ok'; response: McpCreateQuestionOutput; replayed: boolean }
   | { kind: 'error'; code: string; message: string; fieldPath?: string };
 
-/**
- * Lõi tạo MỘT câu draft (lớp 5 của khuôn validate 5 lớp): idempotency
- * theo khoá được truyền → chống trùng QB-4 → ĐÚNG đường REST
- * (createQuestionSchema + QuestionsService) → lật draft. Cổng bank
- * (lớp 4) do caller chạy trước qua gatePersonalBankWrite. create_question
- * truyền khoá của chính nó; batch truyền khoá suy từ (khoá lô +
- * clientItemId) nên idempotency có ngữ nghĩa TỪNG CÂU như đặc tả.
- */
 async function createDraftQuestionCore(
   deps: McpToolDeps,
   actor: McpActor,
   opts: { tool: string; bank: BankRow; categoryId: string; item: DraftItemPayload; idempotencyKey: string },
 ): Promise<CreateCoreOutcome> {
   const { tool, bank, categoryId, idempotencyKey } = opts;
-  // Chỉ các trường nội dung câu tham gia băm idempotency (caller có
-  // thể truyền object rộng hơn — vd payload create_question còn mang
-  // bankId/idempotencyKey — các trường đó không thuộc danh tính câu).
   const item: DraftItemPayload = {
     qtype: opts.item.qtype,
     questionText: opts.item.questionText,
@@ -352,7 +269,6 @@ async function createDraftQuestionCore(
     options: opts.item.options,
   };
 
-  // ── Lớp 5a: idempotency ────────────────────────────────────────
   const requestHash = mcpRequestHash(tool, { bankId: bank.id, categoryId, ...item });
   const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
   if (existing) {
@@ -369,8 +285,6 @@ async function createDraftQuestionCore(
     return { kind: 'ok', response: stored, replayed: true };
   }
 
-  // ── Dịch TF-A ở biên (thân + 4 mệnh đề → tài liệu + solution) ─
-  // Sai hình thì lỗi ngay tại đây, trước khi băm chống trùng.
   let tfContent: ReturnType<typeof buildTruefalseContent> | undefined;
   if (item.qtype === 'truefalse') {
     const built = buildTruefalseContent(item.questionText, item.answers);
@@ -385,9 +299,6 @@ async function createDraftQuestionCore(
     tfContent = built;
   }
 
-  // ── Lớp 5b: chống trùng ở cổng tạo (cùng cơ chế QB-4) ─────────
-  // TF-A sai hình đã bị chặn ở trên nên duplicateCheckInput không null
-  // tại đây; các qtype khác luôn có dữ kiện băm.
   const dupInput = duplicateCheckInput(item.qtype, item.questionText, item.answers);
   if (!dupInput) {
     return {
@@ -419,15 +330,9 @@ async function createDraftQuestionCore(
     return { kind: 'ok', response, replayed: false };
   }
 
-  // ── Lớp 2: ĐÚNG đường của REST — parse bằng createQuestionSchema
-  // rồi gọi QuestionsService (capability question:add tại context
-  // category do service tự kiểm lại). ─────────────────────────────
   const serviceInput = {
     categoryId,
     qtype: item.qtype,
-    // TF-A: thân câu là tài liệu đã dựng (paragraph thân + statementList),
-    // đáp án từng mệnh đề đi qua solution; các qtype khác gửi chuỗi thuần
-    // + đáp án đã chuẩn hoá cờ đúng/sai.
     questionText: tfContent ? tfContent.questionText : item.questionText,
     generalFeedback: item.generalFeedback,
     guidance: item.guidance,
@@ -455,8 +360,6 @@ async function createDraftQuestionCore(
     return { kind: 'error', code, message, fieldPath: FIELDPATH_BY_CODE[code] };
   }
 
-  // Câu nạp qua MCP LUÔN vào draft chờ giáo viên duyệt (REST mặc
-  // định ready) — lật cả entry + version mới nhất về draft.
   await deps.banks.setQuestionStatus(view.question.id, 'draft');
 
   const response: McpCreateQuestionOutput = {
@@ -480,7 +383,6 @@ async function createDraftQuestionCore(
   return { kind: 'ok', response, replayed: false };
 }
 
-/** Đăng ký các tool MCP lên một McpServer vừa dựng cho đúng một actor (mỗi request một server). */
 export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpToolDeps): void {
   server.registerTool(
     'list_my_banks',
@@ -540,9 +442,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const categories: { id: string; name: string; parentId: string | null; questionCount: number }[] = [];
       for (const cat of all) {
         if (await deps.banks.categoryBelongsToBank(cat, bank)) {
-          // Chỉ cần SỐ câu trong category: đi qua facade service
-          // (listQuestionIdsInCategory) thay vì repository — ranh giới
-          // đóng gói của QuestionsModule (issue #138, mục 8.1 của #134).
           const questionIds = await deps.questions.listQuestionIdsInCategory(cat.id);
           categories.push({ id: cat.id, name: cat.name, parentId: cat.parent ?? null, questionCount: questionIds.length });
         }
@@ -564,7 +463,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     async (rawArgs) => {
       const args = rawArgs as McpCreateQuestionInput;
 
-      // ── Lớp 3: nội dung (quét ký tự cấm → chuẩn hoá NFC) ──────────
       const violations: ContentViolation[] = [];
       scanContent(args, violations, '', new Set(['/bankId', '/categoryId', '/stimulusId', '/idempotencyKey']));
       if (violations.length > 0) {
@@ -577,7 +475,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
 
       const { idempotencyKey, bankId, categoryId } = clean;
 
-      // ── Lớp 4 (cổng bank cá nhân) + lớp 5 (lõi tạo) dùng chung ───
       const gate = await gatePersonalBankWrite(deps, actor, 'create_question', bankId, categoryId);
       if (gate.kind === 'error') return errResult(gate.code, gate.message, gate.fieldPath);
       const outcome = await createDraftQuestionCore(deps, actor, {
@@ -620,7 +517,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         const view = await deps.questions.getQuestionForViewer(actor.userId, questionId);
         const projected = mcpGetQuestionOutputSchema.parse(view);
         await auditCall(deps, actor, 'get_question', { result: 'ok', questionId });
-        // Câu hỏi không có trường tên — tóm tắt bằng trích đoạn nội dung.
         const excerpt = extractRichTextPlainText(view.latestVersion.questionText as never).replace(/\s+/g, ' ').slice(0, 120);
         return okResult(projected as unknown as Record<string, unknown>, `Question (${view.question.qtype}): ${excerpt}.`);
       } catch (error) {
@@ -643,7 +539,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     async (rawArgs) => {
       const args = rawArgs as McpSubmitContributionInput;
 
-      // ── Lớp 3: nội dung (ghi chú đóng góp — quét ký tự cấm → NFC) ──
       const violations: ContentViolation[] = [];
       scanContent(args, violations, '', new Set(['/targetBankId', '/idempotencyKey']));
       if (violations.length > 0) {
@@ -653,25 +548,16 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       }
       const clean = normalizeContentStrings(args);
       const { idempotencyKey, targetBankId } = clean;
-      // Ba danh sách đối xứng ba thực thể ngân hàng (issue #228):
-      // schema đã gác "ít nhất một danh sách có phần tử" — ở đây
-      // vắng danh sách nào thì coi như rỗng.
       const questionIds = clean.questionIds ?? [];
       const examIds = clean.examIds ?? [];
       const matrixIds = clean.matrixIds ?? [];
       const note = clean.note ?? '';
 
-      // ── Trần scope (phòng thủ tầng tool; cổng chính ở mount trả HTTP
-      // 403 insufficient_scope — research Phần 2.2/3.2): scope OAuth
-      // chỉ là TRẦN, quyền nghiệp vụ thật do proposeContribution kiểm
-      // bằng capability tại context như đường REST. ─────────────────
       if (!actor.scopes.includes('giaokhoa.banks.contribute')) {
         await auditCall(deps, actor, 'submit_contribution', { result: 'insufficient_scope', bankId: targetBankId });
         return errResult('insufficient_scope', 'This tool requires the OAuth scope "giaokhoa.banks.contribute"');
       }
 
-      // ── Bank đích phải tồn tại (mọi cổng đích còn lại — personal,
-      // trùng, quyền share — do proposeContribution giữ như REST). ──
       try {
         await deps.banks.getBankOrThrow(targetBankId);
       } catch {
@@ -679,7 +565,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         return errResult('question.bank_not_found', `Question bank ${targetBankId} not found`, '/targetBankId');
       }
 
-      // ── Idempotency (cùng khuôn create_question / đặc tả 2026-07-28)
       const { idempotencyKey: _key, ...hashPayload } = clean;
       const requestHash = mcpRequestHash('submit_contribution', hashPayload);
       const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
@@ -693,23 +578,14 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         }
         const stored = existing.responseJson as unknown as McpSubmitContributionOutput;
         await auditCall(deps, actor, 'submit_contribution', { result: 'idempotent_replay', bankId: targetBankId });
-        // Bản ghi cũ (trước đợt mở đối xứng) chưa có hai mảng
-        // examResults/matrixResults — bù rỗng cho khớp hình dạng
-        // hiện hành khi phát lại.
         return okResult(
           { ...stored, examResults: stored.examResults ?? [], matrixResults: stored.matrixResults ?? [] },
           'Idempotent replay: this submission was already processed; returning the original result.',
         );
       }
 
-      // ── Từng câu: cổng chủ sở hữu ở biên MCP (câu phải của chính chủ
-      // token), rồi ĐÚNG đường QB-4 — proposeContribution tự kiểm
-      // question:share tại context bank nguồn, trạng thái ready, đích
-      // không phải bank personal, trùng trong bank đích. ─────────────
       const results: McpSubmitContributionOutput['results'] = [];
       for (const questionId of questionIds) {
-        // Qua facade QuestionsService (sau tái cấu trúc module #138):
-        // câu không tồn tại → service ném question.not_found.
         let createdBy: string | null;
         try {
           createdBy = (await deps.questions.getQuestion(questionId)).question.createdBy;
@@ -734,10 +610,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         }
       }
 
-      // ── Từng ĐỀ: cùng khuôn cổng chủ sở hữu, rồi vào ĐƯỜNG ĐÓNG
-      // GÓP DUY NHẤT của đề (mode 'new') — ExamsService.proposeContribution
-      // tự kiểm exam:share tại bank nguồn, trạng thái ready, đích là
-      // bank đề dùng chung, chống trùng trong bank đích. ───────────
       const examResults: McpSubmitContributionOutput['examResults'] = [];
       for (const examId of examIds) {
         let createdBy: string | null;
@@ -764,11 +636,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         }
       }
 
-      // ── Từng MA TRẬN: cùng khuôn cổng chủ sở hữu, rồi vào hàng
-      // chờ đóng góp ma trận — MatrixBanksService.proposeContribution
-      // tự kiểm matrix:share tại context nguồn, trạng thái ready,
-      // đích là bank ma trận dùng chung, chống trùng trong bank
-      // đích. ────────────────────────────────────────────────────────
       const matrixResults: McpSubmitContributionOutput['matrixResults'] = [];
       for (const matrixId of matrixIds) {
         const matrix = await deps.matrixBanks.findMatrixById(matrixId);
@@ -821,7 +688,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     },
   );
 
-  // ══ Lát MCP-1 (issue #163) ═══════════════════════════════════════
 
   server.registerTool(
     'create_questions_batch',
@@ -835,8 +701,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     async (rawArgs) => {
       const args = rawArgs as McpCreateQuestionsBatchInput;
 
-      // ── Lớp 3: quét nội dung theo TỪNG item/ngữ liệu (đường dẫn
-      // fieldPath giữ nguyên chỉ số thật trong payload gốc). ───────
       const violations: ContentViolation[] = [];
       (args.stimuli ?? []).forEach((stimulus, index) => {
         scanContent(stimulus, violations, `/stimuli/${index}`, new Set([`/stimuli/${index}/ref`]));
@@ -856,12 +720,9 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const clean = normalizeContentStrings(args);
       const { bankId, categoryId, idempotencyKey } = clean;
 
-      // ── Lớp 4: cổng bank cá nhân cho cả lô ───────────────────────
       const gate = await gatePersonalBankWrite(deps, actor, 'create_questions_batch', bankId, categoryId);
       if (gate.kind === 'error') return errResult(gate.code, gate.message, gate.fieldPath);
 
-      // ── Ngữ liệu khai trong lô: tạo trước, có idempotency riêng
-      // theo (khoá lô) để phát lại cả lô không nhân đôi ngữ liệu. ──
       const stimuliResults: McpCreateQuestionsBatchOutput['stimuli'] = [];
       const stimulusIdByRef = new Map<string, string>();
       const declaredStimuli = clean.stimuli ?? [];
@@ -908,7 +769,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         }
       }
 
-      // ── Từng item qua lõi tạo (idempotency suy từ khoá lô) ──────
       const results: McpBatchItemResult[] = [];
       for (const item of clean.items) {
         const failedItem = (code: string, message: string, fieldPath?: string): McpBatchItemResult => ({
@@ -1007,7 +867,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     async (rawArgs) => {
       const args = rawArgs as McpCreateStimulusWithQuestionsInput;
 
-      // ── Lớp 3: nội dung ──────────────────────────────────────────
       const violations: ContentViolation[] = [];
       scanContent(args, violations, '', new Set(['/bankId', '/categoryId', '/idempotencyKey']));
       if (violations.length > 0) {
@@ -1026,11 +885,9 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         }
       }
 
-      // ── Lớp 4: cổng bank cá nhân ─────────────────────────────────
       const gate = await gatePersonalBankWrite(deps, actor, 'create_stimulus_with_questions', bankId, categoryId);
       if (gate.kind === 'error') return errResult(gate.code, gate.message, gate.fieldPath);
 
-      // ── Idempotency của cả nhóm ──────────────────────────────────
       const { idempotencyKey: _key, ...hashPayload } = clean;
       const requestHash = mcpRequestHash('create_stimulus_with_questions', hashPayload);
       const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
@@ -1047,12 +904,8 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         return okResult({ ...stored }, 'Idempotent replay: this group was already created; returning the original result.');
       }
 
-      // ── Kiểm trước TOÀN BỘ nhóm (truefalse + trùng exact) trước
-      // khi ghi bất cứ thứ gì — nguyên tử bắt đầu từ biên MCP. ──────
       const nearByIndex = new Map<number, string | null>();
       for (const [index, question] of clean.questions.entries()) {
-        // TF-A sai hình chặn ngay tại đây (trước khi ghi bất cứ thứ gì);
-        // các qtype khác luôn có dữ kiện băm chống trùng.
         const dupInput = duplicateCheckInput(question.qtype, question.questionText, question.answers);
         if (!dupInput) {
           return errResult(
@@ -1077,8 +930,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         nearByIndex.set(index, dup.nearId);
       }
 
-      // ── Ghi nguyên tử ở tầng service (một giao dịch: ngữ liệu +
-      // mọi câu qua cùng lõi ghi của createQuestion). ──────────────
       let group;
       try {
         const serviceQuestions = clean.questions.map((question) => {
@@ -1116,7 +967,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         return errResult(code, message, FIELDPATH_BY_CODE[code]);
       }
 
-      // Câu MCP luôn vào draft (như create_question).
       const results: McpCreateQuestionOutput[] = [];
       for (const [index, view] of group.questions.entries()) {
         await deps.banks.setQuestionStatus(view.question.id, 'draft');
@@ -1161,14 +1011,12 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
     async (rawArgs) => {
       const args = rawArgs as { questionIds: string[]; idempotencyKey: string };
 
-      // ── Trần scope (phòng thủ tầng tool; cổng chính ở mount). ────
       if (!actor.scopes.includes('giaokhoa.questions.write')) {
         await auditCall(deps, actor, 'publish_questions', { result: 'insufficient_scope' });
         return errResult('insufficient_scope', 'This tool requires the OAuth scope "giaokhoa.questions.write"');
       }
       const { questionIds, idempotencyKey } = args;
 
-      // ── Idempotency của cả lượt publish ──────────────────────────
       const requestHash = mcpRequestHash('publish_questions', { questionIds });
       const existing = await deps.idempotency.find(actor.userId, idempotencyKey);
       if (existing) {
@@ -1184,8 +1032,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         return okResult({ ...stored }, 'Idempotent replay: this publish run was already processed; returning the original result.');
       }
 
-      // ── Từng câu: của chính chủ + trong bank cá nhân của chủ +
-      // đang draft → setQuestionStatus('ready') như đường web. ─────
       const results: McpPublishQuestionsOutput['results'] = [];
       for (const questionId of questionIds) {
         let view;
@@ -1293,11 +1139,10 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
         try {
           views = await deps.questions.listQuestionsForViewer(actor.userId, cat.id);
         } catch {
-          continue; // Category không đọc được → vắng khỏi kết quả như không tồn tại.
+          continue;
         }
         for (const view of views) {
           if (args.qtype && view.question.qtype !== args.qtype) continue;
-          // Câu hỏi không có trường tên — chỉ soi trong thân câu.
           const plainText = extractRichTextPlainText(view.latestVersion.questionText as never);
           const haystack = plainText.normalize('NFC').toLowerCase();
           if (!haystack.includes(needle)) continue;
@@ -1364,8 +1209,6 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
 
       const results = [];
       for (const item of clean.items) {
-        // Đường soi trùng không ghi gì: câu TF-A sai hình không băm
-        // được thì quy về `none` (không phải trùng của câu nào đã có).
         const dupInput = duplicateCheckInput(item.qtype, item.questionText, item.answers);
         const dup = dupInput
           ? await deps.banks.findDuplicatesForPayload(bank, {

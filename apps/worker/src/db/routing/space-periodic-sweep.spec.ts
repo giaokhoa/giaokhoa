@@ -3,11 +3,6 @@ import type { ConfigService } from '@nestjs/config';
 import { tenantAls } from '../tenant-als';
 import { SpaceDatabaseService } from './space-database.service';
 
-/**
- * Hồi quy issue #11: mọi lượt quét định kỳ phải xem shared + từng kho
- * dedicated với định danh registry bất biến, ngay cả khi user/tenant/
- * outbox UUID trùng nhau; lỗi một kho không được ngăn kho khác.
- */
 describe('SpaceDatabaseService.sweepSharedAndDedicated', () => {
   const registry = [
     { id: 'space-a', slug: 'a', storageMode: 'dedicated', status: 'active' },

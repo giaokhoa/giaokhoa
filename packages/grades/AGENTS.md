@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -33,13 +33,6 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Mọi thay đổi ngữ nghĩa phải đi kèm ca trong **parity corpus** thể hiện kết quả đúng theo quyết định/oracle — test ở đây chính là đặc tả nghiệp vụ tính điểm: đổi quyết định tính điểm thì ca tương ứng phải fail trước khi sửa engine.
 - Test kiểm KẾT QUẢ SỐ của các tình huống nghiệp vụ thật (điểm trống, chia 0, làm tròn biên 2.5/-2.5…), không test chi tiết cây phân tích cú pháp nội bộ.
 
-## Chuẩn comment TSDoc
+## Không viết comment trong code
 
-Mọi code TypeScript viết mới hoặc sửa trong `packages/grades` phải có comment **tiếng Việt theo chuẩn TSDoc**, chi tiết nhất có thể — ngữ nghĩa tính điểm phải nằm ngay trong code, để lần sửa sau dựa vào nội dung code đang có chứ không dựa vào trí nhớ của trợ lý. Chuẩn ngôn ngữ chung của repo: code bằng tiếng Anh (định danh, tên hàm/biến, chuỗi kỹ thuật); **comment — gồm cả comment luồng nghiệp vụ — bằng tiếng Việt**; mọi tài liệu bằng tiếng Việt:
-
-- Đầu mỗi file: khối TSDoc mô tả vai trò của file + luồng xử lý tổng thể (dữ liệu vào → các bước phân tích/tính toán → kết quả trả về).
-- Mỗi hàm trọng yếu (phân tích công thức, tính điểm, làm tròn…): TSDoc `/** ... */` tiếng Việt gồm mục đích, `@param`/`@returns`, các bước xử lý, ngữ nghĩa biên đã chốt (chia 0 → null, bỏ qua điểm trống trong hàm tổng hợp, round nửa ra xa số 0, if lười…) và ca parity corpus tương ứng nếu có.
-- Logic phức tạp/nhánh rẽ quan trọng: comment nội tuyến tiếng Việt nói bước xử lý và **lý do** — không lặp lại điều code đã hiển nhiên.
-- Cú pháp/tag theo TSDoc (`@remarks`/`@example` khi cần); định danh và tên tag giữ tiếng Anh.
-- Sửa code thì căn cứ vào comment đang có trong code; thấy comment lệch code thật — đặc biệt là lệch ngữ nghĩa tính điểm đã chốt — thì sửa comment **trong cùng lượt** với sửa code.
-- Đội đánh giá độc lập soi chuẩn này như một tiêu chí đạt — code thiếu comment đạt chuẩn là chưa đạt. Comment tiếng Anh còn tồn đọng trong package được dịch theo đợt riêng của chương trình sửa chuẩn ngôn ngữ toàn repo, không tự trộn việc dịch vào feat đang bay.
+Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.

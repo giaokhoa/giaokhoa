@@ -16,9 +16,6 @@ import {
   type WithdrawSystemBankQuestion,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation của module System Bank dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
- */
 export {
   createSystemBankQuestionSchema,
   createSystemBankVersionSchema,

@@ -6,20 +6,6 @@ import { TestProviders } from '#test/providers';
 import { ClassEditPage } from './class-edit';
 import { ClassPublicPage, loader as classPublicLoader, meta as classPublicMeta, type ClassPublicSummary } from './class-public';
 
-/**
- * Spec HỌC PHÍ THEO LỚP phía web (CLASS-3, issue #184): kiểm LUỒNG NGHIỆP VỤ qua endpoint thật (fetch stub ở biên mạng):
- *  - người chưa ghi danh thấy gói + nút thanh toán; bấm mua gọi đúng
- *    POST /payments/class-fee/:classId và hiện mã VietQR/mã thanh toán;
- *  - poll thấy payment succeeded → báo đã vào lớp;
- *  - poll DỪNG hẳn khi payment đã succeeded (không gọi lặp vô thời
- *    hạn theo trạng thái cũ trong state);
- *  - người ĐÃ ghi danh ACTIVE chỉ thấy trạng thái đã ghi danh, KHÔNG
- *    có nút mua (không bị mời mua lại) và không phát sinh payment nào;
- *  - lớp không bật học phí → không có nút mua;
- *  - màn sửa lớp: GV đặt học phí thì PATCH mang feeCost đúng số nguyên
- *    đã nhập.
- * Đổi luật (mời mua lại thành viên, tự ghi danh ở web…) thì ca phải đỏ.
- */
 const CLASS_ID = '01900000-0000-7000-8000-0000000000c1';
 const PAYMENT_ID = '01900000-0000-7000-8000-0000000000p1'.replace('p', 'f');
 
@@ -83,7 +69,6 @@ function stubFetch(calls: RecordedCall[], pub: unknown, paymentStatus = 'pending
           201,
         );
       if (url === `/api/v1/payments/${PAYMENT_ID}`) {
-        // Lần poll đầu còn pending, các lần sau succeeded (đối soát đã khớp ở API).
         const polls = calls.filter((c) => c.url === url).length;
         return respond({
           id: PAYMENT_ID, amount: 1500000, currency: 'VND', status: polls > 1 ? paymentStatus : 'pending',
@@ -152,8 +137,6 @@ describe('Trang công khai mua gói lớp (CLASS-3)', () => {
     const paymentCalls = () => calls.filter((c) => c.url === `/api/v1/payments/${PAYMENT_ID}`).length;
     const settledCount = paymentCalls();
     expect(settledCount).toBeGreaterThan(0);
-    // Quá một chu kỳ poll (3 giây): số lần gọi phải đứng yên — poll
-    // đã dừng theo trạng thái mới nhất, không chạy vô thời hạn.
     await new Promise((resolve) => setTimeout(resolve, 3400));
     expect(paymentCalls()).toBe(settledCount);
   }, 20000);
@@ -258,8 +241,6 @@ describe('Loader phía server của trang lớp public (HTML đầu mang dữ ki
 
     expect(screen.getByRole('heading', { name: 'Lớp 10A1' })).toBeTruthy();
     expect(screen.getByText('Lớp toán nâng cao')).toBeTruthy();
-    // Trạng thái theo người gọi chưa có dữ kiện: tuyệt đối không hiện
-    // nút mua từ bản chiếu công khai.
     expect(screen.queryByRole('button', { name: 'Thanh toán học phí' })).toBeNull();
   });
 });

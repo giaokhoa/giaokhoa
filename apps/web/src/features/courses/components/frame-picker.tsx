@@ -4,10 +4,6 @@ import { useTranslation } from 'react-i18next';
 import type { FrameUnit } from '#lib/curriculum';
 import '#config/i18n';
 
-/**
- * Danh sách tích chọn đơn vị khung chương trình để nạp vào khoá (K0a):
- * trình bày NHÓM THEO MẠCH NỘI DUNG như văn bản chương trình của Bộ — đơn vị gốc (mạch) thành tiêu đề nhóm, các chủ đề nằm trong nhóm của nó; mỗi đơn vị mở ra được danh sách Nội dung | Yêu cầu cần đạt của các bài thuộc đơn vị (YCCĐ neo ở đơn vị tổ tiên gần nhất, không nhân bản). Hành vi chọn giữ nguyên: tích vào đơn vị nào thì nạp cả subtree của đơn vị đó. Dùng chung cho form tạo khoá (courses.tsx) và panel nạp khung trong quản trị khoá (course-admin.tsx).
- */
 export function FrameUnitPicker({
   units,
   selected,
@@ -23,7 +19,6 @@ export function FrameUnitPicker({
   if (units.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('frameNoUnits')}</p>;
   }
-  // Nhóm theo đơn vị gốc (độ sâu 0): mỗi nhóm bắt đầu ở một đơn vị gốc và gồm mọi đơn vị theo sau cho tới trước đơn vị gốc kế tiếp.
   const groups: FrameUnit[][] = [];
   for (const unit of units) {
     if (unit.depth === 0 || groups.length === 0) groups.push([unit]);

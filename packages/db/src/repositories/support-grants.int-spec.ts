@@ -1,9 +1,3 @@
-/**
- * Đối chiếu repository hỗ trợ trên PostgreSQL thật và migration thật.
- * Mỗi grant có tenant, recipient, scope, expiry/revocation; audit
- * luôn mang tenant. Các phép đọc ràng buộc tenant rõ ở SQL, song song
- * chính sách RLS FORCE tại DB.
- */
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { TestTenantPool, runInTestTenantContext } from "../test-support/tenant-context";
@@ -36,7 +30,6 @@ const otherStaff = randomUUID();
 const ownerA = randomUUID();
 const ownerB = randomUUID();
 
-/** Lưu một grant mẫu vào tenant, thao tác và hạn được từng ca chỉnh. */
 async function grant(
   tenantId: string,
   scopes: string[],
@@ -83,8 +76,6 @@ beforeAll(async () => {
       .returning("id")
       .executeTakeFirstOrThrow()
   ).id;
-  // Role kiểm thử KHÔNG có superuser/BYPASSRLS, dùng pool gắn tenant
-  // như lớp ứng dụng thực thay vì chạy mọi test bằng postgres.
   const adminPool = new Pool({ connectionString: adminUrl });
   try {
     await adminPool.query(`CREATE ROLE "${ROLE_NAME}" LOGIN PASSWORD '${ROLE_PASSWORD}'`);
@@ -164,8 +155,6 @@ describe("Quyền hỗ trợ hữu hạn và audit của từng trung tâm trên
   });
 
   it("grant hết hạn không còn hiệu lực ngay cả khi dòng vẫn tồn tại", async () => {
-    // Migration cấm expires_at trước created_at; gieo cả hai mốc
-    // trong quá khứ để đo expiry thật mà vẫn tôn trọng CHECK của DB.
     const expired = await db
       .insertInto("support_grants")
       .values({

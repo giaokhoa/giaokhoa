@@ -74,33 +74,20 @@ import {
   ReportScheduleProcessor, RestoreProcessor, SearchReindexProcessor,
 } from './processors/platform-services.processors';
 
-/**
- * Tên các hàng đợi phát sự kiện outbox, suy ra từ bảng định tuyến
- * {@link OUTBOX_EVENT_QUEUE_ROUTES}: mỗi loại sự kiện đã định tuyến
- * đóng góp mọi hàng đợi đích của nó một lần (một loại fan-out nhiều
- * đích đóng góp đủ các đích). Đăng ký hàng đợi và bản đồ hàng đợi
- * cấp cho relay đều suy ra từ danh sách này nên hai nơi không thể
- * lệch nhau khi bảng định tuyến được mở rộng.
- */
 const outboxRouteQueueNames: string[] = allQueueNamesOfRoutes(OUTBOX_EVENT_QUEUE_ROUTES);
 
-/**
- * Token của provider gắn handle kho chung (xem khai báo trong `providers` của WorkerModule): giá trị của provider không được inject ở đâu — provider tồn tại vì hành động gắn lúc khởi tạo.
- */
 const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     I18nWorkerModule,
-    // Khung định tuyến theo trung tâm: cấp SpaceDatabaseService cho relay (quét outbox theo trung tâm) và SpaceJobRunner cho các processor tiêu thụ job outbox (issue #582). Handle kho chung gắn vào service này bởi provider SHARED_CENTRE_KYSELY ở dưới — tới đúng service mà relay/processor dùng.
     SpaceRoutingModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         connection: redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
-        // Chính sách job mặc định thống nhất toàn hệ (bản sao đúng cùng bộ giá trị ở BullModule.forRoot của apps/api — hai app dùng chung một Redis và cùng các hàng đợi): thử lại tối đa 3 lần với giãn cách hàm mũ từ 1 giây; job đã xong/lỗi chỉ giữ 1.000 bản gần nhất để Redis không tăng vô hạn (mặc định của BullMQ là giữ vô hạn). Job lặp theo lịch do scheduler đăng ký cũng chịu chính sách này; processor đều idempotent nên thử lại an toàn.
         defaultJobOptions: {
           attempts: 3,
           backoff: { type: 'exponential', delay: 1000 },
@@ -128,20 +115,11 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     BullModule.registerQueue({ name: 'report-schedule' }),
     BullModule.registerQueue({ name: 'privacy' }),
     BullModule.registerQueue({ name: 'payment-reconciliation' }),
-    // Hàng đợi phát sự kiện outbox của relay duy nhất: một đăng ký cho mỗi hàng đợi có mặt trong bảng định tuyến phát job.
     ...outboxRouteQueueNames.map((name) => BullModule.registerQueue({ name })),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
   ],
   providers: [
-    /**
-     * Gắn handle Kysely kho chung vào khung định tuyến theo trung tâm của worker (issue #581): dựng pool kho chung rồi gắn handle Kysely dựng trên chính pool đó (không mở thêm pool). Handle mà các processor/service dùng là HANDLE ĐỊNH TUYẾN của khung (`routedKysely`, cùng cơ chế với phía API): ngữ cảnh không mang slug của một trung tâm đã chuẩn bị ở kho riêng thì handle uỷ thác về đúng handle kho chung ở trên, nên mọi đường chưa qua phiên theo trung tâm (job của trung tâm ở kho chung, scheduler quét xuyên tenant) chạy đúng như hiện tại; job của trung tâm ở kho riêng chạy trong phiên do `SpaceJobRunner` mở và được handle này dẫn vào kho của trung tâm đó. Instance này không được `destroy()` riêng — vòng đời của nó đi theo vòng đời pool chung.
-     * - Pool là `TenantAwarePool` (TENANT-1, #196): pool tự gắn
-     *   GUC tenant theo ngữ cảnh ALS ở mọi checkout — cùng cơ chế với phía API (xem apps/api/src/app.module.ts):
-     *   scheduler/processor tự bọc ngữ cảnh platform/tenant, ngoài ngữ cảnh là fail-closed.
-     * - Ngân sách kết nối (issue #586): trần `DATABASE_POOL_MAX`
-     *   khi được cấu hình; chưa cấu hình thì giữ nguyên cấu hình pool như trước — cùng cơ chế với phía api.
-     */
     {
       provide: SHARED_CENTRE_KYSELY,
       inject: [ConfigService, SpaceDatabaseService],
@@ -157,7 +135,6 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         return pool;
       },
     },
-    // Đường phát job của relay outbox duy nhất: bảng định tuyến và bản đồ hàng đợi tra theo tên, cả hai suy ra từ OUTBOX_EVENT_QUEUE_ROUTES để nơi đăng ký và nơi tiêu thụ dùng chung một nguồn.
     { provide: OUTBOX_EVENT_ROUTES, useValue: OUTBOX_EVENT_QUEUE_ROUTES },
     {
       provide: OUTBOX_EVENT_QUEUES,
@@ -166,7 +143,6 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         new Map(outboxRouteQueueNames.map((name, index) => [name, queues[index]!] as const)),
     },
     FileCleanupProcessor, OutboxRelayScheduler, EventLogWriter, TaskLogService, EnrolExpiryProcessor, ClassEnrolReconcileProcessor, ClassEnrolReconcileScheduler, ActivityDueReminderProcessor, ActivityDueReminderScheduler, GuardianDigestProcessor, GuardianDigestScheduler, GuardianDigestEventsProcessor, GuardianDigestHandlerService, CompletionRecalculateProcessor, EnrolExpiryScheduler, NotificationDispatchProcessor, ResendMailService, NotificationDigestProcessor, NotificationDigestScheduler, NotificationDeliveryService, NotificationRetentionProcessor, NotificationRetentionScheduler, CalendarReminderProcessor, CalendarImportProcessor, BadgeAwardProcessor, BackupProcessor, RestoreProcessor, SearchReindexProcessor, AnalyticsRunProcessor, ReportScheduleProcessor, PrivacyProcessor, PaymentReconciliationProcessor,
-    // Consumer phân phối realtime messaging (issue #521): runtime giữ tầng phân phối dùng chung + Redis dấu đã-phân-phối + cổng phát qua Redis adapter; processor chỉ tiêu thụ job.
     MessagingRealtimeRuntime,
     {
       provide: MESSAGING_DISTRIBUTION_SERVICE,
@@ -179,17 +155,9 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
       useFactory: (runtime: MessagingRealtimeRuntime) => runtime.redis,
     },
     MessagingRealtimeProcessor,
-    // Consumer mail auth trên hàng đợi (issue #517): processor của hàng đợi `auth-mail` (đăng ký hàng đợi tự suy ra từ bảng định tuyến outbox ở trên) + dấu chiếm/đã xử lý theo outboxId trên Redis làm hàng rào idempotent cho processor.
     AuthMailProcessor, { provide: AUTH_MAIL_SENT_MARKER, useClass: RedisAuthMailSentMarker },
-    // Consumer thông báo sự kiện trên hàng đợi (issue con #520 của #491): processor của hàng đợi `notification-events` (đăng ký hàng đợi tự suy ra từ bảng định tuyến outbox ở trên) + handler nghiệp vụ + dấu đã xử lý/lease theo outboxId trên Redis làm hàng rào idempotent cho processor + dịch vụ phát bù tồn đọng một lần theo watermark của consumer polling cũ khi chuyển đổi (chỉ chạy khi còn khoá watermark cũ, tự xoá khoá khi rút cạn xong).
     NotificationEventsProcessor, NotificationEventsHandlerService, NotificationEventsMarker, NotificationEventsCatchupService,
-    // Consumer đồng bộ cohort trên hàng đợi (issue con #528 của #519): processor của hàng đợi `cohort-sync-events` (đăng ký hàng đợi tự suy ra từ bảng định tuyến outbox ở trên) + host bề mặt vật chất hoá cohort dùng chung của issue con #527. Processor không mang watermark riêng: idempotent hai tầng
-    // (chống trùng job của relay + guard trạng thái của bề mặt).
-    // Dịch vụ phát bù tồn đọng một lần theo watermark của consumer polling cũ khi chuyển đổi (chỉ chạy khi còn khoá watermark cũ, tự xoá khoá khi rút cạn xong; xem phân xử trên PR #550).
     CohortSyncService, CohortSyncEventsProcessor, CohortSyncCatchupService,
-    // Điểm quét matching IPN SePay ở worker (issue con #539 của #522): scheduler quét bảng `payment_provider_events` theo nhịp 1 giây + bề mặt matching dùng chung của `@giaokhoa/payments`
-    // + cài đặt phía worker cho ba cổng xuyên module (kích hoạt ghi
-    // danh / ghi danh cấp lớp / đối chiếu đích + settle) trên bề mặt vật chất hoá cohort dùng chung của `@giaokhoa/enrol`. Không đăng ký hàng đợi BullMQ nào cho nhịp quét: đây là quét bảng, không phải đường relay outbox.
     {
       provide: PaymentsRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new PaymentsRepository(spaceDb.routedKysely),

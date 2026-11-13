@@ -1,13 +1,6 @@
 import { Pool, type PoolClient, type PoolConfig } from 'pg';
 import { tenantAls } from './tenant-als';
 
-/**
- * Pool PostgreSQL gắn ngữ cảnh tenant từ `tenantAls` vào mọi kết nối ngay trước truy vấn đầu tiên sau mỗi lượt checkout.
- *
- * Vì truy vấn Kysely có thể chạy ngoài transaction tường minh, GUC dùng `set_config(..., false)` ở mức phiên. Ngữ cảnh tenant đặt `app.tenant_id` và `app.platform = 'off'`; ngữ cảnh platform đặt `app.platform = 'on'`; không có ngữ cảnh thì đặt tenant rỗng và platform tắt để RLS từ chối dữ liệu tenant.
- *
- * Khi pool tái sử dụng một client, trạng thái `tagged` được đặt lại để GUC từ request trước không rò sang request sau. Transaction cũng checkout qua pool này; `set_config(..., true)` trong transaction có thể ghi đè GUC ở phạm vi giao dịch khi cần.
- */
 interface TenantTagState {
   tagged: boolean;
   tenantId: string;
@@ -22,7 +15,6 @@ export class TenantAwarePool extends Pool {
     super(config);
   }
 
-  /** Chuẩn bị state gắn GUC cho một client vừa checkout theo ngữ cảnh ALS hiện tại. */
   private prepareClient(client: PoolClient): PoolClient {
     const store = tenantAls.getStore();
     const tenantId = store?.platform ? '' : (store?.tenantId ?? '');
@@ -30,7 +22,6 @@ export class TenantAwarePool extends Pool {
     const holder = client as PoolClient & { [TAG_STATE]?: TenantTagState };
     const existing = holder[TAG_STATE];
     if (existing) {
-      // Client tái sử dụng từ pool: cập nhật đích GUC + buộc gắn lại ở câu truy vấn đầu tiên của lượt checkout này.
       existing.tenantId = tenantId;
       existing.platform = platform;
       existing.tagged = false;
@@ -64,7 +55,6 @@ export class TenantAwarePool extends Pool {
     callback?: (err: Error, client: PoolClient, done: (release?: unknown) => void) => void,
   ): Promise<PoolClient> | void {
     if (callback) {
-      // Dạng callback (pg dùng nội bộ cho pool.query): giữ nguyên hợp đồng — client trao tay đã sẵn sàng gắn GUC ở câu query đầu.
       super.connect((err, client, done) => {
         if (err || !client)
           return callback(

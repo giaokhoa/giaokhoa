@@ -6,15 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '#lib/query-client';
 import { SettingsNotificationsPage } from './settings-notifications';
 
-/**
- * Mục Thông báo của khu Cài đặt (issue #288) — mô hình HAI LỚP trên API preferences v2 giữ nguyên:
- * - Lớp 1 theo NHÓM: trạng thái nhóm SUY RA từ các dòng thật; đổi ở
- *   nhóm = PUT từng provider trong nhóm (bỏ qua loại bắt buộc khi tắt popup, bỏ qua loại admin đã tắt ở cấp site).
- * - Lớp 2 "Tuỳ chỉnh từng loại": PUT đúng một provider và THẮNG cài
- *   đặt nhóm — sau khi chỉnh, hàng nhóm hiện "Đã tuỳ chỉnh".
- * - Luật cứng chỉ hiển thị: P2 khoá "Bắt buộc"; NB-7 hiện "Admin đã
- *   tắt ở cấp site" và khoá điều khiển; ngoại lệ theo khoá (NB-4/P3) nguyên vẹn; học sinh chỉ có bề mặt tối thiểu.
- */
 interface PrefRow {
   provider: string;
   component: string;
@@ -61,7 +52,6 @@ function teacherRows(): PrefRow[] {
     row({ provider: 'assignment_submitted', group: 'learning', label: { vi: 'Bài nộp mới', en: 'New submission' }, teacherOnly: true, emailFrequency: 'daily' }),
     row({ provider: 'enrol_expiry_warning', group: 'learning', label: { vi: 'Sắp hết hạn ghi danh', en: 'Enrolment expiring' }, mandatoryInApp: true, emailFrequency: 'daily' }),
     row({ provider: 'message_new', group: 'people', label: { vi: 'Tin nhắn mới', en: 'New message' }, emailFrequency: 'immediate' }),
-    // badge_awarded: admin đã tắt ở cấp site (NB-7) — siteEnabled=false.
     row({ provider: 'badge_awarded', group: 'people', label: { vi: 'Huy hiệu mới', en: 'New badge' }, popupEnabled: false, emailFrequency: 'immediate', siteEnabled: false }),
     row({ provider: 'calendar_reminder', group: 'system', label: { vi: 'Nhắc sự kiện lịch', en: 'Calendar reminder' }, emailFrequency: 'immediate' }),
   ];
@@ -129,16 +119,13 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
     expect(screen.getByLabelText('Lớp & mọi người — Trong ứng dụng')).toBeChecked();
     expect(screen.getByLabelText('Lớp & mọi người — Email')).toHaveValue('immediate');
     expect(screen.getByLabelText('Hệ thống — Email')).toHaveValue('immediate');
-    // Nhóm Học tập chứa loại bắt buộc P2 → có ghi chú ở hàng nhóm.
     expect(screen.getByText('Nhóm này gồm loại bắt buộc luôn hiện trong ứng dụng, không tắt được.')).toBeInTheDocument();
-    // Lớp 2 thu gọn mặc định: nhãn từng loại chưa xuất hiện.
     expect(screen.queryByText('Điểm số thay đổi')).not.toBeInTheDocument();
     expect(screen.getByText('Tuỳ chỉnh từng loại')).toBeInTheDocument();
   });
 
   it('nhóm bị bộ lọc audience của API làm rỗng thì không render mục nào ở cả hai lớp (issue #288)', async () => {
     const calls: RecordedCall[] = [];
-    // API đã lọc theo vai + context: chỉ còn nhóm Lớp & mọi người. Hai nhóm rỗng không được dựng section nào — cả ở lớp tổng hợp theo nhóm lẫn ở lớp "Tuỳ chỉnh từng loại".
     stubFetch(calls, {
       rows: [
         row({ provider: 'message_new', group: 'people', label: { vi: 'Tin nhắn mới', en: 'New message' }, emailFrequency: 'immediate' }),
@@ -171,8 +158,6 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
       { provider: 'grade_updated', popupEnabled: false },
       { provider: 'assignment_submitted', popupEnabled: false },
     ]);
-    // Loại bắt buộc không bị tắt → trạng thái nhóm thành "Đã tuỳ chỉnh"
-    // (checkbox indeterminate) thay vì tắt hẳn.
     await waitFor(() => expect((screen.getByLabelText('Học tập — Trong ứng dụng') as HTMLInputElement).indeterminate).toBe(true));
     expect(screen.getByText(/Các loại trong nhóm đang có giá trị khác nhau/)).toBeInTheDocument();
   });
@@ -207,8 +192,6 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
 
     await waitFor(() => expect(prefPuts(calls)).toHaveLength(1));
     expect(prefPuts(calls)[0]!.body).toEqual({ provider: 'grade_updated', popupEnabled: false });
-    // Nhóm không còn đồng nhất: hàng nhóm báo "Đã tuỳ chỉnh" và checkbox nhóm ở trạng thái indeterminate — giá trị từng loại
-    // (đang tắt) là giá trị hiệu lực được hiển thị ở lớp 2.
     await waitFor(() => expect((screen.getByLabelText('Học tập — Trong ứng dụng') as HTMLInputElement).indeterminate).toBe(true));
     expect(screen.getByLabelText('Điểm số thay đổi — Trong ứng dụng')).not.toBeChecked();
     expect(screen.getByLabelText('Bài nộp mới — Trong ứng dụng')).toBeChecked();
@@ -225,7 +208,6 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
     expect(mandatoryToggle).toBeChecked();
     expect(mandatoryToggle).toBeDisabled();
     expect(screen.getByText('Bắt buộc')).toBeInTheDocument();
-    // Email của loại bắt buộc vẫn đổi được (chỉ kênh trong-app bị khoá).
     expect(screen.getByLabelText('Sắp hết hạn ghi danh — Email')).not.toBeDisabled();
   });
 
@@ -241,7 +223,6 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
     expect(screen.getByLabelText('Huy hiệu mới — Trong ứng dụng')).toBeDisabled();
     expect(screen.getByLabelText('Huy hiệu mới — Email')).toBeDisabled();
 
-    // Ghi theo nhóm ở lớp 1 cũng bỏ qua loại này: chỉ message_new được PUT.
     await userEvent.click(screen.getByLabelText('Lớp & mọi người — Trong ứng dụng'));
     await waitFor(() => expect(prefPuts(calls)).toHaveLength(1));
     expect(prefPuts(calls)[0]!.body).toEqual({ provider: 'message_new', popupEnabled: false });
@@ -262,7 +243,6 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
     expect(await screen.findByText('Ngoại lệ theo khoá học')).toBeInTheDocument();
     expect(await screen.findByText('Khoá Toán 10')).toBeInTheDocument();
     expect(screen.getByText('Đã tắt tiếng')).toBeInTheDocument();
-    // Chú thích P3: điểm mới + hết hạn ghi danh vẫn được gửi.
     expect(screen.getByText(/Điểm mới và thông báo sắp hết hạn ghi danh/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByLabelText('Tắt tiếng khoá này: Khoá Toán 10'));
@@ -292,12 +272,8 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
     expect(screen.getByLabelText('Tắt tiếng khoá này: Khoá Toán 10')).toBeInTheDocument();
   });
 
-  // Hai ca dưới đây giữ các hành vi của trang vốn được ghim ở engagement.spec.tsx (describe tuỳ chọn thông báo đặt sai file):
-  // đổi tần suất email của một loại và hoàn trạng thái khi PUT lỗi.
   it('đổi tần suất email của một loại ở lớp tuỳ chỉnh: chỉ PUT đúng provider đó, hiện ghi chú kênh chưa khả dụng', async () => {
     const calls: RecordedCall[] = [];
-    // Dòng badge_awarded giữ mặc định của row(): emailAvailable=false
-    // (kênh email chưa gửi thật), tần suất immediate.
     stubFetch(calls, {
       rows: [
         row({ provider: 'badge_awarded', group: 'people', label: { vi: 'Huy hiệu mới', en: 'New badge' }, emailFrequency: 'immediate' }),
@@ -308,13 +284,11 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
 
     await screen.findByLabelText('Lớp & mọi người — Trong ứng dụng');
     await userEvent.click(screen.getByText('Tuỳ chỉnh từng loại'));
-    // Nhãn hiển thị là nhãn registry (vi), không lộ khoá thô của provider và không còn trục loggedin/loggedoff của mô hình cũ.
     expect(await screen.findByText('Huy hiệu mới')).toBeInTheDocument();
     expect(screen.queryByText('badge_awarded')).not.toBeInTheDocument();
     expect(screen.queryByText(/loggedin|loggedoff/)).not.toBeInTheDocument();
     const select = await screen.findByLabelText('Huy hiệu mới — Email');
     expect(select).toHaveValue('immediate');
-    // Trung thực kênh: email chưa gửi thật thì phải có ghi chú, và không có bất kỳ bề mặt push nào trên trang.
     expect(screen.getByText('Chưa khả dụng — cài đặt sẽ áp dụng khi kênh mở')).toBeInTheDocument();
     expect(screen.queryByText(/push/i)).not.toBeInTheDocument();
 
@@ -338,7 +312,6 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
           );
         if (url === '/api/v1/messages/preferences')
           return new Response(JSON.stringify([badgeRow]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        // Ghi đè theo khoá (NB-4): danh sách khoá tải tốt — lỗi duy nhất của ca này là PUT tuỳ chọn, để role=alert chỉ có một nguồn.
         if (url === '/api/v1/messages/preferences/courses')
           return new Response(JSON.stringify({ courses: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });

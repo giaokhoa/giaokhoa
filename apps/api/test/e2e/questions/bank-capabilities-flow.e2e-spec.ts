@@ -7,19 +7,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { RolesService } from '../../../src/modules/access/roles.service';
 
-/**
- * Khuôn capability chung của ba thực thể ngân hàng (issue #228, lát S3) — đối chiếu tiêu chí nghiệm thu của issue: "đủ bộ capability theo quy ước <area>:<name> cho cả ba thực thể
- * (use/add/edit/copy/share/moderate và các capability quản trị tương
- * ứng); bỏ việc neo quyền xem/sửa ma trận vào area quiz:*; chuẩn hoá tên capability của đề về cùng khuôn".
- *
- * Luật được khoá ở đây:
- *  - Registry chỉ còn matrix:use/add/edit/copy/share/moderate cho ma
- *    trận và exam:use/add/edit/copy/share/moderate/deploy cho đề; quiz:viewmatrix, quiz:managematrix và exam:view không còn tồn tại ở bất kỳ tầng nào (định nghĩa lẫn override đã seed).
- *  - Cổng TẠO dùng capability add ở cả ba đường tạo: tạo ma trận tại
- *    context môn (matrix:add), tạo đề trong bank (exam:add) — thành viên bank (chỉ có use + copy) tạo đề trong bank tổ bị 403, phụ trách bank (đủ bộ) tạo được.
- *  - Bề mặt capabilities của bank ma trận phản ánh đúng bộ mới:
- *    phụ trách có add + edit, thành viên chỉ có use (+ copy).
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -51,7 +38,6 @@ describe('Khuôn năng lực ngân hàng (issue #228 S3)', () => {
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Một tổ (cohort) với tổ trưởng + thành viên; trả cohort id để lập bank tổ theo kind. */
   async function mkTeam() {
     const leader = await mkStaffUser();
     const member = await mkStaffUser();

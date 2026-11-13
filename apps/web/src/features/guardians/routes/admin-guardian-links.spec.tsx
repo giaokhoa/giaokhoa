@@ -8,9 +8,6 @@ import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 import { AdminGuardianLinksPage } from './admin-guardian-links';
 import { GuardianLinkView } from '../types/guardians';
 
-/**
- * Spec trang quản lý liên kết giám hộ (gói kích hoạt phụ huynh): bề mặt chỉ dành cho người có capability `guardian:manage` — danh sách liên kết đọc từ GET /guardian-links và tra họ tên qua GET /users/:id; tạo liên kết phải gửi đúng thân (hai id đã chọn + quan hệ) tới POST /guardian-links; thu hồi phải gọi DELETE /guardian-links/:linkId sau xác nhận và hàng chuyển trạng thái đã thu hồi. Người không có `guardian:manage`: trang không dựng bề mặt quản lý nào và không gọi GET /guardian-links (quyền thật vẫn do API thực thi — trang chỉ là lớp trình bày theo ảnh chụp quyền).
- */
 
 const MANAGER_ID = '01900000-0000-7000-8000-0000000000a1';
 const STUDENT_ACTOR_ID = '01900000-0000-7000-8000-0000000000a2';
@@ -48,7 +45,6 @@ const PARENT_B = profileOf(PARENT_B_ID, 'parent2', 'Thị Mai', 'Phạm');
 const STUDENT_B = profileOf(STUDENT_B_ID, 'student2', 'Thu Hằng', 'Phạm');
 const PROFILES = new Map([MANAGER_PROFILE, STUDENT_ACTOR_PROFILE, PARENT_A, STUDENT_A, PARENT_B, STUDENT_B].map((p) => [p.id, p]));
 
-/** Ảnh chụp quyền của người phụ trách: guardian:manage ở context tenant (cấp 30) — đúng hình dạng cổng API kiểm. */
 const MANAGER_ACCESS = {
   userId: MANAGER_ID,
   isSiteAdmin: false,
@@ -59,7 +55,6 @@ const MANAGER_ACCESS = {
   hasLearnerArtifacts: false,
 };
 
-/** Ảnh chụp quyền của học viên thuần: không context nào mang guardian:manage. */
 const STUDENT_ACCESS = {
   userId: STUDENT_ACTOR_ID,
   isSiteAdmin: false,
@@ -91,11 +86,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/**
- * Stub fetch có trạng thái: danh sách liên kết sống trong bộ nhớ của
- * stub — POST thêm hàng, DELETE lật trạng thái — để các test khẳng
- * định được cả lời gọi lẫn bề mặt sau khi cache được làm mới.
- */
 function stubFetch(calls: RecordedCall[], actor: { profile: UserProfile; access: unknown }) {
   let links: GuardianLinkView[] = [linkRow(LINK_A_ID, PARENT_A_ID, STUDENT_A_ID, 'Cha')];
   vi.stubGlobal(
@@ -193,7 +183,6 @@ describe('Trang quản lý liên kết giám hộ', () => {
         relationship: 'Mẹ',
       });
     });
-    // Liên kết mới xuất hiện ngay trong danh sách sau khi tạo.
     expect(await screen.findByText('Phạm Thị Mai (parent2)')).toBeInTheDocument();
     expect(await screen.findByText('Phạm Thu Hằng (student2)')).toBeInTheDocument();
   });

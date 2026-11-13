@@ -7,11 +7,6 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
-/**
- * Chat lớp CẤP KHOÁ (việc nối tiếp của issue #33, mở lại 25/10/2026 theo comment 6394860125): mỗi khoá có đúng một conversation toàn lớp (type 2, component core_course, itemType 'course'), cấp phát lười idempotent khi thành viên/staff mở; thành viên = ghi danh đang hiệu lực ∪ staff khoá, đồng bộ lười; GV tắt được qua cờ `enabled`
- * (học viên dừng gửi, GV vẫn gửi); người ngoài khoá nhận 404 ở mọi
- * đường — không rò tồn tại của khoá/conversation.
- */
 
 interface Person { id: string; username: string; token: string }
 
@@ -20,9 +15,6 @@ interface CourseConversationBody {
   itemId: string | null; enabled: boolean; createdBy: string | null; members: string[];
 }
 
-/**
- * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425, trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
- */
 async function insertAssignmentRow(roleId: string, userId: string, contextId: string): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -75,8 +67,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
     app = await createTestApp();
     admin = await adminToken(app);
 
-    // Khoá A: giáo viên phụ trách (editingteacher tại context khoá,
-    // đồng thời ghi danh như thông lệ seed) + hai học viên ghi danh.
     const category = await createCategory(app, admin);
     const course = await createCourse(app, admin, category.id);
     courseA = course.id;
@@ -88,11 +78,8 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
     for (const p of [teacher, s1, s2]) await enrolUser(app, admin, courseA, instanceA, p.id);
     const courseCtx = await contextIdByLevelInstance(app, admin, 50, courseA);
     const editingTeacher = await roleIdByShortname(app, admin, 'editingteacher');
-    // Persona giáo viên ở đây vừa ghi danh vừa giữ vai giảng dạy tại
-    // chính khoá: dòng gán vai ghi thẳng vào DB (xem insertAssignmentRow).
     await insertAssignmentRow(editingTeacher, teacher.id, courseCtx);
 
-    // Khoá B độc lập với một học viên riêng — căn cứ kiểm chéo hai khoá.
     const categoryB = await createCategory(app, admin);
     const courseBRes = await createCourse(app, admin, categoryB.id);
     courseB = courseBRes.id;
@@ -100,8 +87,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
     studentB = await person();
     await enrolUser(app, admin, courseB, instanceB.id, studentB.id);
 
-    // Học viên ghi danh MUỘN (chưa ghi danh lúc khoá A đã có chat) và
-    // một người hoàn toàn ngoài khoá.
     sLate = await person();
     outsider = await person();
   });
@@ -116,8 +101,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
     expect(body.itemType).toBe('course');
     expect(body.itemId).toBe(courseA);
     expect(body.enabled).toBe(true);
-    // Người tạo bản ghi là học viên mở đầu — nhưng thẩm quyền quản lý
-    // vẫn theo staff khoá (kiểm chứng ở test 4).
     expect(body.createdBy).toBe(s1.id);
     for (const p of [teacher, s1, s2]) expect(body.members).toContain(p.id);
     expect(body.members).not.toContain(outsider.id);
@@ -173,8 +156,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
       .set('Authorization', `Bearer ${outsider.token}`).send({});
     expect(readOut.status).toBe(404);
 
-    // Học viên khoá B: mở được chat của khoá mình (conversation khác
-    // hẳn), nhưng với khoá A vẫn là người ngoài — 404 như trên.
     const ownB = await ensure(studentB.token, courseB);
     expect(ownB.status).toBe(200);
     expect((ownB.body as CourseConversationBody).id).not.toBe(convA);
@@ -186,8 +167,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
   });
 
   it('4. GV tắt chat: học viên bị chặn gửi nhưng vẫn đọc được, GV vẫn gửi được; người tạo bản ghi (học viên) không có quyền quản lý', async () => {
-    // s1 là người tạo bản ghi conversation (mở đầu ở test 1) nhưng
-    // KHÔNG thành người quản lý — PATCH tắt chat bị từ chối.
     const studentToggle = await http(app).patch(`/api/v1/messages/conversations/${convA}`)
       .set('Authorization', `Bearer ${s1.token}`).send({ enabled: false });
     expect(studentToggle.status).toBe(403);
@@ -205,12 +184,10 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
     const teacherSend = await send(teacher.token, convA, 'thông báo một chiều của thầy');
     expect(teacherSend.status).toBe(201);
 
-    // Học viên vẫn ĐỌC được khi chat tắt.
     const stillReadable = await view(s2.token, convA);
     expect(stillReadable.status).toBe(200);
     expect(stillReadable.body.enabled).toBe(false);
 
-    // Bật lại: học viên gửi lại được.
     const on = await http(app).patch(`/api/v1/messages/conversations/${convA}`)
       .set('Authorization', `Bearer ${teacher.token}`).send({ enabled: true });
     expect(on.status).toBe(200);
@@ -219,7 +196,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
   });
 
   it('5. ghi danh muộn vào lớp lười qua đồng bộ; huỷ ghi danh thì mất đọc ở lần đọc/gửi kế', async () => {
-    // Chưa ghi danh: ensure bị 404 như người ngoài.
     const before = await ensure(sLate.token, courseA);
     expect(before.status).toBe(404);
 
@@ -254,8 +230,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
       .set('Authorization', `Bearer ${studentB.token}`);
     expect((listB.body as { id: string }[]).map((c) => c.id)).not.toContain(convA);
 
-    // Đường group cũ: tạo group trong khoá A, mở conversation nhóm,
-    // gửi tin bình thường.
     const group = await createGroupViaApi(app, admin, courseA, 'Nhóm học tập A');
     for (const p of [s1, s2]) await addGroupMember(app, admin, courseA, group.id, p.id);
     const groupConv = await http(app).post('/api/v1/messages/conversations/group')
@@ -267,7 +241,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
   });
 
   it('7. đua ensure song song: 6 lượt mở đồng thời của một khoá MỚI chỉ tạo đúng một conversation cấp khoá (khẳng định ở DB)', async () => {
-    // Khoá C hoàn toàn mới (chưa ai mở chat) với 5 thành viên ghi danh.
     const categoryC = await createCategory(app, admin);
     const courseCRes = await createCourse(app, admin, categoryC.id);
     const courseC = courseCRes.id;
@@ -279,10 +252,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
       membersC.push(p);
     }
 
-    // 6 lượt ensure bắn ĐỒNG THỜI (luân phiên 5 thành viên): trước
-    // bản vá, probe của đội đánh giá trên head a41a216 đo được 4
-    // conversation trùng cho cùng một khoá vì find nằm ngoài
-    // transaction và insert không có điểm đồng bộ nào.
     const racers = [membersC[0]!, membersC[1]!, membersC[2]!, membersC[3]!, membersC[4]!, membersC[0]!];
     const results = await Promise.all(racers.map((p) => ensure(p.token, courseC)));
     for (const r of results) expect(r.status).toBe(200);
@@ -292,8 +261,6 @@ describe('Messaging — chat lớp cấp khoá (issue #33)', () => {
       for (const p of membersC) expect((r.body as CourseConversationBody).members).toContain(p.id);
     }
 
-    // Khẳng định ở mức DB — bất biến của lát: mỗi khoá đúng MỘT
-    // conversation cấp khoá, không phải chỉ "các response trùng id".
     const pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
     try {

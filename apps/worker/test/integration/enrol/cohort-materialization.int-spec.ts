@@ -5,24 +5,6 @@ import { CohortMaterializationSurface, type EnrolInstanceRow, type SharedOutboxP
 import { createCentreKysely, sql, type CentreDB, type CentreDb } from '@giaokhoa/db';
 import { tenantAls } from '../../../src/db/tenant-als';
 
-/**
- * Spec đặc tả hoá cho bề mặt vật chất hoá cohort dùng chung `@giaokhoa/enrol` ở phía WORKER (issue #527, tiêu chí nghiệm thu về tính gọi được từ worker).
- *
- * Bối cảnh: đường đồng bộ cohort trước đây chỉ chạy được trong tiến trình API — funnel ghi danh sống trong `EnrolService` và phụ thuộc các cơ chế đăng ký lúc khởi tạo của tiến trình API (probe dữ liệu liên quan, hook tái tổng hợp). Spec này chứng minh bề mặt đã trích xuất dựng và chạy trọn vẹn trong NGỮ CẢNH CỦA WORKER:
- * chính tiến trình test của worker import package, dựng bề mặt bằng tay cầm Kysely trên cơ sở dữ liệu test của worker
- * (`giaokhoa_test_worker`), cổng outbox do phía gọi tự cấp (chèn thẳng
- * vào `outbox_events` trên schema dùng chung, gương `tenantId` vào payload như dịch vụ outbox của API vẫn làm) và cổng ngữ cảnh platform là `tenantAls` của worker — không qua bất kỳ service nào của API. Kết quả trên cơ sở dữ liệu phải khớp từng khẳng định với đường vật chất hoá ở phía API:
- *
- * - thêm thành viên: ghi danh ACTIVE, gán vai của instance tại
- *   context khoá với truy vết nguồn của instance, sự kiện `user_enrolled`, membership active tại tenant của khoá;
- * - thành viên vi phạm chốt tách vai bị bỏ qua riêng lẻ;
- * - rời cohort ở chế độ rút khi không còn dữ liệu liên quan: xoá
- *   cứng ghi danh, gỡ vai của instance, phát `user_unenrolled` và `course_completion_reaggregation_requested` trong cùng đường rút;
- * - rời cohort ở chế độ đình chỉ: ghi danh SUSPENDED, vết người
- *   thao tác về null, sự kiện đình chỉ mang lý do `cohort_removed`.
- *
- * Việc DÂY consumer đồng bộ cohort của worker vào bề mặt này là việc của issue con tiếp theo trong chuỗi; spec này chỉ ghim tính gọi được và tính đúng hành vi của chính bề mặt từ phía worker. Fixture dựng bằng SQL trực tiếp với id ngẫu nhiên theo từng ca.
- */
 
 interface CourseGraph {
   courseId: string;
@@ -55,10 +37,6 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
     const cohortId = randomUUID();
     const instanceId = randomUUID();
     const courseCtxId = randomUUID();
-    // Cây context dùng chung của suite (hệ thống → tenant) đã dựng
-    // một lần ở beforeAll; mỗi đồ thị chỉ dựng thêm context khoá của
-    // riêng nó dưới tenant chung để các ca độc lập dữ kiện nghiệp vụ
-    // nhưng không chèn trùng các context dùng chung.
     await pg.query(
       'INSERT INTO course (id, tenant_id, category, full_name, short_name, is_template) VALUES ($1, $2, $3, $4, $5, true)',
       [courseId, tenantId, categoryId, 'Khoá đặc tả hoá worker 527', `W527-${courseId.slice(0, 8)}`],
@@ -90,7 +68,6 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
     return res.rows as Array<{ payload: Record<string, unknown> }>;
   }
 
-  /** Dòng enrol instance dùng cho các ca gọi trực tiếp `enrolUserInternal`. */
   function instanceRow(graph: CourseGraph, onLeave: 'suspend' | 'unenrol'): EnrolInstanceRow {
     return {
       id: graph.instanceId,
@@ -122,12 +99,6 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
     await pg.connect();
     pool = new Pool({ connectionString });
     db = createCentreKysely(pool);
-    // Cổng outbox phía worker tự cấp cho bề mặt: chèn thẳng vào
-    // outbox_events trên schema dùng chung; enqueue ghi trong
-    // transaction được truyền vào, enqueueStandalone ghi độc lập —
-    // đúng hợp đồng cổng mà package khai báo. Cột `payload` jsonb
-    // đi qua serialize tường minh kèm `::jsonb` theo khuôn ghi
-    // jsonb của `@giaokhoa/db`.
     const outbox: SharedOutboxPort = {
       async enqueue(tx, input) {
         const tenantIdValue = input.tenantId ?? null;
@@ -172,16 +143,12 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
     await pg.query('INSERT INTO course_categories (id, tenant_id, name) VALUES ($1, $2, $3)', [
       categoryId, tenantId, 'Danh mục worker 527',
     ]);
-    // Cây context dùng chung của suite dựng MỘT lần tại đây (hệ
-    // thống → tenant của suite); các ca chỉ thêm context khoá riêng.
     await pg.query('INSERT INTO context (id, context_level, instance_id, path, depth) VALUES ($1, 10, NULL, $2, 1)', [
       systemCtxId, `/${systemCtxId}`,
     ]);
     await pg.query('INSERT INTO context (id, context_level, instance_id, path, depth) VALUES ($1, 20, $2, $3, 2)', [
       tenantCtxId, tenantId, `/${systemCtxId}/${tenantCtxId}`,
     ]);
-    // Worker không có seed vai trò: dựng hai vai trò archetype cần
-    // cho các ca (học viên cho instance, giảng dạy cho ca xung đột).
     await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Student', $2, 'student')", [studentRoleId, `student527-${tenantId.slice(0, 8)}`]);
     await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Teacher', $2, 'editingteacher')", [teacherRoleId, `teacher527-${tenantId.slice(0, 8)}`]);
   });
@@ -275,9 +242,6 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
   it('lỗi outbox không phải unique violation trong transaction ghi danh thì phải nổi lên và không để lại dòng ghi danh nào (ca phủ định T-10)', async () => {
     const graph = await makeCourseGraph('unenrol');
     const userId = await insertUser();
-    // Cổng outbox lỗi đúng tại sự kiện `user_enrolled` — lỗi này
-    // không mang mã 23505 nên bề mặt KHÔNG được nuốt thành
-    // idempotent: transaction phải rollback và lỗi phải nổi lên.
     const failingOutbox: SharedOutboxPort = {
       async enqueue(tx, input) {
         if (input.type === 'user_enrolled') throw new Error('outbox boom');

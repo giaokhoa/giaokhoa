@@ -4,9 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { ContentBankRepository } from './content-bank';
 
-/**
- * Spec tích hợp của ContentBankRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật; mọi ca chạy qua repository production. Các ca khoá: chuyển đổi tường minh `size_bytes` int8 (đọc là string theo luật T-7) về `number` ở biên repository; ghi các cột jsonb dạng mảng/object qua serialize + `::jsonb`; bộ lọc động của `listFiltered`; và hình dạng CohortRow của `listCohortsForUser` qua join cohort_members → cohort.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
@@ -59,7 +56,6 @@ describe('ContentBankRepository (Kysely)', () => {
   });
 
   it('listFiltered áp từng điều kiện được truyền và bỏ qua điều kiện vắng mặt', async () => {
-    // subject_id là FK thật tới subjects: dựng hai môn học trước.
     const [subjectA] = await db.insertInto('subjects').values({
       context_id: CONTEXT_ID, name: 'Môn lọc A', slug: 'loc-a-g6',
     }).returning(['id']).execute();
@@ -94,7 +90,6 @@ describe('ContentBankRepository (Kysely)', () => {
   });
 
   it('listCohortsForUser trả đúng CohortRow của các cohort user là thành viên, isCohortMember khớp theo từng phía', async () => {
-    /** Tenant fixture đã tồn tại; cohort và học liệu cùng thuộc trung tâm này. */
     const [cohort] = await db.insertInto('cohort').values({
       tenant_id: TENANT_ID, name: 'Tổ Toán', context_id: CONTEXT_ID,
     }).returning(['id']).execute();

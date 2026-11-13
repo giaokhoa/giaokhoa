@@ -4,11 +4,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 
-/**
- * Một vũ trụ đếm chưa đọc chuẩn duy nhất (issue #592): vũ trụ của badge sidebar — mọi conversation có tin chưa đọc của chính tôi, trừ conversation đã tắt thông báo và trừ hội thoại 1–1 đang bị ẩn vì chặn. Huy hiệu sidebar, hàng trong danh sách, thẻ lọc "Chưa đọc" và huy hiệu tab Nhóm đều phải dẫn từ cùng vũ trụ này, nên sau khi đọc, mọi bề mặt về cùng một con số trong cùng một chu kỳ cập nhật.
- *
- * Dàn dựng cho người xem B: một hội thoại 1–1 bình thường có tin chưa đọc, một nhóm tự do đã tắt thông báo có tin chưa đọc, và một hội thoại 1–1 đang chặn có tin chưa đọc (tin gửi trước khi chặn). Kỳ vọng: badge = 1, chỉ hàng 1–1 bình thường mang số chưa đọc > 0, hàng nhóm tắt mang 0, cây nhóm của nhóm tắt mang 0; sau khi B đọc hội thoại bình thường, badge và danh sách cùng về 0 ngay ở các lần đọc liên tiếp.
- */
 interface Person { id: string; username: string; token: string }
 interface SummaryRow { id: string; unread: number; type: number; muted?: boolean }
 
@@ -46,8 +41,6 @@ describe('Messaging — vũ trụ đếm chưa đọc chuẩn duy nhất (issue 
     const sender = await person('An', 'GuiTin');
     const blockedPeer = await person('Cuong', 'BiChan');
 
-    // Hội thoại 1–1 bình thường: kết bạn hai chiều rồi mở 1–1,
-    // phía gửi gửi một tin mà người xem chưa đọc.
     const req = await http(app).post(`/api/v1/messages/contacts/${viewer.id}`)
       .set('Authorization', `Bearer ${sender.token}`).send({});
     expect(req.status).toBe(201);
@@ -61,7 +54,6 @@ describe('Messaging — vũ trụ đếm chưa đọc chuẩn duy nhất (issue 
     expect((await http(app).post(`/api/v1/messages/conversations/${normalDmId}/messages`)
       .set('Authorization', `Bearer ${sender.token}`).send({ text: 'tin chưa đọc ở hội thoại bình thường' })).status).toBe(201);
 
-    // Nhóm tự do có tin chưa đọc, sau đó người xem tắt thông báo.
     const group = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${admin}`).send({ memberIds: [sender.id, viewer.id], type: 2 });
     expect(group.status).toBe(201);
@@ -72,9 +64,6 @@ describe('Messaging — vũ trụ đếm chưa đọc chuẩn duy nhất (issue 
       .set('Authorization', `Bearer ${viewer.token}`).send({ muted: true });
     expect(mute.status).toBe(200);
 
-    // Hội thoại 1–1 đang chặn: kết bạn, mở 1–1, gửi tin chưa đọc,
-    // rồi người xem chặn phía gửi — hội thoại này biến khỏi danh
-    // sách và không được đếm vào vũ trụ chuẩn.
     const req2 = await http(app).post(`/api/v1/messages/contacts/${viewer.id}`)
       .set('Authorization', `Bearer ${blockedPeer.token}`).send({});
     expect(req2.status).toBe(201);

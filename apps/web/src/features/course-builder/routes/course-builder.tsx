@@ -15,13 +15,6 @@ import { ImportCard } from '../components/import-card';
 import { OutlineCard } from '../components/outline-card';
 import { statusChoiceOf, type ItemStatusChoice } from '../utils/utils';
 
-/**
- * Builder Outline (K1 — issue #68): trang xây dựng khoá học RIÊNG, tách khỏi trang quản trị khoá gộp theo chuẩn §9. Gồm: thông tin khoá
- * (+ cờ khoá mẫu tổ/trường), panel "Thêm từ khung" (K0a), outline
- * section/module với kéo–thả đổi thứ tự (kèm nút lên/xuống), nhân bản/xoá ngay tại dòng, thêm nội dung bằng MENU chọn loại (không gõ chuỗi component), khối "Thêm từ kho" trong từng section (CB-1 — issue #107: cắm học liệu của Kho học liệu vào section qua endpoint insert sẵn có của CB-1), trạng thái Nháp/Đã mở/Mở theo lịch qua trường ngày mở `openAt` riêng, điều kiện truy cập nâng cao
- * (availability) giữ nguyên từ bản cũ, panel "Dùng lại từ khoá khác"
- * và tiêu chí hoàn thành khoá. Quyền: teaching của khoá hoặc quản trị hệ thống — API vẫn thực thi capability thật cho từng thao tác ghi.
- */
 export function CourseBuilderPage() {
   const { t } = useTranslation('app');
   const { id } = useParams();
@@ -37,9 +30,6 @@ export function CourseBuilderPage() {
   const canManageCompletion =
     perms.canAdminister || (courseAccess?.capabilities.includes('completion:manage') ?? false);
 
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): gói builder là một query
-  // (clientLoader đã prefetch cùng khoá); chờ tải đầu qua trạng thái
-  // chưa có dữ liệu gói như trước (F-14).
   const builderQuery = useCourseBuilder(courseId, canBuild);
   const builderData = builderQuery.data;
   const course = builderData?.course ?? null;
@@ -50,7 +40,6 @@ export function CourseBuilderPage() {
   const { refetch } = builderQuery;
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Form thông tin khoá.
   const [fullName, setFullname] = useState('');
   const [shortName, setShortname] = useState('');
   const [courseCategory, setCourseCategory] = useState('');
@@ -59,13 +48,11 @@ export function CourseBuilderPage() {
   const [isTemplate, setIsTemplate] = useState(false);
   const [startDate, setStartdate] = useState('');
   const [endDate, setEnddate] = useState('');
-  // Outline.
   const [newSectionName, setNewSectionName] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [sectionEdits, setSectionEdits] = useState<Record<string, { name: string; status: ItemStatusChoice; openAt: string }>>({});
   const [moduleEdits, setModuleEdits] = useState<Record<string, { name: string; status: ItemStatusChoice; openAt: string }>>({});
   const [moduleDrafts, setModuleDrafts] = useState<Record<string, { component: string; name: string }>>({});
-  // Thêm từ kho học liệu (CB-1, issue #107).
   const [bankOpenSectionId, setBankOpenSectionId] = useState<string | null>(null);
   const [bankItems, setBankItems] = useState<LibraryItem[] | null>(null);
   const [bankQuery, setBankQuery] = useState('');
@@ -74,19 +61,14 @@ export function CourseBuilderPage() {
   const [availabilityDrafts, setAvailabilityDrafts] = useState<Record<string, unknown>>({});
   const [dragSectionId, setDragSectionId] = useState<string | null>(null);
   const [dragModule, setDragModule] = useState<{ sectionId: string; moduleId: string } | null>(null);
-  // Dùng lại từ khoá khác.
   const otherCourses = (useCoursesList().data ?? []).filter((c) => c.id !== courseId);
   const [importSourceId, setImportSourceId] = useState('');
   const importContent = useCourseContent(importSourceId).data ?? null;
   const [importSections, setImportSections] = useState<string[]>([]);
   const [importModules, setImportModules] = useState<string[]>([]);
-  // Tiêu chí hoàn thành.
   const [criteriaMethod, setCriteriaMethod] = useState(1);
   const [criteriaDraft, setCriteriaDraft] = useState<{ criteriaType: string; moduleInstance: string; date: string }[]>([]);
 
-  // Khởi tạo các trường form/bản nháp từ gói dữ liệu mỗi khi gói
-  // (lại) tải về — đúng phần khởi tạo của reload() thủ công trước đây
-  // (chạy lúc mở trang và sau mỗi đột biến, qua refetch ở dưới).
   const [previousBuilderData, setPreviousBuilderData] = useState<typeof builderData | undefined>(undefined);
   if (previousBuilderData !== builderData) {
     setPreviousBuilderData(builderData);
@@ -150,11 +132,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  // Mọi thao tác ghi đi qua các đột biến của features/course-builder/queries/course-builder
-  // (F-01): đột biến tự làm mới gói builder — dữ liệu mới về thì
-  // effect khởi tạo ở trên chạy lại. reload() chỉ còn cho nhịp cắm
-  // học liệu từ kho (endpoint insert của CB-1 nằm ngoài module này)
-  // và nhịp tự khớp lại sau khi đổi thứ tự thất bại.
   const reload = useCallback(async () => {
     await refetch();
   }, [refetch]);
@@ -167,7 +144,6 @@ export function CourseBuilderPage() {
   const reorderSectionsMutation = useReorderBuilderSections(courseId);
   const reorderModulesMutation = useReorderBuilderModules(courseId);
   const createExamPinMutation = useCreateBuilderExamPin(courseId);
-  /** Giữ requestId theo nội dung form đến khi thành công; lỗi mạng bấm lại không tạo đề nháp dư. */
   const pendingExamRequest = useRef<Record<string, string>>({});
   const createAssignmentMutation = useCreateBuilderAssignment(courseId);
   const createModuleMutation = useCreateBuilderModule(courseId);
@@ -217,7 +193,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  /** Lưu tên + trạng thái mở của section: Nháp = ẩn; Đã mở = hiện, không lịch; Mở theo lịch = hiện + openAt. */
   async function saveSection(sectionId: string) {
     const edit = sectionEdits[sectionId];
     if (!edit) return;
@@ -258,7 +233,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  /** Đổi thứ tự section: gửi toàn bộ danh sách id theo thứ tự mới (API đòi đủ mọi section). */
   async function reorderSections(orderedIds: string[]) {
     setMessage(null);
     try {
@@ -279,12 +253,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  /**
-   * Thêm nội dung bằng menu chọn loại: `mod_quiz` đi qua endpoint
-   * exam-pins dạng newExam (tạo đề + ghim, tự tạo module + grade item
-   * rồi mở trang lần ghim); các loại khác qua POST
-   * /courses/:id/modules — không còn ô gõ chuỗi component.
-   */
   async function createModule(event: FormEvent, sectionId: string) {
     event.preventDefault();
     const draft = moduleDrafts[sectionId] ?? { component: 'mod_page', name: '' };
@@ -292,9 +260,6 @@ export function CourseBuilderPage() {
     try {
       if (draft.component === 'mod_quiz') {
         if (!draft.name.trim()) return;
-        // Sau gộp Đề (#226): "thêm bài kiểm tra" = tạo ĐỀ mới trong
-        // bank cá nhân của GV + GHIM vào khoá trong một thao tác
-        // (newExam); GV soạn câu hỏi tiếp ở trình soạn đề của pin.
         const requestKey = `${sectionId}:${draft.name.trim()}`;
         const requestId = pendingExamRequest.current[requestKey] ?? crypto.randomUUID();
         pendingExamRequest.current[requestKey] = requestId;
@@ -321,11 +286,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  /**
-   * Mở/đóng panel "Thêm từ kho" của một section. Danh sách học liệu
-   * tải lười biếng một lần cho cả trang (API list của CB-1 đã lọc
-   * theo quyền xem: học liệu của mình + đã duyệt của đồng nghiệp).
-   */
   async function toggleBankPanel(sectionId: string) {
     if (bankOpenSectionId === sectionId) {
       setBankOpenSectionId(null);
@@ -344,12 +304,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  /**
-   * Cắm một học liệu từ kho vào section: API insert của CB-1 tạo
-   * module `mod_resource` bằng bản sao file trong context của module
-   * mới (sửa ở kho không đổi bản đã cắm); reload để module hiện ngay
-   * trong outline.
-   */
   async function insertFromBank(item: LibraryItem, sectionId: string) {
     setMessage(null);
     setBankBusyId(item.id);
@@ -430,7 +384,6 @@ export function CourseBuilderPage() {
     }
   }
 
-  /** "Dùng lại từ khoá khác": POST import-content với các section/module đã tích chọn ở khoá nguồn. */
   async function submitImport(event: FormEvent) {
     event.preventDefault();
     if (!importSourceId || (importSections.length === 0 && importModules.length === 0)) return;
@@ -620,15 +573,8 @@ export function CourseBuilderPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default CourseBuilderPage;
 
-/**
- * clientLoader (F-01 đợt 1 + bổ sung clientLoader, rà soát #133):
- * prefetch gói builder + danh sách khoá vào QueryClient singleton
- * (đúng khoá factory) trước khi component mount. prefetchQuery
- * không ném lỗi: tải hỏng thì component tự xử lý qua useQuery.
- */
 export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
   if (params.id) {
     await Promise.all([
@@ -639,7 +585,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { titleMeta } from '#lib/route-meta';
 export function meta() {

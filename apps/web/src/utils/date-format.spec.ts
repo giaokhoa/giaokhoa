@@ -1,11 +1,7 @@
-/**
- * Kiểm chứng helper định dạng ngày giờ dùng chung (lib/date-format): khóa CHUỖI ĐẦU RA CHÍNH XÁC của từng khuôn hiển thị đã hợp nhất về helper, với mốc thời gian cố định và cả hai ngôn ngữ giao diện đang dùng (vi, en-US). Đây là bằng chứng cho yêu cầu "chuỗi ngày giờ hiển thị không đổi" của đợt hợp nhất khuôn lặp: mỗi kỳ vọng dưới đây là đúng chuỗi mà lời gọi `toLocale*` / `Intl.DateTimeFormat` gốc tại vị trí đã chuyển sinh ra cho cùng đầu vào và locale.
- */
 import { describe, expect, it } from 'vitest';
 
 import { formatDate, formatDateTime, formatTime, formatWithOptions } from '#utils/date-format';
 
-// Mốc cố định: 05/01/2026 14:30:00 giờ địa phương — ngày giờ có cả thành phần ngày, tháng, giờ, phút để mọi khuôn đều lộ đủ ký tự phân tách.
 const MOMENT = new Date(2026, 0, 5, 14, 30, 0);
 const MOMENT_ISO = MOMENT.toISOString();
 

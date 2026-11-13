@@ -1,12 +1,3 @@
-/**
- * Bản sao lưu trọn kho: chốt cùng một snapshot MVCC cho pg_dump và metadata
- * file, chụp byte bất biến theo miền sở hữu, rồi lưu manifest cùng payload
- * file dưới dạng mã hoá. Bản dump giữ toàn bộ schema/bảng PostgreSQL, không
- * liệt kê bảng nghiệp vụ theo thế hệ migration.
- *
- * Bộ kiểm chứng đối chiếu ID kho, từng đối tượng, băm và kích thước trước
- * khi cho phép phục hồi. Mọi byte tạm/sản phẩm dở được dọn khi lỗi.
- */
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
@@ -25,14 +16,12 @@ import {
   type StoredBackup,
 } from './fleet-common';
 
-/** Mô tả một byte vật lý trong snapshot; hash luôn kiểm lại từ nội dung thật. */
 export type ArchiveFile = {
   domain: string;
   hash: string;
   size: number;
   sha256: string;
 };
-/** Manifest gắn cả bản dump, tập file và định danh sổ đăng ký không thay đổi. */
 export type SpaceArchiveManifest = {
   version: 1;
   spaceId: string;
@@ -45,7 +34,6 @@ export type SpaceArchiveManifest = {
 type ArchivePayloadFile = { domain: string; hash: string; data: string };
 type ArchivePayload = { version: 1; files: ArchivePayloadFile[] };
 
-/** Tên tệp đi kèm một dump; cả hai tệp đều mã hoá và có SHA-256 riêng. */
 export function archiveSidecarPaths(dumpPath: string): {
   manifest: string;
   files: string;
@@ -56,20 +44,17 @@ export function archiveSidecarPaths(dumpPath: string): {
   };
 }
 
-/** Dùng một cấu hình riêng từ env của CLI nhưng cùng adapter local/S3 của ứng dụng. */
 function storageForEnv(env: NodeJS.ProcessEnv) {
   const config = { get: (key: string) => env[key] } as unknown as ConfigService;
   return createObjectStorage(config);
 }
 
-/** Không bao giờ gộp byte của B/ngân hàng vào bản chụp của A. */
 function assertOwnedDomain(domain: string, spaceId: string): void {
   if (domain !== fileDomainForSpace(spaceId) && domain !== LEGACY_FILE_DOMAIN) {
     throw new Error('archive file belongs to another storage domain');
   }
 }
 
-/** Ghi một gói mã hoá cùng băm, không để tệp trông hoàn chỉnh nếu ghi hỏng. */
 function writeEncryptedSidecar(path: string, data: Buffer, encryptionKey: string): void {
   let createdFile = false;
   let createdHash = false;
@@ -83,14 +68,12 @@ function writeEncryptedSidecar(path: string, data: Buffer, encryptionKey: string
     });
     createdHash = true;
   } catch (error) {
-    // Không xoá file được người chạy khác tạo sẵn nếu flag wx từ chối.
     if (createdHash) unlinkSync(path + '.sha256');
     if (createdFile) unlinkSync(path);
     throw error;
   }
 }
 
-/** Dọn mọi thành phần của một bản chụp không hoàn chỉnh. */
 function removeIncompleteArchive(path: string): void {
   const sidecars = archiveSidecarPaths(path);
   for (const file of [
@@ -105,12 +88,6 @@ function removeIncompleteArchive(path: string): void {
   }
 }
 
-/**
- * Chụp kho đầy đủ dưới một PostgreSQL snapshot và gói byte file mã hoá.
- * @param options - Định danh sổ đăng ký, URL dump quản trị và vùng backup.
- * @returns Tệp dump chỉ được trả khi manifest và file cũng đã ghi toàn vẹn.
- * @throws Error nếu byte thiếu/sai hash, khác miền, hoặc công cụ lỗi.
- */
 export async function dumpSpaceArchive(options: {
   space: FleetSpace;
   url: string;
@@ -124,9 +101,6 @@ export async function dumpSpaceArchive(options: {
   if (!options.encryptionKey) throw new Error('FLEET_BACKUP_ENCRYPTION_KEY is required');
   const env = options.env ?? process.env;
   const { space } = options;
-  // pg_dump xuất trọn DATABASE, không lọc theo tenant. Với shared, ngay
-  // cả kho không có file vẫn có thể chứa dữ liệu B: từ chối TRƯỚC khi
-  // kết nối hoặc tạo tệp để không bao giờ gắn nhãn A lên dump của B.
   if (space.storageMode !== 'dedicated') {
     throw new Error('fleet.archive_requires_dedicated_database: shared database cannot be exported as a single space');
   }
@@ -151,8 +125,6 @@ export async function dumpSpaceArchive(options: {
     const snapshotId = snapshot.rows[0]?.snapshot;
     if (!snapshotId) throw new Error('PostgreSQL did not export a snapshot');
 
-    // Chọn metadata đúng cùng điểm thời gian với pg_dump; các blob là
-    // immutable theo hash, do đó đọc blob sau snapshot vẫn là bản đã chốt.
     const hasFiles = await client.query<{ found: string | null }>("SELECT to_regclass('public.files')::text AS found");
     const rows = hasFiles.rows[0]?.found
       ? (
@@ -179,8 +151,6 @@ export async function dumpSpaceArchive(options: {
         if (previousSize !== row.file_size) throw new Error('inconsistent file size in snapshot: ' + key);
         continue;
       }
-      // JSON/base64 có thể nhân bản byte trong RAM nhiều lần. Giới
-      // hạn TRƯỚC khi đọc blob để tránh OOM rồi để lại archive dở.
       if (!Number.isSafeInteger(row.file_size) || row.file_size < 0) {
         throw new Error('archive file has invalid size');
       }
@@ -213,7 +183,6 @@ export async function dumpSpaceArchive(options: {
     transactionOpen = false;
 
     const sidecars = archiveSidecarPaths(stored.path);
-    // Không cho dump và payload cùng lúc tràn ngân sách bộ đệm.
     if (statSync(stored.path).size + payloadSizeUpperBound > memoryBudget) {
       throw new Error('fleet.archive_memory_budget_exceeded: combined database and file payload exceed budget');
     }
@@ -242,10 +211,6 @@ export async function dumpSpaceArchive(options: {
   }
 }
 
-/**
- * Chỉ trả nội dung sau khi mọi tệp/băm/định danh khớp; thiếu manifest
- * là lỗi bắt buộc, kể cả khi dump database riêng còn đọc được.
- */
 export function readVerifiedSpaceArchive(
   dumpPath: string,
   space: FleetSpace,
@@ -255,14 +220,10 @@ export function readVerifiedSpaceArchive(
   manifest: SpaceArchiveManifest;
   files: { domain: string; hash: string; data: Buffer }[];
 } {
-  // Một dump toàn DB sinh trước khi có guard này cũng không được
-  // phục hồi như backup của một trung tâm trong kho shared.
   if (space.storageMode !== 'dedicated') {
     throw new Error('fleet.archive_requires_dedicated_database: cannot restore a shared database as one centre');
   }
   const sidecars = archiveSidecarPaths(dumpPath);
-  // Trước khi giải mã/tạo Buffer file, kiểm ngân sách kết hợp.
-  // Giữ giới hạn đối xứng với lúc chụp (kèm biên header AES nhỏ).
   const budget = fleetArchiveMemoryBudgetBytes();
   if (statSync(dumpPath).size + statSync(sidecars.files).size > budget + 128) {
     throw new Error('fleet.archive_memory_budget_exceeded: combined encrypted archive exceeds budget');
@@ -312,10 +273,6 @@ export function readVerifiedSpaceArchive(
   return { dump, manifest, files };
 }
 
-/**
- * Phục hồi byte vào vùng cô lập của lần kiểm thử. File legacy chuyển
- * thành miền của cùng ID trung tâm trong vùng đích, không sửa nguồn.
- */
 export async function restoreArchiveFilesToLocalDir(
   files: { domain: string; hash: string; data: Buffer }[],
   spaceId: string,
@@ -337,16 +294,10 @@ export async function restoreArchiveFilesToLocalDir(
   return files.length;
 }
 
-/** Huỷ vùng tạm cô lập của lượt kiểm thử kể cả khi việc phục hồi lỗi. */
 export function removeTemporaryRestoreFiles(dir: string): void {
   rmSync(dir, { recursive: true, force: true });
 }
 
-/**
- * Xác minh rằng toàn bộ metadata file trong database đã phục hồi
- * khớp 1-1 với manifest, bao gồm quan hệ được thêm ở schema mới.
- * Không dùng danh sách bảng học tập legacy để giới hạn pg_dump.
- */
 export async function verifyRestoredFileMetadata(client: Client, manifest: SpaceArchiveManifest): Promise<void> {
   const hasFiles = await client.query<{ found: string | null }>("SELECT to_regclass('public.files')::text AS found");
   const rows = hasFiles.rows[0]?.found

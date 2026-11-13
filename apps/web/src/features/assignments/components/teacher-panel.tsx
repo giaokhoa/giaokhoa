@@ -10,11 +10,6 @@ import { assignmentSubmissionsQueryOptions, useReleaseSubmissionsBatch } from '.
 import { queryKeys } from '../queries/keys';
 import { GradingPanel } from './grading-panel';
 
-/**
- * Phía giáo viên: danh sách bài nộp cả lớp + trả bài theo đợt + mở bề mặt chấm từng em. Danh sách bài nộp là dữ kiện máy chủ nên đọc trực tiếp từ cache TanStack qua `assignmentSubmissionsQueryOptions`
- * (CN-13, issue #493) — các đột biến chấm/trả bài tự invalidate
- * khoá này ở tầng dữ kiện; `loadSummaries` chỉ còn là lần nạp lại tường minh cho bề mặt chấm gọi sau mỗi hành động.
- */
 export function TeacherPanel({ data }: { data: AssignmentForUserView }) {
   const { t } = useTranslation('app');
   const { assignment, rubric } = data;
@@ -27,11 +22,9 @@ export function TeacherPanel({ data }: { data: AssignmentForUserView }) {
   const queryClient = useQueryClient();
   const releaseBatchMutation = useReleaseSubmissionsBatch();
 
-  /** Lỗi nạp danh sách lần đầu (chưa từng có dữ kiện trong cache) — lỗi hành động vẫn qua state `error`. */
   const loadError = summariesQuery.isError && !summariesQuery.data ? t('assignLoadFailed') : null;
   const shownError = error ?? loadError;
 
-  /** Nạp lại danh sách bài nộp từ server (bề mặt chấm gọi sau mỗi hành động ghi). */
   const loadSummaries = useCallback(async () => {
     await queryClient.refetchQueries({ queryKey: queryKeys.assignmentSubmissions(assignment.id) });
   }, [assignment.id, queryClient]);

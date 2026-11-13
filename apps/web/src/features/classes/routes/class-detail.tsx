@@ -20,15 +20,6 @@ import type { ClassRosterImportReport, ClassStaffRole } from '../types/classes';
 import { formatDate } from '#utils/date-format';
 import { queryKeys } from '../queries/keys';
 
-/**
- * Dashboard theo lớp (CLASS-2, issue #184 — dựng trên bề mặt quản trị của CLASS-1): MỘT trang tổng quan của lớp, dựng theo ĐÚNG vai của người gọi mà server suy trong gói `GET /classes/:id/overview`:
- *  - chủ lớp / đồng GV (staff): khối tổng quan (số học sinh, số khoá)
- *    + mọi khoá trong lớp + các khối quản trị của CLASS-1 ở dưới
- *    (roster, hàng chờ duyệt, đã đình chỉ, phân quyền — danh sách giáo
- *    viên nằm ở khối phân quyền) — từng khối hiện theo cờ khả năng của chính người gọi (canManageRoster / canShare), không hiện forms mà API sẽ từ chối;
- *  - học sinh (member): chỉ khối tổng quan + các khoá MÌNH đang ghi
- *    danh ACTIVE trong lớp (server đã lọc sẵn) + giáo viên của lớp + nút Chat lớp — không có bất kỳ khối quản trị nào. Dashboard là bề mặt tổng quan/điều hướng thuần: trang này KHÔNG hiển thị bất kỳ số điểm nào (mô hình điểm chỉ theo từng bài, không tổng hợp theo lớp/khoá). Quyền thật nằm ở API (capability tại context lớp); màn này chỉ dẫn luồng và hiển thị kết quả API trả về.
- */
 export function ClassDetailPage() {
   const { t } = useTranslation('app');
   const { id } = useParams<{ id: string }>();
@@ -39,13 +30,6 @@ export function ClassDetailPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
-  /**
-   * Mở chat cấp lớp (lát MSG-T2).
-   *
-   * Flow: bấm nút "Chat lớp" → GET ensure conversation của lớp phía messaging (cấp phát lười phía server) → điều hướng sang trang Tin nhắn mở đúng conversation qua deep-link `?conversation=` sẵn có — cùng khuôn nút chat ở trang khoá. Trang này KHÔNG tự gác quyền: người ngoài lớp bị API trả 404 và luồng rơi vào nhánh lỗi hiển thị thông báo.
-   *
-   * Side-effect: lần mở đầu tiên của lớp tạo conversation ở server.
-   */
   async function openClassChat() {
     setChatBusy(true);
     setChatError(null);
@@ -59,13 +43,6 @@ export function ClassDetailPage() {
     }
   }
 
-  /**
-   * Gói tổng quan là nguồn vai DUY NHẤT của trang: quan hệ của người
-   * gọi với lớp + cờ khả năng + khoá đã lọc theo vai đều từ đây. Các
-   * truy vấn quản trị chỉ bật khi vai/cờ tương ứng cho phép — học sinh
-   * không gọi các endpoint quản trị, đồng GV không gọi endpoint mà
-   * mình không có quyền (tránh lỗi 403 vô ích và bề mặt thừa).
-   */
   const overviewQuery = useQuery({ queryKey: queryKeys.classOverview(classId), queryFn: () => fetchClassOverview(classId), enabled: Boolean(classId) });
   const overview = overviewQuery.data;
   const isMember = overview?.viewerRole === 'member';
@@ -82,7 +59,6 @@ export function ClassDetailPage() {
   const invalidateStaff = () => void queryClient.invalidateQueries({ queryKey: queryKeys.classStaff(classId) });
   const invalidateRequests = () => void queryClient.invalidateQueries({ queryKey: queryKeys.classJoinRequests(classId) });
 
-  // --- Thêm học sinh theo định danh ---
   const [studentName, setStudentName] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
   const [studentPhone, setStudentPhone] = useState('');
@@ -112,7 +88,6 @@ export function ClassDetailPage() {
     addStudentMutation.mutate();
   }
 
-  // --- Nhập từ Excel ---
   const fileRef = useRef<HTMLInputElement>(null);
   const [importReport, setImportReport] = useState<ClassRosterImportReport | null>(null);
   const importMutation = useMutation({
@@ -134,7 +109,6 @@ export function ClassDetailPage() {
     importMutation.mutate(file);
   }
 
-  // --- Đình chỉ / kích hoạt lại ---
   const removeMutation = useMutation({
     mutationFn: (userId: string) => removeRosterMember(classId, userId),
     onSuccess: () => {
@@ -160,7 +134,6 @@ export function ClassDetailPage() {
     removeMutation.mutate(userId);
   }
 
-  // --- Hàng chờ duyệt ---
   const decideMutation = useMutation({
     mutationFn: (input: { requestId: string; approve: boolean }) => decideJoinRequest(classId, input.requestId, input.approve),
     onSuccess: () => {
@@ -171,7 +144,6 @@ export function ClassDetailPage() {
     onError: () => setMessage(t('classRequestFailed')),
   });
 
-  // --- Phân quyền đồng GV ---
   const [staffEmail, setStaffEmail] = useState('');
   const [staffRoles, setStaffRoles] = useState<ClassStaffRole[]>([]);
   const staffMutation = useMutation({
@@ -214,13 +186,6 @@ export function ClassDetailPage() {
             <Button type="button" variant="outline" disabled={chatBusy} onClick={() => void openClassChat()}>
               {t('classChatOpen')}
             </Button>
-            {/*
-              Liên kết "Sửa" chỉ render khi gói tổng quan ĐÃ VỀ và vai
-              cho phép: suy "không phải member" từ gói chưa tải xong
-              sẽ làm nút chớp hiện với học viên trong lúc trang đang
-              tải (overview rỗng → isMember = false). Trong lúc tải,
-              header chỉ giữ nút Chat lớp dùng cho mọi vai thuộc lớp.
-            */}
             {overview && !isMember ? (
               <Link className={buttonVariants({ variant: 'outline' })} to={`/classes/${classId}/edit`}>
                 {t('classEdit')}
@@ -594,7 +559,6 @@ export function ClassDetailPage() {
 
 export default ClassDetailPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

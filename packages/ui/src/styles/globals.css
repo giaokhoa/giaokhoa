@@ -1,21 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-/* Font toàn hệ nạp tại đây (Fontsource bản Variable, tự host). Tên font
-   chỉ xuất hiện ở hai dòng import này và ở hai token --font-sans /
-   --font-mono trong khối @theme bên dưới — đổi họ font lần sau chỉ
-   sửa đúng chỗ này, không sửa component nào. */
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
-/* Tailwind v4 tự quét nguồn theo vị trí file CSS; file này sống trong
-   package ui nên phải khai báo tường minh cả hai cây nguồn dùng chung
-   bộ token ở đây: component của package và mã nguồn của apps/web. */
 @source "../components";
 @source "../../../../apps/web/src";
-/* Package editor (lát E1 #248) dùng class Tailwind trong chính
-   component của nó (panel công thức, toolbar) — phải nằm trong diện
-   quét thì các class đó mới sinh CSS ở bản dựng của apps/web. */
 @source "../../../../packages/editor/src";
 
 @custom-variant dark (&:is(.dark *));

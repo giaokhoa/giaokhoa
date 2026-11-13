@@ -11,11 +11,6 @@ import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useBackupJobs, useBackupSteps, useCreateBackupJob, useRestoreBackup } from '../queries/platform';
 
-/**
- * Backup/restore (platform services): tạo job, xem bước, restore sang course mới. Dữ liệu đọc qua tầng TanStack Query
- * (`lib/platform-data.ts`, khoá `backupJobs`/`backupSteps`;
- * `clientLoader` của route nạp trước danh sách việc); các bước chỉ tải khi người dùng chọn xem một việc, tạo job và restore qua đột biến làm mới danh sách như lần tải lại thủ công trước đây.
- */
 export function BackupPage() {
   const { t: t } = useTranslation();
   const jobsQuery = useBackupJobs();
@@ -110,15 +105,12 @@ export function BackupPage() {
   );
 }
 
-/** Route module gộp (issue #500): nội dung trang bên dưới vốn ở module pages riêng, phần khung route (biên lỗi + tiêu đề) vốn ở wrapper routes riêng — hai module nhập một theo bản đồ features/. */
 export { BackupPage as default };
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('backupTitle');
 }
 
-// clientLoader (F-01, rà soát #133): nạp trước dữ liệu đúng khoá trang sẽ đọc.
 export { backupPageClientLoader as clientLoader } from '../queries/platform';

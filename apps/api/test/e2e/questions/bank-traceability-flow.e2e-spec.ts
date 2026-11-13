@@ -7,21 +7,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
-/**
- * Truy vết copy + truy nguồn hai chiều cho cả ba thực thể ngân hàng
- * (issue #228, lát S2) — đối chiếu tiêu chí nghiệm thu của issue:
- * "ma trận và đề có đủ truy vết copy như câu hỏi; truy vấn được hai chiều câu hỏi ↔ đề ↔ ma trận ↔ sách".
- *
- * Luật được khoá ở đây:
- *  - Copy ma trận ghi bank nguồn + tác giả gốc tại lúc copy và tăng
- *    copy_count của ma trận nguồn; endpoint attribution của ma trận trả đúng các giá trị đã ghi + use_count = số version đề đã sinh.
- *  - Copy đề ghi bank nguồn + SỐ VERSION của đề nguồn TẠI LÚC COPY:
- *    copy trước khi nguồn lên version 2 giữ derived_from_version=1, copy sau ghi 2 — truy vết không bị viết lại theo trạng thái nguồn về sau.
- *  - Truy nguồn chiều ngược: ma trận → các đề đã sinh
- *    (generated-exams), câu → các version đề đang chứa câu
- *    (containing-exams, cùng cổng đọc 404 với attribution), sách →
- *    các câu ghi nguồn từ sách (qua cặp source_kind/source_ref).
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -74,14 +59,12 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Giáo viên thuộc nhóm vai staff tại hệ thống — được cấp ngân hàng cá nhân. */
   async function mkStaffUser(): Promise<{ id: string; username: string; token: string }> {
     const u = await mkUser();
     await assignRole(app, admin, u.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
     return u;
   }
 
-  /** Môn → chương trình → chủ đề → bài → 2 YCCĐ (Biết/Hiểu). */
   async function setupCurriculum(): Promise<{ subjectId: string; curriculumId: string; lessonId: string; outcomeBiet: string; outcomeHieu: string }> {
     const systemCtxId = await systemContextId(app, admin);
     const subjRes = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
@@ -160,7 +143,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     expect(copy.originalAuthorId).toBe(source.createdBy);
     expect(copy.copyCount).toBe(0);
 
-    // Giá trị ghi tại tầng DB của bản copy.
     const copyRow = await pg.query<{ derived_from_bank_id: string; original_author_id: string; copy_count: number }>(
       'select derived_from_bank_id, original_author_id, copy_count from exam_matrices where id = $1', [copy.id],
     );
@@ -168,7 +150,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
       derived_from_bank_id: schoolBank.id, original_author_id: source.createdBy, copy_count: 0,
     });
 
-    // Attribution của nguồn: không phải bản copy, copy_count đã tăng, chưa sinh đề nào.
     const srcAttrRes = await http(app).get(`/api/v1/exam-matrices/${source.id}/attribution`).set(bearer(admin));
     expect(srcAttrRes.status, JSON.stringify(srcAttrRes.body)).toBe(200);
     const srcAttr = srcAttrRes.body as MatrixAttributionBody;
@@ -177,7 +158,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     expect(srcAttr.useCount).toBe(0);
     expect(srcAttr.sourceBankId).toBeNull();
 
-    // Attribution của bản copy: đủ nguồn + tên bank nguồn + tên tác giả gốc.
     const copyAttrRes = await http(app).get(`/api/v1/exam-matrices/${copy.id}/attribution`).set(bearer(admin));
     expect(copyAttrRes.status, JSON.stringify(copyAttrRes.body)).toBe(200);
     const copyAttr = copyAttrRes.body as MatrixAttributionBody;
@@ -188,7 +168,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     expect(copyAttr.originalAuthorId).toBe(source.createdBy);
     expect(copyAttr.originalAuthorName).toBeTruthy();
 
-    // Ma trận không tồn tại → 404.
     const missing = await http(app).get('/api/v1/exam-matrices/01900000-0000-7000-8000-0000000000aa/attribution').set(bearer(admin));
     expect(missing.status).toBe(404);
   });
@@ -221,18 +200,15 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     expect(quiz.examId).toBeTruthy();
     expect(quiz.examVersionId).toBeTruthy();
 
-    // Ma trận → các đề đã sinh: đúng một version đề, neo matrix version 1.
     const genListRes = await http(app).get(`/api/v1/exam-matrices/${matrix.id}/generated-exams`).set(bearer(admin));
     expect(genListRes.status, JSON.stringify(genListRes.body)).toBe(200);
     const generated = genListRes.body as { examId: string; examVersionId: string; version: number; name: string; matrixVersion: number | null }[];
     expect(generated).toHaveLength(1);
     expect(generated[0]).toMatchObject({ examId: quiz.examId, examVersionId: quiz.examVersionId, version: 1, matrixVersion: 1 });
 
-    // use_count của ma trận khớp số version đề đã sinh.
     const attrRes = await http(app).get(`/api/v1/exam-matrices/${matrix.id}/attribution`).set(bearer(admin));
     expect((attrRes.body as MatrixAttributionBody).useCount).toBe(1);
 
-    // Câu → các version đề đang chứa câu: lấy một câu trong đề vừa sinh.
     const paperRes = await http(app).get(`/api/v1/exams/${quiz.examId}`).set(bearer(admin));
     expect(paperRes.status, JSON.stringify(paperRes.body)).toBe(200);
     const paper = paperRes.body as PaperBody;
@@ -244,7 +220,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     const containing = containingRes.body as { examId: string; examVersionId: string; version: number }[];
     expect(containing).toContainEqual(expect.objectContaining({ examId: quiz.examId, examVersionId: quiz.examVersionId, version: 1 }));
 
-    // Câu không tồn tại → 404 đồng nhất như attribution.
     const missing = await http(app).get('/api/v1/questions/01900000-0000-7000-8000-0000000000bb/containing-exams').set(bearer(admin));
     expect(missing.status).toBe(404);
   });
@@ -272,7 +247,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     const statusRes = await http(app).post(`/api/v1/exams/${source.paper.id}/status`).set(bearer(admin)).send({ status: 'ready' });
     expect(statusRes.status, JSON.stringify(statusRes.body)).toBe(201);
 
-    // Copy lần 1 khi nguồn ở version 1.
     const copy1Res = await http(app).post(`/api/v1/exams/${source.paper.id}/copy`).set(bearer(owner.token)).send({});
     expect(copy1Res.status, JSON.stringify(copy1Res.body)).toBe(201);
     const copy1 = copy1Res.body as PaperBody;
@@ -287,7 +261,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     );
     expect(copy1Row.rows[0]).toEqual({ derived_from_bank_id: schoolBank.id, derived_from_version_number: 1 });
 
-    // Nguồn lên version 2 (sửa metadata), rồi copy lần 2.
     const patchRes = await http(app).patch(`/api/v1/exams/${source.paper.id}`).set(bearer(admin)).send({ name: 'Đề nguồn S2 (bản 2)' });
     expect(patchRes.status, JSON.stringify(patchRes.body)).toBe(200);
     expect((patchRes.body as PaperBody).paper.latestVersion).toBe(2);
@@ -297,7 +270,6 @@ describe('Truy vết ngân hàng (issue #228 S2)', () => {
     expect(copy2.attribution?.derivedFromVersionNumber).toBe(2);
     expect(copy2.attribution?.sourceBankId).toBe(schoolBank.id);
 
-    // Bản copy lần 1 giữ nguyên truy vết version 1; nguồn có copy_count = 2.
     const copy1After = await http(app).get(`/api/v1/exams/${copy1.paper.id}`).set(bearer(owner.token));
     expect((copy1After.body as PaperBody).attribution?.derivedFromVersionNumber).toBe(1);
     const sourceAfter = await http(app).get(`/api/v1/exams/${source.paper.id}`).set(bearer(admin));

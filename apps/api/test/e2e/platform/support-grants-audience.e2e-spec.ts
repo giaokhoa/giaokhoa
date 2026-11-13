@@ -1,8 +1,3 @@
-/**
- * Kiểm chứng toàn chuỗi guard HTTP cho quyền hỗ trợ issue #19:
- * token platform không qua API nghiệp vụ / login-as, token nghiệp
- * vụ không qua support-centres dù là site admin, không token bị 401.
- */
 import { INestApplication } from "@nestjs/common";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {

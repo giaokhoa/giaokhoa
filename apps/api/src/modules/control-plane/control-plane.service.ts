@@ -20,12 +20,8 @@ import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ControlPlaneConnection } from '../../db/control-plane-connection.service';
 
-/**
- * Phiên bản schema hiện tại của KHO CHUNG (database nghiệp vụ) — tên thư mục migration baseline duy nhất của kho đó. Dòng đăng ký của các không gian đang ở chế độ `shared` mang phiên bản này cho tới khi chúng tách sang kho riêng (chương trình tenant, issue #587).
- */
 export const SHARED_DATABASE_SCHEMA_VERSION = '20261025163710_baseline';
 
-/** Một không gian hiện hữu cần đảm bảo có dòng đăng ký khi gieo dữ kiện. */
 export type ExistingSpaceSeed = {
   slug: string;
   name: string;
@@ -36,21 +32,6 @@ export type ExistingSpaceSeed = {
   secretRef: string;
 };
 
-/**
- * Service của control plane (issue #580): sổ đăng ký không gian và registry phiên bản schema.
- *
- * Luồng nghiệp vụ chính:
- * - Ghi sổ (tạo / cập nhật / đổi trạng thái): gác bằng capability
- *   `tenant:manage` tại context HỆ THỐNG — cơ chế quản trị platform hiện hữu, tầng này không dựng mô hình tài khoản quản trị riêng. Mỗi thao tác ghi chạy trong MỘT transaction của database control plane: đổi dòng đăng ký + ghi đúng một dòng lịch sử (người thực hiện, thời gian, ảnh chụp trước/sau) — hai ghi cùng thành hoặc cùng huỷ, sổ và lịch sử không bao giờ lệch nhau.
- * - Đọc định tuyến theo slug: trả nguyên dòng đăng ký để tầng ứng
- *   dụng (và các issue định tuyến #581/#582 sau này) biết không gian đang ở kho nào, bằng role nào, ở phiên bản schema nào.
- * - Registry phiên bản schema: khung ghi/đọc trạng thái schema của
- *   từng kho (phiên bản hiện tại, lượt migration, trạng thái sao lưu/khôi phục gần nhất). Cơ chế tự động ghi thuộc issue #586.
- *
- * Mọi thao tác đều cần control plane đã cấu hình
- * (`CONTROL_PLANE_DATABASE_URL`); chưa cấu hình thì repository ném
- * `control_plane.not_configured` (503).
- */
 @Injectable()
 export class ControlPlaneRegistryService {
   private readonly logger = new Logger(ControlPlaneRegistryService.name);
@@ -62,20 +43,15 @@ export class ControlPlaneRegistryService {
     private readonly contexts: ContextsService,
   ) {}
 
-  /** Control plane đã được cấu hình kết nối hay chưa (điểm gieo dữ kiện hỏi trước khi ghi). */
   get isConfigured(): boolean {
     return this.connection.isConfigured;
   }
 
-  /**
-   * Gác quản trị platform: chỉ người giữ `tenant:manage` tại context hệ thống mới được đọc/ghi sổ — cùng helper với bề mặt quản trị tenant hiện hữu.
-   */
   private async assertPlatformManager(actorId: string): Promise<void> {
     const systemId = (await this.contexts.ensureSystemContext()).id;
     await this.evaluator.requireCapability(actorId, 'tenant:manage', systemId);
   }
 
-  /** Ảnh chụp một dòng đăng ký để ghi lịch sử (không kèm mốc thời gian của dòng). */
   private snapshot(row: SpaceRegistryRow): Omit<SpaceRegistration, 'createdAt' | 'updatedAt'> {
     return {
       id: row.id,
@@ -92,7 +68,6 @@ export class ControlPlaneRegistryService {
     };
   }
 
-  /** Ánh xạ dòng đăng ký sang hình dạng hợp đồng API. */
   private toRegistration(row: SpaceRegistryRow): SpaceRegistration {
     return {
       ...this.snapshot(row),
@@ -101,9 +76,6 @@ export class ControlPlaneRegistryService {
     };
   }
 
-  /**
-   * Tạo dòng đăng ký không gian mới + dòng lịch sử `create` trong cùng transaction. Kiểm tra trùng slug có hai lớp: kiểm tra nhanh ngoài transaction cho đường thường, và insert-bỏ-qua-khi-trùng ngay trong transaction để hai lượt tạo đồng thời cùng slug chỉ một lượt thành công — lượt còn lại nhận lỗi xung đột (409), không vấp ràng buộc unique thành lỗi 500.
-   */
   async createRegistration(actorId: string, dto: CreateSpaceRegistration): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);
     if (await this.repo.findSpaceBySlug(dto.slug)) {
@@ -112,15 +84,6 @@ export class ControlPlaneRegistryService {
         code: 'control_plane.slug_taken',
       });
     }
-    // Lớp kiểm tra trùng databaseName ở tầng ứng dụng (issue #583,
-    // ghi chú điều phối 6528534235 — điểm P1-2b từ review PR #594):
-    // một tên database không được hai dòng đăng ký cùng dùng, KỂ CẢ
-    // khi một trong hai là hàng shared — đường cấp phát kho dedicated
-    // mang tên trùng kho chung sẽ khiến trung tâm mới trỏ thẳng vào
-    // kho chung thay vì kho riêng của nó. Chỉ số duy nhất riêng phần
-    // trên database (chỉ phủ hàng dedicated) là chốt chặn cho cuộc
-    // đua dedicated-vs-dedicated; kiểm tra ở đây bắt cả trường hợp
-    // trùng với hàng shared mà chỉ số không phủ.
     if (await this.repo.findSpaceByDatabaseName(dto.databaseName)) {
       throw new ConflictException({
         message: `Database name ${dto.databaseName} is already registered`,
@@ -164,14 +127,6 @@ export class ControlPlaneRegistryService {
         return row;
       });
     } catch (error) {
-      // Chốt chặn cho cuộc đua dedicated-vs-dedicated: hai lượt tạo
-      // đồng thời cùng databaseName đều qua được kiểm tra ngoài
-      // transaction, lượt sau vấp chỉ số duy nhất riêng phần trong
-      // transaction — ánh xạ thành 409 cùng mã với kiểm tra ngoài
-      // thay vì để lỗi 500 rò ra ngoài. Mã 23505 một mình chưa đủ:
-      // chỉ khi tên ràng buộc là chỉ số dedicated mới là va chạm
-      // này; các vi phạm unique khác (ví dụ slug) giữ nguyên hành
-      // vi cũ qua nhánh ConflictException bên trong transaction.
       if (isDedicatedDatabaseNameConflict(error)) {
         throw new ConflictException({
           message: `Database name ${dto.databaseName} is already registered`,
@@ -180,37 +135,10 @@ export class ControlPlaneRegistryService {
       }
       throw error;
     }
-    // Sổ vừa có dòng mới: báo khung định tuyến (issue #581) vô hiệu
-    // hoá đệm của slug này — phát SAU khi transaction đã commit để
-    // bên nghe đọc lại được giá trị mới.
     emitSpaceRegistryChanged(created.slug);
     return this.toRegistration(created);
   }
 
-  /**
-   * Cập nhật các trường sửa được của một dòng đăng ký + dòng lịch
-   * sử `update` trong cùng transaction. Dòng hiện tại được đọc LẠI
-   * bên trong transaction kèm khoá dòng: ảnh `before` của lịch sử
-   * vì vậy luôn là giá trị ngay trước lần ghi này kể cả khi có
-   * thao tác ghi khác chạy đồng thời (đọc ngoài transaction sẽ
-   * chụp phải ảnh cũ và làm chuỗi lịch sử đứt).
-   *
-   * Bất biến trùng tên database áp cho cả cập nhật như đường tạo:
-   * đổi `databaseName` sang tên đã có ở dòng khác (kể cả dòng kho
-   * chung — chỉ số duy nhất riêng phần chỉ phủ hàng dedicated nên
-   * không bắt được ca này) thì bị từ chối 409 ngay trong
-   * transaction, trước khi ghi. Đổi về chính tên hiện tại của dòng
-   * thì không tính là trùng. Hai lượt cập nhật đồng thời cùng tên
-   * dedicated thì lượt sau vấp chỉ số riêng phần trong transaction
-   * và được ánh xạ thành cùng mã 409 như đường tạo. Cùng bất biến
-   * đó áp cho cả ca chỉ đổi `storageMode`: lật một dòng từ `shared`
-   * sang `dedicated` mà giữ nguyên tên cũng phải kiểm tra theo tổ
-   * hợp hiệu lực sau cập nhật, vì dòng kia có thể vẫn là `shared`
-   * nên chỉ số riêng phần không bắt được va chạm này. Cả hai điểm
-   * kiểm tra đều loại trừ dòng đang sửa NGAY TRONG TRUY VẤN: tra
-   * cứu `LIMIT 1` không loại trừ có thể trả về chính dòng đang sửa
-   * và bỏ qua dòng còn lại cùng tên.
-   */
   async updateRegistration(actorId: string, id: string, dto: UpdateSpaceRegistration): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);
     let updated: SpaceRegistryRow;
@@ -232,16 +160,6 @@ export class ControlPlaneRegistryService {
             });
           }
         }
-        // Kiểm tra trùng tên theo tổ hợp hiệu lực sau cập nhật: chỉ
-        // đổi `storageMode` sang `dedicated` mà giữ nguyên tên cũng
-        // phải bắt, vì dòng đang giữ tên đó có thể vẫn là `shared`
-        // nên chỉ số duy nhất riêng phần không chặn được va chạm.
-        // Kiểm tra đổi tên ở trên vẫn giữ nguyên để ca đổi tên ở
-        // chế độ `shared` cũng bị chặn như trước. Cả hai điểm đều
-        // dùng tra cứu loại trừ dòng đang sửa NGAY TRONG TRUY VẤN:
-        // tra cứu `LIMIT 1` không loại trừ có thể trả về chính dòng
-        // này và bỏ qua dòng còn lại cùng tên (phán quyết vòng chấm
-        // lại hẹp thứ hai PR #611).
         const effectiveDatabaseName = dto.databaseName ?? existing.databaseName;
         const effectiveStorageMode = dto.storageMode ?? existing.storageMode;
         if (effectiveStorageMode === 'dedicated') {
@@ -275,21 +193,10 @@ export class ControlPlaneRegistryService {
       }
       throw error;
     }
-    // Cập nhật có thể đổi đích định tuyến (database/role/chế độ
-    // kho): vô hiệu hoá đệm của slug sau khi đã commit.
     emitSpaceRegistryChanged(updated.slug);
     return this.toRegistration(updated);
   }
 
-  /**
-   * Đổi trạng thái vòng đời của không gian + dòng lịch sử
-   * `status_change` trong cùng transaction. Đổi sang chính trạng
-   * thái hiện tại là thao tác rỗng: trả dòng hiện tại, không ghi
-   * lịch sử (lịch sử chỉ ghi thay đổi thật). Quyết định "có phải
-   * thao tác rỗng" và ảnh `before` đều lấy từ dòng đã đọc kèm khoá
-   * bên trong transaction — cùng lý do với đường cập nhật: trạng
-   * thái thật ngay trước lần ghi này mới là căn cứ đúng.
-   */
   async changeStatus(actorId: string, id: string, dto: ChangeSpaceStatus): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);
     let changedSlug: string | undefined;
@@ -302,18 +209,12 @@ export class ControlPlaneRegistryService {
         });
       }
       if (existing.status === dto.status) return existing;
-      // HTTP chỉ đổi trạng thái tạm ngưng/hoạt động. Đóng trung
-      // tâm là thao tác huỷ DB+file có xác nhận ID, phải đi qua
-      // CLI fleet để không ghi trạng thái closed giả khi chưa dọn.
       if (dto.status === 'closed') {
         throw new ConflictException({
           message: 'Closing a centre requires the fleet lifecycle CLI',
           code: 'control_plane.close_requires_fleet_cli',
         });
       }
-      // Sau khi xoá vật lý, đổi lại active qua API sẽ cấp quyền
-      // vào một database không còn tồn tại; phục hồi cần luồng
-      // vận hành tường minh với manifest và database đích hợp lệ.
       if (existing.status === 'closed') {
         throw new ConflictException({
           message: 'A closed centre cannot be reactivated through the API',
@@ -334,14 +235,10 @@ export class ControlPlaneRegistryService {
       changedSlug = row.slug;
       return row;
     });
-    // Chỉ phát sự kiện khi trạng thái thật sự đổi (đổi về chính
-    // trạng thái hiện tại là thao tác rỗng — sổ không đổi, đệm định
-    // tuyến không cần vô hiệu hoá).
     if (changedSlug) emitSpaceRegistryChanged(changedSlug);
     return this.toRegistration(updated);
   }
 
-  /** Tra cứu định tuyến theo slug: trả nguyên dòng đăng ký của không gian. */
   async getBySlug(actorId: string, slug: string): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);
     const row = await this.repo.findSpaceBySlug(slug);
@@ -354,7 +251,6 @@ export class ControlPlaneRegistryService {
     return this.toRegistration(row);
   }
 
-  /** Lịch sử quản trị của một không gian, mới nhất trước. */
   async listHistory(actorId: string, spaceId: string): Promise<SpaceRegistryHistoryEntry[]> {
     await this.assertPlatformManager(actorId);
     if (!(await this.repo.findSpaceById(spaceId))) {
@@ -369,15 +265,12 @@ export class ControlPlaneRegistryService {
       spaceId: row.spaceId,
       actorId: row.actorId,
       action: row.action as SpaceRegistryHistoryEntry['action'],
-      // Ảnh chụp trong jsonb do chính service này ghi theo hình dạng
-      // hợp đồng (xem snapshot) — ép về kiểu hợp đồng ở biên đọc.
       before: row.before as SpaceRegistryHistoryEntry['before'],
       after: row.after as SpaceRegistryHistoryEntry['after'],
       createdAt: row.createdAt.toISOString(),
     }));
   }
 
-  /** Đọc trạng thái schema của một kho; kho chưa có dòng registry thì trả trạng thái rỗng (mọi trường null). */
   async getSchemaRegistry(actorId: string, spaceId: string): Promise<SpaceSchemaRegistry> {
     await this.assertPlatformManager(actorId);
     const space = await this.repo.findSpaceById(spaceId);
@@ -399,21 +292,6 @@ export class ControlPlaneRegistryService {
     };
   }
 
-  /**
-   * Ghi trạng thái schema của một kho (khung trường của issue này):
-   * hợp nhất với trạng thái đã có rồi ghi đè một dòng; khi
-   * `currentVersion` có mặt trong yêu cầu — kể cả giá trị `null`
-   * (xoá phiên bản) — phiên bản trên dòng đăng ký cũng được đồng bộ
-   * trong cùng transaction để hai nơi không lệch nhau; trường không
-   * có mặt (`undefined`) mới là "không đụng".
-   *
-   * Việc hợp nhất đọc trạng thái hiện tại BÊN TRONG transaction,
-   * sau khi khoá dòng đăng ký của không gian: khoá này nối tiếp mọi
-   * thao tác ghi của không gian đó, nên hai lượt ghi đồng thời vào
-   * các trường độc lập (ví dụ trạng thái sao lưu và trạng thái khôi
-   * phục do hai tác vụ vận hành báo về) không còn cùng đọc một ảnh
-   * cũ rồi ghi đè mất giá trị của nhau.
-   */
   async updateSchemaRegistry(
     actorId: string,
     spaceId: string,
@@ -428,9 +306,6 @@ export class ControlPlaneRegistryService {
       });
     }
     const row = await this.repo.transaction(async (tx) => {
-      // Khoá dòng đăng ký trước (nối tiếp các thao tác ghi của
-      // không gian), rồi mới đọc trạng thái schema hiện tại để hợp
-      // nhất — thứ tự khoá thống nhất với các đường ghi khác.
       await this.repo.findSpaceByIdForUpdate(spaceId, tx);
       const existing = await this.repo.findSchemaRegistry(spaceId, tx);
       const merged = {
@@ -458,8 +333,6 @@ export class ControlPlaneRegistryService {
       }
       return saved;
     });
-    // Trạng thái/phiên bản của kho vừa đổi trên sổ: vô hiệu hoá đệm
-    // định tuyến của slug sau khi đã commit.
     emitSpaceRegistryChanged(space.slug);
     return {
       spaceId: row.spaceId,
@@ -472,22 +345,6 @@ export class ControlPlaneRegistryService {
     };
   }
 
-  /**
-   * Ghi một lượt chạy migration vào nhật ký của kho. Lượt `success`
-   * có `toVersion` đồng thời nâng phiên bản hiện tại (registry phiên
-   * bản schema + trường phiên bản trên dòng đăng ký) trong cùng
-   * transaction — phiên bản hiện tại chỉ tiến khi lượt chạy thành
-   * công, lượt hỏng không đổi phiên bản đích.
-   *
-   * Transaction khoá dòng đăng ký của không gian TRƯỚC khi đọc và
-   * ghi đè registry phiên bản (issue #586, ghi chú từ phán quyết
-   * PR #589): cùng thứ tự khoá với `updateSchemaRegistry`, nên một
-   * lượt ghi migration và một lượt ghi trạng thái sao lưu/khôi phục
-   * đồng thời của cùng không gian nối tiếp nhau thay vì cùng đọc một
-   * ảnh cũ của registry rồi lần ghi sau ghi đè mất trường của lần
-   * ghi trước (phiên bản mới bị thay bằng ảnh cũ, hoặc trạng thái
-   * sao lưu vừa báo bị cuốn về giá trị trước đó).
-   */
   async recordMigrationRun(
     actorId: string,
     spaceId: string,
@@ -503,10 +360,6 @@ export class ControlPlaneRegistryService {
     }
     let versionChanged = false;
     const run = await this.repo.transaction(async (tx) => {
-      // Khoá dòng đăng ký trước (nối tiếp các thao tác ghi của
-      // không gian), rồi mới chèn lượt chạy và đọc trạng thái
-      // registry để hợp nhất — thứ tự khoá thống nhất với
-      // `updateSchemaRegistry`.
       await this.repo.findSpaceByIdForUpdate(spaceId, tx);
       const saved = await this.repo.insertMigrationRun(
         {
@@ -538,8 +391,6 @@ export class ControlPlaneRegistryService {
       }
       return saved;
     });
-    // Lượt migration thành công đã nâng phiên bản trên dòng đăng
-    // ký: vô hiệu hoá đệm định tuyến của slug sau khi đã commit.
     if (versionChanged) emitSpaceRegistryChanged(space.slug);
     return {
       id: run.id,
@@ -554,7 +405,6 @@ export class ControlPlaneRegistryService {
     };
   }
 
-  /** Các lượt chạy migration đã ghi của một kho, cũ nhất trước. */
   async listMigrationRuns(actorId: string, spaceId: string): Promise<SpaceSchemaMigrationRun[]> {
     await this.assertPlatformManager(actorId);
     if (!(await this.repo.findSpaceById(spaceId))) {
@@ -577,18 +427,6 @@ export class ControlPlaneRegistryService {
     }));
   }
 
-  /**
-   * Gieo dữ kiện cho các không gian ĐÃ TỒN TẠI ở kho chung (đường
-   * bootstrap/seed gọi): đảm bảo mỗi không gian có đúng một dòng
-   * đăng ký ở chế độ `shared` + một dòng registry phiên bản schema
-   * mang phiên bản của kho chung. Idempotent tuyệt đối — slug đã có
-   * thì giữ nguyên dòng hiện tại (không ghi đè, không trùng), nên
-   * chạy lại bao nhiêu lần cũng an toàn. Đây là ghi của HỆ THỐNG khi
-   * khởi động, không phải thao tác quản trị, nên không qua cổng
-   * capability và không ghi lịch sử quản trị.
-   *
-   * @returns số dòng đăng ký mới được tạo ở lượt này.
-   */
   async seedExistingSpaces(spaces: ExistingSpaceSeed[]): Promise<number> {
     if (!this.isConfigured) return 0;
     let created = 0;
@@ -610,9 +448,6 @@ export class ControlPlaneRegistryService {
       if (inserted) created += 1;
       await this.repo.ensureSchemaRegistry(row.id, SHARED_DATABASE_SCHEMA_VERSION);
     }
-    // Dòng đăng ký có thể vừa được tạo ở lượt gieo này: báo khung
-    // định tuyến vô hiệu hoá đệm của các slug vừa gieo để lần phân
-    // giải sau đọc đúng dòng hiện có trên sổ.
     for (const space of spaces) emitSpaceRegistryChanged(space.slug);
     if (created > 0) this.logger.log(`Seeded ${created} existing space registration(s) into the control plane registry`);
     return created;

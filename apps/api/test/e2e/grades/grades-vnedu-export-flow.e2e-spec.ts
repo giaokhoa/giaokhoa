@@ -5,9 +5,6 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { createGradeItem, getGradebook, setGrade } from '../../support/assessment-helpers';
 
-/**
- * Xuất bảng điểm Excel vnEdu (issue #53; nguồn đổi ở issue #224). Oracle: Thông tư 22/2021/TT-BGDĐT (Điều 5 thang 10 + làm tròn 1 chữ số thập phân; Điều 9 công thức ĐTBmhk — bản công thức ĐTB DUY NHẤT còn lại của hệ nằm trong domain/vnedu-export và test này kiểm trực tiếp qua file xuất) và kết quả kiểm chứng mẫu ở comment Bước 0 của issue #53. Test đối chiếu TỪNG Ô điểm trong file .xlsx với điểm theo bài (qua GET gradebook — đường đọc độc lập): khớp 100% mới đạt. Nguồn xuất (issue #224): chỉ bài ĐÃ CÔNG BỐ mới được xuất.
- */
 describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
   let app: INestApplication;
   let admin: string;
@@ -31,12 +28,10 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     return { course, students };
   }
 
-  /** POST xuất vnEdu đọc body dạng Buffer thô (file nhị phân) thay vì JSON. */
   function exportVneduFile(courseId: string, body: Record<string, unknown>, token = admin) {
     return http(app)
       .post(`/api/v1/courses/${courseId}/grade-exports`)
       .set('Authorization', `Bearer ${token}`)
-      // Path canonical grade-exports khai nhà cung cấp trong thân yêu cầu: provider: 'vnedu', phần còn lại là payload vnEdu như cũ.
       .send({ provider: 'vnedu', ...body })
       .buffer(true)
       .parse((res, cb) => {
@@ -50,7 +45,6 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     return http(app)
       .post(`/api/v1/courses/${courseId}/grade-exports`)
       .set('Authorization', `Bearer ${token}`)
-      // Path canonical grade-exports khai nhà cung cấp trong thân yêu cầu: provider: 'vnedu', phần còn lại là payload vnEdu như cũ.
       .send({ provider: 'vnedu', ...body });
   }
 
@@ -62,7 +56,6 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     return sheet;
   }
 
-  /** Dòng dữ liệu của một học sinh theo cột Mã học sinh (cột 2), dữ liệu bắt đầu từ dòng 6. */
   function rowOfStudent(sheet: ExcelJS.Worksheet, username: string): number {
     for (let r = 6; r <= sheet.rowCount; r += 1) {
       if (sheet.getCell(r, 2).value === username) return r;
@@ -79,7 +72,6 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     const tx2 = await createGradeItem(app, admin, course.id, { itemName: 'Kiểm tra 15 phút', gradeMax: 100 });
     const gk = await createGradeItem(app, admin, course.id, { itemName: 'Giữa kỳ', gradeMax: 10 });
     const ck = await createGradeItem(app, admin, course.id, { itemName: 'Cuối kỳ', gradeMax: 10 });
-    // s1 có đủ điểm; s2 thiếu tx2 và ck.
     await setGrade(app, admin, tx1.id, s1.id, 8);
     await setGrade(app, admin, tx2.id, s1.id, 75);
     await setGrade(app, admin, gk.id, s1.id, 7);
@@ -102,7 +94,6 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     expect(res.headers['content-disposition']).toContain('.xlsx');
 
     const sheet = await loadSheet(res.body as Buffer);
-    // Khối thông tin + đầu bảng hai tầng theo cấu trúc đã kiểm chứng ở Bước 0.
     expect(sheet.getCell(1, 1).value).toBe('BẢNG ĐIỂM MÔN HỌC');
     const info = String(sheet.getCell(2, 1).value);
     expect(info).toContain('Lớp: 10A1');
@@ -117,11 +108,8 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     expect(sheet.getCell(5, 6).value).toBe('ĐĐGgk (hệ số 2)');
     expect(sheet.getCell(5, 7).value).toBe('ĐĐGck (hệ số 3)');
     expect(sheet.getCell(4, 8).value).toBe('Điểm trung bình môn học kỳ (ĐTBmhk)');
-    expect(sheet.rowCount).toBe(7); // 5 dòng đầu + đúng 2 học sinh, không dòng thừa
+    expect(sheet.rowCount).toBe(7);
 
-    // Đối chiếu từng ô với điểm theo bài qua GET gradebook (đường đọc
-    // độc lập): ô = finalGrade quy đổi thang 10 theo gradeMax của mục,
-    // làm tròn 1 số thập phân.
     const maxByItemName = new Map([['Kiểm tra miệng', 10], ['Kiểm tra 15 phút', 100], ['Giữa kỳ', 10], ['Cuối kỳ', 10]]);
     const colByItemName = new Map([['Kiểm tra miệng', 4], ['Kiểm tra 15 phút', 5], ['Giữa kỳ', 6], ['Cuối kỳ', 7]]);
     for (const student of [s1, s2]) {
@@ -136,14 +124,12 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
         const cell = sheet.getCell(sheetRow, sheetCol).value ?? null;
         expect(cell, `${student.username} / ${itemName}`).toBe(expected);
       }
-      // ĐTBmhk theo Điều 9 từ chính các ô thành phần; thiếu điểm thì trống.
       const [txA, txB, mid, fin] = converted as [number | null, number | null, number | null, number | null];
       const expectedAvg = txA === null || txB === null || mid === null || fin === null
         ? null
         : round1((txA + txB + 2 * mid + 3 * fin) / (2 + 5));
       expect(sheet.getCell(sheetRow, 8).value ?? null, `${student.username} / ĐTBmhk`).toBe(expectedAvg);
     }
-    // Giá trị kỳ vọng tính tay cho s1: (8 + 7.5 + 2×7 + 3×9) / 7 = 56.5/7 → 8.1.
     expect(sheet.getCell(rowOfStudent(sheet, s1.username), 8).value).toBe(8.1);
   });
 
@@ -196,7 +182,6 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     await setGrade(app, admin, gk.id, s1.id, 7);
     await setGrade(app, admin, ck.id, s1.id, 9);
 
-    // GK đặt policy manual và chưa công bố → cả lượt xuất bị từ chối.
     const policy = await http(app).put(`/api/v1/grade-items/${gk.id}/posting-policy`)
       .set('Authorization', `Bearer ${admin}`).send({ policy: 'manual' });
     expect(policy.status).toBe(200);
@@ -206,7 +191,6 @@ describe('Xuất sổ điểm Excel vnEdu (issue #53)', () => {
     expect(blocked.status).toBe(400);
     expect(blocked.body.code).toBe('grades.vnedu_item_not_published');
 
-    // Công bố GK → xuất thành công.
     const pub = await http(app).post(`/api/v1/grade-items/${gk.id}/publish`)
       .set('Authorization', `Bearer ${admin}`).send({});
     expect(pub.status).toBe(201);

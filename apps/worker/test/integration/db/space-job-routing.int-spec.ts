@@ -21,22 +21,6 @@ import { OUTBOX_EVENT_QUEUE_ROUTES, allQueueNamesOfRoutes, type OutboxEventJobDa
 import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
 import { NotificationEventsProcessor } from '../../../src/processors/notification-events.processor';
 
-/**
- * Ca tích hợp của ĐỊNH TUYẾN JOB THEO TRUNG TÂM phía worker
- * (issue #582): relay outbox thật và consumer thông báo thật chạy
- * trên hai kho kiểm chứng dựng riêng cho đợt này — kho chung là chính database test của worker, kho riêng là một database mới
- * (`giaokhoa_test_centre_a_582w`) có role ứng dụng riêng, CONNECT của
- * PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho, và một database control plane riêng (`giaokhoa_test_cp_582w`) giữ dòng đăng ký của trung tâm. Chuỗi bí mật của kho riêng cố ý trỏ về database mặc định `postgres` — đích cuối do sổ chốt như ca của khung ở issue #581.
- *
- * Các ca khoá hai tiêu chí nghiệm thu của issue ở phía worker:
- * (1) relay đọc dòng outbox nằm TRONG kho riêng của trung tâm
- *     (lượt quét theo trung tâm), phát job mang slug của trung
- *     tâm, và đóng dấu `publishedAt` ở chính kho đó — kiểm chứng trực tiếp trong từng kho; sự kiện ở kho chung giữ đúng đường hiện tại (job mang slug của tenant ở kho chung).
- * (2) consumer thật (`NotificationEventsProcessor` + handler +
- *     đường phát thông báo thật) xử lý job của trung tâm thì thông báo được ghi vào kho riêng của trung tâm — kiểm chứng trực tiếp tại database của kho riêng, và kho chung không có thông báo đó.
- *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 như ca tích hợp của khung (PG18 có sẵn hàm này).
- */
 const CP_DATABASE = 'giaokhoa_test_cp_582w';
 const CP_ROLE = 'giaokhoa_cp_test_582w';
 const CP_PASSWORD = 'cp-test-582w';
@@ -63,7 +47,6 @@ const SHARED_OUTBOX_ID = '01958200-0000-7000-8000-0000000000f2';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
-/** Dựng URL kết nối tới một database trên cùng cụm với database test của worker. */
 function clusterUrl(database: string, username?: string, secret?: string): string {
   const base = new URL(process.env.DATABASE_URL!);
   base.pathname = `/${database}`;
@@ -72,7 +55,6 @@ function clusterUrl(database: string, username?: string, secret?: string): strin
   return base.toString();
 }
 
-/** Bọc một định danh Postgres trong dấu nháy kép cho các câu lệnh quản trị của ca test. */
 function quoted(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -87,7 +69,6 @@ async function withClient<T>(connectionString: string, fn: (client: Client) => P
   }
 }
 
-/** Áp một file migration SQL (tách theo dấu phân đoạn của file) lên một database qua kết nối cho trước. */
 async function applySqlFile(connectionString: string, filePath: string, withUuidShim: boolean): Promise<void> {
   await withClient(connectionString, async (client) => {
     if (withUuidShim) {
@@ -105,7 +86,6 @@ async function applySqlFile(connectionString: string, filePath: string, withUuid
   });
 }
 
-/** Áp bộ migration riêng của control plane từ rỗng (đọc chính các file SQL đã sinh trong repo). */
 async function applyControlPlaneMigrations(connectionString: string): Promise<void> {
   const outDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'control-plane');
   const folders = readdirSync(outDir, { withFileTypes: true })
@@ -117,7 +97,6 @@ async function applyControlPlaneMigrations(connectionString: string): Promise<vo
   }
 }
 
-/** Áp baseline nghiệp vụ vào kho riêng bằng kết nối của chính role chủ kho đó. */
 async function applyBusinessBaseline(connectionString: string): Promise<void> {
   const baseline = join(
     __dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre', '20261025163710_baseline', 'migration.sql',
@@ -125,7 +104,6 @@ async function applyBusinessBaseline(connectionString: string): Promise<void> {
   await applySqlFile(connectionString, baseline, true);
 }
 
-/** ConfigService giả chỉ mang đúng các khoá mà khung định tuyến, relay và các service trong ca đọc. */
 function fakeConfig(values: Record<string, unknown>): ConfigService {
   return {
     get: (key: string) => values[key],
@@ -137,7 +115,6 @@ function fakeConfig(values: Record<string, unknown>): ConfigService {
   } as unknown as ConfigService;
 }
 
-/** Hàng đợi giả ghi lại mọi job relay phát (đúng bề mặt `Queue.add` mà relay dùng). */
 class CaptureQueue {
   readonly jobs: Array<{ name: string; data: OutboxEventJobData }> = [];
 
@@ -146,7 +123,6 @@ class CaptureQueue {
   }
 }
 
-/** Đọc trực tiếp các dòng thông báo của một học viên trong một kho bằng kết nối của role kho đó. */
 async function readNotificationIdsDirectly(
   connectionString: string,
   userId: string,
@@ -167,9 +143,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
   let marker: NotificationEventsMarker;
 
   beforeAll(async () => {
-    // Cấp phát control plane + kho riêng trên cụm test như ca của
-    // khung: role riêng cho từng kho, kho thuộc role của nó,
-    // CONNECT của PUBLIC bị thu hồi và chỉ cấp lại cho đúng role đó.
     await withClient(clusterUrl('postgres'), async (admin) => {
       for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
@@ -208,12 +181,8 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     });
     spaceDb = new SpaceDatabaseService(config);
     sharedPool = new TenantAwarePool({ connectionString: process.env.DATABASE_URL! });
-    // Handle Kysely kho chung trên pool dùng chung — đúng nhịp gắn
-    // của `worker.module.ts` lúc khởi động; thiếu là facade Kysely
-    // fail-closed `shared_not_bound`.
     spaceDb.bindSharedKysely(createCentreKysely(sharedPool));
 
-    // Dòng đăng ký của trung tâm kiểm chứng trong sổ.
     const cpSeedPool = new Pool({ connectionString: clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD) });
     try {
       const cpDb = createControlPlaneKysely(cpSeedPool);
@@ -237,15 +206,10 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       await cpSeedPool.end();
     }
 
-    // Dữ kiện nền ở kho chung: một tenant ở kho chung và một dòng
-    // outbox của nó đang chờ phát. Ghi qua một pool tối đa 1 kết
-    // nối với cờ platform đặt trên chính kết nối đó.
     const seedPool = new Pool({ connectionString: process.env.DATABASE_URL!, max: 1 });
     try {
       const seedDb = createCentreKysely(seedPool);
       await sql`SELECT set_config('app.platform', 'on', false)`.execute(seedDb);
-      // Xoá dữ kiện của một lượt chạy lỗi trước còn sót (nếu có)
-      // để ca tự chạy lại được trên cùng database test.
       await seedDb.deleteFrom('outbox_events').where('id', '=', SHARED_OUTBOX_ID).execute();
       await seedDb.deleteFrom('tenants').where('id', '=', SHARED_TENANT_ID).execute();
       await seedDb.insertInto('tenants').values({
@@ -265,10 +229,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       await seedPool.end();
     }
 
-    // Dữ kiện nền ở kho riêng — ghi qua phiên theo trung tâm của
-    // khung (đúng đường consumer sẽ chạy): tenant của trung tâm,
-    // học viên, khoá, hạng mục điểm, và một dòng outbox chờ phát
-    // trỏ vào các dữ kiện đó.
     await spaceDb.withSpaceKysely(
       CENTRE_SLUG,
       async () => {
@@ -313,15 +273,11 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
   }, 180_000);
 
   afterAll(async () => {
-    // Từng bước dọn độc lập: một bước lỗi (hoặc chưa kịp dựng ở
-    // beforeAll) không được chặn các bước dọn còn lại.
     await marker?.onModuleDestroy().catch(() => undefined);
     await spaceDb?.onModuleDestroy().catch(() => undefined);
     await sharedPool?.end().catch(() => undefined);
     delete process.env.SPACE_TEST_A_582W_URL;
     delete process.env.SPACE_TEST_B_582W_URL;
-    // Dọn dữ kiện nền đã gieo vào kho chung để các ca khác dùng
-    // chung database test của worker không thấy dữ kiện lạ.
     await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       await client.query('DELETE FROM outbox_events WHERE id = $1', [SHARED_OUTBOX_ID]);
@@ -339,8 +295,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
 
   function makeRelay(): { relay: OutboxRelayScheduler; queue: CaptureQueue } {
     const queue = new CaptureQueue();
-    // Dẫn bằng toàn bộ bảng routes thật: outbox còn sót từ fixture
-    // khác trên DB test không được làm lỗi hàng đợi giả thiếu đích.
     const queues = new Map<string, Queue>(allQueueNamesOfRoutes(OUTBOX_EVENT_QUEUE_ROUTES).map(
       (name) => [name, (name === 'notification-events' ? queue : new CaptureQueue()) as unknown as Queue],
     ));
@@ -358,11 +312,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
   it('relay phát sự kiện ở kho chung: job đóng dấu shared tường minh và dòng được đóng dấu ở kho chung', async () => {
     const { relay, queue } = makeRelay();
 
-    // Relay chạy trong ngữ cảnh platform tường minh như nhịp
-    // `relayTick` trên production (RLS fail-closed ngoài ngữ
-    // cảnh). Database test của worker dùng chung với các ca tích
-    // hợp khác nên lô có thể gồm dòng chờ của ca khác — khẳng
-    // định nhắm đúng dòng của ca này.
     await tenantAls.run({ platform: true }, () => relay.publishPending());
 
     const sharedJob = queue.jobs.find((job) => job.data.outboxId === SHARED_OUTBOX_ID);
@@ -396,7 +345,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       spaceSlug: CENTRE_SLUG,
       spaceId: expect.any(String),
     });
-    // Kiểm chứng trực tiếp tại kho riêng bằng kết nối của role kho.
     const stamped = await withClient(clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD), async (client) => {
       const result = await client.query<{ published_at: Date | null }>(
         'SELECT published_at FROM outbox_events WHERE id = $1',
@@ -405,7 +353,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       return result.rows[0]?.published_at;
     });
     expect(stamped).not.toBeNull();
-    // Sự kiện của trung tâm không hề xuất hiện ở kho chung.
     const inShared = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       const result = await client.query<{ count: string }>(
@@ -419,13 +366,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
 
   it('consumer thật xử lý job của trung tâm thì thông báo được ghi vào kho riêng của trung tâm, không vào kho chung', async () => {
     const { relay, queue } = makeRelay();
-    // Phát lại từ đầu trên một dòng outbox MỚI trong kho riêng để
-    // job đi trọn đường relay → consumer như production (dòng của
-    // ca trước đã đóng dấu và đã được kiểm chứng ở ca đó).
-    // Id dòng outbox của ca này phải DUY NHẤT theo lượt chạy:
-    // dấu chống trùng của consumer nằm trong Redis dùng chung
-    // (không bị xoá cùng database khi dọn), nên id cố định sẽ bị
-    // coi là "đã xử lý" ở mọi lượt chạy sau lượt đầu tiên.
     const freshOutboxId = randomUUID();
     await spaceDb.withSpaceKysely(
       CENTRE_SLUG,
@@ -463,8 +403,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     const outcome = await processor.process({ data: jobData } as Job<OutboxEventJobData>);
 
     expect(outcome).toEqual({ handled: true });
-    // Kiểm chứng trực tiếp tại từng kho: thông báo của học viên
-    // nằm ở kho riêng của trung tâm, kho chung không có dòng nào.
     expect(
       await readNotificationIdsDirectly(clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD), STUDENT_ID),
     ).toHaveLength(1);
@@ -480,8 +418,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
   it('quét digest và hạn ghi danh ở hai kho riêng trùng UUID; lỗi A không chặn B và retry không nhân đôi', async () => {
     const aUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
     const bUrl = clusterUrl(B_DATABASE, B_ROLE, B_PASSWORD);
-    // Hai kho có CÙNG tenant, user, course, enrolment, log ID nhưng
-    // email khác nhau. Một lượt quét sai kho sẽ gửi/ghi nhầm rõ ràng.
     for (const [slug, isB] of [[CENTRE_SLUG, false], [B_SLUG, true]] as const) {
       await tenantAls.run({ platform: true }, () => spaceDb.withSpaceKysely(slug, async () => {
         const db = spaceDb.routedKysely;
@@ -580,8 +516,6 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     await expiry.process({ data: {} } as never);
     expect(await countWarnings(aUrl)).toBe(1);
     expect(await countWarnings(bUrl)).toBe(1);
-    // Cả nhật ký vận hành cũng phải ở kho của tác vụ, không dồn số
-    // liệu của A/B vào `task_log` shared.
     for (const dbUrl of [aUrl, bUrl]) {
       const logs = await withClient(dbUrl, async (client) => {
         await client.query("SELECT set_config('app.platform', 'on', false)");

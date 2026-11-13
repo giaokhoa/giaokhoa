@@ -1,4 +1,3 @@
-/** Học liệu trong khoá: nội dung riêng hoặc phiên bản công bố, mọi đường đọc giữ cổng audience của module. */
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ContentRepository, type PageRow, type ResourceRow } from '@giaokhoa/db/repositories/content';
@@ -13,21 +12,17 @@ import { isSafeExternalResourceUrl, sanitizePageContent } from './page-content-s
 export const PAGE_COMPONENT = 'mod_page';
 export const RESOURCE_COMPONENT = 'mod_resource';
 
-/** Ngưỡng hoàn thành mặc định cho video (chế độ progress): xem ≥ 90% thời lượng thì hoàn thành — theo nghiên cứu học liệu số VN (K2-B1); điểm cấu hình duy nhất, đổi tại đây khi có site-config cho ngưỡng này. */
 export const VIDEO_COMPLETION_THRESHOLD_PERCENT = 90;
 
 type CompletionMode = 'view' | 'manual' | 'progress' | 'none';
 
-/** Ánh xạ chế độ hoàn thành của mục nội dung sang các trường completion của course module. */
 function completionFields(mode: CompletionMode): { completion: number; completionView: boolean; completionManual: boolean; completionUseGrade: boolean } {
   if (mode === 'view') return { completion: 2, completionView: true, completionManual: false, completionUseGrade: false };
   if (mode === 'manual') return { completion: 1, completionView: false, completionManual: true, completionUseGrade: false };
-  // progress: completion tự động nhưng không tiêu chí sẵn nào của engine áp được — trạng thái lưu trong bản ghi completion là nguồn quyết định (computeCmState trả về trạng thái đã lưu khi không có tiêu chí view/expected/grade), ContentService ghi state=1 khi % xem đạt ngưỡng, cùng khuôn với refreshGradeCompletion của Grades.
   if (mode === 'progress') return { completion: 2, completionView: false, completionManual: false, completionUseGrade: false };
   return { completion: 0, completionView: false, completionManual: false, completionUseGrade: false };
 }
 
-/** Suy chế độ hoàn thành từ các trường của course module (đảo ngược completionFields). */
 function modeOfCm(cm: CmRow): CompletionMode {
   if (cm.completion === 0) return 'none';
   if (cm.completionView) return 'view';
@@ -35,9 +30,6 @@ function modeOfCm(cm: CmRow): CompletionMode {
   return 'progress';
 }
 
-/**
- * Mặc định hoàn thành theo LOẠI nội dung (bảng 2.1 của nghiên cứu học liệu số VN): video → progress (xem ≥ ngưỡng); tài liệu đọc (PDF/văn bản/trình chiếu) → manual (mở xem + tự xác nhận); tệp còn lại (tải về/mô phỏng) và liên kết ngoài → none (chỉ ghi truy cập, ngoài % hoàn thành). Giáo viên đổi được theo từng mục khi tạo/sửa.
- */
 function defaultModeForFile(mimeType: string | null): CompletionMode {
   if (mimeType?.startsWith('video/')) return 'progress';
   if (
@@ -50,7 +42,6 @@ function defaultModeForFile(mimeType: string | null): CompletionMode {
   return 'none';
 }
 
-/** URL nhúng cho video/liên kết ngoài (YouTube/Vimeo) — null nếu không nhúng được. */
 export function embedUrlFor(url: string): string | null {
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{6,})/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
@@ -84,11 +75,6 @@ export interface ClassMarker {
 }
 
 @Injectable()
-/**
- * Học liệu trong khoá (K2): trang đọc mod_page, tài nguyên mod_resource
- * (tệp/liên kết/video), trang học (player), tổng hợp tiến độ học từ dữ
- * liệu completion và mốc tiến độ theo lớp (nhóm) trên outline.
- */
 export class ContentService {
   constructor(
     private readonly repo: ContentRepository,
@@ -98,7 +84,6 @@ export class ContentService {
     private readonly evaluator: PermissionEvaluator,
     private readonly systemMaterials: SystemMaterialsService,
   ) {
-    // Hồ sơ quá trình học (Điều 8 TT 09/2021): mọi lần một cm chuyển sang hoàn thành (bất kỳ đường nào — xem/thủ công/điểm/tiến độ) đều được chụp lại tên mục tại thời điểm đó vào learning_records.
     this.completion.registerCmCompletionHook(async ({ cmId, courseId, userId }) => {
       const cm = await this.courses.getCm(cmId).catch(() => undefined);
       await this.repo.insertLearningRecord({
@@ -108,11 +93,7 @@ export class ContentService {
     });
   }
 
-  // --- mod_page ---------------------------------------------------------------
 
-  /**
-   * Tạo trang đọc: bản ghi page + course module (component mod_page). Quyền tạo hoạt động do CoursesService kiểm (course:manageactivities). Mặc định hoàn thành kiểu manual (mở xem + học sinh tự xác nhận "Đã học") — nội dung đọc không đo được "đã đọc thật" (bảng 2.1 nghiên cứu học liệu số VN); giáo viên đặt 'view' nếu chỉ cần xem là đủ. Nội dung HTML được LÀM SẠCH THEO ALLOWLIST trước khi ghi DB (xem page-content-sanitizer): nội dung trang được phía web render bằng `dangerouslySetInnerHTML`, nên mã thực thi (thẻ script, thuộc tính sự kiện) không được phép tới DB qua đường ghi này.
-   */
   async createPage(actorId: string, courseId: string, input: {
     sectionId: string; name: string; content?: string; completionMode?: CompletionMode;
   }): Promise<PageRow & { completionMode: CompletionMode }> {
@@ -133,18 +114,12 @@ export class ContentService {
     return { ...created, completionMode: mode };
   }
 
-  /**
-   * Lấy trang đọc (kèm chế độ hoàn thành suy từ cm của nó). Nội dung được làm sạch LẠI ở đường đọc: bản ghi đã lưu từ trước khi đường ghi có cổng làm sạch (hoặc được ghi qua đường vòng như
-   * import backup bằng repository trực tiếp) có thể còn mang mã thực
-   * thi — điểm này là điểm nghẽn đọc mà cả `getPageForUser` lẫn `getPlayer` đều đi qua, nên làm sạch tại đây phủ mọi bề mặt hiển thị nội dung trang. Hàm làm sạch idempotent nên dữ kiện đã qua cổng ghi không bị biến dạng khi làm sạch lần hai.
-   */
   async getPage(id: string): Promise<PageRow> {
     const row = await this.repo.getPage(id);
     if (!row) throw new NotFoundException({ message: `Page ${id} not found`, code: 'content.page_not_found' });
     return { ...row, content: sanitizePageContent(row.content) };
   }
 
-  /** Đọc trang đọc cho người xem: phải qua được cổng truy cập khoá học. */
   async getPageForUser(userId: string, id: string): Promise<PageRow & { completionMode: CompletionMode }> {
     const page = await this.getPage(id);
     await this.courses.assertCourseAccess(userId, page.course);
@@ -152,11 +127,6 @@ export class ContentService {
     return { ...page, completionMode: cm ? modeOfCm(cm) : 'view' };
   }
 
-  /**
-   * Sửa trang đọc (course:manageactivities tại khoá); đổi tên/chế độ
-   * hoàn thành đồng bộ sang cm. Nội dung mới cũng qua cùng cổng làm
-   * sạch allowlist như đường tạo trước khi ghi DB.
-   */
   async updatePage(actorId: string, id: string, input: {
     name?: string; content?: string; completionMode?: CompletionMode;
   }): Promise<PageRow> {
@@ -175,36 +145,19 @@ export class ContentService {
     return this.getPage(id);
   }
 
-  /** Xoá trang đọc: xoá cm qua CoursesService (phát cm_deleted) và xoá bản ghi page. */
   async deletePage(actorId: string, id: string): Promise<void> {
     const page = await this.getPage(id);
     if (page.cmId) await this.courses.deleteCm(actorId, page.cmId);
     await this.repo.deletePage(id);
   }
 
-  // --- mod_resource -------------------------------------------------------------
 
-  /**
-   * Chặn URL tài nguyên ngoài mang scheme nguy hiểm: phía web đưa URL
-   * này thẳng vào `href` của trang học nên chỉ http/https được phép
-   * lưu; scheme kiểu `javascript:`/`data:` bị từ chối bằng mã
-   * `content.url_scheme_not_allowed` (tầng hợp đồng cũng có refine
-   * tương ứng — hai tầng gác độc lập).
-   *
-   * @throws BadRequestException khi URL không dùng scheme http/https.
-   */
   private assertSafeResourceUrl(url: string): void {
     if (!isSafeExternalResourceUrl(url)) {
       throw new BadRequestException({ message: 'url must use the http or https scheme', code: 'content.url_scheme_not_allowed' });
     }
   }
 
-  /**
-   * Tạo tài nguyên: đúng một nguồn (file đã tải lên qua Files, hoặc URL
-   * ngoài/video nhúng). Mặc định hoàn thành theo loại nội dung (bảng
-   * 2.1): video → progress (xem ≥ ngưỡng), tài liệu → manual, tệp
-   * khác và liên kết ngoài → none (chỉ ghi truy cập, ngoài %).
-   */
   async createResource(actorId: string, courseId: string, input: {
     sectionId: string; name: string; kind: 'file' | 'url';
     fileId?: string; url?: string; transcript?: string; completionMode?: CompletionMode;
@@ -239,21 +192,12 @@ export class ContentService {
     return { ...created, completionMode: mode };
   }
 
-  /** Lấy tài nguyên. */
   async getResource(id: string): Promise<ResourceRow> {
     const row = await this.repo.getResource(id);
     if (!row) throw new NotFoundException({ message: `Resource ${id} not found`, code: 'content.resource_not_found' });
     return row;
   }
 
-  /**
-   * Đọc tài nguyên cho người xem: qua cổng khoá học; file kèm URL đã
-   * ký để xem/tải. URL ngoài đã lưu từ trước khi có cổng scheme có
-   * thể mang scheme nguy hiểm — đường đọc này KHÔNG phát URL đó ra
-   * đáp ứng (trả `url: null`, không tính embed) để href nguy hiểm
-   * không tới được trang học; bản ghi trong DB giữ nguyên, giáo viên
-   * sửa lại URL hợp lệ là hiển thị trở lại bình thường.
-   */
   async getResourceForUser(userId: string, id: string): Promise<{
     resource: ResourceRow & { completionMode: CompletionMode; publication?: import('@giaokhoa/contracts').SystemMaterialVersion };
     file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null;
@@ -296,18 +240,12 @@ export class ContentService {
     };
   }
 
-  /** Byte công bố dùng URL có phiên đăng nhập và kiểm audience lại mỗi lần; không phát URL kho vật lý. */
   async readSystemMaterialFile(userId: string, id: string) {
     const resource = await this.getResource(id);
     const version = await this.systemMaterials.forCourse(userId, resource);
     return this.systemMaterials.readFile(version.package);
   }
 
-  /**
-   * Sửa tài nguyên (course:manageactivities tại khoá); tên/chế độ
-   * hoàn thành đồng bộ sang cm. URL ngoài mới (khi không phải null gỡ
-   * nguồn) phải qua cùng cổng scheme như đường tạo.
-   */
   async updateResource(actorId: string, id: string, input: {
     name?: string; fileId?: string | null; url?: string | null; transcript?: string | null; completionMode?: CompletionMode;
   }): Promise<ResourceRow> {
@@ -337,28 +275,19 @@ export class ContentService {
     return this.getResource(id);
   }
 
-  /** Xoá tài nguyên: xoá cm qua CoursesService và xoá bản ghi resource. */
   async deleteResource(actorId: string, id: string): Promise<void> {
     const resource = await this.getResource(id);
     if (resource.cmId) await this.courses.deleteCm(actorId, resource.cmId);
     await this.repo.deleteResource(id);
   }
 
-  /** Dọn instance khi course module bị xoá từ nơi khác (idempotent). */
   @OnEvent('cm_deleted')
   async onCmDeleted(payload: { cmId: string; component?: string }): Promise<void> {
     if (payload.component === PAGE_COMPONENT) await this.repo.deletePageByCm(payload.cmId);
     if (payload.component === RESOURCE_COMPONENT) await this.repo.deleteResourceByCm(payload.cmId);
   }
 
-  // --- tiến độ ------------------------------------------------------------------
 
-  /**
-   * Tổng hợp tiến độ của một học sinh trong khoá từ dữ liệu completion:
-   * chỉ các cm có bật theo dõi (completion != 0) và hiển thị được với
-   * học sinh mới vào mẫu số. % = đã xong / tổng mục theo dõi (làm tròn);
-   * percent = null khi khoá chưa có mục nào được theo dõi.
-   */
   async getMyProgress(userId: string, courseId: string): Promise<MyProgress> {
     const content = await this.courses.getCourseContent(userId, courseId);
     const completions = await this.completion.listCmCompletionsForCourse(courseId, userId);
@@ -399,7 +328,6 @@ export class ContentService {
     };
   }
 
-  /** Chọn mục "Học tiếp": ưu tiên mục mở gần nhất còn dở, rồi mục theo dõi đầu tiên chưa xong. */
   private resolveResume(flat: OutlineItemProgress[], lastCmId: string | null): MyProgress['resume'] {
     if (!flat.length) return null;
     const byId = new Map(flat.map((i) => [i.cmId, i]));
@@ -411,12 +339,6 @@ export class ContentService {
     return { cmId: flat[0]!.cmId, reason: 'start' };
   }
 
-  /**
-   * Mốc "lớp đã học tới đây" cho outline: với mỗi lớp (nhóm của khoá),
-   * mốc là cm theo dõi cuối cùng của tiền tố outline mà tại mọi cm trong
-   * tiền tố, ít nhất một nửa thành viên lớp đã hoàn thành. Khoá không có
-   * nhóm thì tính một mốc cho toàn bộ học sinh đang ghi danh hiệu lực.
-   */
   async getClassMarkers(userId: string, courseId: string): Promise<{ courseId: string; trackedTotal: number; markers: ClassMarker[] }> {
     await this.courses.assertCourseAccess(userId, courseId);
     const db = this.repo.dbHandle;
@@ -494,17 +416,7 @@ export class ContentService {
     return { courseId, trackedTotal: cms.length, markers };
   }
 
-  // --- sự kiện học: tiến độ xem (K2-B2/B3) ---------------------------------------
 
-  /**
-   * Học sinh báo tiến độ xem một mục (video/trang): sự kiện được LƯU
-   * BỀN theo HS–mục–thời điểm; client gửi bù khi rớt mạng nên mạng yếu
-   * không làm mất tiến độ. percent chỉ tăng (ôn lại không bị phạt).
-   * Mục kiểu progress (video): đạt ngưỡng (mặc định 90%) thì ghi trạng
-   * thái hoàn thành vào completion — cùng khuôn ghi state của
-   * refreshGradeCompletion — và chụp bản ghi hồ sơ. KHÔNG dùng thời
-   * lượng ngồi xem làm điều kiện ở bất kỳ đâu.
-   */
   async recordProgress(userId: string, courseId: string, cmId: string, input: {
     percent?: number; positionSeconds?: number; page?: number;
   }): Promise<{ cmId: string; percent: number; positionSeconds: number | null; page: number | null; state: number }> {
@@ -536,15 +448,7 @@ export class ContentService {
     return { cmId, percent: row.percent, positionSeconds: row.positionSeconds, page: row.page, state };
   }
 
-  // --- báo cáo tiến độ cho giáo viên (K2-B4) --------------------------------------
 
-  /**
-   * Báo cáo tiến độ của giáo viên — một payload phục vụ cả ba bề mặt:
-   * ma trận lớp × mục (students × items kèm trạng thái từng ô), tổng
-   * theo mục (mục nào cả lớp kẹt) và tổng theo học sinh (kèm lần học
-   * gần nhất + bản ghi hồ sơ hoàn thành). Lọc theo nhóm (lớp/tổ) bằng
-   * groupId. Cổng: quyền quản completion của khoá.
-   */
   async getProgressReport(actorId: string, courseId: string, groupId?: string): Promise<{
     courseId: string;
     items: { cmId: string; name: string; component: string; sectionId: string; completedCount: number; totalStudents: number; percent: number | null }[];
@@ -648,7 +552,6 @@ export class ContentService {
     return { courseId, items, students };
   }
 
-  /** Bản CSV của ma trận tiến độ (hàng = học sinh, cột = mục, ô = trạng thái) để giáo viên tải xuống làm minh chứng. */
   async getProgressReportCsv(actorId: string, courseId: string, groupId?: string): Promise<string> {
     const report = await this.getProgressReport(actorId, courseId, groupId);
     const esc = (v: string): string => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
@@ -666,11 +569,7 @@ export class ContentService {
     return lines.join('\n');
   }
 
-  // --- mẫu cấu trúc bài học theo khung 5512 (K2-B5) -------------------------------
 
-  /**
-   * Tạo bộ section mẫu "bài học" theo khung kế hoạch bài dạy (CV 5512): Mở đầu → Hình thành kiến thức mới → Luyện tập → Vận dụng → Kiểm tra nhanh & tổng kết. Đây là KHUNG GỢI Ý ở mức cấu trúc section — giáo viên thêm nội dung thật vào từng phần và sửa/xoá tự do, hệ thống không ép cứng luồng soạn. Phần kiến thức mới mang sẵn dòng nhắc ghi mục tiêu neo YCCĐ trong tóm tắt section.
-   */
   async createLessonTemplate(actorId: string, courseId: string, input: { title?: string }): Promise<{ id: string; name: string | null; section: number }[]> {
     await this.courses.getCourse(courseId);
     const prefix = input.title ? `${input.title} — ` : '';
@@ -689,14 +588,7 @@ export class ContentService {
     return created;
   }
 
-  // --- player -------------------------------------------------------------------
 
-  /**
-   * Dữ liệu trang học (player) cho một cm: nội dung của mục, outline kèm
-   * trạng thái hoàn thành của chính học sinh, mục Trước/Tiếp và tiến độ
-   * tổng. Mở player là hành vi "truy cập học" — ghi last-access để Học
-   * tiếp đưa học sinh về đúng mục dở dang.
-   */
   async getPlayer(userId: string, courseId: string, cmId: string): Promise<{
     course: { id: string; fullName: string; shortName: string };
     cm: CmRow;
@@ -705,7 +597,6 @@ export class ContentService {
       | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null; embedUrl: string | null }
       | { type: 'other'; component: string };
     completion: { state: number; viewed: boolean; mode: CompletionMode };
-    /** Tiến độ xem của chính học sinh ở mục này (video/trang): % cao nhất + vị trí dở để phát tiếp đúng chỗ. */
     itemProgress: { percent: number; positionSeconds: number | null; page: number | null } | null;
     progress: MyProgress;
     prevCmId: string | null; nextCmId: string | null;

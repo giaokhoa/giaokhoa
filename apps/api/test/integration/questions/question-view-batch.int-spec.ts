@@ -7,13 +7,6 @@ import {
 import { QuestionsRepository } from '@giaokhoa/db/repositories/questions';
 import { QuestionsService } from '../../../src/modules/questions/questions.service';
 
-/**
- * Đặc trưng hoá hình dạng QuestionView của ba đường liệt kê câu hỏi
- * (issue #488, điểm DL-01): `listQuestions`,
- * `listQuestionsByCurriculumFilter` và bản có cổng đọc `listQuestionsByCurriculumFilterForViewer`.
- *
- * Ba đường này lắp view từng câu bằng một vòng lặp await tại thời điểm viết đặc trưng hoá. Test này ghim HÀNH VI đang có — tập câu trả về, thứ tự, và hình dạng đầy đủ của từng view (answers theo thứ tự lưu, options theo dạng câu, bản ghi phía đáp án, ngữ liệu, version mới nhất) — bằng cách đối chiếu từng view của đường liệt kê với `getQuestion` của chính câu đó (đường đọc đơn không đổi) cộng các khẳng định cụ thể theo từng dạng câu. Refactor sang loader theo lô phải giữ test này xanh nguyên vẹn; đổi hình dạng/thứ tự/quyền ở bất kỳ đường nào là test phải đỏ.
- */
 describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (issue #488)', () => {
   let app: INestApplication;
   let admin: string;
@@ -43,9 +36,6 @@ describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (is
     repo = app.get(QuestionsRepository);
     const sysCtx = await systemContextId(app, admin);
 
-    // Context mức khoá học: giáo viên được gán vai editingteacher CHỈ
-    // tại context này — có question:useall tại đó, không có tại context
-    // hệ thống. Đây là mốc quyền cho bản ForViewer.
     const courseCtx = await createContextViaApi(app, admin, 50, randomUUID(), sysCtx);
     const teacher = await createUserViaApi(app, admin);
     teacherId = teacher.id;
@@ -60,7 +50,6 @@ describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (is
     catMain = await mkCategory('View batch main', sysCtx);
     const catCourse = await mkCategory('View batch course', courseCtx.id);
 
-    // Chương trình tối thiểu: môn → chương trình → chủ đề → ĐVK → 2 YCCĐ.
     const subj = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
       .send({ contextId: sysCtx, name: 'Toán học', slug: `toan-view-${Date.now()}` });
     const subjectId = subj.body.id as string;
@@ -211,8 +200,6 @@ describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (is
     const filter = { nodeId: lessonId, cognitiveLevel: 'biet' };
     const forAdmin = await questions.listQuestionsByCurriculumFilterForViewer(adminId, filter);
     expect(forAdmin.map((v) => v.question.id).sort()).toEqual([mcId, saId, courseMcId].sort());
-    // Giáo viên chỉ có question:useall tại context khoá học: chỉ thấy
-    // câu của category khoá học, câu ở context hệ thống bị loại hẳn.
     const forTeacher = await questions.listQuestionsByCurriculumFilterForViewer(teacherId, filter);
     expect(forTeacher.map((v) => v.question.id)).toEqual([courseMcId]);
     const forStranger = await questions.listQuestionsByCurriculumFilterForViewer(strangerId, filter);
@@ -234,19 +221,15 @@ describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (is
     });
     if (created.status !== 201 && created.status !== 200) throw new Error(`question failed: ${created.status} ${JSON.stringify(created.body)}`);
     const qid = (created.body as { question: { id: string } }).question.id;
-    // Sửa hai lượt nữa → entry tích đủ 3 version, con trỏ mới nhất ở 3.
     for (const text of ['Câu nhiều version — bản 2.', 'Câu nhiều version — bản 3.']) {
       const r = await http(app).patch(`/api/v1/questions/${qid}`).set(bearer(admin)).send({ questionText: text });
       if (r.status !== 200) throw new Error(`edit failed: ${r.status} ${JSON.stringify(r.body)}`);
     }
     const entry = await repo.getEntryByQuestion(qid);
     expect(entry?.latestVersion).toBe(3);
-    // Hàm nạp version theo lô trả đúng MỘT dòng — version 3 — dù entry
-    // có hai version cũ nằm cùng bảng.
     const rows = await repo.getLatestVersionsByEntries([entry!]);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.version).toBe(3);
-    // View của đường liệt kê mang đúng version đó và khớp đường đọc đơn.
     const views = await questions.listQuestions(catId);
     expect(views).toHaveLength(1);
     expect(views[0]?.latestVersion.version).toBe(3);
@@ -269,15 +252,10 @@ describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (is
     if (created.status !== 201 && created.status !== 200) throw new Error(`question failed: ${created.status} ${JSON.stringify(created.body)}`);
     const qid = (created.body as { question: { id: string } }).question.id;
     const entry = await repo.getEntryByQuestion(qid);
-    // Trỏ con trỏ version mới nhất tới số version không có dòng nào:
-    // dữ kiện hỏng mà cả hai đường đọc đều phải báo cùng một mã lỗi.
-    // Ghi thẳng qua handle gốc của repository Kysely (issue #642 —
-    // repository chỉ còn handle Kysely).
     await repo.db().updateTable('question_bank_entries').set({ latest_version: 99 })
       .where('id', '=', entry!.id).execute();
     const brokenEntry = await repo.getEntryByQuestion(qid);
     expect(brokenEntry?.latestVersion).toBe(99);
-    // Hàm nạp version theo lô không bịa dòng nào cho entry này.
     expect(await repo.getLatestVersionsByEntries([brokenEntry!])).toEqual([]);
     const fromBatch = await questions.listQuestions(catId).then(() => null, (e: unknown) => e);
     expect(fromBatch).toBeInstanceOf(NotFoundException);

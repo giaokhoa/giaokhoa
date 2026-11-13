@@ -1,45 +1,7 @@
-/**
- * Repository của KHO HỌC LIỆU trên Kysely.
- *
- * Vai trò: mọi truy cập tới bảng content_bank_content của kho
- * trung tâm tập trung ở đây, cộng các truy vấn chỉ-đọc cohort (tổ
- * chuyên môn — bảng cohort/cohort_members của cụm groups) phục vụ
- * scope org của kho học liệu. Repository không chứa luật nghiệp
- * vụ — gác quyền xem/duyệt nằm ở tầng service phía ứng dụng.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
- * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng (khớp `$inferSelect`/`$inferInsert` của
- *   repository cũ trước chuyển đổi): cột được chọn bằng danh sách tường minh
- *   có bí danh, giá trị ghi được ánh xạ từng trường ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này.
- * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (quy tắc T-4 đã chốt ở pilot); bộ lọc động của
- *   `listFiltered` ghép bằng các lần `.where(...)` xâu chuỗi trên
- *   cùng một builder giữ trong biến (khuôn T-13 đã chốt) thay cho
- *   mảng điều kiện + `and(...conds)` của bộ máy cũ.
- * - Cột jsonb khi ghi (`config_data`, `outcome_ids`, `keywords`,
- *   `review_checklist`) đi qua helper serialize tường minh + ép
- *   kiểu `::jsonb` ({@link jsonbValue}).
- * - Cột `size_bytes` là bigint: codegen sinh kiểu `Int8` (đọc ra
- *   là `string` — thử nghiệm T-7 đã chốt: không bật parser toàn
- *   cục), trong khi hợp đồng dòng phía tiêu thụ giữ `number` như
- *   thời bộ máy cũ (`mode: 'number'`). Repository vì vậy chuyển đổi
- *   tường minh tại biên: đọc `string → number`, ghi `number`
- *   nguyên trạng (kiểu ghi của `Int8` nhận number).
- * - Hình chiếu toàn bảng của cohort trong `listCohortsForUser`
- *   (điểm cùng họ với thử nghiệm T-14): bộ máy cũ chọn
- *   `select({ cohort })` rồi bóc `.cohort`; ở đây chọn tường minh
- *   từng cột của bảng cohort qua join — kết quả trả ra là chính
- *   các dòng cohort, hình dạng không đổi.
- */
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
 
-/** Một dòng học liệu trong kho; các cột jsonb giữ `unknown` như hình dạng `$inferSelect` cũ (bộ máy cũ không gắn `$type`). */
 export interface ContentRow {
   id: string;
   tenantId: string;
@@ -82,7 +44,6 @@ export interface ContentRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một học liệu mới (khớp `$inferInsert` cũ). */
 export interface NewContent {
   id?: string;
   tenantId?: string;
@@ -125,7 +86,6 @@ export interface NewContent {
   updatedAt?: Date;
 }
 
-/** Một dòng cohort (tổ chuyên môn). */
 export interface CohortRow {
   id: string;
   tenantId: string;
@@ -139,7 +99,6 @@ export interface CohortRow {
   updatedAt: Date;
 }
 
-/** Bộ lọc của Kho học liệu (scope/metadata/trạng thái duyệt) — mọi trường đều tuỳ chọn. */
 export interface ContentFilters {
   scope?: string;
   spaceId?: string;
@@ -152,22 +111,10 @@ export interface ContentFilters {
   reviewStatus?: string;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi, vì driver `pg` hiểu mảng ở cấp cao nhất là mảng
- * PostgreSQL và cột jsonb sẽ lỗi `invalid input syntax for type
- * json` (ca thật ở cụm này: `outcome_ids`/`keywords` là mảng).
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng content_bank_content (dùng cho cả select lẫn returning). */
 const CONTENT_COLUMNS = [
   'id',
   'tenant_id as tenantId',
@@ -210,7 +157,6 @@ const CONTENT_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng cohort. */
 const COHORT_COLUMNS = [
   'cohort.id as id',
   'cohort.tenant_id as tenantId',
@@ -224,19 +170,12 @@ const COHORT_COLUMNS = [
   'cohort.updated_at as updatedAt',
 ] as const;
 
-/** Dòng thô ở biên select: giống {@link ContentRow} nhưng `sizeBytes` còn là chuỗi int8 thô từ driver. */
 type ContentRowRaw = Omit<ContentRow, 'sizeBytes'> & { sizeBytes: string | null };
 
-/**
- * Chuyển một dòng thô thành dòng công khai: `size_bytes` int8 đọc
- * ra là `string` (T-7) trong khi hợp đồng cũ là `number` — chuyển
- * đổi tường minh tại biên repository, không bật parser toàn cục.
- */
 function toContentRow(row: ContentRowRaw): ContentRow {
   return { ...row, sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes) };
 }
 
-/** Ánh xạ dữ kiện ghi học liệu sang values insert (snake_case), loại `undefined` (quy tắc T-4); các cột jsonb qua {@link jsonbValue}. */
 function contentInsertValues(values: NewContent): InsertObject<CentreDB, 'content_bank_content'> {
   const row: InsertObject<CentreDB, 'content_bank_content'> = {
     name: values.name,
@@ -282,7 +221,6 @@ function contentInsertValues(values: NewContent): InsertObject<CentreDB, 'conten
   return row;
 }
 
-/** Ánh xạ một patch học liệu (hình dạng dòng từng phần) sang set update (snake_case), loại `undefined` từng trường; các cột jsonb qua {@link jsonbValue}. */
 function contentUpdateSet(patch: Partial<ContentRow>): UpdateObject<CentreDB, 'content_bank_content'> {
   const set: UpdateObject<CentreDB, 'content_bank_content'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -325,21 +263,17 @@ function contentUpdateSet(patch: Partial<ContentRow>): UpdateObject<CentreDB, 'c
   return set;
 }
 
-/** Kho dữ liệu content_bank_content + truy vấn cohort (tổ chuyên môn) phục vụ scope org của Kho học liệu. */
 export class ContentBankRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Instance gốc của repository. */
   private db(): CentreDb {
     return this.handle;
   }
 
-  /** Handle DB gốc (giữ hợp đồng cũ của repository — tầng service hiện không mở transaction qua handle này). */
   get dbHandle(): CentreDb {
     return this.db();
   }
 
-  /** Chèn một học liệu. */
   async insert(v: NewContent): Promise<ContentRow> {
     const rows = await this.db()
       .insertInto('content_bank_content')
@@ -349,7 +283,6 @@ export class ContentBankRepository {
     return toContentRow(rows[0]! as ContentRowRaw);
   }
 
-  /** Lấy một học liệu theo id. */
   async get(id: string): Promise<ContentRow | undefined> {
     const row = await this.db()
       .selectFrom('content_bank_content')
@@ -359,7 +292,6 @@ export class ContentBankRepository {
     return row ? toContentRow(row as ContentRowRaw) : undefined;
   }
 
-  /** Toàn bộ học liệu trong kho. */
   async list(): Promise<ContentRow[]> {
     const rows = await this.db()
       .selectFrom('content_bank_content')
@@ -368,7 +300,6 @@ export class ContentBankRepository {
     return rows.map((row) => toContentRow(row as ContentRowRaw));
   }
 
-  /** Học liệu neo ở một context. */
   async listByContext(contextId: string): Promise<ContentRow[]> {
     const rows = await this.db()
       .selectFrom('content_bank_content')
@@ -378,7 +309,6 @@ export class ContentBankRepository {
     return rows.map((row) => toContentRow(row as ContentRowRaw));
   }
 
-  /** Liệt kê theo bộ lọc của Kho học liệu (scope/metadata/trạng thái duyệt), mới nhất trước. Việc gác quyền xem nằm ở service. */
   async listFiltered(f: ContentFilters): Promise<ContentRow[]> {
     let query = this.db().selectFrom('content_bank_content').select(CONTENT_COLUMNS);
     if (f.scope) query = query.where('scope', '=', f.scope);
@@ -394,7 +324,6 @@ export class ContentBankRepository {
     return rows.map((row) => toContentRow(row as ContentRowRaw));
   }
 
-  /** Cập nhật một học liệu (đã lọc trường ở tầng service). */
   async update(id: string, v: Partial<ContentRow>): Promise<void> {
     await this.db()
       .updateTable('content_bank_content')
@@ -403,14 +332,11 @@ export class ContentBankRepository {
       .execute();
   }
 
-  /** Xoá một học liệu. */
   async remove(id: string): Promise<void> {
     await this.db().deleteFrom('content_bank_content').where('id', '=', id).execute();
   }
 
-  // --- cohort (tổ chuyên môn) -------------------------------------------------
 
-  /** Lấy một cohort theo id. */
   async getCohort(id: string): Promise<CohortRow | undefined> {
     const row = await this.db()
       .selectFrom('cohort')
@@ -420,12 +346,10 @@ export class ContentBankRepository {
     return row;
   }
 
-  /** Toàn bộ cohort. */
   async listAllCohorts(): Promise<CohortRow[]> {
     return this.db().selectFrom('cohort').select(COHORT_COLUMNS).execute();
   }
 
-  /** Các cohort mà một user là thành viên (chọn tường minh từng cột của cohort qua join — tương đương hình chiếu `{ cohort }` cũ, xem ghi chú T-14 ở đầu file). */
   async listCohortsForUser(userId: string): Promise<CohortRow[]> {
     return this.db()
       .selectFrom('cohort_members')
@@ -435,7 +359,6 @@ export class ContentBankRepository {
       .execute();
   }
 
-  /** User có phải thành viên của cohort hay không. */
   async isCohortMember(cohortId: string, userId: string): Promise<boolean> {
     const row = await this.db()
       .selectFrom('cohort_members')

@@ -3,11 +3,6 @@ import { loader as legacyQuizLoader } from './legacy-quiz';
 import { loader as legacyQuizResultsLoader } from './legacy-quiz-results';
 import { loader as legacyQuizPaperLoader } from './legacy-quiz-paper';
 
-/**
- * Các route tương thích quiz cũ trả chuyển hướng từ loader ngay cả khi
- * yêu cầu tài liệu SSR chưa hydrate; giữ nguyên định danh bài và query
- * để bookmark và deep-link cũ không hỏng.
- */
 const CASES = [
   { path: '/courses/abc/quizzes/pin-1', target: '/courses/abc/exams/pin-1', loader: legacyQuizLoader },
   { path: '/courses/abc/quizzes/pin-1/results', target: '/courses/abc/exams/pin-1/results', loader: legacyQuizResultsLoader },

@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { usePostFeedbackMessage } from '../queries/assignment';
 import { dateLabel } from '../utils/shared';
 
-/** Hội thoại phản hồi trên bài đã trả (học sinh ↔ giáo viên của bài đó). */
 export function FeedbackMessages({
   assignmentId,
   userId,

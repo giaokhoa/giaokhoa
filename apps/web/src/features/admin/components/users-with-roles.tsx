@@ -29,64 +29,13 @@ import { RoleAssignmentDialog } from './role-assignment-dialog';
 import { RoleUserDialog, userDisplayName } from './role-user-dialog';
 import { TablePagination } from './table-pagination';
 
-/**
- * Bảng người dùng kèm vai trò của họ trên trang vai trò — một dòng là
- * một người dùng kèm toàn bộ gán vai của người đó, đọc từ endpoint
- * gộp `GET /access/users-with-assignments`, không gọi danh sách
- * người dùng và danh sách gán riêng lẻ rồi tự ghép ở client.
- *
- * Hình dáng theo thẻ bảng "Total users with their roles" của mẫu:
- * thẻ phẳng, đầu thẻ có viền dưới (tiêu đề 18px medium + mô tả),
- * vùng lọc gồm hai khối riêng ngăn nhau bằng viền dưới, mỗi khối đệm
- * 24px — khối lọc là hai ô chọn có nhãn đặt phía trên (vai trò,
- * trạng thái; KHÔNG có ô chọn gói dịch vụ vì gói thuộc về trung tâm,
- * không thuộc về người dùng), khối công cụ là ô tìm kiếm bên trái và
- * cụm cỡ trang + nút Gán vai trò bên phải (KHÔNG có Export/Import vì
- * hệ không có endpoint đó). Mọi ô chọn là Select của `@giaokhoa/ui` qua
- * component dùng chung của feature. Hàng bảng cao 56px:
- * người dùng là avatar 36px kèm tên đậm và email xám dưới tên; cột
- * vai trò bày MỌI gán của người đó kèm nhãn cấp ngữ cảnh dạng chữ
- * qua adapter — không bày định danh hay đường dẫn kỹ thuật; trạng
- * thái là pill màu theo trạng thái tài khoản; ngày tham gia bày dạng
- * chữ; cột thao tác mở hộp thoại quản lý gán của đúng người đó.
- * Không có cột chọn hàng (không có thao tác hàng loạt nào đứng sau)
- * và không có cột Plan/Billing. Chân bảng là dòng "Hiển thị X đến Y
- * trong Z mục" kèm cụm nút chuyển trang 36px.
- *
- * Luồng hiển thị:
- *
- * 1. Trạng thái lọc/tìm/trang sống ở đây: đổi vai trò, trạng thái, từ
- *    khoá hay trang đều đổi khoá truy vấn nên gọi lại endpoint gộp
- *    với tham số tương ứng; tổng số NGƯỜI DÙNG khớp do server trả về
- *    quyết định số trang (tổng đếm người dùng, không đếm dòng gán).
- *    Bảng giữ keepPreviousData nên đổi lọc/trang không nháy rỗng.
- *    Trang hiện tại được kẹp theo tổng mới nhất ngay trong lúc render
- *    như bảng gán vai (không dùng effect). API không có hợp đồng sắp
- *    xếp nên bảng không bật sắp xếp cột.
- * 2. Quản lý gán vai không yếu đi: nút thao tác của dòng mở hộp thoại
- *    liệt kê mọi gán của người đó — gán tay gỡ qua hộp thoại xác nhận
- *    hiện hành, gán do ghi danh cấp (`component = 'enrol'`) không có
- *    thao tác gỡ và hiện thẳng lý do; trong hộp thoại có lối vào gán
- *    thêm cho chính người đó (người dùng chọn sẵn). Sau gán/gỡ thành
- *    công, đột biến làm mới gốc khoá bảng nên bảng tải lại đúng trang
- *    và bộ lọc hiện hành, đồng thời lưới thẻ cập nhật số người giữ
- *    qua tiền tố `access`.
- *
- * @param props - Danh sách vai trò (dùng cho bộ lọc vai trò và hộp
- * thoại gán) và cây context (dùng cho hộp thoại gán, hộp thoại quản
- * lý gán và cột vai trò) do trang đã tải.
- */
 export interface UsersWithRolesSectionProps {
-  /** Danh sách vai trò (lưới thẻ của trang đã tải). */
   roles: RoleListItem[];
-  /** Cây context (trang đã tải, dùng cho hộp thoại gán, hộp thoại quản lý và cột vai trò). */
   contexts: ContextRow[];
 }
 
-/** Các lựa chọn cỡ trang của bảng theo mẫu (mặc định 10). */
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
-/** Chữ viết tắt cho avatar: chữ đầu của họ và tên, lùi về chữ đầu của tên đăng nhập. */
 function initialsOf(user: UserWithAssignmentsListItem): string {
   const initials = `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.trim().toUpperCase();
   return initials === '' ? user.username.charAt(0).toUpperCase() : initials;
@@ -94,16 +43,13 @@ function initialsOf(user: UserWithAssignmentsListItem): string {
 
 export function UsersWithRolesSection({ roles, contexts }: UsersWithRolesSectionProps) {
   const { t } = useTranslation('app');
-  /** '' nghĩa là không lọc theo tiêu chí đó. */
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | UserListStatus>('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [assignOpen, setAssignOpen] = useState(false);
-  /** Người đang mở hộp thoại quản lý gán; bám theo dòng mới nhất của bảng khi bảng tải lại. */
   const [manageUserId, setManageUserId] = useState<string | null>(null);
-  /** Người đang mở hộp thoại gán ở chế độ chọn sẵn (từ hộp thoại quản lý). */
   const [presetUser, setPresetUser] = useState<UserWithAssignmentsListItem | null>(null);
 
   const usersQuery = useQuery({
@@ -120,7 +66,6 @@ export function UsersWithRolesSection({ roles, contexts }: UsersWithRolesSection
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  /** Kẹp trang theo tổng mới nhất ngay trong lúc render như bảng gán vai. */
   if (data && page > pageCount) {
     setPage(pageCount);
   }
@@ -129,7 +74,6 @@ export function UsersWithRolesSection({ roles, contexts }: UsersWithRolesSection
   const rangeTo = (page - 1) * pageSize + rows.length;
   const manageUser = rows.find((user) => user.id === manageUserId) ?? null;
 
-  /** Pill trạng thái tài khoản: đã xoá > đã khoá > đang hoạt động. */
   function statusBadge(user: UserWithAssignmentsListItem) {
     if (user.deleted)
       return (
@@ -156,9 +100,6 @@ export function UsersWithRolesSection({ roles, contexts }: UsersWithRolesSection
         <CardTitle className="text-lg">{t('userRolesTitle')}</CardTitle>
         <CardDescription>{t('userRolesDescription')}</CardDescription>
       </CardHeader>
-      {/* Vùng lọc hai khối ngăn nhau bằng viền dưới như thẻ bảng mẫu:
-          khối lọc là hai ô chọn có nhãn phía trên (vai trò, trạng
-          thái); khối công cụ là tìm kiếm trái, cỡ trang + nút gán phải. */}
       <div className="border-b">
         <div className="flex flex-col gap-4 border-b p-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">

@@ -1,27 +1,3 @@
-/**
- * Khối liên kết chương trình của màn soạn câu hỏi (tách cấu trúc
- * từ `pages/question-editor.tsx` theo đợt A của issue #223): thẻ
- * gắn câu hỏi đang sửa với môn học và yêu cầu cần đạt kèm mức độ
- * nhận thức. Khối chỉ trình bày dữ liệu gắn kết đã nạp và chuyển
- * thao tác gắn/gỡ qua các handler của trang; trạng thái chọn và
- * việc nạp dữ liệu do trang giữ.
- *
- * @param props.links - Gắn kết hiện tại của câu hỏi (null khi chưa tải được).
- * @param props.linkSubjects - Danh sách môn học chọn được.
- * @param props.outcomeLabels - Nhãn nội dung của các YCCĐ đã gắn.
- * @param props.linkSubjectPick - Môn đang chọn ở ô chọn môn.
- * @param props.linkOutcomeOptions - Danh sách YCCĐ chọn được của môn đã chọn.
- * @param props.linkOutcomePick - YCCĐ đang chọn ở ô chọn YCCĐ.
- * @param props.linkLevelPick - Mức độ nhận thức đang chọn cho lần gắn mới.
- * @param props.pickLinkSubject - Handler chọn môn (nạp cây YCCĐ của môn).
- * @param props.attachLinkSubject - Handler gắn môn đang chọn vào câu hỏi.
- * @param props.detachLinkSubject - Handler gỡ một môn khỏi câu hỏi.
- * @param props.attachLinkOutcome - Handler gắn YCCĐ đang chọn kèm mức độ.
- * @param props.changeOutcomeLevel - Handler đổi mức độ của một YCCĐ đã gắn.
- * @param props.detachLinkOutcome - Handler gỡ một YCCĐ khỏi câu hỏi.
- * @param props.setLinkOutcomePick - Setter cho ô chọn YCCĐ.
- * @param props.setLinkLevelPick - Setter cho ô chọn mức độ.
- */
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
@@ -104,12 +80,6 @@ export function ProgrammeLinks({
                     items={Object.fromEntries(linkSubjects.map((s) => [s.id, s.name]))}
                     value={linkSubjectPick === '' ? null : linkSubjectPick}
                     onValueChange={(v) => {
-                      // Base UI tự phát null khi giá trị đang chọn bị
-                      // lọc khỏi options (môn vừa gắn xong bị loại khỏi
-                      // danh sách chọn) — đó không phải thao tác chọn
-                      // của người dùng; bỏ qua để không xoá mất danh
-                      // sách YCCĐ vừa nạp cho môn đó. Select native
-                      // trước đây không có hiệu ứng phụ này.
                       if (!v) return;
                       void pickLinkSubject(v);
                     }}

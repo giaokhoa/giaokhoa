@@ -9,19 +9,6 @@ import { PermissionEvaluator } from '../../../src/modules/access/permission-eval
 import { QuestionsService } from '../../../src/modules/questions/questions.service';
 import { QuizService } from '../../../src/modules/quiz/quiz.service';
 
-/**
- * Đặc trưng hoá số đếm ứng viên của ô ma trận (issue #488, điểm DL-02).
- *
- * Tại thời điểm viết đặc trưng hoá, `cellAvailableCount` đếm bằng cách nạp toàn bộ ứng viên của ô qua `cellCandidatesForUser` rồi lấy độ dài mảng. Test này ghim số đếm ĐÚNG theo từng kịch bản ô × người dùng trên dữ kiện mẫu cố định — gồm ca người dùng bị chặn bởi quyền `question:useall` tại context của category chứa câu — và đối chiếu hai cách đếm trên cùng dữ kiện: cách đếm THAM CHIẾU bằng nạp view
- * (liệt kê ứng viên qua `listQuestionsByCurriculumFilter` rồi lọc
- * theo cổng `question:useall` tại context của category của từng câu — đúng định nghĩa đếm trước refactor) với bề mặt đếm công khai
- * (`importAvailability` và `matrixAvailability` của QuizService, hai
- * đường dùng chung `cellAvailableCount`). Sau refactor đếm bằng `count()` ở SQL, mọi con số ở đây phải giữ nguyên.
- *
- * Dữ kiện mẫu (mọi câu đều gắn YCCĐ của ĐVK, trạng thái ready trừ câu nháp): ô (ĐVK, biết, multichoice) có 5 ứng viên thô — 3 câu ở category context hệ thống + 2 câu ở category context khoá học; ô
- * (ĐVK, hiểu, multichoice) có 1; ô (ĐVK, biết, truefalse) có 1. Quản
- * trị viên dùng được cả hai context; giáo viên chỉ dùng được context khoá học; người lạ không dùng được context nào.
- */
 describe('Đặc trưng hoá số đếm ứng viên ô ma trận theo người dùng (issue #488)', () => {
   let app: INestApplication;
   let admin: string;
@@ -114,8 +101,6 @@ describe('Đặc trưng hoá số đếm ứng viên ô ma trận theo người 
     await tag(await mkMc(catSys, 'SYS-O1: câu của ĐVK khác.'), outcomeOther, 'biet');
     const draftId = await mkMc(catSys, 'SYS-D1: câu nháp mức biết.');
     await tag(draftId, outcomeBiet, 'biet');
-    // Câu nháp không thuộc diện ứng viên: trạng thái của bank entry là
-    // điều kiện lọc (status = ready) — đặt thẳng trạng thái fixture.
     await pg.query("update question_bank_entries set status = 'draft' where question_id = $1", [draftId]);
 
     const tfCorrects = [true, false, true, false];
@@ -152,12 +137,6 @@ describe('Đặc trưng hoá số đếm ứng viên ô ma trận theo người 
     { actor: () => adminId, actorName: 'quản trị viên', cell: { cognitiveLevel: 'biet', qtype: 'essay' }, expected: 0 },
   ];
 
-  /**
-   * Cách đếm tham chiếu bằng nạp view: liệt kê ứng viên thô của ô rồi
-   * đếm các câu thuộc category mà người dùng có `question:useall` tại
-   * context của category (cache theo context) — đúng định nghĩa mà
-   * đường đếm cũ (`cellCandidatesForUser(...).length`) áp dụng.
-   */
   async function countByViews(actorId: string, cell: { curriculumNodeId: string; cognitiveLevel: string; qtype: string }): Promise<number> {
     const all = await questions.listQuestionsByCurriculumFilter({
       nodeId: cell.curriculumNodeId, cognitiveLevel: cell.cognitiveLevel, qtype: cell.qtype, status: 'ready',

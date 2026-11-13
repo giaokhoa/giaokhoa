@@ -7,14 +7,6 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { contextIdByLevelInstance, suspendUser } from '../../support/engagement-helpers';
 
-/**
- * Mô hình khám phá bạn bè ĐÃ CHỐT LẠI của issue #33 (quyết định 24/10/2026, thay toàn bộ cơ chế tìm người theo tên của PR #41):
- *  - Endpoint `GET /messages/people/search` ĐÃ GỠ — gọi vào là 404.
- *  - Khám phá bạn bè qua ROSTER thành viên khoá: thành viên = ghi
- *    danh đang hiệu lực ∪ gán vai tại context khoá (giáo viên chỉ được gán vai, không ghi danh, vẫn hiện với dấu hiệu teacher). Chỉ thành viên mới xem được; người ngoài khoá nhận đúng 404 như khoá không tồn tại. Roster phân trang CON TRỎ (displayName, username, id), mỗi dòng đúng whitelist trường đã kiểm chứng + vai trò + trạng thái quan hệ; tài khoản tạm ngưng bị loại; quan hệ chặn (cả hai chiều) bị giấu.
- *  - Nhắn riêng 1-1 CHỈ giữa liên hệ đã kết bạn: cùng khoá không
- *    còn mở cổng, công tắc `core/messagingallusers` bật cũng không mở; hội thoại cũ với người đã gỡ liên hệ vẫn đọc được lịch sử nhưng gửi mới bị chặn. NGOẠI LỆ duy nhất (chốt bổ sung 25/10/2026): giáo viên của khoá ↔ học sinh đang ghi danh chính khoá đó nhắn trực tiếp không cần kết bạn — spec riêng messaging-teacher-direct.e2e-spec.ts khoá hành vi đó; ở spec này actor là học sinh nên `canDirectMessage` luôn false.
- */
 
 interface Person { id: string; username: string; token: string; displayName: string }
 
@@ -58,7 +50,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
   beforeAll(async () => {
     app = await createTestApp();
     admin = await adminToken(app);
-    // Bắt đầu từ mặc định đã đăng ký (công tắc tắt) dù các lượt chạy trước để lại gì.
     await http(app).delete('/api/v1/site-config/core/messagingallusers').set('Authorization', `Bearer ${admin}`);
 
     actor = await person('An', 'Actor');
@@ -73,21 +64,12 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     const course = await createCourse(app, admin, category.id, { fullName: 'Khoá Roster A' });
     courseA = course.id;
     const instance = await createEnrolInstance(app, admin, courseA);
-    // teacherRoleOnly KHÔNG ghi danh — chỉ gán vai editingteacher tại
-    // context khoá. teacherBoth vừa ghi danh vừa gán vai.
     for (const p of [actor, teacherBoth, s2, s3, ghost]) {
       await enrolUser(app, admin, courseA, instance.id, p.id);
     }
     const courseCtx = await contextIdByLevelInstance(app, admin, 50, courseA);
     const editingTeacher = await roleIdByShortname(app, admin, 'editingteacher');
     await assignRole(app, admin, teacherRoleOnly.id, editingTeacher, courseCtx);
-    // teacherBoth: trạng thái lẫn vai (vừa ghi danh học viên đang hoạt
-    // động vừa có gán vai giảng dạy tại chính khoá) — từ issue #425,
-    // API KHÔNG còn đường nào tạo được trạng thái này (cả hai chiều
-    // gán vai/ghi danh đều bị chốt tách vai chặn); nó chỉ còn tồn tại
-    // như DỮ KIỆN TỒN TẠI từ trước chốt, và hành vi phân loại roster
-    // trên dữ kiện đó vẫn phải được kiểm. Fixture vì vậy ghi thẳng
-    // dòng gán vai vào DB thay vì đi qua API gán vai.
     const fixtureDb = new Client({ connectionString: process.env.DATABASE_URL });
     await fixtureDb.connect();
     try {
@@ -98,7 +80,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     } finally {
       await fixtureDb.end();
     }
-    // Thành viên bị tạm ngưng: vẫn ghi danh nhưng không được hiện ở roster.
     await suspendUser(app, admin, ghost.id);
 
     const category2 = await createCategory(app, admin);
@@ -124,7 +105,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     const ids = (mine.body.courses as { courseId: string }[]).map((c) => c.courseId);
     expect(ids).toContain(courseA);
     expect(ids).not.toContain(courseB);
-    // Giáo viên chỉ gán vai (không ghi danh) vẫn thấy khoá là của mình.
     const teacherCourses = await http(app).get('/api/v1/messages/courses').set('Authorization', `Bearer ${teacherRoleOnly.token}`);
     expect((teacherCourses.body.courses as { courseId: string }[]).map((c) => c.courseId)).toContain(courseA);
     const outsiderCourses = await http(app).get('/api/v1/messages/courses').set('Authorization', `Bearer ${outsider.token}`);
@@ -138,22 +118,16 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     expect(res.status).toBe(200);
     const members = res.body.members as RosterMember[];
     const byId = new Map(members.map((m) => [m.userId, m]));
-    // Giáo viên chỉ gán vai hiện diện với dấu hiệu teacher.
     expect(byId.get(teacherRoleOnly.id)).toMatchObject({
       displayName: 'Giao Vien', username: teacherRoleOnly.username, role: 'teacher', relationship: 'none',
     });
-    // Vừa ghi danh vừa gán vai staff: vẫn là teacher, chỉ một dòng.
     expect(members.filter((m) => m.userId === teacherBoth.id)).toHaveLength(1);
     expect(byId.get(teacherBoth.id)?.role).toBe('teacher');
     expect(byId.get(s2.id)).toMatchObject({ displayName: 'Binh Tran', role: 'student', relationship: 'none' });
     expect(byId.get(s3.id)?.role).toBe('student');
-    // Loại trừ: chính mình, người ngoài khoá, thành viên bị tạm ngưng.
     expect(byId.has(actor.id)).toBe(false);
     expect(byId.has(outsider.id)).toBe(false);
     expect(members.map((m) => m.displayName)).not.toContain('Ghi Danh');
-    // Whitelist trường: đúng 6 khoá, không rò thêm dữ kiện ghi danh/hồ sơ.
-    // (canDirectMessage thêm theo ngoại lệ GV–HS chốt 25/10/2026; actor
-    // là học sinh nên mọi dòng đều false ở góc nhìn này.)
     for (const m of members) {
       expect(Object.keys(m).sort()).toEqual(['canDirectMessage', 'displayName', 'relationship', 'role', 'userId', 'username']);
       expect(m.canDirectMessage).toBe(false);
@@ -172,11 +146,9 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
   });
 
   it('roster phản ánh trạng thái quan hệ và ẩn quan hệ bị chặn cả hai chiều', async () => {
-    // pending_outgoing: actor gửi yêu cầu cho s2.
     const out = await http(app).post(`/api/v1/messages/contacts/${s2.id}`)
       .set('Authorization', `Bearer ${actor.token}`).send({});
     expect(out.status).toBe(201);
-    // pending_incoming: s3 gửi yêu cầu cho actor.
     const inc = await http(app).post(`/api/v1/messages/contacts/${actor.id}`)
       .set('Authorization', `Bearer ${s3.token}`).send({});
     expect(inc.status).toBe(201);
@@ -186,9 +158,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     expect(byId.get(s2.id)?.relationship).toBe('pending_outgoing');
     expect(byId.get(s3.id)?.relationship).toBe('pending_incoming');
 
-    // s3 chặn actor: s3 biến mất khỏi roster của actor (chiều bị chặn),
-    // và actor cũng biến mất khỏi roster của s3 (chiều chặn) — cả hai
-    // chiều đều giấu theo brief đã chốt.
     const block = await http(app).post(`/api/v1/messages/contacts/${actor.id}/block`)
       .set('Authorization', `Bearer ${s3.token}`).send({});
     expect(block.status).toBe(201);
@@ -224,13 +193,11 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     await enrolUser(app, admin, course.id, instance.id, gateA.id);
     await enrolUser(app, admin, course.id, instance.id, gateB.id);
 
-    // Cùng khoá, chưa kết bạn: tạo conversation 1-1 bị từ chối.
     const blockedCreate = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${gateA.token}`).send({ type: 1, memberIds: [gateB.id] });
     expect(blockedCreate.status).toBe(403);
     expect(blockedCreate.body.code).toBe('messaging.not_a_contact');
 
-    // Công tắc site bật: cổng VẪN đóng (công tắc đã mất hiệu lực với tin nhắn).
     const on = await http(app).put('/api/v1/site-config/core/messagingallusers')
       .set('Authorization', `Bearer ${admin}`).send({ value: true });
     expect(on.status).toBe(200);
@@ -243,7 +210,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
       await http(app).delete('/api/v1/site-config/core/messagingallusers').set('Authorization', `Bearer ${admin}`);
     }
 
-    // Yêu cầu đang chờ vẫn chưa đủ — chấp nhận xong mới mở cổng.
     const req = await http(app).post(`/api/v1/messages/contacts/${gateB.id}`)
       .set('Authorization', `Bearer ${gateA.token}`).send({});
     expect(req.status).toBe(201);
@@ -261,7 +227,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
       .set('Authorization', `Bearer ${gateA.token}`).send({ text: 'tin khi đã kết bạn' });
     expect(sent.status).toBe(201);
 
-    // Gỡ liên hệ: gửi mới bị chặn, lịch sử vẫn đọc được.
     const removed = await http(app).delete(`/api/v1/messages/contacts/${gateB.id}`)
       .set('Authorization', `Bearer ${gateA.token}`);
     expect(removed.status).toBe(200);
@@ -304,7 +269,6 @@ describe('Messaging — roster thành viên khoá + cổng nhắn riêng chỉ l
     expect(pages).toBe(3);
     expect(seen).toEqual(names.map((n) => `${n} Test`));
 
-    // Con trỏ hỏng bị từ chối rõ ràng.
     const bad = await roster(me.token, course.id, '?cursor=khong-phai-con-tro');
     expect(bad.status).toBe(400);
     expect(bad.body.code).toBe('messaging.roster_cursor_invalid');

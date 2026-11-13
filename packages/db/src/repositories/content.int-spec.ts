@@ -4,11 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { ContentRepository } from './content';
 
-/**
- * Spec tích hợp của ContentRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật; mọi ca chạy qua repository production. Dữ kiện nền dựng theo đồ thị FK thật của cụm (tenant → danh mục khoá → khoá → section → course module) vì `pages.course`, `course_last_access.cm_id`, `course_module_progress.cm_id` và `learning_records.cm_id` đều là khoá ngoại thật. Các ca khoá: upsert onConflict của last-access và module-progress (percent chỉ tăng, tính ở phía mã), hai đường đọc lọc-trong-bộ-nhớ giữ nguyên từ repository cũ
- * (`getLastAccess` khớp khoá trong mã, `getModuleProgress` đối
- * chiếu user trong mã), và doNothing của learning record.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
@@ -37,8 +32,6 @@ beforeAll(async () => {
   const [category] = await db.insertInto('course_categories').values({
     tenant_id: tenant!.id, name: 'Danh mục G6',
   }).returning(['id']).execute();
-  // Khoá mẫu (is_template) để qua check `course_class_required_check`
-  // (khoá thường phải thuộc một lớp; spec này chỉ cần khoá làm đích FK).
   const [course] = await db.insertInto('course').values({
     tenant_id: tenant!.id, category: category!.id, full_name: 'Khoá G6', short_name: 'G6-CONTENT',
     is_template: true,

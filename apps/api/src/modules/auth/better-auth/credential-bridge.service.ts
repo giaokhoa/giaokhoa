@@ -12,37 +12,18 @@ export interface CreateUserWithCredentialInput {
   firstName: string;
   lastName: string;
   password: string;
-  /** Tài khoản công cộng tự khai email CHƯA được xác minh. */
   emailVerified?: boolean;
 }
 
-/**
- * Luật username của plugin username chính chủ (Better Auth 1.7.12). Factory của dự án chỉ đặt `displayUsername: false` nên cả ba giá trị đều là mặc định của plugin: dài tối thiểu 3, tối đa 30, chỉ gồm chữ cái, chữ số, `_` và `.` (hàm `defaultUsernameValidator` của plugin).
- */
 const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 30;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_.]+$/;
 
-/**
- * Cầu nối credential giữa kho tài khoản nghiệp vụ (`users`) và Better Auth (issue #7). Ba phép toán nền mà Giai đoạn 2 sẽ dùng ở mọi điểm đồng bộ user (admin tạo user, seed lại tại cutover, login-as):
- *
- * - `createUserWithCredential`: tạo CẶP user + account credential
- *   trong MỘT transaction của adapter. Phát hiện ở Giai đoạn 0:
- *   `internalAdapter.createUser` của 1.7.12 chỉ ghi bản ghi user, KHÔNG tự tạo account từ trường password — thiếu nửa sau là user có thật nhưng không bao giờ đăng nhập được; transaction bọc cả hai lần ghi để `createAccount` lỗi cũng không để lại user mồ côi.
- * - `linkExistingPasswordHash`: chép nguyên hash argon2id đang nằm ở
- *   `users.password_hash` sang dòng credential của `account` (verify uỷ thác argon2 nên hash cũ dùng được nguyên trạng).
- * - `createProgrammaticSession`: tạo phiên theo chương trình qua
- *   internalAdapter + giá trị cookie ĐÃ KÝ — nền của login-as (endpoint có cổng capability thi công ở Giai đoạn 2). Cookie chứa token trần bị Better Auth từ chối; chữ ký HMAC theo đúng cơ chế của nó.
- */
 @Injectable()
 export class CredentialBridgeService {
-  /**
-   * Facade Kysely định tuyến theo trung tâm (issue #654, D2): giữ tham chiếu tới facade là an toàn — facade tự phân giải kho đích theo ngữ cảnh ALS tại mỗi lần gọi, không phải ảnh chụp kho tại thời điểm dựng service.
-   */
   private readonly db: CentreDb;
 
   constructor(
-    // forwardRef: vòng import/provider khép kín chỉ xuất hiện khi hai lát GĐ2 gặp nhau — cầu nối → BetterAuthService → LoginLockoutService → UsersService → cầu nối (UsersService đồng bộ credential từ chặng 2.6, LoginLockoutService là của điểm 2.4). Mọi cạnh của vòng đều khai forwardRef để metadata không bắt phải tham chiếu chưa nạp tuỳ thứ tự nạp module.
     @Inject(forwardRef(() => BetterAuthService))
     private readonly betterAuth: BetterAuthService,
     spaceDb: SpaceDatabaseService,
@@ -50,9 +31,6 @@ export class CredentialBridgeService {
     this.db = spaceDb.routedKysely;
   }
 
-  /**
-   * Tự thực thi phần hiệu lực của database hook `user.create.before` của plugin username — phần bị rơi khi dựng internalAdapter trong transaction (xem ghi chú tại `createUserWithCredential`). Cùng thứ tự kiểm của plugin: quá ngắn → quá dài → sai định dạng → trùng. Kiểm trùng chạy trên username ĐÃ HẠ THƯỜNG (dạng chuẩn hoá mà plugin lưu); UNIQUE trên `users.username` vẫn là vòng gác cuối cho các lời gọi đồng thời lọt qua tiền kiểm này.
-   */
   private async assertUsernameAllowed(username: string): Promise<void> {
     if (username.length < USERNAME_MIN_LENGTH) {
       throw new Error(
@@ -81,43 +59,10 @@ export class CredentialBridgeService {
   }
 
   async createUserWithCredential(input: CreateUserWithCredentialInput): Promise<{ id: string }> {
-    // Validate username TRƯỚC mọi lần ghi và trước cả bước băm: đây là
-    // phần hook của plugin username mà đường giao dịch dưới đây không
-    // mang theo (xem ghi chú dài tại khối transaction).
     await this.assertUsernameAllowed(input.username);
     const auth = this.betterAuth.requireAuth();
     const ctx = await auth.$context;
-    // Băm TRƯỚC khi tạo user: chiều hash chạy validatePolicy của dự án,
-    // mật khẩu yếu phải bị từ chối trước khi bất kỳ bản ghi nào được ghi
-    // (không để lại user mồ côi không credential). Đây cũng là thứ tự
-    // của chính luồng sign-up của Better Auth.
     const passwordHash = await ctx.password.hash(input.password);
-    // Cặp ghi user + account phải NGUYÊN TỬ (điểm giữ lại từ review
-    // Giai đoạn 1): hai lần ghi rời nhau thì `createAccount` lỗi giữa
-    // chừng để lại user có thật nhưng không credential — không bao giờ
-    // đăng nhập được. Adapter Kysely của instance đã khai
-    // `transaction: true` ở factory nên `ctx.adapter.transaction` là
-    // transaction PostgreSQL thật; internalAdapter gắn với adapter
-    // giao dịch được dựng bằng chính `createInternalAdapter` của
-    // Better Auth với options/logger/generateId của context.
-    //
-    // NHƯNG nó KHÔNG tương đương internalAdapter thường của lõi ở
-    // phần hooks — điểm chặn do đội đánh giá chỉ ra ở vòng review của
-    // điểm 2.1: lõi gom database hooks từ `init` của mọi plugin (gồm
-    // hook `user.create.before` của plugin username) ở bước
-    // runPluginInit rồi mới truyền cho internalAdapter thường, còn
-    // plugin hooks KHÔNG nằm trong `ctx.options.databaseHooks` (ở
-    // 1.7.12 chúng cũng không lộ ra trên ctx qua API công khai nào)
-    // nên internalAdapter giao dịch ở đây chạy với hooks = [] cộng
-    // hooks tự khai của factory nếu có — dự án không khai hook nào,
-    // tức thực tế là 0 hook. Hệ quả: validator username của plugin
-    // không chạy trên đường này. Cầu nối tự thực thi phần hook đó
-    // TRƯỚC transaction (assertUsernameAllowed ở đầu hàm này: độ dài +
-    // định dạng + trùng theo đúng luật plugin). Phần còn lại của hook
-    // không cần làm lại: chuẩn hoá hạ thường username là transform ở
-    // tầng schema field của plugin, adapter áp cho mọi lần ghi kể cả
-    // qua adapter giao dịch. Thiếu transaction thật thì ném lỗi ngay
-    // thay vì âm thầm quay về hai lần ghi rời nhau.
     const adapterTransaction = ctx.adapter.transaction;
     if (!adapterTransaction) {
       throw new Error(
@@ -125,13 +70,6 @@ export class CredentialBridgeService {
       );
     }
     const user = await adapterTransaction(async (trx) => {
-      // Ép kiểu ở hai điểm, cả hai đều an toàn tại runtime: `trx` là
-      // adapter đầy đủ do factory dựng trên transaction handle (chỉ
-      // bị tắt khả năng mở transaction lồng — thứ createInternalAdapter
-      // không hề dùng), và `ctx.options` là options đã phân giải của
-      // instance (đúng kiểu BetterAuthOptions mà lõi truyền cho
-      // internalAdapter của nó, chỉ hẹp hơn ở tầng type do factory của
-      // dự án suy luận kiểu trực tiếp từ object literal).
       const txInternalAdapter = createInternalAdapter(
         trx as unknown as Parameters<typeof createInternalAdapter>[0],
         {
@@ -148,19 +86,6 @@ export class CredentialBridgeService {
           generateId: ctx.generateId,
         },
       );
-      // Tham số nguồn tạo user là bắt buộc trong type của 1.7.12: cầu
-      // nối này phục vụ các luồng do hệ thống/quản trị khởi tạo nên
-      // khai method "admin" (đúng cách plugin admin của chính Better
-      // Auth gọi).
-      //
-      // Quy tắc #7/#8: tài khoản quản trị/hệ thống qua cầu nối mặc
-      // định emailVerified=true vì bên cấp đã xác nhận mailbox. Riêng
-      // khu công cộng tự khai email bắt buộc truyền false từ controller
-      // đăng ký: chưa được liên kết OAuth theo email cho tới khi xác
-      // minh. Lần OTP đầu của user chưa xác minh có thể kích hoạt
-      // revokeUnprovenAccountAccess của BA và thu hồi credential cũ
-      // trước khi đánh dấu verified; đó là hành vi bảo vệ khỏi người
-      // chiếm trước email, KHÔNG được tự đổi flag này thành true.
       const created = await txInternalAdapter.createUser(
         {
           email: input.email,
@@ -178,11 +103,6 @@ export class CredentialBridgeService {
       });
       return created;
     });
-    // Adapter ánh xạ `name` → `first_name` nhưng chưa có
-    // `last_name` trong model. Phép cập nhật này nằm ngoài BA tx;
-    // nếu thất bại PHẢI bù user vừa tạo (FK cascade account) trước
-    // khi ném lỗi. Nếu không, PublicRegistrationService không có
-    // userId để bù khi cầu nối chưa trả về: retry bị kẹt UNIQUE.
     if (input.lastName) {
       try {
         await this.db.updateTable('users').set({ last_name: input.lastName }).where('id', '=', user.id).execute();
@@ -200,15 +120,6 @@ export class CredentialBridgeService {
     return { id: user.id };
   }
 
-  /**
-   * Chép hash hiện hữu sang account; trả false khi user không có hash
-   * (ví dụ user chỉ dùng OAuth) hoặc đã có credential. Lần chèn cuối là
-   * idempotent trên UNIQUE (user_id, provider_id) của bảng account
-   * (điểm 2.1 trong hồ sơ Giai đoạn 2): hai lời gọi ĐỒNG THỜI cùng qua
-   * được vòng kiểm tra "đã có chưa" ở trên thì vòng chèn cũng chỉ cho
-   * đúng một dòng thắng — lời gọi thua nhận `false` thay vì văng lỗi
-   * trùng khoá, và tổng số dòng credential của user luôn là một.
-   */
   async linkExistingPasswordHash(userId: string): Promise<boolean> {
     this.betterAuth.requireAuth();
     const row = await this.db
@@ -238,32 +149,10 @@ export class CredentialBridgeService {
       .returning('id')
       .execute();
     if (inserted.length === 0) return false;
-    // BA-1 — cùng chốt semantics như createUserWithCredential: việc
-    // hệ thống/quản trị chép hash mật khẩu hiện hữu sang credential
-    // là khẳng định quyền sở hữu mailbox cho user đó (chỉ bên giữ hash
-    // mới làm được), nên lần liên kết thành công cũng đánh dấu
-    // email_verified = true — nếu không, lần đăng nhập OTP đầu tiên
-    // sẽ chạy revokeUnprovenAccountAccess và xoá chính credential
-    // vừa liên kết. Chỉ liên kết thành công mới đổi cờ (đường đã có
-    // credential từ trước trả false và không ghi gì thêm).
     await this.db.updateTable('users').set({ email_verified: true }).where('id', '=', userId).execute();
     return true;
   }
 
-  /**
-   * Đồng bộ dòng credential trong `account` theo hash HIỆN HÀNH ở
-   * `users.password_hash` (chặng 2.6 của issue #7 — điểm nối duy nhất
-   * mà module users gọi sau mỗi lần ghi mật khẩu phía hệ cũ: tạo user,
-   * admin đặt lại mật khẩu, user tự đổi mật khẩu qua đường cũ; quy
-   * trình seed cũng gọi cho các tài khoản mẫu). Khác
-   * `linkExistingPasswordHash` ở hai điểm: (1) Better Auth đang TẮT
-   * thì đây là no-op trả `false` — hệ cũ là nguồn duy nhất, không
-   * phải lỗi; (2) đã có dòng credential thì CẬP NHẬT `password` của
-   * nó theo hash mới (link chỉ chèn khi chưa có). Chưa có thì chèn
-   * idempotent trên UNIQUE (user_id, provider_id) như link. User
-   * không có hash (chỉ OAuth/guest) → `false`, không tạo credential
-   * rỗng. Trả `true` khi có một lần ghi thật (chèn hoặc cập nhật).
-   */
   async syncCredentialPassword(userId: string): Promise<boolean> {
     if (!this.betterAuth.auth) return false;
     const row = await this.db
@@ -303,15 +192,6 @@ export class CredentialBridgeService {
     return inserted.length > 0;
   }
 
-  /**
-   * Tạo phiên theo chương trình cho user (không qua HTTP đăng nhập) và
-   * trả giá trị cookie phiên đã ký để phía gọi đặt lên response — đúng
-   * định dạng `token.signature` mà Better Auth chấp nhận.
-   */
-  /**
-   * Thu hồi toàn bộ phiên cookie Better Auth của user trong đúng kho trung tâm.
-   * @returns Số dòng session đã bị xoá để phục vụ audit và nghiệm thu.
-   */
   async revokeSessionsForUser(userId: string): Promise<number> {
     if (!this.betterAuth.auth) return 0;
     const deleted = await this.db

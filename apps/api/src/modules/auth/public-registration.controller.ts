@@ -4,11 +4,6 @@ import type { Request } from 'express';
 import { Public } from '../../common/public.decorator';
 import { PublicRegistrationService } from './public-registration.service';
 
-/**
- * Giao diện đăng ký của khu công cộng; không dùng sign-up toàn cục
- * của Better Auth vì địa chỉ trung tâm và kho vận hành không được
- * phép tự tạo tài khoản. Handler chỉ chạy sau guard gắn kho đích.
- */
 export const publicRegistrationSchema = z.object({
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
   email: z.email(),

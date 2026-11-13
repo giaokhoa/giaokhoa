@@ -9,9 +9,6 @@ import { SettingsLinkedAccountsPage } from './routes/settings-linked-accounts';
 import { SettingsNotificationsPage } from './routes/settings-notifications';
 import { SettingsSecurityPage } from './routes/settings-security';
 
-/**
- * Khu Cài đặt (issue #288): khung dùng chung có MENU TRÁI theo mục, `/settings` redirect về mục đầu (Bảo mật), bấm mục nào thì nội dung mục đó hiện ở cột phải và dấu chọn (aria-current) đi theo. Spec này dựng đúng bốn route module của khu và đi lại như người dùng.
- */
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
@@ -66,7 +63,6 @@ describe('Khu vực Cài đặt — menu trái, route mục, chuyển hướng g
     stubFetch();
     const { router } = renderSettings('/settings');
 
-    // Đích redirect: thẻ 2FA của mục Bảo mật hiện ra.
     expect(await screen.findByText('Xác thực hai lớp')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/settings/security');
     const securityLink = screen.getByRole('link', { name: /Bảo mật & đăng nhập/ });

@@ -12,18 +12,6 @@ import {
 import { GuardianViewRepository } from './guardian-view';
 import { GuardiansRepository } from './guardians';
 
-/**
- * Spec tích hợp của hai repository giám hộ trên Kysely (issue #649):
- * repository liên kết giám hộ và repository bề mặt phụ huynh chỉ-xem.
- *
- * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production — không mô phỏng handle — trong ngữ cảnh tenant qua pool gắn GUC như đường production.
- *
- * Ngoài hành vi của từng phương thức, spec này là bằng chứng nghiệm thu "phạm vi dữ kiện chỉ-đọc giữ nguyên trước/sau" của bề mặt phụ huynh: hai truy vấn khó nhất (quiz có hạn nộp và đếm tiến độ theo khoá) được chạy SONG SONG bằng hai bản thực thi — bản cũ (sao nguyên văn logic từ repository phía ứng dụng trước chuyển đổi, giữ lại trong file này chỉ để đối chiếu; từ #663 bản sao này dựng bằng Kysely thô vì ORM cũ đã rời khỏi cây) và bản repository hiện hành — trên CÙNG một bộ dữ kiện mẫu, và kết quả phải khớp nhau từng dòng. Dữ kiện mẫu được dựng có chủ đích để bắt đúng điểm nóng của nhóm:
- * - Một attempt xem trước (preview = true) cạnh một attempt thật:
- *   điều kiện preview nằm trong ON của left join nên quiz chỉ có đúng một dòng với trạng thái của attempt thật.
- * - Một module có dòng hoàn thành ở trạng thái 0: điều kiện
- *   completion_state <> 0 nằm trong ON của left join nên module vẫn tính vào tổng số, chỉ không tính vào số đã hoàn thành; dòng hoàn thành của HỌC SINH KHÁC trên cùng module không được rò vào đếm.
- */
 const TEST_DATABASE = 'giaokhoa_db_g649_guardians';
 const TEST_ROLE = 'giaokhoa_db_g649_guardians';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_guardians_pw';
@@ -50,7 +38,6 @@ let courseId = '';
 let cmQuizId = '';
 let cmAssignId = '';
 
-/** Bản thực thi cũ của quizDueRows (sao nguyên văn logic để đối chiếu trước/sau; dựng bằng Kysely thô). */
 async function oldQuizDueRows(courseIds: string[], studentUserId: string, until: Date) {
   if (!courseIds.length) return [];
   return db
@@ -78,7 +65,6 @@ async function oldQuizDueRows(courseIds: string[], studentUserId: string, until:
     .execute();
 }
 
-/** Bản thực thi cũ của courseProgressRows (sao nguyên văn logic để đối chiếu trước/sau; dựng bằng Kysely thô). */
 async function oldCourseProgressRows(courseIds: string[], studentUserId: string) {
   if (!courseIds.length) return [];
   return db
@@ -100,7 +86,6 @@ async function oldCourseProgressRows(courseIds: string[], studentUserId: string)
     .execute();
 }
 
-/** Bản thực thi cũ của assignmentDueRows (sao nguyên văn logic để đối chiếu trước/sau; dựng bằng Kysely thô). */
 async function oldAssignmentDueRows(courseIds: string[], studentUserId: string, until: Date) {
   if (!courseIds.length) return [];
   return db
@@ -126,7 +111,6 @@ async function oldAssignmentDueRows(courseIds: string[], studentUserId: string, 
     .execute();
 }
 
-/** Chèn một course module mẫu và trả id. */
 async function insertCm(values: {
   component: string;
   instanceId?: string | null;
@@ -232,8 +216,6 @@ beforeAll(async () => {
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    // Chuỗi đề thi: ngân hàng → đề → phiên bản → pin (pin không đặt
-    // tên riêng để kiểm chứng coalesce lấy tên của phiên bản đề).
     const bank = await db
       .insertInto('question_banks')
       .values({
@@ -282,7 +264,6 @@ beforeAll(async () => {
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    // Bài tập và bài nộp của học sinh.
     const assignment = await db
       .insertInto('assignments')
       .values({ course: courseId, name: 'Bài tập về nhà', due_date: ASSIGN_DUE_AT })
@@ -293,9 +274,6 @@ beforeAll(async () => {
       .values({ assignment_id: assignment.id, user_id: studentId, status: 'submitted' })
       .execute();
 
-    // Các course module của khoá: hai module có hạn nộp, một module
-    // thường có theo dõi hoàn thành, một module không theo dõi và
-    // một module ẩn — hai module cuối không được tính vào tiến độ.
     cmQuizId = await insertCm({ component: 'mod_quiz', instanceId: pin.id, completion: 2, sectionId: section.id });
     cmAssignId = await insertCm({ component: 'mod_assign', instanceId: assignment.id, completion: 1, sectionId: section.id });
     const cmPageId = await insertCm({ component: 'mod_page', completion: 1, sectionId: section.id });
@@ -303,7 +281,6 @@ beforeAll(async () => {
     await insertCm({ component: 'mod_page', completion: 0, sectionId: section.id });
     await insertCm({ component: 'mod_page', completion: 2, visible: false, sectionId: section.id });
 
-    // Attempt thật (đã chốt) và attempt xem trước trên cùng pin.
     const usageReal = await db
       .insertInto('question_usages')
       .values({ component: 'mod_quiz', user_id: studentId })
@@ -337,8 +314,6 @@ beforeAll(async () => {
       })
       .execute();
 
-    // Trạng thái hoàn thành: cmQuiz đã xong (2), cmAssign ở trạng
-    // thái 0 (chưa xong), cmPage chỉ có dòng của học sinh khác.
     await db
       .insertInto('course_modules_completion')
       .values({ course_module_id: cmQuizId, user_id: studentId, completion_state: 2, viewed: true })
@@ -356,8 +331,6 @@ beforeAll(async () => {
       .values({ course_module_id: cmAssignId, user_id: otherStudentId, completion_state: 2, viewed: true })
       .execute();
 
-    // Thông báo: hai thông báo cho học sinh (khác thời điểm), một
-    // thông báo cho học sinh khác không được lọt vào danh sách.
     const mkNotification = async (userIdTo: string, subject: string, createdAt: Date): Promise<void> => {
       await db
         .insertInto('notifications')

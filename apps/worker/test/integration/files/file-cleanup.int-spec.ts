@@ -17,11 +17,6 @@ import {
 const STORAGE = '/tmp/giaokhoa-worker-test-files';
 const DOMAIN_B = fileDomainForSpace('bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb');
 
-/**
- * Worker thực chạy qua role thường, PostgreSQL và hàng đợi BullMQ.
- * Trường hợp hash trùng ở hai miền có cả metadata lẫn byte thật:
- * dọn miền hệ thống không xoá miền B; job sai miền bị từ chối.
- */
 describe('Worker file-cleanup: tách miền sở hữu khi cùng content hash', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -98,8 +93,6 @@ describe('Worker file-cleanup: tách miền sở hữu khi cùng content hash', 
     const queue = context.get<Queue>(getQueueToken('file-cleanup'));
     const completedIds: string[] = [];
     for (const round of [1, 2]) {
-      // Mô phỏng byte mới được upload lại vào cùng content key,
-      // không chỉ mock lời gọi xoá: worker phải thật sự xóa byte.
       await writeFile(physicalSystem, content);
       const record = await db.insertInto('files').values({
         content_hash: hash, storage_domain: SYSTEM_FILE_DOMAIN,
@@ -111,8 +104,6 @@ describe('Worker file-cleanup: tách miền sở hữu khi cùng content hash', 
       expect(existsSync(physicalSystem)).toBe(true);
       await db.deleteFrom('files').where('id', '=', record.id).execute();
 
-      // Cùng công thức jobId do FilesService dùng: sự kiện xóa id
-      // mới phải được xử lý ngay cả khi completed của vòng 1 còn lưu.
       const jobId = ['orphan', SYSTEM_FILE_DOMAIN, hash, record.id].join('-');
       const job = await queue.add('cleanup-orphan', {
         contentHash: hash, storageDomain: SYSTEM_FILE_DOMAIN,

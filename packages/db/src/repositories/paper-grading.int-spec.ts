@@ -7,22 +7,6 @@ import type { ExamVariant } from '../jsonb-types';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { PaperGradingRepository } from './paper-grading';
 
-/**
- * Spec tích hợp của repository chấm bài giấy trên Kysely (issue #644).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `paper-grading.ts` — không mô phỏng handle.
- *
- * Các tính chất chốt tại đây:
- * - Ghi/đọc jsonb nghiệp vụ (`layout`/`roster` của lô, `quality`/
- *   `readings` của phiếu) khớp hai chiều repository ↔ oracle độc lập trên cùng dữ kiện mẫu (mục `JSONColumnType` của tài liệu Kysely + thử nghiệm T-6): phía repository ghi qua helper xâu hoá + `::jsonb`, phía oracle (Kysely thô ngoài repository) đọc lại phải thấy đúng giá trị.
- * - `readings` có DEFAULT `[]` của database: insert không truyền
- *   thì nhận mảng rỗng, repository không tự điền.
- * - Patch phiếu theo T-4 với cột jsonb nullable đủ ba trạng
- *   thái: `undefined` giữ nguyên, giá trị thay mới, `null` ghi SQL NULL.
- * - Lọc theo trạng thái, thứ tự theo thời gian tạo và phiếu mới
- *   nhất giữ nguyên hành vi của repository cũ. Repository không có bề mặt giao dịch ở bản cũ nên bản Kysely cũng không thêm
- *   (rủi ro R-G4-3) — spec này không kiểm tra tham số tx nào.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -31,7 +15,6 @@ const adminUrl =
 const TEST_DB = 'giaokhoa_db_g644_paper_grading';
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-/** Định danh cố định cho các cột tham chiếu mềm (file/user) — không có khoá ngoại. */
 const ACTOR = '019276a1-4444-7000-8000-0000000000a9';
 const STUDENT = '019276a1-4444-7000-8000-0000000000a8';
 const QUESTION_ID = '019276a1-4444-7000-8000-0000000000a7';
@@ -62,7 +45,6 @@ interface Seed {
 
 let seed: Seed;
 
-/** Gieo chuỗi neo tối thiểu tenant → khoá → bank → đề → version → pin qua Kysely thô. */
 async function seedData(): Promise<Seed> {
   const tenant = await db.insertInto('tenants')
     .values({ slug: 'g644-paper', name: 'Tenant giấy G644', kind: 'centre' })
@@ -176,16 +158,13 @@ describe('PaperGradingRepository trên Kysely (issue #644)', () => {
       examPinId: seed.pinId, fileId: FILE_3, uploadedBy: ACTOR, quality: QUALITY, readings: READINGS,
       createdAt: new Date('2026-01-03T00:00:00Z'),
     });
-    // Không truyền quality → giữ nguyên; đổi status + gán học sinh.
     const step1 = await repo.updateScan(scan.id, { status: 'ready', studentId: STUDENT, identitySource: 'manual' });
     expect(step1.quality).toEqual(QUALITY);
     expect(step1.status).toBe('ready');
     expect(step1.studentId).toBe(STUDENT);
-    // Truyền giá trị mới → thay.
     const step2 = await repo.updateScan(scan.id, { quality: QUALITY_2 });
     expect(step2.quality).toEqual(QUALITY_2);
     expect(step2.readings).toEqual(READINGS);
-    // Truyền null tường minh → SQL NULL; readings thay bằng mảng mới.
     const step3 = await repo.updateScan(scan.id, { quality: null, readings: [] });
     expect(step3.quality).toBeNull();
     expect(step3.readings).toEqual([]);
@@ -195,7 +174,6 @@ describe('PaperGradingRepository trên Kysely (issue #644)', () => {
   it('listScansForPin lọc theo trạng thái và giữ thứ tự tạo; latestScanForQuiz trả phiếu mới nhất; deleteScan xoá hẳn', async () => {
     const all = await repo.listScansForPin(seed.pinId);
     expect(all).toHaveLength(3);
-    // Ba phiếu có created_at tường minh tăng dần 01-01 → 01-02 → 01-03.
     expect(all.map((s) => s.fileId)).toEqual([FILE_1, FILE_2, FILE_3]);
     const byStatus = await repo.listScansForPin(seed.pinId, 'needs_review');
     expect(byStatus.map((s) => s.fileId)).toEqual([FILE_2]);

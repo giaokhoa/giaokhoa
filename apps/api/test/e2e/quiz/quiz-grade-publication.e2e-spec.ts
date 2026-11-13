@@ -5,24 +5,6 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Cổng công bố điểm cho điểm TỔNG của bài kiểm tra (issue #411).
- *
- * Quy tắc nghiệp vụ: học viên chỉ thấy điểm ĐÃ CÔNG BỐ. Điểm từng câu vốn đã được gác bằng mặt nạ xem lại (reviewMarks theo cửa sổ), nhưng điểm tổng (grade/sumGrades trong tóm tắt lượt và myGrade ở trang bài kiểm tra) từng bị trả thẳng vô điều kiện ở mọi đường đọc phía chủ lượt. Spec này khoá cả HAI điều kiện độc lập của cổng che điểm tổng:
- *
- *  - (a) mặt nạ điểm ĐÓNG + hạng mục điểm đã công bố (chính sách auto)
- *    → phía học viên vẫn null: điều kiện mặt nạ một mình đã đủ che.
- *  - (b) mặt nạ điểm MỞ + hạng mục điểm manual CHƯA công bố → phía học
- *    viên vẫn null; sau khi giáo viên công bố hạng mục, cùng dữ kiện đó hiện số thật: điều kiện công bố một mình đã đủ che.
- *  - (c) mặt nạ MỞ + đã công bố → học viên thấy đúng số thật ở mọi bề
- *    mặt (view lượt, danh sách lượt của mình, myGrade).
- *  - (d) lượt đang chờ chấm tay (needsgrading) + chưa công bố → tổng
- *    BÁN PHẦN cũng bị che (null), không lộ qua tóm tắt lượt.
- *  - (e) giáo viên/người có đặc quyền xem CÙNG dữ kiện của ca (b) khi
- *    chưa công bố vẫn thấy đủ số thật ở view lượt, danh sách lượt và trang kết quả lớp — cổng che chỉ áp phía chủ lượt.
- *
- * Mặt nạ mở trong spec này = reviewMarks 4368 (đủ bốn cửa sổ xem lại) và reviewAttempt 4368 để nội dung lượt luôn xem được; các lượt đều được đọc ngay sau khi nộp, tức trong cửa sổ "ngay sau nộp".
- */
 describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () => {
   let app: INestApplication;
   let admin: string;
@@ -94,7 +76,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
 
   type Ctx = Awaited<ReturnType<typeof setup>>;
 
-  /** Ghim một đề chỉ gồm câu trắc nghiệm (tổng thang bài 10) với cấu hình mặt nạ cho trước. */
   async function mkMcQuiz(ctx: Ctx, name: string, extra: Record<string, unknown>): Promise<{ pinId: string; cmId: string }> {
     const draft = await createExamDraft(app, admin, name, 10);
     await addExamSlot(app, admin, draft, { questionId: ctx.mcId });
@@ -102,7 +83,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     return { pinId: pin.id as string, cmId: pin.cmId as string };
   }
 
-  /** Ghim một đề trắc nghiệm + tự luận (tổng thang bài 3) để tạo lượt chờ chấm tay. */
   async function mkMixedQuiz(ctx: Ctx, name: string, extra: Record<string, unknown>): Promise<{ pinId: string; cmId: string }> {
     const draft = await createExamDraft(app, admin, name, 3);
     await addExamSlot(app, admin, draft, { questionId: ctx.mcId });
@@ -111,7 +91,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     return { pinId: pin.id as string, cmId: pin.cmId as string };
   }
 
-  /** Hạng mục điểm gắn với lần ghim (tạo tự động khi ghim đề). */
   async function gradeItemId(cmId: string): Promise<string> {
     const r = await pg.query('SELECT id FROM grade_items WHERE item_type = $1 AND item_instance = $2', ['mod', cmId]);
     if (!r.rows.length) throw new Error(`no grade item for cm ${cmId}`);
@@ -134,7 +113,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     expect(r.body.published).toBe(true);
   }
 
-  /** Học viên làm đề trắc nghiệm, chọn đáp án ĐÚNG (1/1 điểm) và nộp. */
   async function playMc(ctx: Ctx, pinId: string): Promise<{ attemptId: string; submitBody: AttemptViewBody }> {
     const start = await http(app).post(`/api/v1/exam-pins/${pinId}/attempts`).set('Authorization', `Bearer ${ctx.student}`).send({});
     expect(start.status === 200 || start.status === 201).toBe(true);
@@ -147,7 +125,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     return { attemptId: view.attempt.id, submitBody: submit.body as AttemptViewBody };
   }
 
-  /** Học viên làm đề hỗn hợp: trắc nghiệm đúng (1 điểm) + tự luận chờ chấm → lượt needsgrading với tổng bán phần 1. */
   async function playMixed(ctx: Ctx, pinId: string): Promise<{ attemptId: string; submitBody: AttemptViewBody }> {
     const start = await http(app).post(`/api/v1/exam-pins/${pinId}/attempts`).set('Authorization', `Bearer ${ctx.student}`).send({});
     expect(start.status === 200 || start.status === 201).toBe(true);
@@ -163,10 +140,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     return { attemptId: view.attempt.id, submitBody: submit.body as AttemptViewBody };
   }
 
-  /**
-   * Đọc cả ba bề mặt phía học viên của một lượt và khẳng định điểm
-   * tổng ở tất cả đều bằng giá trị kỳ vọng (số thật hoặc null).
-   */
   async function expectStudentTotals(ctx: Ctx, pinId: string, attemptId: string, expected: { sumGrades: number | null; grade: number | null; myGrade: number | null }): Promise<void> {
     const view = await http(app).get(`/api/v1/quiz-attempts/${attemptId}`).set('Authorization', `Bearer ${ctx.student}`);
     expect(view.status).toBe(200);
@@ -192,7 +165,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     const { pinId } = await mkMcQuiz(ctx, 'Đề mặt nạ đóng', MASK_MARKS_CLOSED);
     const { attemptId, submitBody } = await playMc(ctx, pinId);
 
-    // Ngay trong view vừa nộp, tổng đã bị che dù dữ kiện thật là 1/1.
     expect(submitBody.attempt.sumGrades).toBeNull();
     expect(submitBody.attempt.grade).toBeNull();
     await expectStudentTotals(ctx, pinId, attemptId, { sumGrades: null, grade: null, myGrade: null });
@@ -208,8 +180,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     expect(submitBody.attempt.grade).toBeNull();
     await expectStudentTotals(ctx, pinId, attemptId, { sumGrades: null, grade: null, myGrade: null });
 
-    // Cùng dữ kiện, chỉ đổi trạng thái công bố → số thật hiện ra:
-    // chứng tỏ chính điều kiện công bố là thứ đang gác ở nửa trên.
     await publishItem(cmId);
     await expectStudentTotals(ctx, pinId, attemptId, { sumGrades: 1, grade: 10, myGrade: 10 });
   });
@@ -230,8 +200,6 @@ describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () =>
     await setManualPolicy(cmId);
     const { attemptId, submitBody } = await playMixed(ctx, pinId);
 
-    // Tổng bán phần thật của lượt là 1 (câu trắc nghiệm đúng, tự luận
-    // chưa chấm) — phía học viên không được thấy cả ở view vừa nộp.
     expect(submitBody.attempt.sumGrades).toBeNull();
     expect(submitBody.attempt.grade).toBeNull();
     await expectStudentTotals(ctx, pinId, attemptId, { sumGrades: null, grade: null, myGrade: null });

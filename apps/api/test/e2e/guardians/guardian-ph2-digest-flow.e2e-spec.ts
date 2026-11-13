@@ -3,13 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
-/**
- * PH-2 (issue #159) — phần còn ở phía API của digest phụ huynh:
- * endpoint tuỳ chọn tần suất theo từng con qua cổng liên kết (mặc định weekly, đặt daily/off có hiệu lực, tần suất lạ bị 400, không liên kết thì 404 đồng nhất cho cả đọc lẫn ghi).
- *
- * Nửa TIÊU THỤ của digest (tổng hợp cửa sổ đã công bố + gửi thông báo + đẩy riêng quá hạn ≥7 ngày) không còn chạy ở phía API: từ issue con #518 của #491 các sự kiện `guardian_digest_due` / `guardian_overdue_alert` đi qua relay outbox vào hàng đợi phía worker. Năm ca hành vi của nửa đó (kết quả đã công bố gửi đúng một lần, item chưa công bố không lọt, cửa sổ rỗng, liên kết đã thu hồi, đẩy quá hạn đúng một lần) đã chuyển nguyên sang tầng tích hợp phía worker:
- * `apps/worker/test/integration/guardians/guardian-digest-delivery.int-spec.ts`.
- */
 describe('PH-2: digest phụ huynh — tuỳ chọn tần suất phía API (issue #159)', () => {
   let app: INestApplication;
   let admin: string;
@@ -22,7 +15,6 @@ describe('PH-2: digest phụ huynh — tuỳ chọn tần suất phía API (issu
   }, 120000);
   afterAll(async () => { await app.close(); });
 
-  /** Khoá mới + học sinh ghi danh + giáo viên editingteacher tại context khoá. */
   async function courseWithPeople() {
     const course = await createCourse(app, admin, catId);
     const instance = await createEnrolInstance(app, admin, course.id);
@@ -73,7 +65,6 @@ describe('PH-2: digest phụ huynh — tuỳ chọn tần suất phía API (issu
     const invalid = await http(app).put(url).set('Authorization', `Bearer ${guardianToken}`).send({ frequency: 'monthly' });
     expect(invalid.status).toBe(400);
 
-    // Không liên kết → 404 đồng nhất cho cả đọc lẫn ghi; học sinh cũng không tự đặt được cho mình.
     const { token: strangerToken } = await freshGuardian();
     const strangerGet = await http(app).get(url).set('Authorization', `Bearer ${strangerToken}`);
     expect(strangerGet.status).toBe(404);

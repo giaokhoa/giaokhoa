@@ -1,5 +1,3 @@
--- Kho công bố học liệu chỉ giữ nguồn, package và quyết định biên tập.
--- Việc sử dụng và hồ sơ học tập chỉ tồn tại ở kho trung tâm tiếp nhận.
 CREATE TABLE "system_materials" (
   "id" uuid PRIMARY KEY DEFAULT uuidv7(),
   "centre_slug" text NOT NULL,
@@ -49,7 +47,6 @@ CREATE INDEX "system_material_submissions_pending_idx" ON "system_material_submi
 --> statement-breakpoint
 CREATE INDEX "system_material_submissions_publication_idx" ON "system_material_submissions" ("published_material_id", "published_version");
 --> statement-breakpoint
--- Phiên bản đã phát hành không thể bị sửa/xoá; bản mới phải có số phiên bản mới.
 CREATE FUNCTION reject_system_material_version_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'system_material.version_immutable';

@@ -12,9 +12,6 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { createClass } from '../api/classes';
 
-/**
- * Màn tạo lớp riêng (CLASS-1, issue #184) — chuẩn giao diện: tạo mới là màn riêng, không phải hộp thoại. Chỉ TÊN lớp là bắt buộc (quyết định lớp tạo trước tối giản); mã/năm học/mô tả đều tuỳ chọn. Tạo xong đi thẳng tới chi tiết lớp để nạp roster ngay.
- */
 export function ClassNewPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
@@ -86,7 +83,6 @@ export function ClassNewPage() {
 
 export default ClassNewPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

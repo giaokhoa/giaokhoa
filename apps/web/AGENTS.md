@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -41,16 +41,9 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Cấu trúc `test/e2e/`, `test/integration/` cùng hậu tố `.e2e-spec`/`.int-spec` là của backend (`apps/api`, `apps/worker`) — không áp dụng cho web và không tạo tầng rỗng cho web.
 - `vitest.config.ts` khai một project Vitest tên `unit` giữ danh sách `include` neo đúng các vị trí trên; script `test` chạy toàn bộ test của app, script `test:unit` chạy riêng project `unit` (hiện cùng một tập test vì web chỉ có một tầng).
 
-## Chuẩn comment TSDoc (sổ quyết định mục F — chốt 13:14 ngày 26/10/2026)
+## Không viết comment trong code
 
-Mọi code TypeScript/TSX viết mới hoặc sửa trong `apps/web` phải có comment **tiếng Việt theo chuẩn TSDoc**, chi tiết nhất có thể — flow kỹ thuật phải nằm ngay trong code, để lần sửa sau dựa vào nội dung code đang có chứ không dựa vào trí nhớ của trợ lý:
-
-- Đầu mỗi file: khối TSDoc mô tả vai trò của file + flow tổng thể (dữ liệu vào từ đâu — loader/dữ liệu route, props, API → các bước xử lý/hiển thị → dữ liệu ra và side-effect).
-- Mỗi component/hook/hàm trọng yếu: TSDoc `/** ... */` tiếng Việt gồm mục đích, `@param`/`@returns` (props của component, giá trị hook trả về), các bước flow, bất biến/ràng buộc hiển thị, side-effect (gọi API, điều hướng, đăng ký realtime/socket, ghi cache truy vấn).
-- Logic hiển thị phức tạp (render theo capability/vai, neo URL + trạng thái mở/đóng, gộp dữ liệu nhiều nguồn): comment nội tuyến tiếng Việt nói bước flow và **lý do** — không lặp lại điều code đã hiển nhiên.
-- Cú pháp/tag theo TSDoc (`@remarks`/`@example` khi cần); định danh và tên tag giữ tiếng Anh.
-- Sửa code thì căn cứ vào comment flow đang có trong code; thấy comment lệch code thật thì sửa comment **trong cùng lượt** với sửa code.
-- Đội đánh giá độc lập soi chuẩn này như một tiêu chí đạt — code thiếu comment flow đạt chuẩn là chưa đạt. Code cũ chưa có comment được phủ theo đợt riêng của issue #272, không tự trộn việc phủ vào feat đang bay.
+Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.
 
 ## Cấu trúc `features/` và kỷ luật import (issue #500)
 

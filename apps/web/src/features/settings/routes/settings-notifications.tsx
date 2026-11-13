@@ -9,16 +9,8 @@ import { preferenceKey } from '#features/notifications/utils/notifications';
 import { useMessagePreferences, useNotificationCourseOverrides, useSetMessagePreference, useSetNotificationCourseOverride } from '#features/notifications/queries/notifications';
 import type { EmailFrequency, NotificationCourseOverrideView, NotificationGroupFilter, NotificationPreferenceView } from '#features/notifications/types/notifications';
 
-/** Ba nhóm provider của registry (NB-2) theo đúng thứ tự trình bày đã chốt. */
 const GROUP_ORDER: NotificationGroupFilter[] = ['learning', 'people', 'system'];
 
-/**
- * Trạng thái gộp của một NHÓM provider cho lớp 1 (theo nhóm):
- * - `popupState`: true/false khi mọi dòng còn chỉnh được đồng nhất,
- *   'mixed' khi lệch nhau (đã có tuỳ chỉnh từng loại), null khi nhóm không còn dòng nào chỉnh được (mọi loại đều bị admin tắt ở site).
- * - `emailState`: cùng quy ước, chỉ tính trên các dòng có kênh email.
- * Dòng bị admin tắt ở cấp site (NB-7, `siteEnabled=false`) bị LOẠI khỏi phép gộp: giá trị tuỳ chọn cá nhân của chúng không còn hiệu lực phát nào để trình bày thành trạng thái nhóm.
- */
 interface GroupSummary {
   group: NotificationGroupFilter;
   rows: NotificationPreferenceView[];
@@ -29,7 +21,6 @@ interface GroupSummary {
   customized: boolean;
 }
 
-/** Gộp trạng thái một nhóm từ các dòng tuỳ chọn thật API trả về (không có trạng thái nhóm lưu riêng ở đâu cả). */
 function summarizeGroup(group: NotificationGroupFilter, rows: NotificationPreferenceView[]): GroupSummary {
   const changeable = rows.filter((r) => r.siteEnabled);
   const popupValues = new Set(changeable.map((r) => r.popupEnabled));
@@ -51,20 +42,6 @@ function summarizeGroup(group: NotificationGroupFilter, rows: NotificationPrefer
   };
 }
 
-/**
- * Mục THÔNG BÁO của khu Cài đặt (`/settings/notifications`, issue #288) — bề mặt tuỳ chọn thông báo phía người dùng, chuyển từ trang `/notifications` (nay chỉ còn trung tâm thông báo) sang đây.
- *
- * Mô hình HAI LỚP trên đúng dữ liệu registry v2 sẵn có (20 provider / 3 nhóm; API `/messages/preferences` giữ nguyên, không có trạng thái "theo nhóm" lưu ở server):
- *
- * - Lớp 1 (bề mặt chính): một hàng cho mỗi nhóm — công tắc popup +
- *   tần suất email THEO NHÓM. Trạng thái nhóm là giá trị SUY RA phía client từ các dòng thật: đồng nhất thì hiện giá trị đó, lệch nhau
- *   (đã tuỳ chỉnh từng loại) thì hiện "Đã tuỳ chỉnh". Đổi ở lớp 1 =
- *   ghi đồng loạt qua API hiện có (PUT từng provider trong nhóm, bỏ qua loại bắt buộc khi tắt popup và loại admin đã tắt) — đúng khuyến nghị research #288 mục 4.3.
- * - Lớp 2 (mục thu/mở "Tuỳ chỉnh từng loại"): nguyên bảng theo loại
- *   như v2 — tuỳ chỉnh ở đây là PUT cho đúng một provider nên THẮNG cài đặt nhóm: sau khi chỉnh, hàng nhóm ở lớp 1 chuyển sang trạng thái "Đã tuỳ chỉnh" thay vì một giá trị giả.
- *
- * Các luật cứng chỉ HIỂN THỊ, không đổi: loại bắt buộc P2 khoá popup kèm nhãn "Bắt buộc"; loại bị admin tắt ở cấp site (NB-7, trường `siteEnabled` API trả về từ đúng chính sách `notify()` tôn trọng) hiện nhãn "Admin đã tắt ở cấp site" và vô hiệu hoá điều khiển. Dưới hai lớp là mục riêng "Ngoại lệ theo khoá học" (NB-4/P3) giữ nguyên hành vi. Học sinh: API trả danh sách theo loại rỗng nên trang chỉ hiện ghi chú tối thiểu + mục ngoại lệ theo khoá (NB-7).
- */
 export function SettingsNotificationsPage() {
   const { t, i18n } = useTranslation('app');
   const [savingPrefs, setSavingPrefs] = useState<ReadonlySet<string>>(new Set());
@@ -101,15 +78,11 @@ export function SettingsNotificationsPage() {
     rows: prefs.filter((p) => p.group === group),
   })).filter((section) => section.rows.length > 0);
 
-  /** Lưu một patch tuỳ chọn của một provider; cờ đang-lưu theo (provider, trường). */
   function savePreference(row: NotificationPreferenceView, field: 'popup' | 'email', patch: { popupEnabled?: boolean; emailFrequency?: EmailFrequency }) {
     const key = `${preferenceKey(row)}|${field}`;
     if (savingPrefs.has(key)) return;
     setPrefError(null);
     setSavingPrefs((prev) => new Set(prev).add(key));
-    // Cập nhật lạc quan + hoàn lại khi lỗi nằm trong mutation ở
-    // features/notifications/queries/notifications; ở đây chỉ lo cờ đang-lưu và lỗi riêng
-    // của khu vực tuỳ chọn.
     preferenceMutation.mutate(
       { provider: row.provider, patch },
       {
@@ -132,16 +105,6 @@ export function SettingsNotificationsPage() {
     savePreference(row, 'email', { emailFrequency: frequency });
   }
 
-  /**
-   * Ghi một thay đổi THEO NHÓM (lớp 1): fan-out thành PUT cho từng
-   * provider còn chỉnh được trong nhóm mà giá trị hiện tại khác giá
-   * trị đích — chạy TUẦN TỰ để mỗi mutation lạc quan ở lib chụp đúng
-   * trạng thái cache trước nó, tránh các bản chụp chồng nhau ghi đè
-   * khi hoàn lại. Loại bắt buộc P2 không bao giờ bị tắt popup qua
-   * đường nhóm (bật thì vô hại vì chúng vốn luôn bật); loại admin đã
-   * tắt ở cấp site bị bỏ qua hẳn — server không phát chúng nữa nên
-   * ghi tuỳ chọn cho chúng là vô nghĩa.
-   */
   async function saveGroup(summary: GroupSummary, field: 'popup' | 'email', target: boolean | EmailFrequency) {
     if (savingGroups.has(summary.group)) return;
     setPrefError(null);
@@ -170,11 +133,6 @@ export function SettingsNotificationsPage() {
     }
   }
 
-  /**
-   * Bật/tắt tắt tiếng một khoá (NB-4): cập nhật lạc quan + hoàn lại
-   * khi lỗi nằm trong mutation ở features/notifications/queries/notifications; ở đây chỉ lo
-   * cờ đang-lưu và thông báo lỗi riêng của khu vực ngoại lệ.
-   */
   function toggleCourseMute(course: NotificationCourseOverrideView) {
     if (savingOverrides.has(course.courseId)) return;
     setOverrideError(null);
@@ -210,15 +168,9 @@ export function SettingsNotificationsPage() {
               {prefError}
             </ErrorAlert>
           ) : null}
-          {/* NB-7: học sinh chỉ có bề mặt tối thiểu — API trả danh sách
-              theo loại rỗng cho họ; trang nói rõ thay vì hiện một thẻ
-              trống, bề mặt thật của họ là Ngoại lệ theo khoá ở dưới. */}
           {prefsQuery.isSuccess && prefs.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('prefMinimalNote')}</p>
           ) : null}
-          {/* Lớp 1 — theo nhóm: trạng thái suy ra từ các dòng thật;
-              nhóm lệch giá trị thì báo "Đã tuỳ chỉnh" thay vì bịa một
-              giá trị chung không có thật. */}
           {summaries.map((summary) => {
             const emailSaving = savingGroups.has(summary.group);
             return (
@@ -232,9 +184,6 @@ export function SettingsNotificationsPage() {
                       checked={summary.popupState === true}
                       disabled={summary.popupState === null || emailSaving}
                       ref={(el) => {
-                        // Trạng thái lệch nhau (đã tuỳ chỉnh từng loại)
-                        // hiện dạng indeterminate — không bật cũng
-                        // không tắt, đúng sự thật của dữ liệu.
                         if (el) el.indeterminate = summary.popupState === 'mixed';
                       }}
                       onChange={(e) => void saveGroup(summary, 'popup', e.target.checked)}
@@ -273,10 +222,6 @@ export function SettingsNotificationsPage() {
           })}
         </CardContent>
       </Card>
-      {/* Lớp 2 — tuỳ chỉnh từng loại: nguyên bảng v2, chỉ mở khi giáo
-          viên cần tinh chỉnh; PUT ở đây áp cho đúng một provider nên
-          thắng cài đặt theo nhóm ở lớp 1. Học sinh không có lớp này
-          (danh sách rỗng) — bề mặt của họ dừng ở ghi chú tối thiểu. */}
       {prefs.length > 0 ? (
         <CollapsibleSection
           title={t('prefCustomizeTitle')}
@@ -393,10 +338,8 @@ export function SettingsNotificationsPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default SettingsNotificationsPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

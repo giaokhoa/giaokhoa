@@ -3,10 +3,6 @@ import { createServer, type Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { McpOAuthVerifier } from './mcp-oauth-verifier';
 
-/**
- * Kiểm chứng bộ kiểm token RS của lát MCP-1 (issue #163) ở mức đơn vị: một AS tí hon (JWKS tự phục vụ + khoá RS256 ký bằng node:crypto) phát token cho verifier thật (createMcpProtectedRequestHandler của plugin). Các ca chặn bắt buộc của issue — sai audience, sai chữ ký, hết hạn — đều phải về 401; token đúng phải cho danh tính + scope + client_id nguyên vẹn.
- */
-// Plugin bắt resource/issuer dùng HTTPS, trừ localhost/loopback cho môi trường phát triển — spec dùng luôn dạng localhost như app thật ở dev/test.
 const ISSUER = 'http://localhost:4891/api/v1/auth';
 const AUDIENCE = 'http://localhost:4891/mcp';
 

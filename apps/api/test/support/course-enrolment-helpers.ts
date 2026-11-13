@@ -17,14 +17,6 @@ export async function createClass(app: INestApplication, token: string, override
   return res.body;
 }
 
-/**
- * Lớp fixture dùng chung cho createCourse: từ cửa sổ đóng gói CLASS-0
- * (PR #200), khoá dạy thật BẮT BUỘC thuộc một lớp (`course.class_required`
- * + CHECK ở DB) nên helper tạo khoá phải cấp một lớp cho token nếu
- * overrides chưa mang classId. Cache theo (app, token): một lớp cho mỗi
- * danh tính/tenant hiệu lực — token khác nhau (hoặc sau switch-tenant)
- * là lớp khác nhau.
- */
 const fixtureClassByToken = new WeakMap<INestApplication, Map<string, Promise<string>>>();
 
 export function fixtureClassId(app: INestApplication, token: string): Promise<string> {
@@ -83,22 +75,6 @@ export async function enrolUser(app: INestApplication, token: string, courseId: 
   return res.body;
 }
 
-/**
- * Cấp cho một giáo viên quyền lợi gói giáo viên (`teacher_plan`) đang
- * hoạt động, ghi thẳng vào DB như một trạng thái fixture có sẵn.
- *
- * Vì sao cần: từ lát thực thi giới hạn slot của issue #189 (đặc tả
- * slot đã duyệt), một giáo viên ở tenant platform chỉ làm chủ được
- * tối đa MỨC NỀN 1 khoá học khi không có gói đang hoạt động — các
- * spec dựng giáo viên làm chủ NHIỀU khoá (lớp học nhiều môn, học phí
- * theo lớp, cây nhóm theo vai...) phải cho giáo viên đó giữ gói giáo
- * viên như điều kiện tiền đề của kịch bản, đúng như người dùng thật
- * đã mua gói. Helper này chỉ dựng trạng thái quyền lợi (kèm payment
- * neo đã `succeeded` và tài khoản nhận đã tắt để không chen vào luật
- * chọn tài khoản của các spec thanh toán); nó không nới bất kỳ
- * assertion nào của spec gọi nó — hành vi bị chặn ở mức nền có spec
- * riêng bao phủ tại payments-coupons-slots.e2e-spec.ts.
- */
 export async function grantActiveTeacherPlan(pg: Client, userId: string): Promise<void> {
   const tz = await pg.query<{ id: string }>("select id from tenants where kind = 'platform'");
   const tenantId = tz.rows[0]!.id;

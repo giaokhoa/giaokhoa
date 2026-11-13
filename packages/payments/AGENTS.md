@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -33,11 +33,6 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - `src/sepay-matching.service.spec.ts` là test đặc trưng hoá ghim hành vi matching: đổi hành vi matching đã chốt thì ca tương ứng phải fail — nếu đổi mà test vẫn xanh, test viết sai và phải sửa cùng lượt. Không yếu hoá khẳng định để cho qua.
 - Hành vi đầu-cuối trên DB thật do các suite e2e payments của apps/api ghim; số ca của các suite đó không được giảm khi sửa package này.
 
-## Chuẩn comment TSDoc
+## Không viết comment trong code
 
-Mọi code TypeScript viết mới hoặc sửa trong `packages/payments` phải có comment tiếng Việt theo chuẩn TSDoc, chi tiết nhất có thể — flow nghiệp vụ phải nằm ngay trong code, để lần sửa sau dựa vào nội dung code đang có chứ không dựa vào trí nhớ của trợ lý:
-
-- Đầu mỗi file/module: khối TSDoc mô tả vai trò của file + flow tổng thể (dữ liệu vào → các bước xử lý → dữ liệu ra/side-effect).
-- Mỗi hàm/class/giao diện trọng yếu: TSDoc `/** ... */` tiếng Việt gồm mục đích, `@param`/`@returns` khi phù hợp, các bước flow, bất biến/ràng buộc và side-effect (ghi DB, phát outbox).
-- Logic phức tạp/nhánh rẽ quan trọng: comment nội tuyến tiếng Việt nói bước flow và lý do — không lặp lại điều code đã hiển nhiên.
-- Sửa code thì căn cứ vào comment flow đang có trong code; thấy comment lệch code thật thì sửa comment trong cùng lượt với sửa code.
+Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.

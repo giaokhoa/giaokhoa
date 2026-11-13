@@ -65,7 +65,6 @@ interface OutlineCardProps {
   statusBadge: (status: string | undefined) => string;
 }
 
-/** Thẻ cây nội dung (outline) của trang Xây dựng khoá: section/module, kéo–thả, kho học liệu, availability. */
 export function OutlineCard(props: OutlineCardProps) {
   const { t } = useTranslation('app');
   const {

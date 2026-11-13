@@ -5,7 +5,6 @@ import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.d
 import { BackupService } from './backup.service';
 import { createBackupSchema, restoreCourseSchema, type CreateBackupDto, type RestoreDto } from './dto/backup.dto';
 
-/** Controller Backup/Restore: các job, các bước, các ánh xạ, checklist. */
 @ApiTags('backup')
 @Controller({ path: 'backup', version: '1' })
 export class BackupController {

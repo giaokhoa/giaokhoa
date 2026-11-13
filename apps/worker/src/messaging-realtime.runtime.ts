@@ -10,18 +10,9 @@ import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { tenantAls } from './db/tenant-als';
 import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } from './messaging-realtime-emitter';
 
-/**
- * Runtime của consumer phân phối realtime messaging ở worker
- * (issue #521): sở hữu các tài nguyên sống theo tiến trình mà
- * processor cần — tầng phân phối dùng chung của `@giaokhoa/messaging`
- * (dựng trên kết nối DB của worker), connection Redis giữ dấu
- * đã-phân-phối theo `outboxId`, và cổng phát realtime qua Redis adapter — rồi đóng tất cả khi module tắt, để không rò connection qua các vòng boot (nhất là trong test boot module nhiều lần).
- */
 @Injectable()
 export class MessagingRealtimeRuntime implements OnModuleDestroy {
-  /** Tầng phân phối dùng chung (luật ở `@giaokhoa/messaging`). */
   readonly distribution: MessagingDistributionService;
-  /** Connection Redis giữ dấu đã-phân-phối của consumer. */
   readonly redis: Redis;
   private readonly emitterHandle: MessagingRealtimeEmitterHandle;
 
@@ -37,15 +28,8 @@ export class MessagingRealtimeRuntime implements OnModuleDestroy {
       logger.warn(`Redis của consumer phân phối messaging lỗi: ${error.message}`);
     });
     this.distribution = createMessagingDistributionService({
-      // Tầng store dùng chung nay nhận handle Kysely (issue #658):
-      // truyền facade định tuyến theo không gian của worker —
-      // cùng handle mà các processor của job hiện hành dùng qua
-      // SpaceJobRunner, nên ngữ cảnh kho/GUC của lượt phân phối
-      // không đổi so với đường cũ trước đây.
       store: createMessagingDistributionStore(spaceDb.routedKysely),
       emitter: this.emitterHandle.emitter,
-      // Mỗi job đã qua SpaceJobRunner; dùng đúng danh tính kho đã
-      // kiểm chứng của phiên cho cả phát sự kiện lẫn rà membership.
       spaceId: () => tenantAls.getStore()?.spaceId,
       logger: {
         warn: (message) => logger.warn(message),

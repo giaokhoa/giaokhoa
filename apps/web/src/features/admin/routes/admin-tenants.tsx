@@ -21,30 +21,15 @@ import { appKeyMeta } from '#lib/route-meta';
 import { currentTenantQueryOptions, tenantMembersQueryOptions, tenantUsersQueryOptions, tenantsQueryOptions, useAddTenantMember, useCreateTenant, useCreateTenantUser, useSetTenantMemberStatus } from '../queries/tenant-admin';
 import type { TenantMemberStatus, TenantUserSummary } from '../types/tenant-admin';
 
-/** Một dòng thành viên đã ghép membership với hồ sơ người dùng của cùng tenant. */
 interface TenantMemberRow {
   membership: TenantMembership;
   user: TenantUserSummary | null;
 }
 
-/** Kiểm tra lỗi API có phải lỗi cấm quyền hay không để trang chọn thông điệp đúng. */
 function isForbidden(error: unknown): boolean {
   return error instanceof ApiError && error.problem.status === 403;
 }
 
-/**
- * Trang quản trị tenant tối thiểu.
- *
- * Luồng hiển thị được quyết định từ ảnh chụp quyền trước, sau đó mọi dữ liệu đều lấy từ API tenant:
- * 1. Người có `tenant:viewall`/`tenant:manage` ở context hệ thống (hoặc
- *    site admin) dùng chế độ platform: danh sách `GET /tenants`, chọn một tenant, rồi đọc membership/người dùng của đúng tenant đã chọn.
- * 2. Người không có quyền platform nhưng có quyền tại tenant hiệu lực
- *    dùng chế độ tenant: `GET /tenants/current` là nguồn tenant duy nhất; trang không nạp danh sách platform và không có điều khiển chọn tenant khác.
- * 3. Người không có cả hai phạm vi quyền chỉ nhận trạng thái cấm và
- *    trang không bật bất kỳ truy vấn quản trị tenant nào.
- *
- * Các điều khiển ghi chỉ xuất hiện khi capability tương ứng có hiệu lực tại phạm vi đang quản lý (`tenant:manage` phía platform hoặc tại chính tenant đó). Đây chỉ là điều kiện trình bày: API kiểm tra lại quyền ở mọi endpoint và trang không cập nhật lạc quan khi thao tác ghi chưa được server xác nhận.
- */
 export function AdminTenantsPage() {
   const { t } = useTranslation('app');
   const perms = usePermissions();
@@ -66,13 +51,11 @@ export function AdminTenantsPage() {
 
   const platformTenants = useMemo(() => tenantsQuery.data ?? [], [tenantsQuery.data]);
 
-  // Tenant đầu tiên là lựa chọn mặc định ở chế độ platform để khu thành viên có một đích xác định ngay khi danh sách tải xong; người dùng đổi lựa chọn thì mọi truy vấn thành viên đi theo lựa chọn mới.
   const firstPlatformTenantId = platformMode ? platformTenants[0]?.id : undefined;
   if (firstPlatformTenantId && !platformTenants.some((tenant) => tenant.id === selectedTenantId)) {
     setSelectedTenantId(firstPlatformTenantId);
   }
 
-  // Cả hai chế độ đều giữ bản ghi tenant đầy đủ `Tenant`: endpoint current trả cùng DTO với danh sách platform, nên thẻ hiển thị ở chế độ tenant đọc trạng thái vòng đời từ trường `status` như chế độ platform.
   const selectedTenant: Tenant | null = platformMode
     ? (platformTenants.find((tenant) => tenant.id === selectedTenantId) ?? null)
     : (currentTenantQuery.data ?? null);
@@ -105,7 +88,6 @@ export function AdminTenantsPage() {
     }));
   }, [membersQuery.data, usersQuery.data]);
 
-  /** Tạo tenant từ form platform; chỉ gửi `plan` khi người dùng đã nhập để giữ đúng hợp đồng tuỳ chọn của API. */
   function createTenant(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
@@ -127,7 +109,6 @@ export function AdminTenantsPage() {
     );
   }
 
-  /** Thêm một tài khoản toàn cục có sẵn vào đúng tenant đang quản lý bằng ID người dùng. */
   function addMember(event: FormEvent) {
     event.preventDefault();
     if (!selectedTenant) return;
@@ -144,7 +125,6 @@ export function AdminTenantsPage() {
     );
   }
 
-  /** Tạo tài khoản mới trong tenant; trường họ tên trống được bỏ khỏi payload vì hợp đồng tạo người dùng coi chúng là tuỳ chọn. */
   function createTenantUser(event: FormEvent) {
     event.preventDefault();
     if (!selectedTenant) return;
@@ -170,7 +150,6 @@ export function AdminTenantsPage() {
     );
   }
 
-  /** Đổi trạng thái membership của một thành viên trong đúng tenant đang quản lý. */
   function setMemberStatus(membership: TenantMembership, status: TenantMemberStatus) {
     if (!selectedTenant || membership.status === status) return;
     setMessage(null);
@@ -183,21 +162,18 @@ export function AdminTenantsPage() {
     );
   }
 
-  /** Nhãn loại tenant theo hợp đồng API (`school`, `center` hoặc `platform`). */
   function kindLabel(kind: Tenant['kind']): string {
     if (kind === 'center') return t('tenantKindCenter');
     if (kind === 'school') return t('tenantKindSchool');
     return t('tenantKindPlatform');
   }
 
-  /** Nhãn trạng thái vòng đời của tenant. */
   function tenantStatusLabel(status: Tenant['status']): string {
     if (status === 'suspended') return t('tenantStatusSuspended');
     if (status === 'archived') return t('tenantStatusArchived');
     return t('tenantStatusActive');
   }
 
-  /** Nhãn trạng thái membership. */
   function memberStatusLabel(status: TenantMembership['status']): string {
     if (status === 'suspended') return t('tenantMemberStatusSuspended');
     if (status === 'ended') return t('tenantMemberStatusEnded');
@@ -383,7 +359,6 @@ export function AdminTenantsPage() {
               </ErrorAlert>
             ) : null}
             {!canViewSelected ? (
-              // Ảnh chụp quyền đã sẵn sàng nhưng người dùng không có quyền tại tenant đang chọn/hiệu lực (quyền tenant chỉ nằm ở một tenant khác): hai truy vấn thành viên bị tắt theo `canViewSelected` nên rơi xuống nhánh chờ sẽ treo khung chờ vô hạn — hiện trạng thái cấm như các khu vực khác của trang.
               <ErrorAlert variant="destructive">{t('tenantsForbidden')}</ErrorAlert>
             ) : membersQuery.isPending || usersQuery.isPending ? (
               <PageSkeleton rows={['h-12 w-full', 'h-12 w-full', 'h-12 w-full']} label={t('loading')} />
@@ -549,10 +524,8 @@ export function AdminTenantsPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default AdminTenantsPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR, cùng mẫu các trang quản trị khác).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 export function meta() {
   return appKeyMeta('navTenants');

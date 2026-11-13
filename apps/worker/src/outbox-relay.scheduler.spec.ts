@@ -10,24 +10,6 @@ import {
   type OutboxEventQueueRoutes,
 } from './outbox-event-routes';
 
-/**
- * Test đặc trưng hoá cho relay outbox duy nhất: ghim các tính chất của ngữ nghĩa đóng dấu `publishedAt` và định tuyến phát job theo loại sự kiện, làm căn cứ cho mọi issue chuyển consumer sang hàng đợi ở worker sau này:
- * (i) `publishedAt` chỉ xuất hiện sau khi relay phát thành công,
- *     không bao giờ trước;
- * (ii) phát thất bại thì sự kiện không có `publishedAt` và được phát
- *     lại ở lượt relay sau;
- * (iii) mỗi loại sự kiện được phát vào đúng (các) hàng đợi của nó —
- *     một sự kiện có nhiều đích thì mỗi đích nhận đúng một job
- *     (fan-out một-sự-kiện-nhiều-handler, issue #520/#521);
- * (iv) `publishedAt` không phải dấu hoàn thành xử lý — relay đóng
- *     dấu ngay khi phát xong, dù job chưa được consumer nào xử lý;
- * (v) với sự kiện nhiều đích, dấu chỉ xuất hiện khi MỌI đích đã nhận
- *     job — lỗi ở một đích thì dòng chưa có dấu, và lượt phát lại không tạo job trùng ở các đích đã nhận (chống trùng `jobId`).
- * (vi) định tuyến theo trung tâm (issue #582): job mang slug của
- *     trung tâm mà tenant của dòng thuộc về, suy ra từ chính kho chứa dòng; và mỗi nhịp relay còn quét outbox của từng trung tâm ở kho riêng trong phiên theo trung tâm của khung — lỗi của một trung tâm không chặn các trung tâm khác.
- *
- * Toàn bộ test chạy trên DB/hàng đợi giả lập trong bộ nhớ theo đúng bề mặt relay dùng (chuỗi truy vấn Kysely, `Queue.add` của BullMQ, `EventLogWriter.record`, `TaskLogService.recordRun`); hàng đợi giả mô phỏng đúng luật chống trùng của BullMQ theo `jobId`. Các khẳng định đều là hệ quả quan sát được (dòng có dấu hay chưa, job nằm ở hàng đợi nào với dữ liệu gì, dòng có được phản chiếu hay không), không phải chi tiết gọi nội bộ.
- */
 
 interface FakeRow {
   id: string;
@@ -57,12 +39,6 @@ function makeRow(partial: Partial<FakeRow>): FakeRow {
   };
 }
 
-/**
- * Hàng đợi giả theo khuôn BullMQ: `add` với `jobId` đã tồn tại thì
- * trả lại job cũ thay vì tạo job trùng; ghi lại trạng thái đóng dấu
- * của dòng tại đúng thời điểm job được đẩy để kiểm chứng thứ tự
- * phát → đóng dấu bằng trạng thái quan sát được.
- */
 class FakeQueue {
   readonly jobs = new Map<string, { name: string; data: OutboxEventJobData }>();
   readonly stampedAtDispatch: boolean[] = [];
@@ -86,14 +62,6 @@ class FakeQueue {
   }
 }
 
-/**
- * DB giả theo chuỗi truy vấn Kysely mà relay dùng (`selectFrom` /
- * `updateTable` trên handle định tuyến): lượt quét outbox trả các
- * dòng chưa có dấu theo đúng thứ tự mảng và trần `limit`; tra cứu
- * `tenants` lọc theo danh sách id của điều kiện `in`; bước đóng dấu
- * áp `published_at` lên đúng dòng mà điều kiện `where` của lệnh
- * cập nhật chỉ tới.
- */
 function makeFakeDb(rows: FakeRow[], tenantSlugs: Record<string, string> = {}) {
   const control = { failNextStamp: false };
   const db = {
@@ -169,14 +137,6 @@ interface Harness {
   taskRuns: Array<{ status: string }>;
 }
 
-/**
- * Khung định tuyến giả cho relay: danh sách đăng ký cấu hình sẵn
- * và một bản đồ slug → DB giả của kho trung tâm; `withSpaceKysely`
- * của giả chạy thân quét trên đúng DB giả của slug đó (mô phỏng
- * phiên theo trung tâm của khung thật) và ném lỗi cho slug được
- * đánh dấu lỗi — đủ để khoá hành vi quét theo trung tâm của relay
- * mà không cần Postgres thật (đường DB thật có spec tích hợp).
- */
 function makeFakeSpaceDb(
   spaces: SpaceRegistryEntry[],
   centreDbs: Map<string, unknown>,
@@ -222,8 +182,6 @@ function makeRelay(
     taskLog as never,
     routes,
     queues as never,
-    // Handle kho chung của relay là `routedKysely` trên khung định
-    // tuyến giả; phần quét theo trung tâm lấy từ options/NO_SPACES.
     { routedKysely: db, ...(options?.spaceDb ?? NO_SPACES) } as never,
     { get: () => undefined } as never,
   );
@@ -244,7 +202,6 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     const published = await relay.publishPending();
 
     expect(published).toBe(1);
-    // Tại thời điểm job được đẩy, dòng vẫn chưa có dấu — dấu chỉ có sau khi phát xong.
     expect(queue.stampedAtDispatch).toEqual([false]);
     expect(row.publishedAt).not.toBeNull();
     const job = queue.jobs.get(`shared-${row.id}`);
@@ -291,9 +248,6 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     expect(published).toBe(3);
     expect([...queues.get('outbox-auth-mail')!.jobs.keys()]).toEqual([`shared-${mailRow.id}`]);
     expect([...queues.get('outbox-messaging')!.jobs.keys()]).toEqual([`shared-${messageRow.id}`]);
-    // Loại chưa định tuyến: không job nào được tạo, nhưng dòng vẫn được
-    // đóng dấu và phản chiếu như đường production hiện hành (phía tiêu
-    // thụ của nó vẫn đọc trực tiếp bảng outbox theo watermark seq).
     expect(unroutedRow.publishedAt).not.toBeNull();
     expect(mirrored.map((r) => r['id'])).toEqual([mailRow.id, messageRow.id, unroutedRow.id]);
   });
@@ -305,9 +259,6 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
 
     const published = await relay.publishPending();
 
-    // Relay trở về và dòng đã có dấu trong khi job vẫn nguyên trong
-    // hàng đợi, chưa consumer nào chạm vào: dấu chỉ ghi nhận việc
-    // phát, tiến độ xử lý thuộc về phía consumer.
     expect(published).toBe(1);
     expect(row.publishedAt).not.toBeNull();
     expect(queue.jobs.get(`shared-${row.id}`)?.name).toBe('message_sent');
@@ -348,12 +299,10 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     const queue = queues.get('outbox-auth-mail')!;
     control.failNextStamp = true;
 
-    // Lượt đầu: job đã vào hàng đợi nhưng đóng dấu lỗi — dòng còn chưa phát.
     await expect(relay.publishPending()).rejects.toThrow('database write failed');
     expect(row.publishedAt).toBeNull();
     expect(queue.jobs.size).toBe(1);
 
-    // Lượt sau phát lại cùng dòng: jobId bằng id dòng nên hàng đợi vẫn đúng một job.
     const published = await relay.publishPending();
     expect(published).toBe(1);
     expect(row.publishedAt).not.toBeNull();
@@ -402,7 +351,6 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
     expect(published).toBe(1);
     expect(notificationsQueue.jobs.get(`shared-${row.id}`)?.name).toBe('message_sent');
     expect(realtimeQueue.jobs.get(`shared-${row.id}`)?.name).toBe('message_sent');
-    // Dữ liệu job ở cả hai đích là toàn bộ dòng outbox đã chuẩn hoá.
     for (const queue of [notificationsQueue, realtimeQueue]) {
       expect(queue.jobs.get(`shared-${row.id}`)?.data).toEqual({
         outboxId: row.id,
@@ -416,8 +364,6 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
         occurredAt: '2026-10-29T00:00:00.000Z',
       });
     }
-    // Tại thời điểm job được đẩy ở cả hai đích, dòng vẫn chưa có dấu:
-    // dấu chỉ xuất hiện sau khi MỌI đích đã phát thành công.
     expect(notificationsQueue.stampedAtDispatch).toEqual([false]);
     expect(realtimeQueue.stampedAtDispatch).toEqual([false]);
     expect(row.publishedAt).not.toBeNull();
@@ -439,7 +385,6 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
     const published = await relay.publishPending();
     expect(published).toBe(1);
     expect(row.publishedAt).not.toBeNull();
-    // jobId bằng id dòng: đích đầu vẫn đúng một job, không sinh bản trùng.
     expect(notificationsQueue.jobs.size).toBe(1);
     expect(realtimeQueue.jobs.size).toBe(1);
     expect(mirrored).toHaveLength(1);
@@ -454,8 +399,6 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
     for (const type of notificationTypes) {
       expect(queueNamesOfRoute(OUTBOX_EVENT_QUEUE_ROUTES[type]!)).toContain('notification-events');
     }
-    // Consumer realtime đã chuyển (issue #521): message_sent là
-    // danh sách đúng hai đích — realtime trước, thông báo sau.
     expect(queueNamesOfRoute(OUTBOX_EVENT_QUEUE_ROUTES['message_sent']!)).toEqual(['messaging-realtime', 'notification-events']);
     expect(OUTBOX_EVENT_QUEUE_ROUTES['guardian_digest_due']).toBe('guardian-digest-events');
     expect(OUTBOX_EVENT_QUEUE_ROUTES['guardian_overdue_alert']).toBe('guardian-digest-events');
@@ -534,7 +477,6 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
     expect(jobs.get(`${spaceB.id}-${id}`)?.data).toMatchObject({ spaceId: spaceB.id, spaceSlug: spaceB.slug });
     expect(aRow.publishedAt).not.toBeNull();
     expect(bRow.publishedAt).not.toBeNull();
-    // Cùng những UUID, relay lại hai database không ghi đè payload của nhau.
     aRow.publishedAt = null;
     bRow.publishedAt = null;
     await relay.publishPendingForCentres();
@@ -549,8 +491,6 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
       storageMode: 'shared',
       status: 'active',
     };
-    // Không cấp DB giả cho hai slug này: nếu relay vẫn quét chúng,
-    // withSpaceKysely giả sẽ ném lỗi và chúng lọt vào failedSlugs.
     const spaceDb = makeFakeSpaceDb([closedSpace, sharedSpace], new Map());
     const { relay } = makeRelay([], ROUTES, { spaceDb });
 

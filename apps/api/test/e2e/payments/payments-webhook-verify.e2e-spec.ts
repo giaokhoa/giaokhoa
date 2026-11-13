@@ -5,9 +5,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 
-/**
- * Hồi quy H1 (issue #134): POST /payments/webhook là route @Public — trước bản vá, handleWebhook KHÔNG gọi gateway.verify nên bất kỳ ai cũng giả được `status: 'succeeded'` để kích hoạt ghi danh có phí mà không trả tiền. Spec này khoá hành vi đã vá: verify chạy TRƯỚC mọi xử lý — webhook giả/không chữ ký bị từ chối và payment giữ nguyên trạng thái, không phát enrol; webhook có secret đúng mới xử lý thành công. Secret test lấy từ env của vitest (PAYMENT_WEBHOOK_SECRET).
- */
 const SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
 const SECRET_HEADER = 'x-payment-webhook-secret';
 

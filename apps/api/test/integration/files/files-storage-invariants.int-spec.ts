@@ -8,15 +8,6 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
 
-/**
- * Bất biến tầng lưu trữ của Files — nửa khẳng định nội bộ tách từ `test/e2e/files/files-flow.e2e-spec.ts` (issue #483).
- *
- * File e2e gốc trộn hai bề mặt trong cùng một ca: bề mặt HTTP (tải lên, xoá bản ghi, `refcount` trong body phản hồi) và bất biến của tầng lưu trữ chỉ đọc được qua `FilesService` — `refcount` đếm ở kho, sự tồn tại của file vật lý tại khoá nội dung
- * (`physicalKey`), và hành vi dọn file mồ côi `cleanupOrphan` của
- * đường worker. Các bất biến này không có bề mặt HTTP tương đương nên thuộc tầng integration theo quy ước của dự án; nửa HTTP ở lại file e2e. Fixture (context, người tải lên, nội dung tải lên) dựng qua HTTP như file gốc — đó là bước chuẩn bị, tầng của test do act/assert quyết định.
- *
- * Nội dung của từng ca là duy nhất theo thời điểm chạy để kho lưu trữ dùng chung của suite không lẫn với các spec khác.
- */
 describe('Files: bất biến lưu trữ theo nội dung (integration)', () => {
   let app: INestApplication;
   let admin: string;
@@ -64,7 +55,6 @@ describe('Files: bất biến lưu trữ theo nội dung (integration)', () => {
     expect(existsSync(service.physicalKey(a.contentHash))).toBe(true);
     const delB = await http(app).delete(`/api/v1/files/${b.id}`).set('Authorization', `Bearer ${uploaderToken}`);
     expect(delB.status).toBe(200);
-    // Bộ xử lý của worker chạy cùng thao tác facade mà API đã đưa vào hàng đợi.
     const removed = await service.cleanupOrphan(a.contentHash);
     expect(removed).toBe(true);
     expect(existsSync(service.physicalKey(a.contentHash))).toBe(false);

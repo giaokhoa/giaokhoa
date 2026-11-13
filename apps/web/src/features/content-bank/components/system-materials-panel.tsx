@@ -1,8 +1,3 @@
-/**
- * Panel công bố ngay trong Kho học liệu: quản trị chọn nguồn và gửi,
- * biên tập viên xem bản chụp rồi quyết định; giáo viên chọn phiên bản,
- * khoá và section để dùng nguyên trạng. API thực thi lại toàn bộ quyền.
- */
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,7 +15,6 @@ import { queryKeys } from '../queries/keys';
 const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
 const ROOT = '/api/v1/system-bank/materials';
 
-/** Nguồn và giấy phép là dữ liệu xuất bản bắt buộc, luôn hiện cùng bản đang chọn. */
 function MaterialAttribution({ pkg }: { pkg: SystemMaterialPackage }) {
   const { t } = useTranslation();
   return <div className="space-y-1 text-sm">
@@ -33,10 +27,6 @@ function MaterialAttribution({ pkg }: { pkg: SystemMaterialPackage }) {
   </div>;
 }
 
-/**
- * Ảnh chụp capability chỉ điều khiển trình bày; mọi hành động đọc/ghi vẫn
- * qua API. Query theo feature và chỉ chạy khi vai tương ứng đã sẵn sàng.
- */
 export function SystemMaterialsPanel() {
   const { t } = useTranslation();
   const permissions = usePermissions();
@@ -61,7 +51,6 @@ export function SystemMaterialsPanel() {
   const selectedReview = pending.data?.find((row) => row.id === reviewId);
   const selectedVersion = published.data?.find((row) => `${row.materialId}:${row.version}` === versionKey);
 
-  /** Sau thao tác thành công, nạp lại hàng chờ/lịch sử/khám phá của feature. */
   const action = useMutation({
     mutationFn: (run: () => Promise<unknown>) => run(),
     onSuccess: async () => {

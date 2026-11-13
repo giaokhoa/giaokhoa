@@ -41,9 +41,6 @@ describe('Khối contracts', () => {
   });
 
   it('ProblemDetails của ghi nhập ma trận bị từ chối mang lỗi cứng định vị (I-2, #233)', () => {
-    // Luật nghiệp vụ của hình dạng: từ chối ghi phải mang đủ vị trí
-    // (sheet/dòng/cột) + mã lỗi cho từng lỗi cứng để web hiển thị lại
-    // bảng lỗi như bước xem trước — một lỗi thiếu mã là hình dạng sai.
     const parsed = problemDetailsSchema.parse({
       type: 'about:blank', title: 'Unprocessable Entity', status: 422, code: 'quiz.matrix_import_invalid',
       matrixImportIssues: [
@@ -88,7 +85,6 @@ describe('Hợp đồng engagement', () => {
     });
     expect(pref.popupEnabled).toBe(true);
     expect(pref.group).toBe('people');
-    // NB-7: trường chính sách admin cấp site là một phần của hợp đồng dòng tuỳ chọn — thiếu nó thì parse phải hỏng, để web không âm thầm mất tín hiệu "admin đã tắt ở cấp site".
     expect(() =>
       notificationPreferenceSchema.parse({
         provider: 'badge_awarded', component: 'core_badges', group: 'people',
@@ -99,7 +95,6 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('khoá hình dạng tìm tin trong conversation (M4): q bắt buộc có độ dài xác định, trần kết quả 50', () => {
-    // Tìm tin chỉ tồn tại trong bề mặt nhắn tin: q rỗng bị schema chặn ngay (tầng service còn chặn q toàn khoảng trắng bằng 400).
     expect(searchMessagesQuerySchema.parse({ q: 'học bài' })).toEqual({ q: 'học bài' });
     expect(() => searchMessagesQuerySchema.parse({ q: '' })).toThrow();
     expect(() => searchMessagesQuerySchema.parse({ q: 'x'.repeat(201) })).toThrow();
@@ -112,20 +107,14 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('khoá hình dạng trạng thái hội thoại (M5): ba cờ độc lập từng phần, lạ bị chặn', () => {
-    // PATCH state là TỪNG PHẦN: gửi một cờ thì chỉ cờ đó đổi — schema giữ nguyên đúng các trường đã gửi, không tự điền cờ còn lại
-    // (điền mặc định sẽ ghi đè trạng thái phía server khi client chỉ
-    // định đổi một cờ).
     expect(updateConversationStateSchema.parse({ muted: true })).toEqual({ muted: true });
     expect(updateConversationStateSchema.parse({ pinned: false, archived: true })).toEqual({ pinned: false, archived: true });
     expect(updateConversationStateSchema.parse({})).toEqual({});
-    // Giá trị không phải boolean và khoá lạ bị chặn ở biên hợp đồng.
     expect(() => updateConversationStateSchema.parse({ pinned: 'yes' })).toThrow();
     expect(() => updateConversationStateSchema.parse({ starred: true })).toThrow();
-    // Query danh sách: archived chỉ nhận boolean thật.
     expect(listConversationsQuerySchema.parse({})).toEqual({});
     expect(listConversationsQuerySchema.parse({ archived: true })).toEqual({ archived: true });
     expect(() => listConversationsQuerySchema.parse({ archived: 'true' })).toThrow();
-    // Hình dạng trạng thái trả về: cờ boolean suy từ mốc, mốc nullable.
     const state = conversationMemberStateSchema.parse({
       conversationId: '01900000-0000-7000-8000-000000000001', pinned: true, pinnedAt: new Date().toISOString(),
       archived: false, archivedAt: null, muted: false,
@@ -135,10 +124,6 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('hồ sơ người phục vụ panel chat 1–1 (issue #592): đủ bốn trường thật, thiếu email hoặc id không phải UUID thì hỏng', () => {
-    // Chỉ các trường hệ có dữ kiện nguồn mới nằm trong hợp đồng:
-    // email là cột của bảng người dùng; các trường panel còn lại
-    // (giới thiệu, điện thoại, website, …) không có nguồn nên
-    // không được bịa thành trường hợp đồng.
     const profile = personProfileSchema.parse({
       userId: '01900000-0000-7000-8000-000000000001', displayName: 'Lan Anh Nguyễn',
       username: 'teacher1', email: 'teacher1@example.com',
@@ -157,7 +142,6 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('khoá thân yêu cầu mark-read (R6-A2, #344): phạm vi chỉ nhận "all", thiếu hoặc lạ đều bị chặn', () => {
-    // Phạm vi đánh dấu đã đọc nằm trong thân yêu cầu thay cho hậu tố `-all` trong tên path cũ: chỉ `all` là phạm vi đã chốt — thiếu scope, scope lạ hay scope dạng nhóm đều bị từ chối ở biên hợp đồng, không suy diễn ngầm thành `all`.
     expect(markNotificationsReadSchema.parse({ scope: 'all' })).toEqual({ scope: 'all' });
     expect(() => markNotificationsReadSchema.parse({})).toThrow();
     expect(() => markNotificationsReadSchema.parse({ scope: 'group' })).toThrow();
@@ -192,7 +176,6 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('cây nhóm nhắn tin (MSG-T1): phân loại conversation bằng component/itemType/itemId và vai tại nút chỉ thuộc tập đã chốt', () => {
-    // Phân loại KHÔNG đoán theo tên: chat khoá mang đúng cặp core_course/course + itemId của khoá; hội thoại cá nhân thì cả ba trường null. itemId không phải UUID thì schema từ chối.
     const courseChat = conversationSchema.parse({
       id: '01900000-0000-7000-8000-000000000001', type: 2, name: null, members: [],
       component: 'core_course', itemType: 'course', itemId: '01900000-0000-7000-8000-000000000003',
@@ -215,18 +198,13 @@ describe('Hợp đồng engagement', () => {
       canCreateFreeGroup: true,
     });
     expect(tree.classes[0]!.courses[0]!.groups[0]!.conversationId).toBeNull();
-    // Cờ tạo nhóm tự do là trường BẮT BUỘC do server tính theo cổng tạo nhóm (chỉ quản trị viên hệ thống/chủ trung tâm mới true):
-    // thiếu cờ thì schema từ chối, tránh client tự suy quyền từ vai.
     expect(tree.canCreateFreeGroup).toBe(true);
     expect(() => conversationGroupTreeSchema.parse({ classes: [], coursesOutsideClasses: [], freeGroups: [] })).toThrow();
-    // Mốc ghim cá nhân của nút là trường BẮT BUỘC (có thể null):
-    // server phải luôn gửi trạng thái ghim của người gọi cho mọi nút để client xếp mục Ghim của tab Nhóm — thiếu trường thì schema từ chối, tránh client tự suy trạng thái ghim từ danh sách hội thoại chưa lưu (hội thoại vừa ghim vừa lưu trữ không nằm trong danh sách đó).
     expect(tree.classes[0]!.courses[0]!.pinnedAt).toBe('2026-01-02T00:00:00.000Z');
     expect(() => conversationGroupTreeSchema.parse({
       ...tree,
       freeGroups: [{ conversationId: '01900000-0000-7000-8000-000000000030', name: 'X', myRole: 'staff', unread: 0 }],
     })).toThrow();
-    // Vai ngoài tập chốt (teaching/learning/staff) và unread âm đều bị từ chối.
     expect(() => conversationGroupTreeSchema.parse({ ...tree, freeGroups: [{ conversationId: '01900000-0000-7000-8000-000000000030', name: 'X', myRole: 'owner', unread: 0, pinnedAt: null }] })).toThrow();
     expect(() => conversationGroupTreeSchema.parse({ ...tree, freeGroups: [{ conversationId: '01900000-0000-7000-8000-000000000030', name: 'X', myRole: 'staff', unread: -1, pinnedAt: null }] })).toThrow();
   });
@@ -269,12 +247,10 @@ describe('Hợp đồng khoá học', () => {
   });
 
   it('chỉ cho phép URL tài nguyên ngoài dùng scheme http/https (gác XSS qua href của trang học)', () => {
-    // URL https/http hợp lệ (kể cả đích nhúng video) đi qua nguyên vẹn ở cả đường tạo lẫn đường sửa.
     expect(createResourceSchema.parse({
       sectionId: '01900000-0000-7000-8000-000000000100', name: 'Video bài giảng', kind: 'url', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', completionMode: 'none',
     }).url).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     expect(updateResourceSchema.parse({ url: 'http://example.com/tai-lieu' }).url).toBe('http://example.com/tai-lieu');
-    // Scheme thực thi khi người xem bấm liên kết phải bị schema từ chối — kể cả biến thể bọc khoảng trắng ở đầu và khác chữ hoa.
     for (const bad of [
       'javascript:alert(document.domain)',
       'JaVaScRiPt:alert(1)',
@@ -287,7 +263,6 @@ describe('Hợp đồng khoá học', () => {
       expect(createResourceSchema.safeParse({ sectionId: '01900000-0000-7000-8000-000000000100', name: 'Liên kết', kind: 'url', url: bad, completionMode: 'none' }).success).toBe(false);
       expect(updateResourceSchema.safeParse({ url: bad }).success).toBe(false);
     }
-    // update cho phép url null (xoá nguồn URL khi chuyển loại) — hành vi cũ không đổi.
     expect(updateResourceSchema.parse({ url: null }).url).toBeNull();
   });
 });
@@ -326,7 +301,6 @@ describe('Hợp đồng đánh giá', () => {
   it('phân tích payload hạng mục điểm (thủ công/mod) và từ chối hình dạng của mô hình tổng hợp đã bỏ', () => {
     const manual = createGradeItemSchema.parse({ itemName: 'Kiểm tra 15 phút', gradeMax: 10, multiplicator: 0.5 });
     expect(manual.multiplicator).toBe(0.5);
-    // Mô hình tổng hợp đã gỡ (issue #224): strictObject từ chối các trường chết.
     expect(() => createGradeItemSchema.parse({ itemName: 'X', calculation: '=average([[a]])' })).toThrow();
     expect(() => createGradeItemSchema.parse({ itemName: 'X', outcomeId: '01900000-0000-7000-8000-000000000020' })).toThrow();
     expect(() => createGradeItemSchema.parse({ itemName: 'X', categoryId: '01900000-0000-7000-8000-000000000001' })).toThrow();
@@ -356,7 +330,6 @@ describe('Hợp đồng đánh giá', () => {
       curriculumNodeId: nodeId, cognitiveLevel: 'biet', qtype: 'multichoice', questionCount: 2, cellScore: 2,
     });
     expect(cell.curriculumNodeId).toBe(nodeId);
-    // Mô hình cũ neo YCCĐ ở ô đã bỏ hẳn: strictObject từ chối learningOutcomeId.
     expect(() => createExamMatrixCellSchema.parse({
       learningOutcomeId: nodeId, cognitiveLevel: 'biet', qtype: 'multichoice', questionCount: 2, cellScore: 2,
     })).toThrow();
@@ -366,7 +339,6 @@ describe('Hợp đồng đánh giá', () => {
       minutes: null, tfScale: null, position: 1,
     });
     expect(view.curriculumNodeId).toBe(nodeId);
-    // Phạm vi đã dạy của ma trận cũng theo ĐVK (scopeNodeIds), không theo YCCĐ.
     const matrix = createExamMatrixSchema.parse({
       name: 'Ma trận', subjectId: '01900000-0000-7000-8000-000000000033',
       curriculumId: '01900000-0000-7000-8000-000000000034', scopeNodeIds: [nodeId],
@@ -382,11 +354,9 @@ describe('Hợp đồng đánh giá', () => {
 describe('Hợp đồng định danh', () => {
   it('chấp nhận payload thiết lập TOTP rỗng và mã hiện tại 6 chữ số, từ chối mã sai định dạng và trường lạ', async () => {
     const { mfaTotpSetupSchema } = await import('./identity.js');
-    // Thân không bắt buộc: client hiện tại gọi setup không kèm thân vẫn hợp lệ.
     expect(mfaTotpSetupSchema.parse(undefined)).toBeUndefined();
     expect(mfaTotpSetupSchema.parse({})).toEqual({});
     expect(mfaTotpSetupSchema.parse({ currentCode: '123456' })).toEqual({ currentCode: '123456' });
-    // Mã hiện tại phải đúng khuôn mã TOTP 6 chữ số; trường lạ bị chặn (strict).
     expect(() => mfaTotpSetupSchema.parse({ currentCode: '12345' })).toThrow();
     expect(() => mfaTotpSetupSchema.parse({ currentCode: '12ab56' })).toThrow();
     expect(() => mfaTotpSetupSchema.parse({ currentCode: '123456', other: 'x' })).toThrow();
@@ -394,7 +364,6 @@ describe('Hợp đồng định danh', () => {
 
   it('hợp đồng truy vấn danh sách người dùng: nhận đúng ba nhóm trạng thái và ba trường sắp xếp, chặn giá trị ngoài tập và pageSize vượt trần 100', async () => {
     const { listUsersQuerySchema } = await import('./identity.js');
-    // Truy vấn rỗng và từng giá trị trong tập đóng đều hợp lệ.
     expect(listUsersQuerySchema.parse({})).toEqual({});
     for (const status of ['active', 'suspended', 'deleted'] as const) {
       expect(listUsersQuerySchema.parse({ status }).status).toBe(status);
@@ -404,9 +373,7 @@ describe('Hợp đồng định danh', () => {
     }
     expect(listUsersQuerySchema.parse({ sortDirection: 'asc' }).sortDirection).toBe('asc');
     expect(listUsersQuerySchema.parse({ sortDirection: 'desc' }).sortDirection).toBe('desc');
-    // pageSize tại đúng trần 100 vẫn hợp lệ.
     expect(listUsersQuerySchema.parse({ pageSize: 100 }).pageSize).toBe(100);
-    // Giá trị ngoài tập đóng và pageSize vượt trần bị validation chặn.
     expect(() => listUsersQuerySchema.parse({ status: 'archived' })).toThrow();
     expect(() => listUsersQuerySchema.parse({ sortBy: 'email' })).toThrow();
     expect(() => listUsersQuerySchema.parse({ sortDirection: 'up' })).toThrow();
@@ -415,17 +382,13 @@ describe('Hợp đồng định danh', () => {
 
   it('hợp đồng truy vấn danh sách người dùng kèm gán vai: nhận ba nhóm trạng thái dùng chung, chặn trạng thái ngoài tập, trường lạ và pageSize vượt trần 100', async () => {
     const { listUsersWithAssignmentsQuerySchema } = await import('./identity.js');
-    // Truy vấn rỗng và từng giá trị trong tập đóng đều hợp lệ.
     expect(listUsersWithAssignmentsQuerySchema.parse({})).toEqual({});
     for (const status of ['active', 'suspended', 'deleted'] as const) {
       expect(listUsersWithAssignmentsQuerySchema.parse({ status }).status).toBe(status);
     }
     expect(listUsersWithAssignmentsQuerySchema.parse({ roleId: '01900000-0000-7000-8000-000000000001' }).roleId)
       .toBe('01900000-0000-7000-8000-000000000001');
-    // pageSize tại đúng trần 100 vẫn hợp lệ.
     expect(listUsersWithAssignmentsQuerySchema.parse({ pageSize: 100 }).pageSize).toBe(100);
-    // Trạng thái ngoài tập dùng chung, roleId không phải uuid, trường lạ
-    // (strict) và pageSize vượt trần bị validation chặn.
     expect(() => listUsersWithAssignmentsQuerySchema.parse({ status: 'archived' })).toThrow();
     expect(() => listUsersWithAssignmentsQuerySchema.parse({ roleId: 'khong-phai-uuid' })).toThrow();
     expect(() => listUsersWithAssignmentsQuerySchema.parse({ sortBy: 'name' })).toThrow();
@@ -470,7 +433,6 @@ describe('Hợp đồng định danh', () => {
     expect(parsed.users).toHaveLength(1);
     expect(parsed.users[0].assignments).toHaveLength(2);
     expect(parsed.users[0].assignments[1].component).toBe('enrol');
-    // Thiếu createdAt (cột ngày tham gia) hoặc contextLevel không nguyên thì bị chặn.
     expect(() => userWithAssignmentsListResponseSchema.parse({
       users: [{
         id: '01900000-0000-7000-8000-000000000001', username: 'u', firstName: 'F', lastName: 'L',
@@ -484,13 +446,10 @@ describe('Hợp đồng định danh', () => {
     const { capabilityMatrixQuerySchema, capabilityMatrixResponseSchema } = await import('./identity.js');
     const contextId = '01900000-0000-7000-8000-000000000040';
     const roleId = '01900000-0000-7000-8000-000000000041';
-    // Query hợp lệ: đúng một trường contextId mang UUID.
     expect(capabilityMatrixQuerySchema.parse({ contextId })).toEqual({ contextId });
-    // Thiếu contextId, contextId sai khuôn UUID và trường lạ đều bị chặn (strict).
     expect(() => capabilityMatrixQuerySchema.parse({})).toThrow();
     expect(() => capabilityMatrixQuerySchema.parse({ contextId: 'khong-phai-uuid' })).toThrow();
     expect(() => capabilityMatrixQuerySchema.parse({ contextId, roleId })).toThrow();
-    // Đáp ứng: vai có ghi đè giữ nguyên cặp năng lực/quyền; vai không có ghi đè tại context mang tập rỗng; số người giữ không được âm.
     const parsed = capabilityMatrixResponseSchema.parse({
       contextId,
       roles: [
@@ -535,8 +494,6 @@ describe('Hợp đồng platform (dịch vụ platform)', () => {
     expect(() => backupIdMappingSchema.parse({ id: '01900000-0000-7000-8000-000000000001', jobId: '01900000-0000-7000-8000-000000000002', itemType: 'cm', oldId: '01900000-0000-7000-8000-000000000010', newId: '01900000-0000-7000-8000-000000000010' })).toThrow();
     expect(() => paymentSchema.parse({ id: '01900000-0000-7000-8000-000000000001', accountId: '01900000-0000-7000-8000-000000000001', userId: '01900000-0000-7000-8000-000000000001', amount: 10.5, currency: 'VND', status: 'pending', gateway: 'manual' })).toThrow();
     expect(paymentSchema.parse({ id: '01900000-0000-7000-8000-000000000001', accountId: '01900000-0000-7000-8000-000000000001', userId: '01900000-0000-7000-8000-000000000001', amount: 50000, currency: 'VND', status: 'succeeded', gateway: 'manual' }).amount).toBe(50000);
-    // Trạng thái chờ đối soát của pipeline VietQR/SePay (issue #189):
-    // tiền về thiếu một trong ba điều kiện khớp thì payment mang needs_review — schema phải parse được trạng thái này.
     expect(paymentSchema.parse({ id: '01900000-0000-7000-8000-000000000001', accountId: '01900000-0000-7000-8000-000000000001', userId: '01900000-0000-7000-8000-000000000001', amount: 50000, currency: 'VND', status: 'needs_review', gateway: 'sepay' }).status).toBe('needs_review');
   });
 
@@ -724,26 +681,21 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
   });
 
   it('locks the multichoice answer shape: 4 choices with exactly one correct (D-3 + bỏ tỉ trọng)', () => {
-    // Hai đáp án đúng -> từ chối (mô hình cũ cho tổng fraction, mô hình mới đúng MỘT đáp án đúng).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?',
       answers: mcAnswers.map((a, i) => (i === 1 ? { ...a, correct: true } : a)),
     })).toThrow();
-    // Không đáp án đúng nào -> từ chối.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?',
       answers: mcAnswers.map((a) => ({ text: a.text })),
     })).toThrow();
-    // 3 hoặc 5 lựa chọn -> từ chối (khoá đúng 4 như giaokhoa).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?', answers: mcAnswers.slice(0, 3),
     })).toThrow();
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?', answers: [...mcAnswers, { text: 'Hải Phòng' }],
     })).toThrow();
-    // Thiếu hẳn answers -> từ chối.
     expect(() => createQuestionSchema.parse({ categoryId, qtype: 'multichoice', questionText: '?' })).toThrow();
-    // Tỉ trọng fraction trong đáp án -> từ chối (strictObject).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?',
       answers: mcAnswers.map((a, i) => (i === 0 ? { text: a.text, fraction: 1 } : a)),
@@ -772,7 +724,6 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
     });
     expect(tf.answers).toBeUndefined();
     expect(tf.solution).toEqual(solution);
-    // Thiếu một mệnh đề (3 ý) hoặc thừa (5 ý) -> từ chối: khoá đúng 4.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'truefalse', questionText: tfDoc(ids.slice(0, 3)),
       solution: { answers: solution.answers.slice(0, 3) },
@@ -781,7 +732,6 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
       categoryId, qtype: 'truefalse', questionText: tfDoc([...ids, 's5']),
       solution: { answers: [...solution.answers, { statementId: 's5', value: true }] },
     })).toThrow();
-    // Solution thiếu một ý / trỏ ý không có trong thân câu -> từ chối.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'truefalse', questionText: tfDoc(ids),
       solution: { answers: solution.answers.slice(0, 3) },
@@ -790,20 +740,16 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
       categoryId, qtype: 'truefalse', questionText: tfDoc(ids),
       solution: { answers: [...solution.answers.slice(0, 3), { statementId: 's9', value: true }] },
     })).toThrow();
-    // Thiếu hẳn solution -> từ chối (mỗi mệnh đề phải có đáp án Đ/S).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'truefalse', questionText: tfDoc(ids),
     })).toThrow();
-    // Đường hai phía cũ (answers Đúng/Sai) đã bỏ hẳn ở TF-A.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'truefalse', questionText: 'Trái đất quay quanh mặt trời.',
       answers: [{ text: 'Đúng', correct: true }, { text: 'Sai' }],
     })).toThrow();
-    // Thân câu dạng chuỗi thuần không mang được mệnh đề -> từ chối.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'truefalse', questionText: 'Trái đất quay quanh mặt trời.', solution,
     })).toThrow();
-    // statementList lạc vào thân câu của qtype khác -> từ chối.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: tfDoc(ids), answers: mcAnswers,
     })).toThrow();
@@ -816,15 +762,11 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
       options: { useCase: false },
     });
     expect(sa.answers).toHaveLength(2);
-    // Không có đáp án chấp nhận nào -> từ chối.
     expect(() => createQuestionSchema.parse({ categoryId, qtype: 'shortanswer', questionText: '?', answers: [] })).toThrow();
     expect(() => createQuestionSchema.parse({ categoryId, qtype: 'shortanswer', questionText: '?' })).toThrow();
-    // Đáp án liệt kê mà đánh dấu không chấp nhận (correct: false) -> từ chối:
-    // mọi đáp án liệt kê đều được chấp nhận, khớp chính xác sau chuẩn hoá (D-2).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'shortanswer', questionText: '?', answers: [{ text: '4', correct: false }],
     })).toThrow();
-    // Dạng payload cũ answer:{answers} đã bỏ hẳn.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'shortanswer', questionText: '?', answer: { answers: ['4', 'bốn'], casesensitive: false },
     })).toThrow();
@@ -834,12 +776,10 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'essay', questionText: '?', answers: [{ text: 'x' }],
     })).toThrow();
-    // Câu hỏi không có trường tên (strictObject từ chối name ở tạo/sửa).
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?', name: 'Thủ đô', answers: mcAnswers,
     })).toThrow();
     expect(() => updateQuestionSchema.parse({ name: 'X' })).toThrow();
-    // Options đã bỏ: single / showNumCorrect / partiallyCorrectFeedback.
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?', answers: mcAnswers, options: { single: true },
     })).toThrow();
@@ -849,7 +789,6 @@ describe('question payload contracts (port giaokhoa: cờ đúng/sai, không tê
     expect(() => createQuestionSchema.parse({
       categoryId, qtype: 'multichoice', questionText: '?', answers: mcAnswers, options: { partiallyCorrectFeedback: 'Gần đúng' },
     })).toThrow();
-    // Payload sửa: đáp án mang fraction -> từ chối; stimulusId null gỡ gắn vẫn hợp lệ.
     expect(() => updateQuestionSchema.parse({ answers: [{ text: 'x', fraction: 0.5 }] })).toThrow();
     expect(updateQuestionSchema.parse({ stimulusId: null }).stimulusId).toBeNull();
     expect(updateQuestionSchema.parse({ answers: [{ text: 'x', correct: true }] }).answers).toHaveLength(1);
@@ -905,7 +844,6 @@ describe('Hợp đồng khung nhìn câu hỏi', () => {
     expect(view.stimulus?.id).toBe('01900000-0000-7000-8000-000000000099');
     expect(extractRichTextPlainText(view.stimulus!.content)).toBe('Đoạn văn ngữ liệu');
     expect(questionViewSchema.parse({ ...view, stimulus: null }).stimulus).toBeNull();
-    // Essay: answerKey.solution mang lời giải mẫu dạng tài liệu.
     const essayKey = questionAnswerKeyViewSchema.parse({
       guidance: null,
       solution: { answer: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Lời giải mẫu' }] }] } },
@@ -914,12 +852,10 @@ describe('Hợp đồng khung nhìn câu hỏi', () => {
   });
 
   it('từ chối hình dạng khung nhìn cũ: đáp án phân số, guidance trên phiên bản, thiếu answerKey', () => {
-    // Đáp án kiểu cũ (fraction, không isCorrect) -> từ chối.
     expect(() => questionAnswerViewSchema.parse({
       id: '01900000-0000-7000-8000-000000000011', questionVersionId: '01900000-0000-7000-8000-000000000008',
       answer: { type: 'doc', content: [{ type: 'paragraph' }] }, fraction: 1, feedback: null, sortOrder: 0,
     })).toThrow();
-    // guidance không còn là trường của version: parse version mang guidance thì guidance bị loại khỏi kết quả.
     const version = questionVersionSchema.parse({
       id: '01900000-0000-7000-8000-000000000008', questionBankEntryId: '01900000-0000-7000-8000-000000000006', questionId: '01900000-0000-7000-8000-000000000004', version: 1,
       questionText: { type: 'doc', content: [{ type: 'paragraph' }] }, generalFeedback: null,
@@ -1030,7 +966,6 @@ describe('class list item contracts (danh sách lớp kèm cờ quyền theo ng�
     expect(parsed.canUpdate).toBe(true);
     expect(parsed.canDelete).toBe(false);
     expect(parsed.canManageRoster).toBe(true);
-    // Mọi trường của ClassView gốc giữ nguyên trong hình dạng danh sách.
     expect(parsed.name).toBe('Lớp 10A1');
     expect(parsed.joinCode).toBeNull();
   });
@@ -1076,7 +1011,6 @@ describe('mcp question contracts (biên AI: không fraction, không tên)', () =
     expect(() => mcpStimulusQuestionItemSchema.parse({
       qtype: 'essay', name: 'Tự luận', questionText: '?',
     })).toThrow();
-    // Options đã bỏ ở biên MCP (D-5): partiallyCorrectFeedback bị từ chối.
     expect(() => mcpQuestionOptionsInputSchema.parse({ partiallyCorrectFeedback: 'Gần đúng' })).toThrow();
     expect(() => mcpQuestionOptionsInputSchema.parse({ single: true })).toThrow();
   });
@@ -1089,7 +1023,6 @@ describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy 
   const questionId = '01900000-0000-7000-8000-000000000080';
 
   it('createExamContributionSchema: mode chỉ nhận new/update, mode lạ và khoá lạ bị từ chối', () => {
-    // Không gửi mode = mode 'new' ở tầng service (payload cũ nguyên vẹn).
     expect(createExamContributionSchema.parse({ examId }).examId).toBe(examId);
     const update = createExamContributionSchema.parse({ examId, mode: 'update', targetExamId: examId, withDossier: true });
     expect(update.mode).toBe('update');
@@ -1109,12 +1042,9 @@ describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy 
   });
 
   it('mcpSubmitContributionInputSchema: ít nhất một trong ba danh sách phải có phần tử', () => {
-    // Payload cũ chỉ-câu-hỏi vẫn hợp lệ nguyên vẹn.
     expect(mcpSubmitContributionInputSchema.parse({ targetBankId: bankId, questionIds: [questionId], idempotencyKey: 'k1' }).questionIds).toEqual([questionId]);
-    // Chỉ đề / chỉ ma trận cũng hợp lệ (đối xứng ba thực thể).
     expect(mcpSubmitContributionInputSchema.parse({ targetBankId: bankId, examIds: [examId], idempotencyKey: 'k2' }).examIds).toEqual([examId]);
     expect(mcpSubmitContributionInputSchema.parse({ targetBankId: bankId, matrixIds: [matrixId], idempotencyKey: 'k3' }).matrixIds).toEqual([matrixId]);
-    // Không danh sách nào / trần 50 phần tử / thiếu khoá idempotency đều bị từ chối.
     expect(() => mcpSubmitContributionInputSchema.parse({ targetBankId: bankId, idempotencyKey: 'k4' })).toThrow();
     expect(() => mcpSubmitContributionInputSchema.parse({ targetBankId: bankId, examIds: [], idempotencyKey: 'k5' })).toThrow();
     expect(() => mcpSubmitContributionInputSchema.parse({
@@ -1168,9 +1098,6 @@ describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy 
 
 describe('coupon + purchase plan contracts (phần còn lại của lát 2, #189)', () => {
   it('coupon phần trăm chỉ hợp lệ trong khoảng 1–99; cố định là số nguyên dương', () => {
-    // Ràng buộc nghiệp vụ của hình dạng theo đặc tả coupon: phần trăm
-    // giảm luôn nhỏ hơn giá gói nên số tiền phải trả không bao giờ về
-    // 0 — percent = 100 bị từ chối ngay ở biên hình dạng.
     expect(createCouponSchema.parse({ code: 'SALE10', discountType: 'percent', discountValue: 10 }).discountValue).toBe(10);
     expect(() => createCouponSchema.parse({ code: 'FREE', discountType: 'percent', discountValue: 100 })).toThrow();
     expect(() => createCouponSchema.parse({ code: 'ZERO', discountType: 'percent', discountValue: 0 })).toThrow();
@@ -1187,10 +1114,7 @@ describe('coupon + purchase plan contracts (phần còn lại của lát 2, #189
     const parsed = createCouponSchema.parse({ code: 'PLAIN', discountType: 'fixed', discountValue: 1000 });
     expect(parsed.appliesTo).toBe('all');
     expect(parsed.isActive).toBe(true);
-    // Mã coupon rỗng sau khi cắt khoảng trắng là hình dạng sai.
     expect(() => createCouponSchema.parse({ code: '   ', discountType: 'fixed', discountValue: 1000 })).toThrow();
-    // Trường lạ bị từ chối (strictObject) — client không nhét được
-    // mức giảm ngoài hai trường đã định.
     expect(() => createCouponSchema.parse({ code: 'X', discountType: 'fixed', discountValue: 1000, amount: 1 })).toThrow();
   });
 
@@ -1246,16 +1170,11 @@ describe('grade export contracts (chuẩn đường dẫn module điểm, #342)'
 
 describe('refund lifecycle + review queue contracts (lát 3, #189)', () => {
   it('tạo yêu cầu hoàn: lý do là BẮT BUỘC (kể cả lý do toàn khoảng trắng), amount là số nguyên dương', () => {
-    // Ràng buộc nghiệp vụ của vòng đời hoàn: mọi khoản chi hoàn đều
-    // phải có lý do để lại vết kiểm toán — thiếu lý do hoặc lý do
-    // rỗng sau khi cắt khoảng trắng bị từ chối ngay ở biên hình dạng.
     expect(createRefundSchema.parse({ amount: 50000, reason: 'Học viên chuyển lớp' }).amount).toBe(50000);
     expect(() => createRefundSchema.parse({ amount: 50000 })).toThrow();
     expect(() => createRefundSchema.parse({ amount: 50000, reason: '   ' })).toThrow();
     expect(() => createRefundSchema.parse({ amount: 0, reason: 'x' })).toThrow();
     expect(() => createRefundSchema.parse({ amount: 1.5, reason: 'x' })).toThrow();
-    // Client không tự chọn cấp duyệt hay trạng thái — cấp duyệt do
-    // service quyết từ ngưỡng cấu hình + luật hoàn đủ (strictObject).
     expect(() => createRefundSchema.parse({ amount: 50000, reason: 'x', approvalLevel: 1 })).toThrow();
     expect(() => createRefundSchema.parse({ amount: 50000, reason: 'x', status: 'settled' })).toThrow();
   });

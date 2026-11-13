@@ -4,19 +4,6 @@ import { io, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
-/**
- * Flow test cho nền dữ liệu + realtime của messaging (issue #33, Lớp A chặng 0 + 1):
- *  - trạng thái đã đọc theo TỪNG thành viên trong nhóm 3 người: một
- *    người đọc không làm người khác mất số chưa đọc (mô hình cũ để mốc đọc chung trên tin nhắn);
- *  - gửi trùng `clientMessageId` không nhân đôi tin (idempotent);
- *  - phân trang cursor theo `seq` không trùng/sót, đồng bộ thiếu hụt
- *    bằng afterSeq;
- *  - realtime theo KẾT NỐI ở phía API: nối lại + `sync` bù đúng phần
- *    thiếu; socket không có token hợp lệ bị ngắt; presence/typing
- *    (A2) đi qua Redis, không xuống DB.
- *
- * Các khẳng định về PHÂN PHỐI sự kiện (tin mới tới socket qua outbox → hàng đợi, biên đã-đọc tới thành viên còn lại, thành viên bị gỡ không nhận tin nữa) thuộc về consumer phía worker từ issue #521 và được kiểm ở `apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts` — spec này chỉ giữ phần hành vi mà tiến trình API tự chịu trách nhiệm (ghi dữ kiện + sự kiện outbox, đọc/sync, presence/typing).
- */
 
 interface WireMessage {
   id: string;
@@ -27,7 +14,6 @@ interface WireMessage {
   clientMessageId: string | null;
 }
 
-/** Nối một socket đã xác thực và chờ 'connect'; lỗi xác thực phía server sẽ ngắt kết nối ngay. */
 async function connectSocket(base: string, token: string): Promise<Socket> {
   const socket = io(`${base}/messaging`, {
     auth: { token },
@@ -43,7 +29,6 @@ async function connectSocket(base: string, token: string): Promise<Socket> {
   return socket;
 }
 
-/** Chờ một sự kiện socket khớp điều kiện, có timeout rõ ràng để test fail có thông điệp đọc được. */
 async function waitForSocketEvent<T>(
   socket: Socket,
   event: string,
@@ -113,8 +98,6 @@ describe('Messaging foundation + realtime (issue #33, Lớp A)', () => {
     tokenA = (await login(app, userA.username, STRONG_PASSWORD)).accessToken;
     tokenB = (await login(app, userB.username, STRONG_PASSWORD)).accessToken;
     tokenC = (await login(app, userC.username, STRONG_PASSWORD)).accessToken;
-    // Conversation nhóm 3 người — cổng liên lạc chỉ áp cho conversation 1-1 nên nhóm gửi tự do, đúng luật hiện hữu. Nhóm do ADMIN tạo:
-    // theo chính sách Lớp B của #33, nhóm tự do chỉ do quản trị viên hệ thống hoặc chủ trung tâm tạo thủ công (admin ở đây) hoặc sinh từ cấu trúc lớp/khoá — giáo viên, nhân viên và học sinh không tự lập nhóm. Ba user A/B/C là thành viên thường của nhóm.
     const conv = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${admin}`)
       .send({ type: 2, memberIds: [userA.id, userB.id, userC.id], name: 'Nhóm kiểm thử #33' });
@@ -149,7 +132,6 @@ describe('Messaging foundation + realtime (issue #33, Lớp A)', () => {
     const bAfter = await listEntry(tokenB);
     expect(bAfter.unread).toBe(0);
     expect(bAfter.lastReadSeq).toBe(2);
-    // Điểm cốt lõi chống mô hình cũ: C vẫn còn nguyên 2 tin chưa đọc.
     const cAfter = await listEntry(tokenC);
     expect(cAfter.unread).toBe(2);
     expect(cAfter.lastReadSeq).toBe(0);
@@ -173,14 +155,12 @@ describe('Messaging foundation + realtime (issue #33, Lớp A)', () => {
     expect(all.status).toBe(200);
     const withKey = (all.body.messages as WireMessage[]).filter((m) => m.clientMessageId === 'retry-key-1');
     expect(withKey).toHaveLength(1);
-    // Seq không bị tiêu tốn bởi lần gửi trùng.
     const entry = await listEntry(tokenA);
     expect(entry.lastMessageSeq).toBe(firstSend.seq);
   });
 
   it('phân trang con trỏ theo seq không trùng lặp hay thiếu hụt', async () => {
     for (const text of ['bốn', 'năm', 'sáu', 'bảy']) await sendAs(tokenA, text);
-    // Tổng 7 tin, seq 1..7.
     const detail = await http(app).get(`/api/v1/messages/conversations/${convId}`)
       .set('Authorization', `Bearer ${tokenB}`);
     expect(detail.status).toBe(200);
@@ -209,11 +189,6 @@ describe('Messaging foundation + realtime (issue #33, Lớp A)', () => {
   });
 
   it('đồng bộ khi kết nối lại trả đúng các tin nhắn lỡ khi ngoại tuyến', async () => {
-    // Hai hành động dưới đây trước đây thuộc hai ca realtime riêng
-    // (tin mới tới socket + biên đã-đọc tới thành viên còn lại): phần
-    // khẳng định qua socket đã chuyển sang spec tích hợp của worker
-    // (issue #521, xem ghi chú đầu file); ở đây chỉ giữ khẳng định
-    // REST và giữ nguyên chuỗi seq mà ca sync phía dưới neo vào.
     const eighth = await sendAs(tokenA, 'tin realtime');
     expect(eighth.seq).toBe(8);
     const read = await http(app).post(`/api/v1/messages/conversations/${convId}/read`)
@@ -243,7 +218,7 @@ describe('Messaging foundation + realtime (issue #33, Lớp A)', () => {
     sockets.push(bad);
     const outcome = await new Promise<string>((resolve) => {
       const timer = setTimeout(() => resolve('timeout'), 6000);
-      bad.on('connect', () => { /* server có thể accept ở tầng transport rồi mới ngắt sau xác thực */ });
+      bad.on('connect', () => {   });
       bad.on('disconnect', () => { clearTimeout(timer); resolve('disconnected'); });
       bad.on('connect_error', () => { clearTimeout(timer); resolve('connect_error'); });
     });

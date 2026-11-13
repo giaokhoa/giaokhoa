@@ -4,7 +4,6 @@ import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.d
 import { AnalyticsService } from './analytics.service';
 import { runAnalyticsModelSchema, type RunModelDto } from './dto/analytics.dto';
 
-/** Controller Analytics: models, run, insights của người dùng hiện tại. */
 @ApiTags('analytics')
 @Controller({ path: 'analytics', version: '1' })
 export class AnalyticsController {

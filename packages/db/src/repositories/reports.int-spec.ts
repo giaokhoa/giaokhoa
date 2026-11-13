@@ -1,16 +1,3 @@
-/**
- * Spec tích hợp CHỐT thử nghiệm T-11 (issue #648, hoàn thiện ở #663): khuôn ghép đoạn động `sql.join` của `ReportsRepository.userHasAnyRole` đặt cạnh NGUYÊN VĂN câu SQL của đường cũ (`ReportsService.isInAudience` trước chuyển đổi — câu SQL giữ nguyên văn, chạy thẳng qua driver `pg` làm oracle độc lập) trên cùng một database trung tâm dựng từ rỗng bằng carrier đóng băng (cụm PostgreSQL thật của môi trường test).
- *
- * Ba ca T-11 phải trả lời, mỗi ca chạy CẢ hai phía và đối chiếu:
- * - 1 đoạn / nhiều đoạn vô hướng: kết quả hai phía bằng nhau và
- *   bằng kỳ vọng; thứ tự tham số đã biên dịch của phía repository đúng khuôn (tham số ngoài đứng trước, rồi từng đoạn theo mảng).
- * - Đoạn chứa biểu thức con mang tham số riêng (`lower(${...})`):
- *   tham số của biểu thức con giữ đúng vị trí của đoạn trong thứ tự tham số toàn cục, kết quả chạy thật của hai phía bằng nhau.
- * - 0 đoạn: câu không chốt chặn biên dịch thành `IN ()` và
- *   PostgreSQL từ chối khi chạy — đây là lý do khuôn chốt yêu cầu chốt chặn: repository trả `false` ngay, không phát truy vấn.
- *
- * Ghi chú #663: trước khi gỡ bộ máy cũ, phía oracle là nguyên văn truy vấn qua ORM cũ (kèm đối chiếu biên dịch qua `PgDialect`). ORM cũ đã rời khỏi cây nên oracle nay là chính câu SQL nguyên văn chạy qua driver — bất biến được chốt (hình dạng SQL + thứ tự tham số + kết quả thật) không đổi.
- */
 import { sql as kyselySql } from 'kysely';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -36,9 +23,6 @@ let pool: Pool;
 let db: CentreDb;
 let repo: ReportsRepository;
 
-/**
- * Nguyên văn câu SQL của đường cũ (`ReportsService.isInAudience` trước chuyển đổi), chạy thẳng qua driver làm oracle: cùng mẫu ghép đoạn trên các mảnh vô hướng, KHÔNG có chốt chặn danh sách rỗng ở tầng này (chốt chặn cũ nằm ở service, trước khi gọi). Ghép `IN (...)` bằng tay theo đúng số đoạn — tương đương hình dạng mà mẫu `sql.join` của đường cũ sinh ra.
- */
 async function oracleUserHasAnyRole(userId: string, roleNames: string[]): Promise<boolean> {
   const placeholders = roleNames.map((_, i) => `$${i + 2}`).join(', ');
   const res = await pool.query(
@@ -56,8 +40,6 @@ beforeAll(async () => {
   db = createCentreKysely(pool);
   repo = new ReportsRepository(db);
 
-  // role_assignments.context_id có khoá ngoại tới bảng context:
-  // gieo một context hệ thống tối thiểu trước khi gán vai.
   await db.insertInto('context').values({ id: CONTEXT_ID, context_level: 10, depth: 1, path: '/1' }).execute();
   await db.insertInto('role').values([
     { id: ROLE_TEACHER, short_name: 'teacher' },
@@ -110,7 +92,6 @@ describe('T-11: userHasAnyRole (Kysely) đặt cạnh nguyên văn SQL của đ�
   });
 
   it('đoạn chứa biểu thức con có tham số riêng: tham số của biểu thức con giữ vị trí của đoạn, kết quả thật của hai phía bằng nhau', async () => {
-    // Khuôn ghép của repository với đoạn đầu là biểu thức con lower(${'TeAcHeR'}).
     const kyselyFragments = [kyselySql`lower(${'TeAcHeR'})`, kyselySql`${'manager'}`];
     const kyselyQuery = kyselySql<{ ok: number }>`
       select 1 as ok from role_assignments ra join role r on r.id = ra.role_id
@@ -121,13 +102,11 @@ describe('T-11: userHasAnyRole (Kysely) đặt cạnh nguyên văn SQL của đ�
       select 1 as ok from role_assignments ra join role r on r.id = ra.role_id
       where ra.user_id = ${USER_B} and lower(r.short_name) in (${kyselySql.join(kyselyFragments, kyselySql`, `)}) limit 1`
       .execute(db);
-    // Phía oracle: cùng biểu thức con, cùng vị trí đoạn, nguyên văn SQL.
     const oracleResult = await pool.query(
       `select 1 as ok from role_assignments ra join role r on r.id = ra.role_id
        where ra.user_id = $1 and lower(r.short_name) in (lower($2), $3) limit 1`,
       [USER_B, 'TeAcHeR', 'manager'],
     );
-    // USER_B giữ vai manager: khớp qua đoạn thứ hai ở cả hai phía.
     expect(kyselyResult.rows.length).toBe(1);
     expect(oracleResult.rows.length).toBe(1);
   });

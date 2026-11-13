@@ -11,7 +11,6 @@ import {
   type UploadContentBankFile,
 } from '@giaokhoa/contracts';
 
-/** Validation Content Bank / Kho học liệu dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts`. */
 export { createContentBankContentSchema, insertContentBankContentSchema, reviewContentBankContentSchema, updateContentBankContentSchema, uploadContentBankFileSchema };
 export type CreateContentDto = CreateContentBankContent;
 export type UpdateContentDto = UpdateContentBankContent;

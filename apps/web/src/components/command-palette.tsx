@@ -9,9 +9,6 @@ import { queryKeys } from '#lib/query-keys';
 import { globalSearchTarget, type GlobalSearchDoc } from '#lib/search-target';
 import '#config/i18n';
 
-/**
- * Một đích đến trong bề mặt tìm kiếm: mục đi tới (màn hình theo quyền hoặc khoá học của tôi) hoặc một kết quả nội dung từ tìm kiếm toàn cục.
- */
 interface PaletteItem {
   id: string;
   title: string;
@@ -20,9 +17,6 @@ interface PaletteItem {
   group: 'goto' | 'content';
 }
 
-/**
- * Bỏ dấu tiếng Việt + hạ chữ thường để khớp tìm kiếm không dấu: người dùng gõ "khoa hoc" vẫn ra "Khoá học", gõ "tin nhan" ra "Tin nhắn".
- */
 function normalizeForSearch(text: string): string {
   return text
     .normalize('NFD')
@@ -32,25 +26,12 @@ function normalizeForSearch(text: string): string {
     .toLowerCase();
 }
 
-/**
- * Khoá nhãn loại kết quả nội dung theo `area` của API tìm kiếm (gợi ý bên phải mỗi kết quả). Chỉ ba area đã có đích ở lib/search-target mới có nhãn; kết quả thuộc area lạ đã bị loại trước khi tới đây.
- */
 const CONTENT_AREA_LABEL_KEYS: Record<string, string> = {
   courses: 'platform:searchAreaCourses',
   users: 'platform:searchAreaUsers',
   contentbank: 'platform:searchAreaContentBank',
 };
 
-/**
- * Bề mặt tìm kiếm hợp nhất của header, mở bằng Cmd+K / Ctrl+K từ mọi trang của khu vực đã đăng nhập (chuẩn app hiện đại — Linear, Notion, GitHub). Chủ repo chốt gộp hai bề mặt tìm kiếm cũ thành một (ngày 27/10/2026): nút "Tìm nhanh…" riêng ở vùng phải header đã BỎ — bề mặt này chỉ còn mở bằng phím tắt; ô tìm kiếm ở giữa header giữ nguyên vai trò đường vào trang kết quả đầy đủ `/search`. Một ô gõ duy nhất cho ra hai nhóm kết quả:
- *
- * - Nhóm "Đi tới": màn hình theo quyền + khoá học của tôi, lọc chữ
- *   tại client và Enter/nhấp là đi thẳng. Tôn trọng quyền theo đúng cây sidebar: danh sách màn hình dựng từ CÙNG các cổng của AppSidebar (canUseQuestionBank cho Ngân hàng câu hỏi, canAdminister cho nhóm quản trị, hasLearnerFootprint cho Huy hiệu/Kế hoạch học tập theo issue #176) và khoá học lấy từ ảnh chụp quyền (perms.courses — API /courses đã tự lọc theo người xem). Mục không có quyền thì KHÔNG xuất hiện. Mục "Tìm kiếm" trỏ `/search` trần của bảng lệnh cũ đã bỏ: trang kết quả nay là một trong các đích của chính nhóm nội dung và của ô giữa header, không còn là một mục điều hướng riêng.
- * - Nhóm "Nội dung": gọi GET /api/v1/search bằng từ khoá đã gỡ
- *   debounce 250 ms (tránh bắn API theo từng phím); server đã lọc kết quả theo quyền của người tìm. Mỗi kết quả mở được item đích theo ánh xạ dùng chung ở lib/search-target (cùng ánh xạ với trang `/search`); kết quả thuộc area chưa có route đích thì không vào danh sách chọn được. Riêng kết quả `users`: mọi vai trò đều nhận được từ API nhưng đích duy nhất là màn quản trị người dùng, nên chỉ vào danh sách khi ảnh chụp quyền của người đang tìm có quyền quản trị người dùng (site admin hoặc `user:update` tại context hệ thống — capability màn đích tự gác); vai trò còn lại không thấy chúng trong danh sách chọn, tránh điều hướng vào màn quản trị mình không có quyền dùng.
- *
- * Điều hướng bàn phím (mũi tên + Enter) chạy trên MỘT danh sách phẳng theo đúng thứ tự hiển thị: nhóm Đi tới trước, nhóm Nội dung sau. Component mount một lần duy nhất trong SiteHeader (không render gì khi đang đóng) nên phím tắt sống trên mọi trang.
- */
 export function CommandPalette() {
   const { t } = useTranslation(['app', 'dashboard', 'platform']);
   const perms = usePermissions();
@@ -111,8 +92,6 @@ export function CommandPalette() {
     return gotoItems.filter((item) => normalizeForSearch(`${item.title} ${item.hint ?? ''}`).includes(q));
   }, [gotoItems, query]);
 
-  // Gỡ debounce từ khoá cho nhóm Nội dung: chỉ khi chữ đã yên 250 ms
-  // mới coi là từ khoá tìm nội dung, tránh gọi API theo từng phím.
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
@@ -125,11 +104,6 @@ export function CommandPalette() {
     enabled: open && debouncedQuery.length > 0,
   });
 
-  // Quyền quản trị người dùng của chính người đang tìm, suy từ
-  // ảnh chụp quyền: điều kiện duy nhất để kết quả `users` có đích
-  // (màn quản trị tự gác `user:update`). Ảnh chụp chưa tải được
-  // thì coi như không có quyền — kết quả `users` không vào danh
-  // sách, đúng chiều an toàn của ánh xạ.
   const canManageUsers =
     (perms.access?.isSiteAdmin ?? false) ||
     (perms.access ? systemCapabilities(perms.access).includes('user:update') : false);
@@ -152,13 +126,10 @@ export function CommandPalette() {
     });
   }, [contentQuery.data, t, canManageUsers]);
 
-  // Danh sách phẳng cho điều hướng bàn phím, đúng thứ tự hiển thị.
   const navigable = useMemo(() => [...filteredGoto, ...contentItems], [filteredGoto, contentItems]);
   const contentPending = debouncedQuery.length > 0 && contentQuery.data === undefined && contentQuery.isFetching;
   const contentFailed = debouncedQuery.length > 0 && contentQuery.isError;
 
-  // Mở bằng Cmd+K (macOS) / Ctrl+K (Windows/Linux) từ bất kỳ trang nào;
-  // bấm lại khi đang mở thì đóng (toggle như các app chuẩn).
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -173,14 +144,12 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Dồn focus vào ô tìm khi bảng lệnh mở, không reset state trong effect.
   useEffect(() => {
     if (!open) return;
     const raf = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(raf);
   }, [open]);
 
-  // Giữ mục đang chọn luôn trong tầm mắt khi di chuyển bằng phím.
   useEffect(() => {
     listRef.current
       ?.querySelector(`[data-index="${activeIndex}"]`)

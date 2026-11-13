@@ -1,12 +1,3 @@
-/**
- * Spec tích hợp của bộ máy migration của `@giaokhoa/db` (issue #639, hoàn thiện ở #663): chứng minh trên database thật rằng bộ máy áp đủ carrier với đúng số đếm kỳ vọng, hàm đọc nhật ký chỉ đọc `kysely_migration`, runner CLI dừng to tiếng trước database lạ, trạng thái "đã áp carrier, native đang chờ" được áp tiếp đúng phần native, và ngữ nghĩa transaction/khoá mà runner production dựa vào được giữ đúng.
- *
- * Lưu ý về "mô phỏng nhật ký cũ": một ca tự tạo schema `drizzle` + bảng `__drizzle_migrations` rồi chèn tên carrier — đó là mô phỏng nhật ký mà bộ máy cũ ghi, KHÔNG phải chạy bộ máy cũ thật. Điều ca đó chứng minh là hàm đọc nhật ký BỎ QUA nhật ký cũ sau khi gỡ Drizzle (issue #663): nguồn sự thật duy nhất là `kysely_migration`. (Trước #663 package còn bước cấy nhật ký chép tên từ nhật ký cũ sang; cửa sổ chuyển đổi đã đóng nên bước cấy và các ca kiểm của nó đã gỡ cùng PR này.)
- *
- * Môi trường: cụm PostgreSQL quản trị từ `GIAOKHOA_DB_TEST_ADMIN_URL`
- * (hoặc suy từ `DATABASE_URL` như spec khói của harness). Các
- * database test bị xoá và dựng lại ở đầu suite, xoá hẳn khi xong. Thử nghiệm T-3 chạy tiến trình con `node -e` dùng `kysely` từ `node_modules` của package (không phụ thuộc dist đã build).
- */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,18 +21,12 @@ const PROD_DB = 'giaokhoa_db_migrate_n2_prod';
 const T2_DB = 'giaokhoa_db_migrate_n2_t2';
 const T3_DB = 'giaokhoa_db_migrate_n2_t3';
 
-/**
- * Diện carrier đóng băng của kho control plane (định nghĩa tại `stores.ts`). Khác với `listMigrationNames` (mọi migration trong thư mục, gồm cả migration native): diện này dùng để dựng trạng thái "mới áp carrier, native chưa áp" và để hậu kiểm đòi đúng các carrier thật phải có mặt trong nhật ký.
- */
 const CP_CARRIERS: string[] = MIGRATION_STORES['control-plane'].carrierNames;
 
 function packageMigrationsDir(store: 'centre' | 'control-plane' | 'system-bank'): string {
   return join(process.cwd(), 'migrations', store);
 }
 
-/**
- * Provider chỉ chứa các migration có tên thuộc tập cho trước, dựng trên `FrozenSqlProvider` đầy đủ — dùng để dựng trạng thái "mới áp một phần" (ví dụ database production mới áp carrier, migration native chưa áp) mà provider đầy đủ không dựng được.
- */
 function providerOnly(migrationsDir: string, names: readonly string[]): MigrationProvider {
   const inner = new FrozenSqlProvider(migrationsDir);
   return {
@@ -52,7 +37,6 @@ function providerOnly(migrationsDir: string, names: readonly string[]): Migratio
   };
 }
 
-/** Đọc DEFAULT hiện tại của `space_registry_history.created_at` từ `information_schema`. */
 async function registryCreatedAtDefault(dbUrl: string): Promise<string | null> {
   const client = new Client({ connectionString: dbUrl });
   await client.connect();
@@ -67,7 +51,6 @@ async function registryCreatedAtDefault(dbUrl: string): Promise<string | null> {
   }
 }
 
-/** Tạo database trống (xoá nếu có) và trả connection string tới nó. */
 async function freshDatabase(name: string): Promise<string> {
   const admin = new Client({ connectionString: adminUrl });
   await admin.connect();
@@ -80,7 +63,6 @@ async function freshDatabase(name: string): Promise<string> {
   return withDatabase(adminUrl, name);
 }
 
-/** Dựng nhật ký của bộ máy cũ mô phỏng với đúng tập tên cho trước (để chứng minh hàm đọc nhật ký bỏ qua nó sau #663). */
 async function mockLegacyJournal(dbUrl: string, names: string[]): Promise<void> {
   const client = new Client({ connectionString: dbUrl });
   await client.connect();
@@ -101,7 +83,6 @@ async function mockLegacyJournal(dbUrl: string, names: string[]): Promise<void> 
   }
 }
 
-/** Dựng bảng `kysely_migration` với đúng tập tên cho trước (trạng thái nhật ký lạ cho ca CLI). */
 async function mockKyselyJournal(dbUrl: string, names: string[]): Promise<void> {
   const client = new Client({ connectionString: dbUrl });
   await client.connect();
@@ -161,8 +142,6 @@ async function countPublic(dbUrl: string, kind: 'tables' | 'policies' | 'indexes
       );
       return result.rows[0].n as number;
     }
-    // Cùng cơ số đo với hậu kiểm của package (mốc 416): chỉ index
-    // không đỡ ràng buộc PK/UNIQUE.
     const result = await client.query(
       `SELECT count(*)::int AS n FROM pg_index i
        JOIN pg_class ic ON ic.oid = i.indexrelid
@@ -220,9 +199,6 @@ describe('bộ máy migration của package cho ba kho', () => {
       } finally {
         await empty.end();
       }
-      // Database CHỈ có nhật ký của bộ máy cũ (chưa từng qua bộ máy
-      // này): sau #663 không còn đường đọc dự phòng — tập đã áp là
-      // rỗng, đúng hệ quả đã chốt khi đóng cửa sổ chuyển đổi.
       await mockLegacyJournal(fresh, carrierNames);
       const legacyOnly = new Client({ connectionString: fresh });
       await legacyOnly.connect();
@@ -246,9 +222,6 @@ describe('bộ máy migration của package cho ba kho', () => {
   it('tên lạ trong nhật ký Kysely làm runner CLI thoát mã khác 0', async () => {
     const strangeUrl = await freshDatabase(STRANGE_DB);
     await mockKyselyJournal(strangeUrl, ['99999999999999_ten_la_khong_thuoc_bo_migration']);
-    // Đường CLI của package phải dừng to tiếng trước database lạ
-    // (Migrator từ chối tập đã áp lạ, hoặc hậu kiểm lệch số dòng
-    // nhật ký kỳ vọng) — thoát mã khác 0, không áp lặng lẽ.
     const run = spawnSync(
       process.execPath,
       [join(process.cwd(), 'dist', 'migrate', 'run.js'), 'control-plane'],
@@ -258,25 +231,15 @@ describe('bộ máy migration của package cho ba kho', () => {
   });
 
   it('database có nhật ký chỉ gồm carrier và migration native đang chờ: migrateToLatest áp native, chạy lại là no-op', async () => {
-    // Ca tái hiện sự cố deploy sau PR #687 (issue #689): trạng thái
-    // của database production lúc lỗi — schema đã dựng bằng carrier,
-    // nhật ký chỉ có các dòng carrier, migration native của kho chưa
-    // áp. Runner phải áp native thay vì dừng vì "thiếu carrier".
     const dir = packageMigrationsDir('control-plane');
     const allNames = listMigrationNames(dir);
     const nativeNames = allNames.filter((name) => !CP_CARRIERS.includes(name));
-    // Issue #9 thêm migration native xoá hai bảng directory sau migration native cũ.
-    // Trạng thái chỉ có carrier phải áp đủ cả hai migration đang chờ.
     expect(nativeNames).toHaveLength(2);
     expect(nativeNames).toContain('20261113043200_remove_business_directories');
     const prodUrl = await freshDatabase(PROD_DB);
     const pool = new Pool({ connectionString: prodUrl });
     const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
     try {
-      // Dựng trạng thái production: shim trên database trống, rồi
-      // chỉ áp carrier bằng provider lọc — trạng thái cuối tương
-      // đương database production đã áp carrier (schema do chính
-      // SQL carrier dựng, nhật ký chỉ có carrier).
       await installUuidv7Shim(db);
       const carrierMigrator = new Migrator({ db, provider: providerOnly(dir, CP_CARRIERS) });
       const firstRun = await carrierMigrator.migrateToLatest();
@@ -284,8 +247,6 @@ describe('bộ máy migration của package cho ba kho', () => {
       expect(await kyselyNames(prodUrl)).toEqual([...CP_CARRIERS].sort());
       expect(await registryCreatedAtDefault(prodUrl)).toContain('now()');
 
-      // Lượt runner trên trạng thái production: migrateToLatest áp
-      // đúng migration native đang chờ (không đòi gì thêm ở nhật ký).
       const migrator = new Migrator({ db, provider: new FrozenSqlProvider(dir) });
       const { error, results } = await migrator.migrateToLatest();
       expect(error).toBeUndefined();
@@ -296,7 +257,6 @@ describe('bộ máy migration của package cho ba kho', () => {
       const verified = await verifyStore(db, 'control-plane');
       expect(verified.ok).toBe(true);
 
-      // Chạy lại toàn trình trên database đã áp đủ: no-op sạch.
       const again = await migrator.migrateToLatest();
       expect(again.error).toBeUndefined();
       expect(again.results ?? []).toHaveLength(0);
@@ -327,10 +287,6 @@ describe('bộ máy migration của package cho ba kho', () => {
     const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
     try {
       await installUuidv7Shim(db);
-      // Trên PG18 hàm tích hợp sẵn (pg_catalog) thỏa kiểm này; dưới
-      // PG18 shim viết tay trong schema public thỏa kiểm này. Điểm
-      // chung cần chứng minh: sau bước tiền-migration, uuidv7()
-      // gọi được — và nhật ký không bị ghi thêm bởi bước shim.
       const check = new Client({ connectionString: shimUrl });
       await check.connect();
       try {
@@ -372,9 +328,6 @@ describe('bộ máy migration của package cho ba kho', () => {
       console.log('T-2 results:', JSON.stringify(results?.map((r) => ({ name: r.migrationName, status: r.status }))));
       console.log('T-2 bang t2_first ton tai:', await tableExists(t2Url, 't2_first'));
       console.log('T-2 dong kysely_migration:', await kyselyNames(t2Url).catch(() => ['<bang chua ton tai>']));
-      // Kết luận đo được (ghi vào thân PR): toàn bộ lượt migrate
-      // nằm trong MỘT transaction nên bảng của migration 1 cũng
-      // rollback và nhật ký không ghi dòng nào.
       expect(await tableExists(t2Url, 't2_first')).toBe(false);
       expect(await kyselyNames(t2Url).catch(() => [] as string[])).toEqual([]);
     } finally {
@@ -404,7 +357,6 @@ const { Migrator } = require('kysely/migration');
       env: { ...process.env, MIGRATE_T3_URL: t3Url },
       cwd: process.cwd(),
     });
-    // Chờ backend của tiến trình con vào trạng thái pg_sleep (đang giữ khoá advisory của Migrator) rồi SIGKILL.
     const watcher = new Client({ connectionString: t3Url });
     await watcher.connect();
     try {
@@ -422,9 +374,6 @@ const { Migrator } = require('kysely/migration');
     }
     child.kill('SIGKILL');
     await new Promise<void>((resolve) => child.on('exit', () => resolve()));
-    // Chạy lại ngay với provider chỉ còn migration tạo bảng: nếu khoá advisory còn giữ, Migrator sẽ chờ tới hết timeout khoá
-    // (1 giờ) mới báo lỗi — hoàn tất nhanh chứng minh khoá cấp
-    // session tự giải phóng khi tiến trình chết.
     const started = Date.now();
     const pool = new Pool({ connectionString: t3Url });
     const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
@@ -506,7 +455,6 @@ const { Migrator } = require('kysely/migration');
         ('Tổ A cũ', ${root}, ${creatorAmbiguous}, 'org', ${cohortId}),
         ('Trang chính có chủ', ${root}, ${creatorPlatform}, 'personal', null),
         ('Chưa xác định được chủ', ${root}, ${creatorAmbiguous}, 'school', null)`.execute(db);
-      // File cũ neo ở USER nằm dưới hệ thống phải kế thừa sở hữu của học liệu, không suy từ context.
       await sql`insert into files (content_hash, context_id, component, file_area, item_id, file_name, file_size)
         values (${'a'.repeat(64)}, ${contextPersonal}, 'core_contentbank', 'content', ${personal.rows[0]!.id}, 'old.pdf', 4)`.execute(db);
       await sql.raw(`CREATE ROLE "${role}" NOLOGIN NOBYPASSRLS`).execute(db);
@@ -521,7 +469,6 @@ const { Migrator } = require('kysely/migration');
 
       const ambiguous = await new Migrator({ db, provider: new FrozenSqlProvider(dir) }).migrateToLatest();
       expect(String(ambiguous.error)).toContain('contentbank.legacy_owner_unresolved');
-      // Thất bại rollback cả thay đổi schema: không được gán nhầm về Trang chính.
       expect((await sql<{ count: number }>`select count(*)::int as count from information_schema.columns
         where table_name = 'content_bank_content' and column_name = 'tenant_id'`.execute(db)).rows[0]?.count).toBe(0);
       await sql`delete from content_bank_content where name = 'Chưa xác định được chủ'`.execute(db);

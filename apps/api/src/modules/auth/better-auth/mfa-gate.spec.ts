@@ -1,20 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMfaGateHook, type MfaGateDeps } from './mfa-gate';
 
-/**
- * Cổng MFA cho mọi đường đăng nhập của Better Auth — tín hiệu là `user_totp` (qua phụ thuộc `isMfaEnabled`), và kỷ luật FAIL-CLOSED khi không xác minh được trạng thái MFA:
- *
- * - Tra cứu trạng thái LỖI tuyệt đối không được hiểu là "chưa bật
- *   MFA": cổng phải ghi log lỗi, huỷ phiên vừa tạo ở cả hai tầng
- *   (cookie phiên khỏi response + xoá dòng session +
- *   setNewSession(null)) rồi ném lỗi dừng đăng nhập — không đường nào để lỗi tra cứu để lại một phiên sống.
- * - Tra cứu THÀNH CÔNG: chưa bật MFA thì đi qua không đụng phiên;
- *   đã bật thì cổng kích hoạt — huỷ phiên, phát dấu chờ bước hai; đường callback ném redirect kèm `twoFactorRedirect=true`, đường sign-in trả JSON `twoFactorRedirect`.
- * - Đường ngoài phạm vi (không phải callback/sign-in) và instance
- *   không có phụ thuộc MFA: hook đi qua, không tra cứu.
- *
- * Đổi kỷ luật (nuốt lỗi tra cứu thành "chưa bật MFA", hoặc bỏ một họ đường khỏi phạm vi) thì các ca tương ứng phải đỏ.
- */
 describe('MfaGate — cổng MFA theo user_totp cho mọi đường đăng nhập', () => {
   const SESSION_TOKEN = 'session-token-1';
   const USER_ID = 'user-1';
@@ -94,8 +80,6 @@ describe('MfaGate — cổng MFA theo user_totp cho mọi đường đăng nhậ
     expect(calls.setNewSession).toHaveBeenCalledTimes(1);
     expect(calls.setNewSession).toHaveBeenCalledWith(null);
     expect(calls.logError).toHaveBeenCalledTimes(1);
-    // Không phát dấu chờ bước hai: đây là dừng đăng nhập, không phải
-    // chuyển sang bước hai.
     expect(calls.createVerificationValue).not.toHaveBeenCalled();
   });
 
@@ -121,14 +105,11 @@ describe('MfaGate — cổng MFA theo user_totp cho mọi đường đăng nhậ
       (error: unknown) => error,
     );
 
-    // Redirect của tầng middleware là APIError trạng thái FOUND
-    // (302) mang location về callbackURL kèm cờ twoFactorRedirect=true.
     const redirectError = thrown as { status?: string; headers?: Headers };
     expect(redirectError.status).toBe('FOUND');
     expect(redirectError.headers?.get('location')).toContain('twoFactorRedirect=true');
     expect(calls.deleteSession).toHaveBeenCalledWith(SESSION_TOKEN);
     expect(calls.setNewSession).toHaveBeenCalledWith(null);
-    // Hai dấu chờ bước hai: verification chờ + bộ đếm lần thử.
     expect(calls.createVerificationValue).toHaveBeenCalledTimes(2);
   });
 
@@ -140,9 +121,6 @@ describe('MfaGate — cổng MFA theo user_totp cho mọi đường đăng nhậ
 
       const returned = (await hook(ctx as never)) as { twoFactorRedirect?: boolean; twoFactorMethods?: string[] } | undefined;
 
-      // Giá trị hook trả ở tầng middleware là chính thân JSON plugin
-      // tự trả ở luồng credential: cờ redirect + phương thức totp —
-      // và KHÔNG mang token phiên nào.
       expect(returned?.twoFactorRedirect).toBe(true);
       expect(returned?.twoFactorMethods).toEqual(['totp']);
       expect(calls.deleteSession).toHaveBeenCalledWith(SESSION_TOKEN);

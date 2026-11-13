@@ -1,29 +1,6 @@
-/**
- * Repository của cụm HỌC LIỆU trên Kysely.
- *
- * Vai trò: mọi truy cập tới các bảng học liệu của kho trung tâm
- * (pages — trang đọc mod_page, resources — tài nguyên mod_resource,
- * course_last_access — dấu vết mở học gần nhất, course_module_progress — tiến độ xem theo mục, learning_records — hồ sơ hoàn thành) tập trung ở đây. Repository không chứa luật nghiệp vụ — tính "percent chỉ tăng", cổng truy cập và tổng hợp tiến độ nằm ở tầng service phía ứng dụng. Repository này không mở transaction nào (mọi phương thức chạy trên handle gốc), đúng bề mặt của repository cũ.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database
- *   (riêng bảng pages/resources, cột khoá ngoại tên là `course`
- *   trong database nên hình dạng camelCase phía tiêu thụ cũng giữ nguyên tên `course`).
- * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng (khớp `$inferSelect`/`$inferInsert` của repository cũ trước chuyển đổi): cột được chọn bằng danh sách tường minh có bí danh, giá trị ghi được ánh xạ từng trường ở các hàm `*InsertValues`/`*UpdateSet` trong file này.
- * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (quy tắc T-4 đã chốt ở pilot); mọi giá trị where là tham số bắt buộc.
- * - `onConflict` theo khoá phức hợp: last-access neo cặp
- *   (user, course), module-progress neo cặp (user, cm),
- *   learning-records `doNothing()` trên cặp (user, cm) — lần hoàn thành đầu tiên là bản ghi duy nhất.
- * - Hai đường đọc giữ nguyên hành vi lọc tại tầng JS của repository
- *   cũ: `getLastAccess` đọc theo user rồi khớp course trong bộ nhớ, `getModuleProgress` đọc theo cm rồi đối chiếu user trong bộ nhớ — không đổi thành điều kiện SQL để hành vi (và thứ tự dòng đầu tiên) giữ nguyên.
- */
 import type { InsertObject, UpdateObject } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
 
-/** Một dòng trang đọc (mod_page). */
 export interface PageRow {
   id: string;
   course: string;
@@ -34,7 +11,6 @@ export interface PageRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một trang đọc mới (khớp `$inferInsert` cũ). */
 export interface NewPage {
   id?: string;
   course: string;
@@ -45,7 +21,6 @@ export interface NewPage {
   updatedAt?: Date;
 }
 
-/** Một dòng tài nguyên (mod_resource). */
 export interface ResourceRow {
   id: string;
   course: string;
@@ -59,7 +34,6 @@ export interface ResourceRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một tài nguyên mới (khớp `$inferInsert` cũ). */
 export interface NewResource {
   id?: string;
   course: string;
@@ -73,7 +47,6 @@ export interface NewResource {
   updatedAt?: Date;
 }
 
-/** Một dòng dấu vết mở học gần nhất của một học sinh trong một khoá. */
 export interface LastAccessRow {
   id: string;
   userId: string;
@@ -82,7 +55,6 @@ export interface LastAccessRow {
   accessedAt: Date;
 }
 
-/** Một dòng tiến độ xem một mục của một học sinh. */
 export interface ModuleProgressRow {
   id: string;
   userId: string;
@@ -94,7 +66,6 @@ export interface ModuleProgressRow {
   updatedAt: Date;
 }
 
-/** Một dòng hồ sơ hoàn thành (chụp tên mục tại thời điểm hoàn thành). */
 export interface LearningRecordRow {
   id: string;
   userId: string;
@@ -105,7 +76,6 @@ export interface LearningRecordRow {
   completedAt: Date;
 }
 
-/** Dữ kiện ghi một hồ sơ hoàn thành mới (khớp `$inferInsert` cũ). */
 export interface NewLearningRecord {
   id?: string;
   userId: string;
@@ -116,7 +86,6 @@ export interface NewLearningRecord {
   completedAt?: Date;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng pages (dùng cho cả select lẫn returning). */
 const PAGE_COLUMNS = [
   'id',
   'course',
@@ -127,7 +96,6 @@ const PAGE_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng resources. */
 const RESOURCE_COLUMNS = [
   'id',
   'course',
@@ -141,7 +109,6 @@ const RESOURCE_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng course_last_access. */
 const LAST_ACCESS_COLUMNS = [
   'id',
   'user_id as userId',
@@ -150,7 +117,6 @@ const LAST_ACCESS_COLUMNS = [
   'accessed_at as accessedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng course_module_progress. */
 const MODULE_PROGRESS_COLUMNS = [
   'id',
   'user_id as userId',
@@ -162,7 +128,6 @@ const MODULE_PROGRESS_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng learning_records. */
 const LEARNING_RECORD_COLUMNS = [
   'id',
   'user_id as userId',
@@ -173,7 +138,6 @@ const LEARNING_RECORD_COLUMNS = [
   'completed_at as completedAt',
 ] as const;
 
-/** Ánh xạ dữ kiện ghi trang đọc sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function pageInsertValues(values: NewPage): InsertObject<CentreDB, 'pages'> {
   const row: InsertObject<CentreDB, 'pages'> = {
     course: values.course,
@@ -187,7 +151,6 @@ function pageInsertValues(values: NewPage): InsertObject<CentreDB, 'pages'> {
   return row;
 }
 
-/** Ánh xạ một patch trang đọc sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function pageUpdateSet(patch: Partial<NewPage>): UpdateObject<CentreDB, 'pages'> {
   const set: UpdateObject<CentreDB, 'pages'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -200,7 +163,6 @@ function pageUpdateSet(patch: Partial<NewPage>): UpdateObject<CentreDB, 'pages'>
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi tài nguyên sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function resourceInsertValues(values: NewResource): InsertObject<CentreDB, 'resources'> {
   const row: InsertObject<CentreDB, 'resources'> = {
     course: values.course,
@@ -217,7 +179,6 @@ function resourceInsertValues(values: NewResource): InsertObject<CentreDB, 'reso
   return row;
 }
 
-/** Ánh xạ một patch tài nguyên sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function resourceUpdateSet(patch: Partial<NewResource>): UpdateObject<CentreDB, 'resources'> {
   const set: UpdateObject<CentreDB, 'resources'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -233,7 +194,6 @@ function resourceUpdateSet(patch: Partial<NewResource>): UpdateObject<CentreDB, 
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi hồ sơ hoàn thành sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function learningRecordInsertValues(values: NewLearningRecord): InsertObject<CentreDB, 'learning_records'> {
   const row: InsertObject<CentreDB, 'learning_records'> = {
     user_id: values.userId,
@@ -247,25 +207,17 @@ function learningRecordInsertValues(values: NewLearningRecord): InsertObject<Cen
   return row;
 }
 
-/**
- * Kho dữ liệu học liệu: trang đọc (mod_page), tài nguyên
- * (mod_resource) và dấu vết mở học gần nhất (last-access) của học
- * sinh trong khoá.
- */
 export class ContentRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Instance gốc của repository. */
   private db(): CentreDb {
     return this.handle;
   }
 
-  /** Handle DB gốc — tầng service đọc handle để chạy các truy vấn tổng hợp tiến độ thuộc bảng của cụm khác. */
   get dbHandle(): CentreDb {
     return this.db();
   }
 
-  /** Chèn trang đọc. */
   async insertPage(v: NewPage): Promise<PageRow> {
     const rows = await this.db()
       .insertInto('pages')
@@ -275,7 +227,6 @@ export class ContentRepository {
     return rows[0]!;
   }
 
-  /** Lấy trang đọc theo id. */
   async getPage(id: string): Promise<PageRow | undefined> {
     const row = await this.db()
       .selectFrom('pages')
@@ -285,7 +236,6 @@ export class ContentRepository {
     return row;
   }
 
-  /** Liệt kê trang đọc của khoá học. */
   async listPages(courseId: string): Promise<PageRow[]> {
     return this.db()
       .selectFrom('pages')
@@ -295,7 +245,6 @@ export class ContentRepository {
       .execute();
   }
 
-  /** Cập nhật trang đọc. */
   async updatePage(id: string, v: Partial<NewPage>): Promise<void> {
     await this.db()
       .updateTable('pages')
@@ -304,17 +253,14 @@ export class ContentRepository {
       .execute();
   }
 
-  /** Xoá trang đọc. */
   async deletePage(id: string): Promise<void> {
     await this.db().deleteFrom('pages').where('id', '=', id).execute();
   }
 
-  /** Xoá trang đọc theo cm (dọn dẹp khi course module bị xoá). */
   async deletePageByCm(cmId: string): Promise<void> {
     await this.db().deleteFrom('pages').where('cm_id', '=', cmId).execute();
   }
 
-  /** Chèn tài nguyên. */
   async insertResource(v: NewResource): Promise<ResourceRow> {
     const rows = await this.db()
       .insertInto('resources')
@@ -324,7 +270,6 @@ export class ContentRepository {
     return rows[0]!;
   }
 
-  /** Lấy tài nguyên theo id. */
   async getResource(id: string): Promise<ResourceRow | undefined> {
     const row = await this.db()
       .selectFrom('resources')
@@ -334,7 +279,6 @@ export class ContentRepository {
     return row;
   }
 
-  /** Liệt kê tài nguyên của khoá học. */
   async listResources(courseId: string): Promise<ResourceRow[]> {
     return this.db()
       .selectFrom('resources')
@@ -344,7 +288,6 @@ export class ContentRepository {
       .execute();
   }
 
-  /** Cập nhật tài nguyên. */
   async updateResource(id: string, v: Partial<NewResource>): Promise<void> {
     await this.db()
       .updateTable('resources')
@@ -353,17 +296,14 @@ export class ContentRepository {
       .execute();
   }
 
-  /** Xoá tài nguyên. */
   async deleteResource(id: string): Promise<void> {
     await this.db().deleteFrom('resources').where('id', '=', id).execute();
   }
 
-  /** Xoá tài nguyên theo cm (dọn dẹp khi course module bị xoá). */
   async deleteResourceByCm(cmId: string): Promise<void> {
     await this.db().deleteFrom('resources').where('cm_id', '=', cmId).execute();
   }
 
-  /** Ghi/ghi đè dấu vết mở học gần nhất của một học sinh trong một khoá. */
   async upsertLastAccess(userId: string, courseId: string, cmId: string): Promise<LastAccessRow> {
     const rows = await this.db()
       .insertInto('course_last_access')
@@ -376,7 +316,6 @@ export class ContentRepository {
     return rows[0]!;
   }
 
-  /** Đọc dấu vết mở học gần nhất của một học sinh trong một khoá (khớp course trong bộ nhớ như repository cũ). */
   async getLastAccess(userId: string, courseId: string): Promise<LastAccessRow | undefined> {
     const rows = await this.db()
       .selectFrom('course_last_access')
@@ -386,9 +325,6 @@ export class ContentRepository {
     return rows.find((r) => r.courseId === courseId);
   }
 
-  /**
-   * Ghi tiến độ xem một mục: percent chỉ TĂNG (giữ giá trị cao nhất đã đạt — ôn lại không bị phạt), vị trí dở dang lấy theo lần báo mới nhất.
-   */
   async upsertModuleProgress(
     userId: string,
     courseId: string,
@@ -423,7 +359,6 @@ export class ContentRepository {
     return rows[0]!;
   }
 
-  /** Đọc tiến độ xem một mục của một học sinh (đối chiếu user trong bộ nhớ như repository cũ). */
   async getModuleProgress(userId: string, cmId: string): Promise<ModuleProgressRow | undefined> {
     const row = await this.db()
       .selectFrom('course_module_progress')
@@ -433,9 +368,6 @@ export class ContentRepository {
     return row && row.userId === userId ? row : undefined;
   }
 
-  /**
-   * Ghi bản ghi hồ sơ hoàn thành (chụp tên mục tại thời điểm hoàn thành). Idempotent: lần hoàn thành đầu tiên của mỗi (HS, mục) là bản ghi duy nhất — các lần hoàn thành sau không ghi đè.
-   */
   async insertLearningRecord(v: NewLearningRecord): Promise<void> {
     await this.db()
       .insertInto('learning_records')
@@ -444,7 +376,6 @@ export class ContentRepository {
       .execute();
   }
 
-  /** Liệt kê bản ghi hồ sơ hoàn thành của một khoá (cho báo cáo giáo viên). */
   async listLearningRecords(courseId: string): Promise<LearningRecordRow[]> {
     return this.db()
       .selectFrom('learning_records')

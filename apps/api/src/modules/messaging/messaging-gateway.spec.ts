@@ -2,27 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { MessagingGateway } from './messaging.gateway';
 import { tenantAls } from '../tenants/tenant-als';
 
-/**
- * Gateway nhắn tin lúc socket nối (issue #33): danh sách chặn của user là MỘT dữ kiện duy nhất, không đổi theo hội thoại — một lần nối với nhiều hội thoại 1–1 chỉ được tải danh sách chặn tối đa một lần, và tập room socket vào được không đổi so với khi tải lại theo từng hội thoại:
- *
- * - Hội thoại 1–1 đang chặn (bất kỳ chiều nào): socket KHÔNG vào
- *   room của hội thoại đó.
- * - Hội thoại 1–1 không chặn và hội thoại nhóm: socket vào room
- *   như cũ; socket luôn vào room riêng của user.
- *
- * Trả danh sách chặn về tải lại theo từng hội thoại thì ca này đỏ ở khẳng định số lượt gọi repository.
- *
- * Cùng file: ảnh chụp presence lúc nối — sau khi ghi presence của người nối, gateway xin tầng realtime danh sách người đang trực tuyến trong quan hệ hội thoại chung và phát `presence.snapshot` cho CHÍNH socket vừa nối, để người đã trực tuyến từ trước (không phát sinh sự kiện thay đổi nào) vẫn được người nối học được.
- *
- * Và: phạm vi kho theo kết nối (tiền điều kiện Phần B, issue #587, hạng mục 1) — danh tính mang slug của trung tâm ở kho riêng thì toàn bộ lượt đọc lúc nối phải chạy qua `withSpaceKysely` của slug đó; đầu dò trong fake ghi lại trạng thái phạm vi tại thời điểm đọc nên bỏ lớp bọc là ca này đỏ.
- */
 describe('MessagingGateway.handleConnection — danh sách chặn tải một lần cho cả lần nối', () => {
   const USER_ID = 'user-1';
   const TENANT_ID = 'tenant-1';
   const BLOCKED_PEER = 'user-blocked';
 
   function build(opts: { spaceSlug?: string | null } = {}) {
-    // Ba hội thoại 1–1 (một đang chặn) + một hội thoại nhóm.
     const conversations = [
       { id: 'conv-blocked', tenantId: TENANT_ID },
       { id: 'conv-open-a', tenantId: TENANT_ID },
@@ -34,7 +19,6 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       'conv-open-a': 'user-a',
       'conv-open-b': 'user-b',
     };
-    // Đầu dò phạm vi kho của kết nối: bật trong lúc callback của `withSpaceKysely` chạy, các fake repository ghi lại trạng thái tại thời điểm được gọi.
     const spaceProbe = { insideSpace: false, currentSpaceId: 'space-a', slugs: [] as string[], listInsideSpace: [] as boolean[] };
     const repo = {
       listConversationsForUser: vi.fn(async () => {
@@ -100,7 +84,6 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     expect(client.disconnect).not.toHaveBeenCalled();
     expect(repo.listBlockedCounterpartIds).toHaveBeenCalledTimes(1);
     expect(repo.listBlockedCounterpartIds).toHaveBeenCalledWith(USER_ID);
-    // Room riêng của user + hai hội thoại 1–1 không chặn + hội thoại nhóm; tuyệt đối không có room của hội thoại đang chặn.
     expect(joinedRooms).toHaveLength(4);
     expect(joinedRooms.some((room) => room.includes('conv-blocked'))).toBe(false);
     expect(joinedRooms.some((room) => room.includes('conv-open-a'))).toBe(true);
@@ -114,13 +97,10 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
 
     await gateway.handleConnection(client as never);
 
-    // Ảnh chụp lấy từ tầng realtime theo đúng người vừa nối và phát
-    // đúng một lần, chỉ tới socket này (client.emit, không qua room).
     expect(realtime.listOnlineCoMemberIds).toHaveBeenCalledTimes(1);
     expect(realtime.listOnlineCoMemberIds).toHaveBeenCalledWith(USER_ID);
     expect(client.emit).toHaveBeenCalledTimes(1);
     expect(client.emit).toHaveBeenCalledWith('presence.snapshot', { onlineUserIds: ['user-a'] });
-    // Thứ tự: ghi presence của người nối TRƯỚC, đọc ảnh chụp SAU.
     expect(realtime.markConnected.mock.invocationCallOrder[0]!)
       .toBeLessThan(realtime.listOnlineCoMemberIds.mock.invocationCallOrder[0]!);
   });
@@ -131,12 +111,9 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     await gateway.handleConnection(client as never);
 
     expect(client.disconnect).not.toHaveBeenCalled();
-    // Lớp bọc kho được mở đúng slug của danh tính và lượt đọc danh
-    // sách hội thoại lúc nối chạy BÊN TRONG lớp bọc đó.
     expect(spaceDb.withSpaceKysely).toHaveBeenCalled();
     expect(spaceProbe.slugs.every((slug) => slug === 'trung-tam-a')).toBe(true);
     expect(spaceProbe.listInsideSpace).toEqual([true]);
-    // Tập room không đổi so với đường kho chung.
     expect(joinedRooms).toHaveLength(4);
     expect(joinedRooms.some((room) => room.includes('conv-blocked'))).toBe(false);
   });
@@ -147,8 +124,6 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     const before = joinedRooms.length;
     const beforeReads = repo.isMember.mock.calls.length;
     spaceProbe.currentSpaceId = 'space-b';
-    // Hai kho có cùng user/conversation ID — nếu chỉ kiểm membership
-    // theo ID mà không ghim identity lúc nối, socket A sẽ đọc nhầm B.
     await expect(gateway.joinConversation(client as never, { conversationId: 'conv-open-a' }))
       .rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
     await expect(gateway.sync(client as never, { 'conv-open-a': 0 }))
@@ -159,7 +134,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     expect(realtime.noteTyping).not.toHaveBeenCalled();
     expect(joinedRooms).toHaveLength(before);
     expect(client.disconnect).toHaveBeenCalledWith(true);
-    expect(spaceDb.withSpaceKysely).toHaveBeenCalledTimes(1); // chỉ lúc handshake
+    expect(spaceDb.withSpaceKysely).toHaveBeenCalledTimes(1);
   });
 
   it('registry trả A nhưng chuẩn bị pool đã sang B: từ chối ngay trong phiên, không chạy callback', async () => {
@@ -191,8 +166,6 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       const roomsBefore = joinedRooms.length;
       const scopesAfterSwitch: Array<string | undefined> = [];
       repo.isMember.mockImplementation(async () => {
-        // Sự kiện bắt đầu trong ALS A và qua mọi chốt trước handler;
-        // chỉ khi membership đang await xong registry mới chuyển B.
         expect(tenantAls.getStore()?.spaceId).toBe('space-a');
         spaceProbe.currentSpaceId = 'space-b';
         return true;
@@ -209,8 +182,6 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
           : gateway.typing(client as never, { conversationId: 'conv-open-a' });
       await expect(call).rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
       expect(client.disconnect).toHaveBeenCalledWith(true);
-      // Nếu đã join thì chỉ room A cũ; Socket.IO tự rời toàn bộ
-      // room khi disconnect. Tuyệt đối không có room của B.
       expect(joinedRooms.slice(roomsBefore).every((room) => !room.includes('space-b'))).toBe(true);
       expect(scopesAfterSwitch.every((scope) => scope === 'space-a')).toBe(true);
       expect(realtime.noteTyping).toHaveBeenCalledTimes(event === 'typing' ? 1 : 0);

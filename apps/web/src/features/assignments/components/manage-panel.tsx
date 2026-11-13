@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { useDeleteAssignment, useSaveAssignmentRubric, useUpdateAssignment } from '../queries/assignment';
 import { selectClass } from '../utils/shared';
 
-/** Chuyển ISO sang giá trị của input datetime-local. */
 function toLocalInput(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -29,7 +28,6 @@ export interface CriterionDraft {
   levels: { label: string; score: string }[];
 }
 
-/** Phía quản lý bài: sửa cài đặt (PATCH), dựng/cập nhật bảng tiêu chí (PUT rubric), xoá bài. */
 export function ManagePanel({ data, courseId, reload }: { data: AssignmentForUserView; courseId: string; reload: () => Promise<void> }) {
   const { t } = useTranslation('app');
   const navigate = useNavigate();

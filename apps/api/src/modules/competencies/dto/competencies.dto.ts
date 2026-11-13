@@ -29,9 +29,6 @@ import {
   type SetCompetencyRule,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation của Competencies dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
- */
 export {
   addCompetencyEvidenceSchema,
   addTemplateCohortSchema,

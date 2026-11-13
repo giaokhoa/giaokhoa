@@ -13,11 +13,6 @@ import {
   trueFalseExtensions,
 } from './true-false.js';
 
-/**
- * Bất biến định danh trong tài liệu soạn (ghi nhận từ ĐG P4, bổ sung theo phán quyết ĐG cuối chuỗi 6419937157): mọi node choice (MC) và statement (TF-A) trong tài liệu soạn phải mang `attrs.id` chuỗi — đáp án đúng của MC và đáp án Đ/S từng mệnh đề của TF-A đều bám theo id này qua kéo-thả/tách-gộp đoạn, nên tài liệu nạp vào mà thiếu id là dữ liệu hỏng nếu không được gán bù.
- *
- * Các ca dưới đây khẳng định bất biến ở mức hành vi tài liệu (nạp tài liệu thiếu id, qua một transaction thì mọi node đều có id), không soi chi tiết nội bộ plugin/transaction của TipTap: thứ tự nội dung giữ nguyên, id phân biệt nhau, đều là chuỗi không rỗng.
- */
 describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
   it('multipleChoice: lựa chọn thiếu attrs.id đều nhận id chuỗi riêng biệt, thứ tự nội dung không đổi', () => {
     const element = document.createElement('div');
@@ -33,7 +28,6 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
             type: CHOICE_LIST_NODE_TYPE,
             content: ['A', 'B', 'C', 'D'].map((label) => ({
               type: CHOICE_NODE_TYPE,
-              // Cố tình thiếu attrs.id: tài liệu nạp vào chưa có, hoặc choice vừa sinh ra khi người soạn tách/gộp đoạn.
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Phương án ${label}` }] }],
             })),
           },
@@ -41,7 +35,6 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       },
     });
     try {
-      // Một transaction nạp lại tài liệu sẽ chạy qua plugin gán id.
       editor.commands.setContent(editor.getJSON());
       const json = editor.getJSON() as { content?: JSONContent[] };
       const choiceList = (json.content ?? []).find((node) => node?.type === CHOICE_LIST_NODE_TYPE);
@@ -50,8 +43,6 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       const ids = choices.map((choice) => choice?.attrs?.id);
       expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
       expect(new Set(ids).size).toBe(MULTIPLE_CHOICE_COUNT);
-      // Id được gán bù không được xáo trộn thứ tự hay nội dung lựa chọn:
-      // đáp án đúng trỏ theo id vẫn khớp đúng nội dung sau khi gán.
       expect(choices.map((choice) => choice?.content?.[0]?.content?.[0]?.text)).toEqual([
         'Phương án A',
         'Phương án B',
@@ -78,7 +69,6 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
             type: STATEMENT_LIST_NODE_TYPE,
             content: ['a', 'b', 'c', 'd'].map((label) => ({
               type: STATEMENT_NODE_TYPE,
-              // Cố tình thiếu attrs.id — cùng trường hợp như choice ở trên.
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Mệnh đề ${label}` }] }],
             })),
           },

@@ -1,8 +1,3 @@
-/**
- * Chụp câu dùng cho đề/thi, tách khỏi ngân hàng editable. Chọn nguồn kiểm quyền
- * và version; giao bài sao đầy đủ phụ thuộc vào trung tâm trước khi pin sẵn sàng.
- * Không ghi dữ liệu học sinh hoặc mở giao dịch tại kho hệ thống.
- */
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { extractRichTextPlainText, systemBankPackageSchema, type RichTextDocument } from '@giaokhoa/contracts';
 import type { ExamQuestionSnapshot } from '@giaokhoa/db';
@@ -14,7 +9,6 @@ import { SystemBankMediaService } from '../system-bank/system-bank-media.service
 import { checksumPackage, packageValidationError } from '../system-bank/system-bank-package';
 import { assertSupportedQtype, normaliseQuestionContent } from '../questions/application/question-content-normalizer';
 
-/** Điều phối bản chụp hai nguồn; mọi thao tác ghi chỉ nằm ở kho trung tâm hiện hành. */
 @Injectable()
 export class ExamQuestionSnapshotsService {
   constructor(
@@ -24,7 +18,6 @@ export class ExamQuestionSnapshotsService {
     private readonly media: SystemBankMediaService,
   ) {}
 
-  /** Đọc đúng version công bố sau cổng quyền nguồn; không nhập câu vào bank đích. */
   async readSystem(actorId: string, questionId: string, versionNumber: number): Promise<ExamQuestionSnapshot> {
     const question = await this.systemBank.getQuestion(actorId, questionId);
     if (question.status !== 'published') {
@@ -38,7 +31,6 @@ export class ExamQuestionSnapshotsService {
     const error = packageValidationError(question.qtype, pkg);
     if (error) throw new BadRequestException({ code: 'system_bank.bad_package', message: error });
     assertSupportedQtype(question.qtype);
-    /** Dùng cùng bộ chuẩn hoá của câu editable để gác rules và cấu trúc TF-A trước khi giao. */
     normaliseQuestionContent(question.qtype, {
       questionText: pkg.questionText as RichTextDocument,
       answers: pkg.answers.map((a) => ({ text: a.answer as RichTextDocument, correct: a.isCorrect, feedback: (a.feedback ?? undefined) as RichTextDocument | undefined })),
@@ -53,12 +45,6 @@ export class ExamQuestionSnapshotsService {
     };
   }
 
-  /**
-   * Chụp version local đúng quyền bank nguồn: bank personal khác bị
-   * chặn dù câu đã ready; bank trường/tổ kiểm membership + useall.
-   * Category legacy chưa neo bank giữ luồng dùng câu ready hiện hành.
-   * Giữ id đáp án nguyên gốc để tương thích lượt làm cũ.
-   */
   async readLocal(actorId: string, questionId: string, versionId: string): Promise<ExamQuestionSnapshot> {
     await this.questionBanks.assertCanUseQuestionInExam(actorId, questionId);
     const view = await this.questions.getQuestion(questionId);
@@ -77,10 +63,6 @@ export class ExamQuestionSnapshotsService {
     };
   }
 
-  /**
-   * Chuẩn bị mọi slot vào miền trung tâm; lỗi quyền/version/hash/byte ném trước
-   * khi pin sẵn sàng. Không dùng bản mới hơn bản đã chọn, không thay nguồn ngầm.
-   */
   async prepare(actorId: string, slots: ExamSlotRow[], targetContextId: string, versionMode = 'pinned', preparationId?: string): Promise<ExamQuestionSnapshot[] | null> {
     if (!slots.some((slot) => slot.sourceDomain === 'bank-system')) return null;
     if (versionMode !== 'pinned') throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
@@ -100,7 +82,6 @@ export class ExamQuestionSnapshotsService {
     return snapshots;
   }
 
-  /** Trích tên hiển thị từ nội dung đã chụp; không cần truy cập lại kho nguồn. */
   excerpt(snapshot: ExamQuestionSnapshot): string {
     return extractRichTextPlainText(snapshot.package.questionText as RichTextDocument).slice(0, 120);
   }

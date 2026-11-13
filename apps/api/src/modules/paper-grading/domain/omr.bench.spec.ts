@@ -1,11 +1,3 @@
-/**
- * BỘ ẢNH KIỂM CHỨNG MÔ PHỎNG của CAM-0 (issue #112, tiêu chí nghiệm thu Phần 4.2 của hồ sơ research): phiếu dựng từ chính template hệ thống, tô theo kịch bản, "chụp" mô phỏng (lệch phối cảnh + nhiễu + gradient sáng + mờ nhẹ) rồi đọc bằng đúng engine sản xuất. Các ngưỡng khẳng định trong file này là tiêu chí nghiệm thu cứng của issue:
- *  - độ chính xác đọc ô ≥ 99,5% trên ảnh đạt cổng chất lượng;
- *  - 100% ca mơ hồ (tô mờ, dấu ✓, tô hai ô, tẩy xoá) vào hàng chờ —
- *    không ca nào bị đoán;
- *  - QR định danh đúng 100%;
- *  - mã tô sai bị phát hiện 100% (số kiểm tra hỏng → không gán nhầm).
- */
 import { describe, expect, it } from 'vitest';
 import { computeSheetGeometry, sbdCodeForIndex, studentCodeForIndex } from './sheet-layout';
 import { processSheetImage } from './omr';
@@ -27,7 +19,7 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
       const truth = new Map<number, number | null>();
       geometry.rows.forEach((row) => {
         const optionCount = row.centers.length;
-        if (rand() < 0.18) { truth.set(row.slot, null); return; } // để trống ~18%
+        if (rand() < 0.18) { truth.set(row.slot, null); return; }
         const choice = Math.floor(rand() * optionCount);
         fills.set(row.slot, { choice, style: 'full' });
         truth.set(row.slot, choice);
@@ -71,8 +63,6 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
     let checked = 0;
     for (let round = 0; round < special.length; round++) {
       const fills = new Map<number, SlotFill>();
-      // 8 câu đặc biệt mỗi phiếu, còn lại tô chuẩn để phiếu giống thật.
-      // secondChoice phải nằm trong số ô của câu (câu đúng/sai chỉ có 2 ô).
       for (let k = 0; k < 8; k++) {
         const row = geometry.rows[k]!;
         const base = special[round]!;
@@ -100,7 +90,6 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
     const geometry = computeSheetGeometry(OPTION_COUNTS_40);
     const fills = new Map<number, SlotFill>();
     for (let slot = 1; slot <= 40; slot++) fills.set(slot, { choice: slot % 4, style: 'full' });
-    // Mã đúng cho 5 học sinh khác nhau.
     for (const index of [0, 4, 17, 42, 120]) {
       const code = studentCodeForIndex(index);
       const sheet = renderSheetRgba({ geometry, qrText: null, bubbleCode: code, fills });
@@ -109,7 +98,6 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
       expect(result.bubbleCode?.code).toBe(code);
       expect(result.bubbleCode?.checksumOk).toBe(true);
     }
-    // Tô sai đúng 1 số (số kiểm tra giữ nguyên của mã đúng) → phải bị phát hiện 100%.
     for (const index of [3, 25, 88]) {
       const good = studentCodeForIndex(index);
       const wrongDigit = (Number(good[1]) + 3) % 10;
@@ -123,13 +111,10 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
   });
 
   it('định danh toàn diện: MỌI vị trí thân × delta chẵn và lẻ đều bị phát hiện trên phiếu đã render (mã lớp)', LONG, () => {
-    // Ca mù của bench cũ: chỉ thử delta +3 (lẻ) ở một vị trí. Bộ trọng
-    // số cũ (3, 5, 7) lọt delta CHẴN ở vị trí trọng số 5 — nay phủ mọi
-    // vị trí × {+2, +3, +8 (≡ −2)} trên ảnh mô phỏng thật.
     const geometry = computeSheetGeometry(OPTION_COUNTS_40);
     const fills = new Map<number, SlotFill>();
     for (let slot = 1; slot <= 40; slot++) fills.set(slot, { choice: slot % 4, style: 'full' });
-    const good = studentCodeForIndex(44); // thân 045 — đủ biên cho cả ba delta ở mọi vị trí
+    const good = studentCodeForIndex(44);
     let rendered = 0;
     for (let pos = 0; pos < 3; pos++) {
       for (const delta of [2, 3, 8]) {
@@ -139,7 +124,7 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
         rendered++;
         const accepted = result.bubbleCode !== null && result.bubbleCode.checksumOk;
         expect(accepted, `tampered class code ${tampered} (from ${good}, pos ${pos}, delta ${delta}) must not validate`).toBe(false);
-        expect(result.bubbleCode?.code).toBe(tampered); // đọc đúng số đã tô, chỉ số kiểm tra bác
+        expect(result.bubbleCode?.code).toBe(tampered);
       }
     }
     expect(rendered).toBe(9);
@@ -153,7 +138,6 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
     const blurred = processSheetImage(simulatePhoto(sheet, { seed: 31337, blurPasses: 8 }), geometry);
     expect(blurred.qualityOk).toBe(false);
     expect(blurred.qualityReasons).toContain('blurry');
-    // Che mất một fiducial bằng mảng trắng lớn ở góc.
     const broken = renderSheetRgba({ geometry, qrText: 'GKHQ1|q|A|u|c', bubbleCode: null, fills });
     for (let y = 0; y < 260; y++) {
       for (let x = 0; x < 260; x++) {
@@ -167,13 +151,6 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
   });
 });
 
-/**
- * Mở rộng cho lát sửa flow (phiếu DÙNG CHUNG + mã đề + mã SBD 8 số):
- * lưới mã đề đọc bằng đúng luật của lưới mã học sinh — chắc chắn mới
- * kết luận, mơ hồ thì null (hàng chờ), tô mã nào đọc đúng mã đó (hệ
- * thống không "sửa" mã đề về mã gần nhất); mã thí sinh 8 số đọc đúng
- * và bắt sai một chữ số 100% như mã 4 số.
- */
 describe('Luồng phiếu chung CAM-0 (lưới biến thể + mã SBD)', () => {
   const FILLS_40 = () => {
     const fills = new Map<number, SlotFill>();
@@ -201,7 +178,6 @@ describe('Luồng phiếu chung CAM-0 (lưới biến thể + mã SBD)', () => {
       expect(result.qualityOk).toBe(true);
       expect(result.variantCode, `light digit ${lightDigit} must not be guessed`).toBeNull();
     }
-    // Không tô cột nào của lưới mã đề → cũng null (phiếu cá nhân hoá/không dùng mã đề).
     const blank = renderSheetRgba({ geometry, qrText: null, bubbleCode: null, variantCode: '', fills: FILLS_40() });
     const blankResult = processSheetImage(simulatePhoto(blank, { seed: 1299 }), geometry);
     expect(blankResult.variantCode).toBeNull();
@@ -226,7 +202,6 @@ describe('Luồng phiếu chung CAM-0 (lưới biến thể + mã SBD)', () => {
       expect(result.bubbleCode?.code).toBe(code);
       expect(result.bubbleCode?.checksumOk).toBe(true);
     }
-    // Tô sai đúng 1 số ở các vị trí khác nhau (kể cả số kiểm tra) → phát hiện 100%.
     for (const [index, pos] of [[3, 0], [25, 3], [88, 6], [7, 7]] as const) {
       const good = sbdCodeForIndex(index);
       const tampered = `${good.slice(0, pos)}${(Number(good[pos]) + 3) % 10}${good.slice(pos + 1)}`;
@@ -238,11 +213,9 @@ describe('Luồng phiếu chung CAM-0 (lưới biến thể + mã SBD)', () => {
   });
 
   it('định danh SBD toàn diện: MỌI vị trí thân × delta chẵn và lẻ đều bị phát hiện trên phiếu đã render', LONG, () => {
-    // Hai vị trí trọng số 5 của bộ cũ là 0 và 6 — delta CHẴN ở đó từng
-    // lọt 12,70% đột biến. Phủ cả 7 vị trí thân × {+2, +3, +8 (≡ −2)}.
     const geometry = computeSheetGeometry(OPTION_COUNTS_40, 8);
     const fills = FILLS_40();
-    const good = sbdCodeForIndex(12_345); // thân 0012346
+    const good = sbdCodeForIndex(12_345);
     let rendered = 0;
     for (let pos = 0; pos < 7; pos++) {
       for (const delta of [2, 3, 8]) {

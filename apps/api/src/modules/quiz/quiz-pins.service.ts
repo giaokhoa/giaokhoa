@@ -35,11 +35,6 @@ import { QUIZ_COMPONENT } from './quiz-shared.service';
 import { QUIZ_CAPABILITIES } from './quiz-shared.service';
 import type { PinRow } from './quiz.service';
 
-/**
- * Cụm ghim đề và vòng đời lần ghim của QuizService (cụm 1 của issue #295): tạo/đọc/sửa/xoá lần ghim, cập nhật version tường minh + chấm lại của issue #254 (giữ trọn trong cụm này, không tách riêng), ghi đè theo người học, phản hồi theo ngưỡng điểm, công bố/huỷ công bố kết quả, và tóm tắt pin. Nhóm phản hồi theo ngưỡng điểm nằm ở cuối file gốc nhưng thuộc cụm này theo bản đồ đặc tả.
- *
- * Cụm này gọi xuống tầng thấp dùng chung (`QuizSharedService`) và gọi sang cụm lượt làm đúng một phép (`pushGrade` của `QuizAttemptsService` trong chấm lại) — ngoài hai đường đó, cụm không phụ thuộc cụm nào. Các method vốn `private` nhưng cụm khác gọi đã nới thành public nội bộ module; bề mặt công khai ra ngoài module vẫn qua facade.
- */
 
 export class QuizPinsService {
   constructor(
@@ -58,7 +53,6 @@ export class QuizPinsService {
     private readonly attempts: QuizAttemptsService,
   ) {}
 
-  /** Pin đã có lượt làm thật thì exam version đã ghim bị khoá (lượt đã pin câu theo version đó). */
   async assertPinUnlocked(pin: PinRow): Promise<void> {
     const attempts = await this.repo.listAttempts(pin.id, QUIZ_PIN_ATTEMPTS_LIMIT);
     if (attempts.some((a) => !a.preview)) {
@@ -66,13 +60,6 @@ export class QuizPinsService {
     }
   }
 
-  /**
-   * Tổng điểm của usage GIẢ ĐỊNH một question attempt mang fraction
-   * khác (issue #254): cùng phép cộng, cùng thứ tự với
-   * {@link syncFromUsage} — dùng để tính điểm sau chấm lại ở bước
-   * dry-run sao cho khớp tuyệt đối với tổng mà đường áp thật đồng bộ
-   * lại từ usage sau khi engine đã chấm lại.
-   */
   private sumWithFraction(usage: UsageView, questionAttemptId: string, fraction: number | null): number {
     let sum = 0;
     for (const a of usage.attempts) {
@@ -83,22 +70,18 @@ export class QuizPinsService {
     return sum;
   }
 
-  // --- CRUD quiz ---------------------------------------------------------------
 
-  /** Kiểm tra định dạng danh sách subnet khi lưu cài đặt; sai định dạng là lỗi của người soạn, không để lọt xuống tầng kiểm tra lúc thi. */
   private assertValidSubnet(subnet: string | null | undefined): void {
     if (subnet !== undefined && subnet !== null && !isValidSubnetList(subnet)) {
       throw new BadRequestException({ message: 'Subnet must be a comma-separated list of IPs or CIDR ranges', code: 'quiz.subnet_invalid' });
     }
   }
 
-  /** Băm mật khẩu vào thi (argon2 qua PasswordService dùng chung) — không bao giờ lưu dạng rõ. */
   private async hashQuizPassword(password: string | null | undefined): Promise<string | null> {
     if (password === undefined || password === null) return null;
     return this.passwords.hash(password);
   }
 
-  /** Nhóm đích của lần ghim phải thuộc đúng khoá của lần ghim (chốt bổ sung 26/10 — ghim neo KHOÁ HỌC, nhóm là của khoá đó). */
   private async assertTargetGroup(courseId: string, targetGroupId: string | null | undefined): Promise<void> {
     if (targetGroupId === undefined || targetGroupId === null) return;
     const group = await this.groups.getGroup(targetGroupId).catch(() => null);
@@ -107,9 +90,6 @@ export class QuizPinsService {
     }
   }
 
-  /**
-   * Cổng chế độ tham chiếu version của lần ghim (issue #254): chế độ trôi `float_latest_ready` CHỈ hợp lệ cho lần ghim luyện tập — cụ thể hoá theo preset của pin: preset `regular` (thường xuyên/luyện tập) mới được trôi; preset kiểm tra chính thức (`periodic`, `mock`) hoặc pin không theo preset nào đều bị chặn. Lý do: kiểm tra chính thức đòi mọi học sinh trong cùng cửa sổ làm đúng cùng một version câu hỏi, còn luyện tập cần học sinh luôn gặp bản câu hỏi mới nhất đã duyệt. Vi phạm ném `exam.version_mode_not_allowed` — chặn ở API, không dựa vào việc ẩn tuỳ chọn ở giao diện.
-   */
   private assertVersionModeAllowed(preset: string | null | undefined, versionMode: string | null | undefined): void {
     if (versionMode === 'float_latest_ready' && preset !== 'regular') {
       throw new BadRequestException({
@@ -151,8 +131,6 @@ export class QuizPinsService {
     }
     this.assertValidSubnet(input.subnet);
     this.assertVersionModeAllowed(input.preset ?? null, input.versionMode ?? 'pinned');
-    // Preset theo hình thức thi: trường gửi kèm THẮNG preset, preset
-    // chỉ điền các trường còn trống (bảng preset ở domain/matrix.ts).
     const preset = input.preset ? EXAM_KIND_PRESETS[input.preset] : null;
     const variantCount = input.variantCount ?? 1;
     const slots = await this.repo.listExamSlots(version.id);
@@ -162,8 +140,6 @@ export class QuizPinsService {
     if (slots.some((s) => s.sourceDomain === 'bank-system') && input.versionMode === 'float_latest_ready') {
       throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
     }
-    // Chèn intent trước khi copy media: file staging luôn truy ngược về pin
-    // và có thể được dọn khi lỗi hoặc lần retry tiếp tục sau crash.
     const pin = await this.repo.insertPin({
       questionSnapshots: null, requestId: input.requestId, requestedSectionId: input.sectionId,
       preparationState: 'preparing',
@@ -195,17 +171,6 @@ export class QuizPinsService {
     return this.resumePinRecord(actorId, courseId, pin, input.sectionId, true);
   }
 
-  /**
-   * Hoàn tất pin đang chuẩn bị. Chạy lại an toàn sau crash ở bất kỳ
-   * ranh giới nào: snapshot đã ghi thì không đọc lại kho nguồn,
-   * cm/grade item đã tạo thì tìm theo instance trước khi thêm mới.
-   * Kiểm tra section của intent và CM cũ TRƯỚC mọi thao tác có thể xóa
-   * dữ liệu: kể cả crash trước CM, retry sai section trả conflict.
-   * Retry chỉ giữ nguyên tài nguyên đã có nếu lỗi, không bù trừ chúng.
-   * Chỉ thao tác vừa tạo intent mới có quyền bù trừ phần tạo dở.
-   *
-   * @param newlyInserted Đúng khi pin mới được chèn trong chính lời gọi.
-   */
   async resumePinRecord(actorId: string, courseId: string, pin: ExamPinRow, sectionId: string, newlyInserted = false): Promise<QuizView> {
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(courseId));
     await this.evaluator.requireCapability(actorId, 'grade:manage', await this.courses.courseContextId(courseId));
@@ -217,16 +182,12 @@ export class QuizPinsService {
     const version = await this.repo.getExamVersion(pin.examVersionId);
     if (!version) throw new NotFoundException({ code: 'exam.version_not_found' });
     const name = pin.name ?? version.name;
-    // Intent đã chốt section trước CM; CM còn được đối chiếu để nhận
-    // ra các bản ghi cũ. Mismatch không được dọn snapshot/CM/điểm cũ.
     let cm = (await this.courses.listCms(courseId))
       .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
     if (cm && cm.section !== sectionId) throw new ConflictException({ code: 'exam.pin_request_conflict' });
     try {
       const slots = await this.repo.listExamSlots(pin.examVersionId);
       if (!pin.questionSnapshots && slots.some((slot) => slot.sourceDomain === 'bank-system')) {
-        // Có thể lần trước bị tắt giữa lúc copy media: chỉ xóa file
-        // staging gắn với pin CHƯA ready rồi mới tạo snapshot mới.
         await this.files.cleanupExamSnapshotFiles(pin.id);
         const snapshots = await this.snapshots.prepare(actorId, slots,
           await this.courses.courseContextId(courseId), pin.versionMode, pin.id);
@@ -247,9 +208,6 @@ export class QuizPinsService {
       });
       await this.repo.updatePin(pin.id, { preparationState: 'ready' });
     } catch (error) {
-      // Chỉ lời gọi mới tạo intent được bù trừ: mọi CM/grade của pin
-      // mới đều do lời gọi đó tạo. Retry pin cũ không xóa bất kỳ tài
-      // nguyên nào nếu lỗi giữa chừng; lần sau tiếp tục cùng requestId.
       if (newlyInserted) {
         try {
           const createdCm = (await this.courses.listCms(courseId))
@@ -262,8 +220,6 @@ export class QuizPinsService {
           await this.files.cleanupExamSnapshotFiles(pin.id);
           await this.repo.deletePin(pin.id);
         } catch {
-          // Bù trừ thất bại: giữ intent, CM và staging còn lại để
-          // retry tiếp tục bằng đúng requestId thay vì mất dấu vết.
         }
       }
       throw error;
@@ -275,7 +231,6 @@ export class QuizPinsService {
     return this.shared.pinView(await this.shared.getPin(pin.id));
   }
 
-  /** Sinh danh sách mã đề cho một lần ghim: 001, 002… kèm seed hoán vị riêng từng mã (hạt giống suy xác định từ nguồn hạt để in lại khớp — chuyển từ tầng deployment EB-2 cũ). */
   private makeVariants(seedSource: string, count: number): { code: string; seed: number }[] {
     let h = 2166136261;
     for (const ch of seedSource) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
@@ -285,22 +240,12 @@ export class QuizPinsService {
     }));
   }
 
-  /**
-   * Dọn media staging còn treo sau crash cập nhật version; chỉ dọn khi
-   * pin VẪN mang version cũ, vì commit version mới và xóa pending id
-   * luôn nằm trong cùng câu lệnh/transaction.
-   */
   private async cleanupPendingSnapshot(pin: PinRow): Promise<void> {
     if (!pin.pendingSnapshotId) return;
     await this.files.cleanupExamSnapshotFiles(pin.pendingSnapshotId);
     await this.repo.updatePin(pin.id, { pendingSnapshotId: null });
   }
 
-  /**
-   * Lưu id staging TRƯỚC khi upload, giúp retry biết file nào chưa
-   * được sử dụng. Bước commit phải ghi cả version/snapshot và xóa id
-   * staging nguyên tử; lỗi có thể dọn file không làm hỏng pin cũ.
-   */
   private async prepareVersionAndApply(
     actorId: string, pin: PinRow, versionId: string, mode: string,
     apply: (snapshots: Awaited<ReturnType<ExamQuestionSnapshotsService['prepare']>>) => Promise<void>,
@@ -318,23 +263,14 @@ export class QuizPinsService {
         await this.courses.courseContextId(pin.course), mode, stageId);
       await apply(snapshots);
     } catch (error) {
-      // Nếu cleanup lỗi, giữ pending id bền để lần retry sau còn dọn.
       try {
         await this.files.cleanupExamSnapshotFiles(stageId);
         await this.repo.updatePin(pin.id, { pendingSnapshotId: null });
-      } catch { /* Giữ bản ghi staging để phục hồi sau. */ }
+      } catch {   }
       throw error;
     }
   }
 
-  /**
-   * Sửa CẤU HÌNH TỔ CHỨC của một pin (quiz:manage): giờ mở/đóng, thời
-   * lượng, số lượt, mật khẩu, luật xem lại, preset (chỉ nhãn — không
-   * áp lại preset), số mã đề. Tên và thang điểm được đồng bộ sang
-   * course module và grade item; thang điểm suy từ exam version nên
-   * chỉ đổi khi đổi version đã ghim — và đổi version bị khoá khi pin
-   * đã có lượt làm thật (exam.pin_locked), số mã đề cũng vậy.
-   */
   async updatePin(actorId: string, pinId: string, input: {
     name?: string; intro?: string;
     timeOpen?: string | null; timeClose?: string | null; timeLimitSeconds?: number | null;
@@ -351,7 +287,6 @@ export class QuizPinsService {
       () => this.updatePinLocked(actorId, pinId, input));
   }
 
-  /** Đọc pin sau khi có khóa để tránh hai lần thay version cùng lúc. */
   private async updatePinLocked(actorId: string, pinId: string, input: {
     name?: string; intro?: string;
     timeOpen?: string | null; timeClose?: string | null; timeLimitSeconds?: number | null;
@@ -368,10 +303,6 @@ export class QuizPinsService {
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
     await this.cleanupPendingSnapshot(pin);
     this.assertValidSubnet(input.subnet);
-    // Cổng chế độ tham chiếu version (issue #254) xét trên cặp
-    // (preset, versionMode) HIỆU LỰC SAU khi sửa: bật float cho pin
-    // không phải luyện tập bị chặn, và đổi preset rời `regular` trong
-    // lúc pin đang float cũng bị chặn — muốn đổi phải tắt float trước.
     this.assertVersionModeAllowed(
       input.preset !== undefined ? input.preset : pin.preset,
       input.versionMode !== undefined ? input.versionMode : pin.versionMode,
@@ -395,8 +326,6 @@ export class QuizPinsService {
     if (input.reviewGeneralFeedback !== undefined) patch.reviewGeneralFeedback = input.reviewGeneralFeedback;
     if (input.reviewRightAnswer !== undefined) patch.reviewRightAnswer = input.reviewRightAnswer;
     if (input.reviewOverallFeedback !== undefined) patch.reviewOverallFeedback = input.reviewOverallFeedback;
-    // Sửa chỉ đổi NHÃN hình thức — không áp lại preset (giáo viên đã
-    // tinh chỉnh từng trường sau khi chọn preset lúc tạo).
     if (input.preset !== undefined) patch.preset = input.preset;
     if (input.lateEntryMinutes !== undefined) patch.lateEntryMinutes = input.lateEntryMinutes;
     if (input.targetGroupId !== undefined) {
@@ -452,11 +381,6 @@ export class QuizPinsService {
     return this.shared.pinView(updated);
   }
 
-  /**
-   * Xoá pin cùng attempts, usages của engine, course module và
-   * grade item của hoạt động (quiz:manage). Đề trong bank không bị
-   * ảnh hưởng — xoá pin chỉ gỡ lần tổ chức trong khoá này.
-   */
   async deletePin(actorId: string, pinId: string): Promise<void> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
@@ -471,21 +395,12 @@ export class QuizPinsService {
     await this.outbox.enqueueStandalone({ aggregate: 'quiz', type: 'quiz_deleted', payload: { pinId: pin.id, courseId: pin.course, actorId } });
   }
 
-  // --- cập nhật version của pin + chấm lại theo đáp án (issue #254) --------------
 
-  /** Pin đã có lượt làm THẬT (không tính lượt preview của giáo viên) hay chưa — điều kiện của luật khoá exam.pin_locked. */
   private async pinHasRealAttempts(pinId: string): Promise<boolean> {
     const attempts = await this.repo.listAttempts(pinId, QUIZ_PIN_ATTEMPTS_LIMIT);
     return attempts.some((a) => !a.preview);
   }
 
-  /**
-   * Diff slot-theo-VỊ-TRÍ giữa exam version đang ghim và exam version
-   * đích: mỗi vị trí thuộc đúng một loại thay đổi (thêm/bớt slot, đổi
-   * câu, đổi version câu đã ghim, đổi điểm slot, hoặc không đổi). Đây
-   * là dữ kiện giáo viên xem TRƯỚC khi quyết định áp cập nhật — diff
-   * không ghi gì và không đổi trạng thái nào.
-   */
   private async diffExamVersionSlots(fromVersionId: string, toVersionId: string): Promise<PinVersionUpdateSlotDiff[]> {
     const [fromSlots, toSlots] = await Promise.all([
       this.repo.listExamSlots(fromVersionId),
@@ -520,13 +435,6 @@ export class QuizPinsService {
     });
   }
 
-  /**
-   * Xem trước thao tác cập nhật pin lên bản ready mới nhất của đề
-   * (quiz:manage; issue #254): đích là exam version có số lớn nhất của
-   * đề — chỉ tồn tại khi đề đang `ready` và bản đó mới hơn bản đang
-   * ghim. Kèm diff từng slot và cờ `blockedByAttempts` để giáo viên
-   * biết trước rằng thao tác áp sẽ bị chặn khi pin đã có lượt làm thật.
-   */
   async getPinVersionUpdatePreview(actorId: string, pinId: string): Promise<PinVersionUpdatePreview> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manage);
@@ -546,27 +454,11 @@ export class QuizPinsService {
     };
   }
 
-  /**
-   * Áp cập nhật pin lên exam version mới nhất của đề (quiz:manage;
-   * issue #254) — thao tác TƯỜNG MINH sau bước xem diff:
-   * 1. Luật khoá dùng chung với updatePin: pin đã có lượt làm thật thì
-   *    bị chặn `exam.pin_locked` (cập nhật chỉ áp cho người chưa làm;
-   *    lượt đã có giữ nguyên version và điểm — sửa hệ quả điểm của
-   *    chúng chỉ qua đường chấm lại theo đáp án).
-   * 2. Đích phải thuộc đúng đề của pin, là version MỚI NHẤT của đề và
-   *    đề phải đang `ready` (`exam.version_not_ready` /
-   *    `exam.version_not_latest`).
-   * 3. Đổi examVersionId của pin, đồng bộ gradeMax của grade item như
-   *    updatePin, ghi vết vào exam_pin_version_updates (ai/khi nào/từ
-   *    version nào lên version nào) và phát sự kiện
-   *    `exam_pin_version_updated`.
-   */
   async applyPinVersionUpdate(actorId: string, pinId: string, toExamVersionId: string): Promise<QuizView> {
     return this.repo.withPinRequestLock(pinId, 'version', 'mutation',
       () => this.applyPinVersionUpdateLocked(actorId, pinId, toExamVersionId));
   }
 
-  /** Cập nhật version dưới cùng khóa thao tác và commit lịch sử cùng snapshot. */
   private async applyPinVersionUpdateLocked(actorId: string, pinId: string, toExamVersionId: string): Promise<QuizView> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
@@ -610,33 +502,9 @@ export class QuizPinsService {
     return this.shared.pinView(updated);
   }
 
-  /**
-   * Chấm lại theo đáp án cho một câu của pin (quiz:grade; issue #254) —
-   * đường DUY NHẤT để sửa hệ quả điểm khi đáp án của một câu đã được
-   * dùng chấm các lượt đã nộp bị sai: giáo viên tạo version mới của câu
-   * với đáp án đúng rồi chấm lại theo version đó.
-   *
-   * Ứng viên: lượt làm THẬT đã nộp (finished/needsgrading) có question
-   * attempt của câu này đã được chấm tự động và đang ghim version khác
-   * version đích. Lượt đang làm dở không bị đụng (chưa có điểm để sửa;
-   * chúng vẫn chấm theo version đã ghim khi bắt đầu, đúng kỷ luật
-   * ghim). Essay nằm ngoài đường này (chấm tay có đường riêng).
-   *
-   * `dryRun` chỉ tính và trả điểm đổi của từng học sinh; áp thật chạy
-   * đúng cùng phép tính ở engine nên kết quả khớp tuyệt đối. Khi áp:
-   * chấm lại qua engine (attempt chuyển ghim sang version đích + step
-   * hiệu chỉnh) → đồng bộ tổng điểm/trạng thái của lượt → ghi điểm vào
-   * sổ nếu lượt đã finished → ghi log exam_attempt_regrades +
-   * exam_attempt_regrade_items (chỉ các lượt điểm thật sự đổi mới có
-   * mục) → phát sự kiện `exam_attempt_answer_key_regraded` (tên riêng,
-   * không dùng lại sự kiện chấm tay `exam_attempt_regraded`).
-   */
   async regradePinQuestion(actorId: string, pinId: string, input: { questionId: string; toVersionId: string; dryRun: boolean }): Promise<PinRegradeResult> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.grade);
-    // Kiểm đích TRƯỚC khi quét ứng viên — kể cả khi không có ứng viên
-    // nào, version đích sai (không thuộc câu / chưa ready) vẫn phải báo
-    // lỗi rõ thay vì trả danh sách đổi rỗng gây hiểu nhầm là "không ai đổi điểm".
     const questionView = await this.questions.getQuestion(input.questionId);
     if (questionView.question.qtype === 'essay') {
       throw new BadRequestException({
@@ -671,10 +539,6 @@ export class QuizPinsService {
         attempt, qa,
         oldFraction: qa.fraction, newFraction: preview.newFraction,
         oldSumGrades,
-        // Tổng điểm sau chấm lại tính bằng ĐÚNG phép cộng của
-        // syncFromUsage trên usage giả định (chỉ fraction của câu này
-        // được thay) — cùng thứ tự cộng với đường áp thật nên dry-run
-        // và áp thật cho ra cùng một con số tuyệt đối.
         newSumGrades: this.sumWithFraction(usage, qa.id, preview.newFraction),
         changed: preview.newFraction !== qa.fraction,
       });
@@ -699,8 +563,6 @@ export class QuizPinsService {
       changes,
     };
     if (input.dryRun || candidates.length === 0) return result;
-    // Áp thật: nhóm ứng viên theo version nguồn — mỗi version nguồn một
-    // dòng log chấm lại (pin trôi có thể có nhiều version nguồn).
     const byFromVersion = new Map<string, Candidate[]>();
     for (const c of candidates) {
       const key = c.qa.questionVersionId!;
@@ -740,11 +602,6 @@ export class QuizPinsService {
     return result;
   }
 
-  /**
-   * Nhật ký chấm lại theo đáp án của pin cho giáo viên (quiz:viewreports;
-   * issue #254): mỗi lần áp thật một dòng kèm điểm đổi của từng lượt —
-   * căn cứ truy vết khi học sinh/phụ huynh hỏi vì sao điểm thay đổi.
-   */
   async listPinRegrades(actorId: string, pinId: string): Promise<PinRegradeLogEntry[]> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.viewReports);
@@ -768,13 +625,6 @@ export class QuizPinsService {
     return out;
   }
 
-  /**
-   * Lịch sử sửa điểm của CHÍNH học sinh trong một pin (issue #254): các
-   * lần chấm lại theo đáp án đã đổi điểm của mình — câu nào, khi nào,
-   * điểm trước/sau. Đi qua CÙNG cổng công bố như mọi đường đọc điểm:
-   * pin chưa công bố kết quả thì trả danh sách rỗng (không lộ điểm qua
-   * kênh phụ), trừ người có quyền xem báo cáo của pin.
-   */
   async listMyPinRegrades(actorId: string, pinId: string): Promise<PinRegradeLogEntry[]> {
     const quiz = await this.shared.getPin(pinId);
     if (!quiz.resultsPublishedAt && !(await this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.viewReports))) {
@@ -805,18 +655,9 @@ export class QuizPinsService {
     return [...byRegrade.values()];
   }
 
-  /**
-   * Các pin trong khoá học (cho trang khoá học/danh sách hoạt động).
-   * H9 (rà soát #134): QuizView kèm slots (questionId, pinnedVersion,
-   * bank) là cấu trúc đề — chỉ người qua cổng truy cập khoá mới liệt kê
-   * được; trước đây handler không nhận actor nên người ngoài khoá cũng
-   * khảo sát được thành phần đề của bất kỳ khoá nào.
-   */
   async listPins(actorId: string, courseId: string): Promise<QuizView[]> {
     await this.courses.assertCourseAccess(actorId, courseId);
     const rows = await this.repo.listPinsInCourse(courseId);
-    // Phạm vi nhóm đích: người không có quyền quản lý tại khoá chỉ
-    // thấy lần ghim toàn khoá + lần ghim của nhóm mình thuộc về.
     const canManage = await this.evaluator.hasCapability(actorId, QUIZ_CAPABILITIES.manage, await this.courses.courseContextId(courseId));
     const myGroupIds = canManage ? null : new Set((await this.groups.groupsOfUser(courseId, actorId)).map((g) => g.id));
     const out: QuizView[] = [];
@@ -827,7 +668,6 @@ export class QuizPinsService {
     return out;
   }
 
-  /** View của một override: tên đích được tra cứu để client hiển thị, mật khẩu chỉ lộ cờ hasPassword. */
   private async overrideView(row: ExamPinOverrideRow): Promise<ExamPinOverrideView> {
     let groupName: string | null = null;
     let userName: string | null = null;
@@ -860,9 +700,7 @@ export class QuizPinsService {
     return row;
   }
 
-  // --- công bố kết quả + bề mặt theo id của pin --------------------------------
 
-  /** Công bố kết quả của pin (trạng thái công bố của #224 sống trên exam_pins.results_published_at; quiz:manage). */
   async publishResults(actorId: string, pinId: string): Promise<QuizView> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
@@ -870,7 +708,6 @@ export class QuizPinsService {
     return this.shared.pinView(await this.shared.getPin(pin.id));
   }
 
-  /** Thu hồi công bố kết quả của pin (quiz:manage). */
   async unpublishResults(actorId: string, pinId: string): Promise<QuizView> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
@@ -878,28 +715,24 @@ export class QuizPinsService {
     return this.shared.pinView(await this.shared.getPin(pin.id));
   }
 
-  /** Sửa override theo id (route /exam-pin-overrides/:overrideId): pin suy từ chính override. */
   async updatePinOverride(actorId: string, overrideId: string, dto: UpdateExamPinOverrideDto): Promise<ExamPinOverrideView> {
     const row = await this.repo.getOverride(overrideId);
     if (!row) throw new NotFoundException({ message: `Exam pin override ${overrideId} not found`, code: 'quiz.override_not_found' });
     return this.updateOverride(actorId, row.pinId, overrideId, dto);
   }
 
-  /** Xoá override theo id (route /exam-pin-overrides/:overrideId). */
   async deletePinOverride(actorId: string, overrideId: string): Promise<void> {
     const row = await this.repo.getOverride(overrideId);
     if (!row) throw new NotFoundException({ message: `Exam pin override ${overrideId} not found`, code: 'quiz.override_not_found' });
     await this.deleteOverride(actorId, row.pinId, overrideId);
   }
 
-  /** Xoá feedback theo id (route /exam-pin-feedbacks/:feedbackId): pin suy từ chính feedback. */
   async deletePinFeedback(actorId: string, feedbackId: string): Promise<void> {
     const row = await this.repo.getFeedback(feedbackId);
     if (!row) throw new NotFoundException({ message: `Exam pin feedback ${feedbackId} not found`, code: 'quiz.feedback_not_found' });
     await this.deleteFeedback(actorId, row.pinId, feedbackId);
   }
 
-  /** Danh sách ghi đè của quiz (quiz:manageoverrides). */
   async listOverrides(actorId: string, pinId: string): Promise<ExamPinOverrideView[]> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manageOverrides);
@@ -909,12 +742,6 @@ export class QuizPinsService {
     return out;
   }
 
-  /**
-   * Tạo ghi đè (quiz:manageoverrides): đích phải là đúng MỘT nhóm của
-   * khoá chứa quiz hoặc đúng MỘT người dùng có quyền vào khoá; mỗi đích
-   * tối đa một ghi đè cho một quiz (trùng đích bị từ chối thay vì đè
-   * lặng lẽ như Moodle upsert).
-   */
   async createOverride(actorId: string, pinId: string, input: CreateExamPinOverrideDto): Promise<ExamPinOverrideView> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manageOverrides);
@@ -940,9 +767,6 @@ export class QuizPinsService {
     if (existing.some((o) => o.groupId === (input.groupId ?? null) && o.userId === (input.userId ?? null))) {
       throw new BadRequestException({ message: 'An override already exists for this target', code: 'quiz.override_exists' });
     }
-    // Lý do BẮT BUỘC khi override người dùng cộng thời gian (đi theo
-    // KHGD cá nhân của HS hoà nhập) hoặc mở cửa sổ riêng (cửa sổ kiểm
-    // tra bù) — truy vết quyết định theo hồ sơ thi trực tuyến VN.
     if (input.userId && (input.timeLimitSeconds != null || input.timeOpen != null) && !input.reason) {
       throw new BadRequestException({ message: 'A reason is required for a user override that extends time or opens a separate window', code: 'quiz.override_reason_required' });
     }
@@ -960,7 +784,6 @@ export class QuizPinsService {
     return this.overrideView(row);
   }
 
-  /** Sửa một ghi đè (quiz:manageoverrides); trường không gửi giữ nguyên, `null` ở trường ghi đè = quay về kế thừa. */
   async updateOverride(actorId: string, pinId: string, overrideId: string, input: UpdateExamPinOverrideDto): Promise<ExamPinOverrideView> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manageOverrides);
@@ -977,11 +800,6 @@ export class QuizPinsService {
     if (nextOpen && nextClose && nextClose <= nextOpen) {
       throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
     }
-    // Cùng quy tắc reason như đường tạo, áp trên TRẠNG THÁI HỢP NHẤT
-    // sau PATCH: override người dùng mà trạng thái cuối còn cộng giờ
-    // hoặc mở cửa sổ riêng thì phải có reason. Thiếu cổng này, PATCH
-    // vòng qua được cổng lúc tạo (tạo override lành tính chỉ-đổi-số-lượt
-    // rồi sửa cộng giờ lặng lẽ, không truy vết quyết định).
     const nextTimeLimit = patch.timeLimit !== undefined ? patch.timeLimit : row.timeLimit;
     const nextReason = patch.reason !== undefined ? patch.reason : row.reason;
     if (row.userId && (nextTimeLimit != null || nextOpen != null) && !nextReason) {
@@ -992,7 +810,6 @@ export class QuizPinsService {
     return this.overrideView(await this.getOverrideRow(quiz, overrideId));
   }
 
-  /** Xoá một ghi đè (quiz:manageoverrides) — đích của ghi đè quay về cài đặt tầng dưới ngay. */
   async deleteOverride(actorId: string, pinId: string, overrideId: string): Promise<void> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manageOverrides);
@@ -1001,9 +818,7 @@ export class QuizPinsService {
     await this.outbox.enqueueStandalone({ aggregate: 'quiz', type: 'quiz_override_deleted', payload: { pinId: quiz.id, courseId: quiz.course, overrideId: row.id, actorId } });
   }
 
-  // --- ma trận đề (Chặng 3) ---------------------------------------------------------
 
-  /** Thông tin tối thiểu của một quiz cho đặc tả theo đề (EB-3): phía gọi tự kiểm quiz có thuộc đề đang xét hay không. */
   async getPinSummary(pinId: string): Promise<{ id: string; name: string; examId: string | null; matrixId: string | null } | null> {
     const row = await this.repo.getPin(pinId);
     if (!row) return null;
@@ -1011,14 +826,12 @@ export class QuizPinsService {
     return { id: quiz.id, name: quiz.name, examId: quiz.examId, matrixId: quiz.matrixId };
   }
 
-  /** Các dải nhận xét tổng quát của quiz (quiz:manage). */
   async listFeedbacks(actorId: string, pinId: string): Promise<ExamPinFeedbackRow[]> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manage);
     return this.repo.listFeedbacks(quiz.id);
   }
 
-  /** Tạo một dải nhận xét tổng quát (quiz:manage); dải tính theo % điểm của bài, [min, max). */
   async createFeedback(actorId: string, pinId: string, input: { minPercent: number; maxPercent: number; feedback: string }): Promise<ExamPinFeedbackRow> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manage);
@@ -1028,7 +841,6 @@ export class QuizPinsService {
     return this.repo.insertFeedback({ pinId: quiz.id, minPercent: input.minPercent, maxPercent: input.maxPercent, feedback: input.feedback });
   }
 
-  /** Xoá một dải nhận xét tổng quát (quiz:manage). */
   async deleteFeedback(actorId: string, pinId: string, feedbackId: string): Promise<void> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manage);

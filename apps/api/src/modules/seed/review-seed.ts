@@ -7,17 +7,6 @@ import { CredentialBridgeService } from '../auth/better-auth/credential-bridge.s
 import { ProgramDumpService } from '../curriculum/program-dump.service';
 import { tenantAls } from '../tenants/tenant-als';
 
-/**
- * Seed dữ liệu mẫu cho buổi review (chạy bằng `pnpm seed` ở thư mục gốc).
- *
- * Script khởi động API trên một cổng tạm, đăng nhập bằng tài khoản admin
- * (gieo lúc bootstrap từ biến môi trường ADMIN_*) rồi tạo dữ liệu mẫu qua
- * chính HTTP API công khai — cùng đường mà giao diện dùng. Mọi bước đều find-or-create nên chạy lại nhiều lần không tạo trùng (idempotent).
- *
- * Dữ liệu tạo ra: teacher1, student1, student2, parent1 (phụ huynh của student1, kèm một liên kết giám hộ đang hiệu lực parent1 → student1 để đăng nhập nghiệm thu được bề mặt phụ huynh); một khoá học mẫu có sections + module, ghi danh, điểm mẫu, một huy hiệu đã cấp cho student1 và một sự kiện lịch của khoá học. Mật khẩu xem tại README, mục Review — CHỈ dùng cho môi trường dev/review.
- *
- * Riêng chương trình GDPT 2018 không đi qua HTTP: seed RESTORE dump đông cứng trong repo qua ProgramDumpService (không chạy importer) — xem khối "[seed] program dump ..." trong main().
- */
 const ADMIN = { username: process.env['ADMIN_USERNAME'] ?? 'admin', password: process.env['ADMIN_PASSWORD'] ?? 'Admin123!' };
 const TEACHER_PASSWORD = ['Teacher', '123', '!'].join('');
 const STUDENT_PASSWORD = ['Student', '123', '!'].join('');
@@ -27,7 +16,6 @@ const STUDENTS = [
   { username: 'student1', password: STUDENT_PASSWORD, firstName: 'Minh Quân', lastName: 'Trần', email: 'student1@example.com' },
   { username: 'student2', password: STUDENT_PASSWORD, firstName: 'Thu Hằng', lastName: 'Phạm', email: 'student2@example.com' },
 ];
-/** Phụ huynh mẫu của student1 (họ Trần như student1): tài khoản để nghiệm thu vai phụ huynh; liên kết giám hộ tới student1 được tạo ở bước riêng sau khi cả hai đã là thành viên tenant. */
 const GUARDIAN = { username: 'parent1', password: GUARDIAN_PASSWORD, firstName: 'Văn Đức', lastName: 'Trần', email: 'parent1@example.com' };
 const COURSE_SHORTNAME = 'DEMO101';
 
@@ -37,7 +25,6 @@ interface Api {
 
 async function main(): Promise<void> {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'] });
-  // Cùng cấu hình bootstrap với main.ts (prefix + versioning + filter lỗi).
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new ProblemDetailsFilter());
@@ -78,13 +65,6 @@ async function main(): Promise<void> {
     const studentIds = [await ensureUser(STUDENTS[0]!), await ensureUser(STUDENTS[1]!)];
     const guardianId = await ensureUser(GUARDIAN);
 
-    // Chặng 2.6 (issue #7): tài khoản mẫu phải đăng nhập được qua
-    // Better Auth NGAY sau seed. User tạo mới trong chính lượt seed
-    // này đã được UsersService tự đồng bộ credential; khối này phủ
-    // các tài khoản ĐÃ tồn tại từ lần seed trước (ensureUser bỏ qua
-    // đường tạo) — sync idempotent, chạy lại vô hại. Chỉ chạy khi
-    // tiến trình seed bật Better Auth (env của chính tiến trình seed);
-    // tắt thì bỏ qua, seed giữ nguyên hành vi cũ.
     const baService = app.get(BetterAuthService, { strict: false });
     if (baService.enabled) {
       const bridge = app.get(CredentialBridgeService, { strict: false });
@@ -98,21 +78,9 @@ async function main(): Promise<void> {
       console.log('[seed] better-auth disabled in seed process — credential linking skipped');
     }
 
-    // TENANT-0 (#168): câu chuyện mẫu sống ở tenant trường mặc định
-    // (truong-mac-dinh, bootstrap seed đã tạo). Thêm giáo viên/học sinh
-    // làm thành viên tường minh rồi chuyển phiên admin sang tenant đó —
-    // từ đây mọi dữ liệu mẫu (danh mục, khoá DEMO101, điểm, sự kiện) đều
-    // thuộc tenant-1. Ghi danh vào khoá cũng tự đảm bảo membership qua
-    // móc enrol, nhưng vai giáo viên gán ở bước sau cần membership có
-    // hiệu lực ngay từ đầu phiên tenant.
-    // Tra registry của platform để tìm trường mẫu: bộ chọn phiên
-    // chỉ công bố tenant hiện hành, không tìm theo định danh user toàn cục.
     const registry = must(await call('GET', '/tenants', admin), 'list registry tenants') as { id: string; slug: string }[];
     const school = registry.find((t) => t.slug === 'truong-mac-dinh');
     if (!school) throw new Error('default school tenant (truong-mac-dinh) is not seeded');
-    // Phụ huynh mẫu cũng phải là thành viên tenant: tạo liên kết giám
-    // hộ trong tenant này đòi cả hai phía là thành viên đang hiệu lực
-    // (assertBothMembers của GuardiansService).
     for (const uid of [teacherId, ...studentIds, guardianId]) {
       must(await call('POST', `/tenants/${school.id}/members`, admin, { userId: uid }), `add tenant member ${uid}`);
     }
@@ -127,11 +95,6 @@ async function main(): Promise<void> {
       console.log(`[seed] category created (#${category.id})`);
     }
 
-    // Lớp học hạng nhất (issue #184, CLASS-0): lớp tạo TRƯỚC, DEMO101
-    // nằm bên trong lớp mẫu của teacher1; học sinh vào khoá qua ROSTER
-    // của lớp (cohort sync vật chất hoá ghi danh) — seed chạy đúng
-    // đường sản phẩm thật để mọi lượt probe sau reset kiểm chứng luôn
-    // cả ghi danh cấp lớp. Admin tạo lớp hộ (ownerId = teacher1).
     const DEMO_CLASS_CODE = 'LOP-MAU-10A1';
     const classList = must(await call('GET', '/classes', admin), 'list classes') as { id: string; code: string | null }[];
     let demoClass = classList.find((c) => c.code === DEMO_CLASS_CODE);
@@ -179,22 +142,15 @@ async function main(): Promise<void> {
     await ensureCm(week1, 'mod_page', 'Trang chào mừng');
     await ensureCm(week1, 'mod_resource', 'Tài liệu hướng dẫn học tập');
 
-    // Ghi danh học sinh QUA LỚP (issue #184): thêm vào roster của lớp
-    // mẫu → instance cohort của DEMO101 (tự tạo khi khoá được tạo trong
-    // lớp) vật chất hoá thành ghi danh thật. Không còn instance manual
-    // + ghi danh tay như trước — đây là đường ghi danh chính của sản phẩm.
     const roster = must(await call('GET', `/classes/${classId}/roster`, admin), 'list class roster') as { userId: string }[];
     for (const sid of studentIds) {
       if (roster.some((m) => m.userId === sid)) { console.log(`[seed] student #${sid} already in demo class roster`); continue; }
       must(await call('POST', `/classes/${classId}/roster`, admin, { userId: sid }), `add student ${sid} to demo class roster`);
       console.log(`[seed] student #${sid} added to demo class roster (cohort sync enrols into DEMO101)`);
     }
-    // Giáo viên: gán role editingteacher tại context khoá học.
     const roles = must(await call('GET', '/access/roles', admin), 'list roles') as { id: string; shortName: string }[];
     const teacherRole = roles.find((r) => r.shortName === 'editingteacher');
     if (teacherRole) {
-      // Từ issue #545: phản hồi liệt kê gán vai là trang
-      // `{ assignments, total, page, pageSize }`, không còn là mảng trần.
       const assignments = (must(await call('GET', `/access/assignments?userId=${teacherId}&contextId=${content.contextId}`, admin), 'list assignments') as { assignments: { roleId: string }[] }).assignments ?? [];
       if (!assignments.some((a) => a.roleId === teacherRole.id)) {
         must(await call('POST', '/access/assignments', admin, { userId: teacherId, roleId: teacherRole.id, contextId: content.contextId }), 'assign teacher role');
@@ -202,13 +158,6 @@ async function main(): Promise<void> {
       } else console.log('[seed] teacher role assignment exists');
     }
 
-    // Liên kết giám hộ mẫu (gói kích hoạt phụ huynh): parent1 là phụ
-    // huynh của student1. Tạo bằng chính endpoint quản lý liên kết
-    // trong phiên tenant của admin (admin là quản trị site nên qua
-    // cổng guardian:manage); cả parent1 và student1 đều đã là thành
-    // viên tenant ở bước trên nên điều kiện thành viên của liên kết
-    // được thoả. Idempotent: cặp đã có liên kết đang hiệu lực thì bỏ
-    // qua (tạo trùng sẽ bị API trả 409).
     const existingLinks = must(await call('GET', `/guardian-links?guardianUserId=${guardianId}&studentUserId=${studentIds[0]}&status=active`, admin), 'list guardian links') as { id: string }[];
     if (existingLinks.length > 0) {
       console.log('[seed] guardian link parent1 → student1 already active');
@@ -219,12 +168,6 @@ async function main(): Promise<void> {
       console.log(`[seed] guardian link parent1 → student1 created (#${link.id})`);
     }
 
-    // Bài tập mẫu mod_assign (ĐX-1, issue #179): một hoạt động Bài tập
-    // nộp tệp/ảnh ở Tuần 2 kèm bảng tiêu chí, để nghiệm thu trình duyệt
-    // đi trọn vòng nộp → chấm → trả. Tạo bằng chính tài khoản teacher1
-    // (đã có editingteacher tại khoá) — đúng đường giáo viên thật dùng.
-    // Idempotent: đã có bài cùng tên thì giữ nguyên, rubric chỉ dựng khi
-    // bài chưa có bảng tiêu chí.
     const teacherLogin = must(await call('POST', '/auth/token', undefined, { username: TEACHER.username, password: TEACHER_PASSWORD }), 'teacher login');
     const teacherToken = (teacherLogin as { accessToken: string }).accessToken;
     const SAMPLE_ASSIGNMENT_NAME = 'Bài tập mẫu: Chụp ảnh bài làm và nộp';
@@ -271,11 +214,6 @@ async function main(): Promise<void> {
       console.log('[seed] sample assignment rubric created');
     } else console.log('[seed] sample assignment rubric exists');
 
-    // Bài kiểm tra mẫu (gộp Đề #226): dựng bằng ĐÚNG đường người dùng
-    // qua tài khoản teacher1 — soạn câu trong bank câu hỏi cá nhân →
-    // tạo ĐỀ trong bank đề cá nhân → ready → GHIM vào Tuần 2 của khoá
-    // (exam-pins tự tạo course module mod_quiz + grade item). Idempotent:
-    // khoá đã có lần ghim mang tên này thì giữ nguyên.
     const SAMPLE_EXAM_NAME = 'Bài kiểm tra thử';
     const existingPins = must(await call('GET', `/courses/${courseId}/exam-pins`, teacherToken), 'list pins') as { id: string; name: string }[];
     if (existingPins.some((pin) => pin.name === SAMPLE_EXAM_NAME)) {
@@ -294,9 +232,6 @@ async function main(): Promise<void> {
           { text: '7', correct: false },
         ],
       }), 'create sample question 1') as { question: { id: string } };
-      // Câu đúng/sai mẫu theo mô hình TF-A (P5): MỘT câu chùm — thân
-      // chung + 4 mệnh đề trong questionText, đáp án từng mệnh đề qua
-      // solution.answers (không còn hai dòng answers Đúng/Sai).
       const tfStatementIds = ['seed-tf-s1', 'seed-tf-s2', 'seed-tf-s3', 'seed-tf-s4'];
       const tfStatements: [string, boolean][] = [
         ['Trái Đất quay quanh Mặt Trời.', true],
@@ -338,17 +273,8 @@ async function main(): Promise<void> {
       console.log(`[seed] sample exam pinned into DEMO101 (#${pin.id})`);
     }
 
-    // Chương trình GDPT 2018 (GDPT-SEED, issue #161; mô hình phân
-    // phối chốt 20:09 ngày 26/10/2026): seed RESTORE DUMP ĐÔNG CỨNG
-    // trong repo qua ProgramDumpService — KHÔNG chạy importer ở các
-    // môi trường. ID trong dump là hằng số literal nên tập id khớp
-    // 100% giữa mọi môi trường; DB đã có dữ liệu chương trình thì bỏ
-    // qua (idempotent theo luật seed, không nhân đôi).
     const programDump = app.get(ProgramDumpService, { strict: false });
     const programStartedAt = Date.now();
-    // TENANT-1 (#196): đường restore trực tiếp (không qua HTTP) chạy
-    // với danh nghĩa hệ thống — bọc ngữ cảnh platform tường minh để
-    // RLS fail-closed cho thấy/ghi được dữ liệu dùng chung của platform.
     const dumpResult = await tenantAls.run({ platform: true }, () => programDump.restoreIfEmpty());
     console.log(`[seed] program dump version=${dumpResult.version}: restored=${dumpResult.restored}, ${((Date.now() - programStartedAt) / 1000).toFixed(1)}s`);
 

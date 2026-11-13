@@ -1,11 +1,3 @@
-/**
- * Panel gói chương trình #17 ở màn quản trị:
- * - Trung tâm gửi ảnh chụp cây theo môn/phạm vi, xem trạng thái và cài
- *   bản đã duyệt vào kho riêng bằng nút chọn phiên bản.
- * - Biên tập viên hệ thống xem cây/YCCĐ trước khi duyệt hoặc từ chối.
- * API vẫn kiểm soát quyền, kho riêng, checksum và transaction; panel
- * chỉ che thao tác không thuộc vai và làm mới trạng thái sau khi ghi.
- */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@giaokhoa/ui/components/badge";
@@ -34,10 +26,6 @@ import {
   type ProgrammePackageMeta,
 } from "../api/programme-packages";
 
-/**
- * Phân biệt lỗi xung đột cụ thể từ API. Không phơi chi tiết SQL hay
- * nguyên nhân nội bộ; chỉ dùng các mã nghiệp vụ đã được API công bố.
- */
 function programmeInstallError(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiError) {
     const code = error.problem.code;
@@ -54,7 +42,6 @@ function programmeInstallError(error: unknown, t: (key: string) => string): stri
   return t("programmePackagesInstallFailed");
 }
 
-/** Chuyển nội dung Tiptap thành văn bản để biên tập viên đọc được trước duyệt. */
 function programmeOutcomePlainText(value: unknown): string {
   if (typeof value === "string") return value;
   if (value === null || typeof value !== "object") return "";
@@ -68,12 +55,6 @@ function programmeOutcomePlainText(value: unknown): string {
   );
 }
 
-/**
- * @param subjects - Danh sách môn để chọn phạm vi gửi; 'all' không phụ
- * thuộc danh sách này khi người dùng vừa tạo chương trình mới.
- * @returns Panel thao tác gói theo capability, không tự tải dữ liệu khi
- * người dùng không có quyền quản trị trung tâm/biên tập hệ thống.
- */
 export function ProgrammePackagePanel({
   subjects,
 }: {
@@ -112,7 +93,6 @@ export function ProgrammePackagePanel({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  /** Nạp lại metadata đúng phạm vi sau mọi quyết định/cài đặt. */
   const refresh = useCallback(async () => {
     if (!canSubmit && !canReview) return;
     const publishedRows = await fetchPublishedProgrammes();
@@ -140,7 +120,6 @@ export function ProgrammePackagePanel({
     };
   }, [refresh, t]);
 
-  /** Gửi đúng bản chụp nguồn; không được cài cho tới khi duyệt. */
   async function submit() {
     if (!version.trim()) return;
     setBusy(true);
@@ -157,7 +136,6 @@ export function ProgrammePackagePanel({
     }
   }
 
-  /** Cài bản đã duyệt sau xác nhận để tránh nhầm phiên bản trung tâm. */
   async function install(selected: ProgrammePackageMeta) {
     if (
       !window.confirm(
@@ -184,7 +162,6 @@ export function ProgrammePackagePanel({
     }
   }
 
-  /** Xem đầy đủ nội dung trước quyết định; chỉ biên tập viên được gọi. */
   async function openReview(selected: ProgrammePackageMeta) {
     setBusy(true);
     setNotice(null);
@@ -200,7 +177,6 @@ export function ProgrammePackagePanel({
     }
   }
 
-  /** Duyệt phát hành hoặc từ chối có lý do; mỗi bản chờ chỉ quyết định một lần. */
   async function review(approve: boolean) {
     if (!selectedVersion || (!approve && !reason.trim())) {
       setNotice(t("programmePackagesReasonRequired"));

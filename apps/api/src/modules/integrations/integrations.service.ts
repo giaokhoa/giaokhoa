@@ -5,21 +5,15 @@ import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
 import { IntegrationsRepository, type ServiceRow, type TokenRow } from '@giaokhoa/db/repositories/integrations';
 
-/** Định nghĩa một external function trong registry code: capability bắt buộc + cách resolve context. */
 export interface ExternalFunctionDef {
   name: string;
   capability: string;
-  /** Resolve contextId từ args; mặc định là system context. */
   resolveContext?: (args: Record<string, unknown>, ctx: ContextsService, courses: CoursesService) => Promise<string>;
   handler: (callerId: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
-/** Băm token để lưu trữ — token thô chỉ trả về đúng một lần khi tạo. */
 export function hashToken(raw: string): string { return createHash('sha256').update(raw).digest('hex'); }
 
-/**
- * Facade của IntegrationTokensModule (Moodle core_webservice, §2#21). Service = tập function + token; mỗi function khai báo capability bắt buộc kiểm tại context đã resolve. Token KHÔNG BAO GIỜ bypass capability của user sở hữu token.
- */
 @Injectable()
 export class IntegrationsService {
   private readonly functions = new Map<string, ExternalFunctionDef>();
@@ -33,7 +27,6 @@ export class IntegrationsService {
     this.registerBuiltinFunctions();
   }
 
-  /** Đăng ký function vào registry — module khác đăng ký qua đây. */
   registerFunction(def: ExternalFunctionDef): void { this.functions.set(def.name, def); }
   listFunctions(): string[] { return [...this.functions.keys()]; }
   getFunction(name: string): ExternalFunctionDef | undefined { return this.functions.get(name); }
@@ -62,7 +55,6 @@ export class IntegrationsService {
     });
   }
 
-  // --- quản trị service/token (capability riêng ở controller/guard + kiểm tra ở service) ---
 
   private async requireManage(actorId: string): Promise<void> {
     const sys = await this.contexts.ensureSystemContext();
@@ -89,7 +81,6 @@ export class IntegrationsService {
     return this.getService(id);
   }
 
-  /** Tạo token: trả token thô đúng một lần; DB chỉ lưu hash. */
   async createToken(actorId: string, input: { userId: string; serviceId: string; validUntil?: string; ipRestriction?: string }): Promise<{ token: string; row: TokenRow }> {
     await this.requireManage(actorId);
     await this.getService(input.serviceId);
@@ -110,25 +101,10 @@ export class IntegrationsService {
     return (await this.repo.getToken(id))!;
   }
 
-  /**
-   * Gọi function qua envelope thống nhất. Các bước kiểm tra theo thứ tự:
-   * token tồn tại/không thu hồi/không hết hạn → chủ token còn hoạt động
-   * (chưa xoá, không bị đình chỉ) → IP khớp → service enabled và chứa
-   * function → capability của USER SỞ HỮU token tại context đã resolve.
-   */
   async callFunction(input: { token: string; functionName: string; args?: Record<string, unknown>; ip?: string }): Promise<unknown> {
     const row = await this.repo.getTokenByHash(hashToken(input.token));
     if (!row || row.revoked) throw new UnauthorizedException({ message: 'Invalid or revoked token', code: 'webservice.invalid_token' });
     if (row.validUntil && row.validUntil < new Date()) throw new UnauthorizedException({ message: 'Token expired', code: 'webservice.token_expired' });
-    // Trạng thái chủ token được kiểm tra tại lúc dùng (read-time), cùng khuôn
-    // với mọi bề mặt xác thực khác (JWT, refresh token, phiên web, MCP đều
-    // nạp lại trạng thái tài khoản ở mỗi request): chủ đã xoá hoặc đang bị
-    // đình chỉ thì token mất hiệu lực ngay tại lời gọi này, dù bản thân token
-    // chưa bị thu hồi và capability của chủ vẫn còn nguyên trong hệ phân
-    // quyền. KHÔNG thu hồi cứng token khi đình chỉ — đình chỉ là trạng thái
-    // khôi phục được, nên điểm kiểm này chỉ đọc trạng thái hiện tại của chủ
-    // mà không đổi trạng thái dòng token: chủ được gỡ đình chỉ là token gọi
-    // lại được ngay, không cần cấp token mới.
     const owner = await this.repo.getTokenOwnerState(row.userId);
     if (!owner || owner.deleted || owner.suspended) {
       throw new UnauthorizedException({ message: 'Token owner account is not active', code: 'webservice.owner_inactive' });
@@ -147,7 +123,6 @@ export class IntegrationsService {
     if (!def) throw new NotFoundException({ message: `Unknown function ${input.functionName}`, code: 'webservice.unknown_function' });
     const args = input.args ?? {};
     const contextId = def.resolveContext ? await def.resolveContext(args, this.contexts, this.courses) : (await this.contexts.ensureSystemContext()).id;
-    // Điểm cốt lõi §2#21: token không bypass capability của chủ token.
     const ok = await this.evaluator.hasCapability(row.userId, def.capability, contextId);
     if (!ok) throw new ForbiddenException({ message: `Token owner lacks capability ${def.capability}`, code: 'webservice.capability_denied' });
     await this.repo.updateToken(row.id, { lastAccess: new Date() });
