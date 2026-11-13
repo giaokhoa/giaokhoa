@@ -54,6 +54,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       })),
     };
     const realtime = {
+      attachServer: vi.fn(),
       markConnected: vi.fn(async () => {}),
       markDisconnected: vi.fn(async () => {}),
       listOnlineCoMemberIds: vi.fn(async () => ['user-a']),
@@ -81,8 +82,36 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       emit: vi.fn(),
       disconnect: vi.fn(),
     };
-    return { gateway, repo, client, realtime, joinedRooms, spaceDb, spaceProbe };
+    return { gateway, auth, repo, client, realtime, joinedRooms, spaceDb, spaceProbe };
   }
+
+  it('namespace từ chối handshake không xác thực trước khi client được kết nối', async () => {
+    const { gateway, auth, realtime } = build();
+    auth.authenticateHandshake.mockResolvedValueOnce(null as never);
+    let guard!: (client: { handshake: unknown; data: Record<string, unknown> }, next: (error?: Error) => void) => void;
+    const namespace = {
+      use: vi.fn((callback: typeof guard) => { guard = callback; }),
+    };
+    gateway.afterInit(namespace as never);
+    const client = { handshake: { auth: {} }, data: {} as Record<string, unknown> };
+    const rejected = await new Promise<Error | undefined>((resolve) => guard(client, resolve));
+    expect(rejected).toBeInstanceOf(Error);
+    expect(client.data.authIdentity).toBeUndefined();
+    expect(auth.authenticateHandshake).toHaveBeenCalledTimes(1);
+    expect(realtime.markConnected).not.toHaveBeenCalled();
+  });
+
+  it('namespace cho phép handshake hợp lệ và không xác thực lại sau connect ACK', async () => {
+    const { gateway, auth, realtime, client } = build();
+    let guard!: (client: typeof client, next: (error?: Error) => void) => void;
+    gateway.afterInit({ use: (callback: typeof guard) => { guard = callback; } } as never);
+    const failure = await new Promise<Error | undefined>((resolve) => guard(client, resolve));
+    expect(failure).toBeUndefined();
+    expect(client.data.authIdentity).toBeDefined();
+    await gateway.handleConnection(client as never);
+    expect(auth.authenticateHandshake).toHaveBeenCalledTimes(1);
+    expect(realtime.markConnected).toHaveBeenCalledTimes(1);
+  });
 
   it('nhiều hội thoại 1–1 trong một lần nối: danh sách chặn chỉ tải đúng một lần, room bị chặn không được vào', async () => {
     const { gateway, repo, client, joinedRooms } = build();

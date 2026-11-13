@@ -12,7 +12,7 @@ import { Public } from '../../common/public.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { blankRecalledContent } from '@giaokhoa/messaging';
-import { MessagingSocketAuth } from './messaging-socket-auth';
+import { MessagingSocketAuth, type MessagingSocketIdentity } from './messaging-socket-auth';
 import { conversationRoom, toWireMessage, userRoom } from '@giaokhoa/messaging';
 import { MessagingRealtimeService } from './messaging-realtime.service';
 
@@ -30,7 +30,9 @@ const SYNC_MAX_CONVERSATIONS = 50;
  * request bắt tay được ưu tiên như chuỗi guard HTTP (GĐ5 của issue
  * #7), access token (`handshake.auth.token` hoặc header Authorization
  * Bearer) là đường dự phòng cho tới cutover. Kết nối không xác thực
- * được thì ngắt ngay.
+ * được thì ngắt ngay, **trước** khi Socket.IO phát connect ACK:
+ * middleware của namespace gọi xác thực bất đồng bộ và chặn handshake
+ * ngay tại cổng; handleConnection chỉ lo vào room sau khi đã xác thực.
  *
  * Khi nối, socket vào room riêng của mình và room của mọi
  * conversation mình là thành viên. Sự kiện tin mới/đã đọc KHÔNG phát
@@ -53,9 +55,9 @@ const SYNC_MAX_CONVERSATIONS = 50;
  * vẫn không thấy hội thoại nào. Kết nối thuộc đường kho chung
  * (không mang slug) chạy nguyên như cũ.
  */
-// @Public ở đây KHÔNG có nghĩa là không cần đăng nhập: nó chỉ tắt
-// JwtAuthGuard toàn cục (guard HTTP đọc header Authorization qua passport — không áp được cho context WebSocket và sẽ ném lỗi trên mọi message handler). Xác thực của kênh này nằm ở handleConnection:
-// không qua được lớp auth mỏng là kết nối bị ngắt trước khi bất kỳ handler nào chạy.
+// @Public chỉ tắt JwtAuthGuard HTTP trên handler Socket.IO. Danh tính
+// được chặn ở middleware namespace TRƯỚC ACK connect; các message handler
+// vẫn chờ pha tham gia room trong handleConnection hoàn tất.
 @Public()
 @WebSocketGateway({ namespace: '/messaging' })
 export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
@@ -80,8 +82,26 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     return slug ? this.spaceDb.withSpaceKysely(slug, fn) : fn();
   }
 
+  /**
+   * Socket.IO chờ callback của namespace middleware trước khi công nhận
+   * kết nối. Không xác thực trong onConnect bất đồng bộ vì Socket.IO không
+   * chờ hook đó, client chưa được kiểm tra đã có thể emit sự kiện.
+   */
   afterInit(server: Namespace): void {
     this.realtime.attachServer(server);
+    server.use((client, next) => {
+      void this.auth.authenticateHandshake(client.handshake).then(
+        (identity) => {
+          if (!identity) return next(new Error('Unauthorized'));
+          client.data.authIdentity = identity;
+          next();
+        },
+        (error: unknown) => {
+          this.logger.warn(`Handshake realtime thất bại: ${error instanceof Error ? error.message : 'unknown'}`);
+          next(new Error('Unauthorized'));
+        },
+      );
+    });
   }
 
   async handleConnection(client: Socket): Promise<void> {
@@ -91,7 +111,12 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       resolveAuth = resolve;
     });
     try {
-      const identity = await this.auth.authenticateHandshake(client.handshake);
+      // Handshake production đã được kiểm chứng trước ACK ở server.use.
+      // Fallback chỉ dành cho test gọi trực tiếp hook; không tái kiểm
+      // tra phiên trong cửa sổ chuyển từ middleware sang handleConnection.
+      const preAuthenticated = client.data.authIdentity as MessagingSocketIdentity | undefined;
+      delete client.data.authIdentity;
+      const identity = preAuthenticated ?? await this.auth.authenticateHandshake(client.handshake);
       if (!identity) {
         client.disconnect(true);
         return;

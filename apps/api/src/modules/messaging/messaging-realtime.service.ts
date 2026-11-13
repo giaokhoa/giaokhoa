@@ -18,7 +18,7 @@ const TYPING_TTL_SECONDS = 4;
 /**
  * Tầng realtime PHÍA KẾT NỐI của messaging (issue #33, chặng A1/A2).
  *
- * Chỉ nơi này chạm vào Socket.IO server tại tiến trình API: gateway lo xác thực + room theo kết nối, service này giữ adapter Redis, presence/typing (sống trong Redis — tạm thời, KHÔNG xuống Postgres; DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc đã đọc) và hai thao tác room theo lệnh nghiệp vụ (đẩy socket của thành viên bị gỡ, nối lại room 1–1 sau bỏ chặn).
+ * Chỉ nơi này chạm vào Socket.IO server tại tiến trình API: gateway lo xác thực + room theo kết nối, adapter Redis do IoAdapter cấp ở bootstrap; service này giữ namespace, presence/typing (sống trong Redis — tạm thời, KHÔNG xuống Postgres; DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc đã đọc) và hai thao tác room theo lệnh nghiệp vụ (đẩy socket của thành viên bị gỡ, nối lại room 1–1 sau bỏ chặn).
  *
  * PHÂN PHỐI sự kiện nghiệp vụ (message.new, conversation.updated, message.read, message.deleted, conversation.invalidate) KHÔNG còn ở đây: từ issue #521, consumer phía worker tiêu thụ sự kiện outbox qua hàng đợi và phân phối qua Redis emitter theo luật ở package dùng chung `@giaokhoa/messaging` (nhà duy nhất của luật phân phối — cổng chặn 1–1 fail-closed và rà soát membership tại thời điểm phân phối nằm ở đó). Tên room cũng lấy từ package đó để nơi nối (gateway) và nơi phát (worker) không bao giờ lệch nhau.
  *
