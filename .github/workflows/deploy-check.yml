@@ -121,6 +121,51 @@ jobs:
           grep -qi '^cache-control: private, no-cache' smoke-login.headers
           curl -fsS -o /dev/null http://127.0.0.1:8080/
 
+      # Kiểm chứng sticky cookie trên hai Socket.IO Server thật với
+      # Redis adapter dùng chung, qua chính Caddy production. Nếu Caddy
+      # xem hostname Docker có hai A record là MỘT upstream thì polling
+      # có thể đổi replica giữa handshake/POST dẫn tới 400 unknown SID.
+      # Dùng hostname container riêng cho replica thứ hai, không tạo
+      # service mới hoặc cổng host mới trên production.
+      - name: Verify Socket.IO polling affinity across two API replicas
+        run: |
+          trap 'docker rm -f giaokhoa-api-2 >/dev/null 2>&1 || true; docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build --force-recreate gateway || true' EXIT
+          docker compose -f compose.yaml -f compose.ci.yaml run -d --no-deps --name giaokhoa-api-2 api
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec giaokhoa-api-2 node -e "fetch('http://127.0.0.1:3100/api/v1/health',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          export GIAOKHOA_API_UPSTREAM='api:3100 giaokhoa-api-2:3100'
+          docker compose -f compose.yaml -f compose.ci.yaml run --rm --no-deps gateway caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build --force-recreate gateway
+          : > "$RUNNER_TEMP/socket-affinity-cookies.txt"
+          for i in $(seq 1 12); do
+            curl -fsS --retry 10 --retry-delay 1 --retry-all-errors --max-time 10 \
+              -H 'Origin: http://localhost:8080' \
+              -D "$RUNNER_TEMP/socket-affinity-headers.txt" \
+              -o "$RUNNER_TEMP/socket-affinity-body.txt" \
+              "http://127.0.0.1:8080/socket.io/?EIO=4&transport=polling&t=$i"
+            cookie=$(grep -i '^set-cookie: api_affinity=' "$RUNNER_TEMP/socket-affinity-headers.txt" | head -n 1 | cut -d ' ' -f 2 | cut -d ';' -f 1 | tr -d '\r')
+            sid=$(node -e 'const s=require("node:fs").readFileSync(process.argv[1],"utf8");if(!s.startsWith("0"))process.exit(1);console.log(JSON.parse(s.slice(1)).sid)' "$RUNNER_TEMP/socket-affinity-body.txt")
+            test -n "$cookie" && test -n "$sid"
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -X POST \
+              -H 'Origin: http://localhost:8080' \
+              -H "Cookie: $cookie" -H 'Content-Type: text/plain;charset=UTF-8' \
+              --data-binary '40' \
+              "http://127.0.0.1:8080/socket.io/?EIO=4&transport=polling&sid=$sid")
+            test "$status" = 200 || { echo "Engine.IO SID mất affinity: HTTP $status" >&2; exit 1; }
+            printf '%s\n' "$cookie" >> "$RUNNER_TEMP/socket-affinity-cookies.txt"
+          done
+          distinct=$(sort -u "$RUNNER_TEMP/socket-affinity-cookies.txt" | wc -l)
+          test "$distinct" -ge 2 || { echo "Caddy không phân phối tới cả 2 upstream" >&2; exit 1; }
+          echo "12 Engine.IO polling handshakes + POST đạt trên $distinct upstream có cookie affinity."
+          unset GIAOKHOA_API_UPSTREAM
+
       # Health phải trả 503 TRÊN HTTP THẬT khi một phụ thuộc ngừng
       # (unit test controller không kiểm chứng wiring Redis/PG hay
       # healthcheck lắng nghe). Chạy sau smoke để không làm nhiễu các
