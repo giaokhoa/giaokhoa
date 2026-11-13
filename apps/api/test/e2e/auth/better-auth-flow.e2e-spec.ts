@@ -90,6 +90,16 @@ describe('Nền tảng Better Auth (issue #7 giai đoạn 1)', () => {
     await app?.close();
   });
 
+  it('handler Better Auth mount trực tiếp vẫn gắn header bảo mật cho phản hồi công khai', async () => {
+    const response = await http(app).get('/api/v1/auth/get-session');
+    expect(response.status).toBe(200);
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+    expect(response.headers['referrer-policy']).toBe('no-referrer');
+    expect(response.headers['strict-transport-security']).toContain('max-age=31536000');
+    expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+  });
+
   it('từ chối mật khẩu yếu tại bridge (chính sách dự án chạy trong bước hash)', async () => {
     const weakName = helpers.uniqueName('baweak');
     await expect(

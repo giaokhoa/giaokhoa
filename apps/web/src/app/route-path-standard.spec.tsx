@@ -13,12 +13,12 @@ import routesConfig from './routes';
  */
 
 /** Mọi (path, route module) đã khai trong bảng route thật (layout Shell + các route ngoài vỏ). */
-const ALL_ROUTES: Array<{ path: string; file: string }> = (() => {
-  const collected: Array<{ path: string; file: string }> = [];
+const ALL_ROUTES: Array<{ path: string; file: string; index?: boolean }> = (() => {
+  const collected: Array<{ path: string; file: string; index?: boolean }> = [];
   const walk = (entries: unknown) => {
     if (!Array.isArray(entries)) return;
-    for (const entry of entries as Array<{ path?: string; file?: string; children?: unknown }>) {
-      if (typeof entry.path === 'string') collected.push({ path: entry.path, file: entry.file ?? '' });
+    for (const entry of entries as Array<{ path?: string; file?: string; index?: boolean; children?: unknown }>) {
+      if (typeof entry.path === 'string') collected.push({ path: entry.path, file: entry.file ?? '', index: entry.index });
       walk(entry.children);
     }
   };
@@ -52,6 +52,14 @@ const EXPECTED_CURRICULUM_PATHS = [
 ];
 
 describe('Bản đồ route của lát R2–R4 (chuẩn đường dẫn #221)', () => {
+  it('trang gốc của các nhóm prefix là index route, URL gốc không bị đổi', () => {
+    for (const path of ['admin/curriculum', 'classes', 'content-bank', 'contentbank', 'guardian', 'settings']) {
+      const matched = ALL_ROUTES.filter((route) => route.path === path);
+      expect(matched).toHaveLength(1);
+      expect(matched[0]?.index, `${path} phải được khai bằng index()`).toBe(true);
+    }
+  });
+
   it('R2: khu vực phụ huynh có gốc và path theo từng con', () => {
     expect(ALL_PATHS).toContain('guardian');
     expect(ALL_PATHS).toContain('guardian/students/:studentId');

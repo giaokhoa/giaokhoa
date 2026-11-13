@@ -1,4 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { attachSecurityHeadersToRawRoutes } from '../../../common/security-headers.middleware';
 import { toNodeHandler } from 'better-auth/node';
 import type { NextFunction, Request, Response } from 'express';
 import type { SpaceDatabaseService } from '../../../db/routing/space-database.service';
@@ -65,9 +66,16 @@ export function mountBetterAuth(
   spaceDb?: BetterAuthSpaceRouting,
 ): void {
   const server = app.getHttpAdapter().getInstance() as {
+    use: import('express').Express['use'];
     all: (path: string, handler: (req: Request, res: Response, next: NextFunction) => void) => void;
     get: (path: string, handler: (req: Request, res: Response) => void) => void;
   };
+  // Handler chạy trước middleware Nest; gắn header bảo mật trực tiếp
+  // cho cả endpoint auth và metadata AS ngoài prefix API.
+  attachSecurityHeadersToRawRoutes(server, [
+    BETTER_AUTH_BASE_PATH,
+    '/.well-known/oauth-authorization-server',
+  ]);
   const handler = toNodeHandler(auth);
   server.all(`${BETTER_AUTH_BASE_PATH}/*splat`, async (req: Request, res: Response, next: NextFunction) => {
     const segment = req.path.slice(BETTER_AUTH_BASE_PATH.length + 1).split('/')[0];

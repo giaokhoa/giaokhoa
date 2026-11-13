@@ -79,6 +79,19 @@ export function plainText(doc: RichTextDocument | null | undefined): string {
 }
 
 /**
+ * Gói câu hệ thống giữ tài liệu dưới dạng unknown trong hợp đồng để cho
+ * phép nhiều node Tiptap: chỉ đọc văn bản khi là tài liệu đã nhận dạng.
+ */
+export function systemBankPlainText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const doc = value as Record<string, unknown>;
+    if (doc.type === 'doc' && Array.isArray(doc.content)) return plainText(value as RichTextDocument);
+  }
+  return '';
+}
+
+/**
  * Nhãn hiển thị của một câu hỏi = TRÍCH ĐOẠN nội dung thân câu của
  * phiên bản mới nhất (tối đa 120 ký tự). Câu hỏi không còn trường tên
  * (quyết 11:28 ngày 26/10/2026) nên mọi bề mặt cần nhãn — danh sách,

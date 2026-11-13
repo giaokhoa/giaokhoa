@@ -1,5 +1,5 @@
 import { Pool, type PoolClient, type PoolConfig } from 'pg';
-import { tenantAls } from '../modules/tenants/tenant-als';
+import { tenantAls } from './tenant-als';
 
 /**
  * Pool PostgreSQL gắn ngữ cảnh tenant từ `tenantAls` vào mọi kết nối ngay trước truy vấn đầu tiên sau mỗi lượt checkout.

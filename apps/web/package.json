@@ -16,9 +16,9 @@
     "#config/*": "./src/config/*"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit && react-router build",
-    "lint": "oxlint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "pnpm run typecheck && react-router build",
+    "lint": "react-router typegen && oxlint .",
+    "typecheck": "react-router typegen && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "dev": "react-router dev",

@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  *
  * Lỗi này đã lọt hai lần cùng một cơ chế: trang `/curriculum` (cơ chế được ghi lại trong comment của `features/curriculum/routes/teacher-curriculum.tsx`) và trang `/admin/guardian-links` (chỉ xuất component theo tên riêng, thiếu cả export mặc định lẫn `ErrorBoundary` và `meta()`). Cả hai lần đều lọt vì spec của chính trang render component theo tên riêng trực tiếp — không nạp file như route module của framework — còn các spec gác route module trước đây (`app/shell-pages-routes.spec.tsx`, `features/platform/routes/platform-routes.spec.tsx`) chỉ liệt kê cứng một số module nhất định, trang mới nằm ngoài danh sách là nằm ngoài diện gác.
  *
- * Cách gác của spec này: danh sách module được SUY RA từ chính nội dung các file config route khi spec chạy — file gộp `src/app/routes.ts` (chuỗi của chính nó là đường dẫn tương đối theo thư mục `app/`) cộng mọi config feature mà nó import (chuỗi trong config feature là đường dẫn tương đối theo thư mục của feature). Mọi chuỗi đường dẫn file `.ts`/`.tsx` trong các file config đều là đích mà `route()`/`index()`/`layout()` đăng ký
+ * Cách gác của spec này: danh sách module được SUY RA từ chính nội dung các file config route khi spec chạy — file gộp `src/app/routes.ts` (chuỗi file route được tính tương đối từ `appDirectory = src`, vì `src/routes.ts` chuyển tiếp cấu hình này) cộng mọi config feature mà nó import (chuỗi trong config feature là đường dẫn tương đối theo thư mục của feature). Mọi chuỗi đường dẫn file `.ts`/`.tsx` trong các file config đều là đích mà `route()`/`index()`/`layout()` đăng ký
  * (đường dẫn URL của route không bao giờ kết thúc bằng `.ts`/`.tsx`);
  * các đường dẫn được chuẩn hoá về dạng tương đối theo `src/` trước khi đối chiếu. Trang mới thêm vào config tự động vào diện gác, không cần sửa spec. Từng file được đọc ở dạng nguồn (gọt comment trước khi quét, để chữ trong comment không bị tính là export) và được khẳng định có export mặc định ở một trong ba dạng cú pháp đang dùng trong repo:
  *
@@ -53,7 +53,7 @@ function listRouteModuleFiles(): string[] {
     }
   };
   const appRoutesSource = readFileSync(join(SRC_DIR, 'routes.ts'), 'utf8');
-  collect(appRoutesSource, 'app');
+  collect(appRoutesSource, '');
   for (const match of stripComments(appRoutesSource).matchAll(/from\s+'(\.\.\/features\/[a-z-]+\/routes)'/g)) {
     const configRel = match[1].replace(/^\.\.\//, '');
     collect(readFileSync(join(SRC_ROOT, `${configRel}.ts`), 'utf8'), dirname(configRel));

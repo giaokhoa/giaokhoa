@@ -1,8 +1,10 @@
 import { Module, ServiceUnavailableException } from '@nestjs/common';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
 import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
+import { SystemBankSubmissionsRepository } from '@giaokhoa/db/repositories/system-bank-submissions';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
+import { FilesModule } from '../files/files.module';
 import { AccessModule } from '../access/access.module';
 import { QuestionsModule } from '../questions/questions.module';
 import { TenantsModule } from '../tenants/tenants.module';
@@ -11,6 +13,9 @@ import { SystemBankController } from './system-bank.controller';
 import { SystemBankDiscoveryController } from './system-bank-discovery.controller';
 import { SystemBankPackagesController } from './system-bank-packages.controller';
 import { SystemBankService } from './system-bank.service';
+import { SystemBankSubmissionsService } from './system-bank-submissions.service';
+import { SystemBankSubmissionsController } from './system-bank-submissions.controller';
+import { SystemBankMediaService } from './system-bank-media.service';
 
 /**
  * SystemBankModule (issue #585): kho ngân hàng hệ thống trên database riêng phía platform — bản chính tập trung, phiên bản bất biến, giáo viên tìm câu qua API và nhập bản chụp đúng phiên bản vào kho trung tâm. Import AccessModule để dùng PermissionEvaluator/ContextsService cho cổng quản trị platform; xuất SystemBankService để các lát sau
@@ -24,8 +29,8 @@ import { SystemBankService } from './system-bank.service';
  *   KHÔNG GIAN (`SpaceDatabaseService.routedKysely` qua SpaceRoutingModule): hai handle giữ tách biệt tuyệt đối, không gộp và không fallback qua nhau.
  */
 @Module({
-  imports: [AccessModule, QuestionsModule, TenantsModule, SpaceRoutingModule],
-  controllers: [SystemBankController, SystemBankDiscoveryController, SystemBankPackagesController],
+  imports: [AccessModule, QuestionsModule, TenantsModule, SpaceRoutingModule, FilesModule],
+  controllers: [SystemBankController, SystemBankDiscoveryController, SystemBankPackagesController, SystemBankSubmissionsController],
   providers: [
     SystemBankConnection,
     {
@@ -44,6 +49,16 @@ import { SystemBankService } from './system-bank.service';
       useFactory: (spaceDb: SpaceDatabaseService) => new SystemBankCentreRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
     },
+    {
+      provide: SystemBankSubmissionsRepository,
+      useFactory: (connection: SystemBankConnection) =>
+        new SystemBankSubmissionsRepository(connection.kysely, () =>
+          new ServiceUnavailableException({ message: 'System bank is not configured', code: 'system_bank.not_configured' }),
+        ),
+      inject: [SystemBankConnection],
+    },
+    SystemBankMediaService,
+    SystemBankSubmissionsService,
     SystemBankService,
   ],
   exports: [SystemBankService, SystemBankConnection],

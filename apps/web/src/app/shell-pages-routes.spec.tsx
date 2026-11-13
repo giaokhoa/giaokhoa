@@ -47,7 +47,11 @@ describe('F-07/F-08 (#133): 10 page module trong shell — ErrorBoundary dùng c
     it(`trang ${name} meta() trả tiêu đề dựng từ khoá ${ns} riêng ${key}`, () => {
       const expectedTitle = i18n.t(key, { ns });
       expect(expectedTitle).not.toBe(key);
-      expect(route.meta()).toEqual([{ title: `${expectedTitle} · Giáo khoa` }]);
+      // Trang lớp public lấy tiêu đề động từ loaderData, nên trường hợp fallback phải truyền dữ liệu loader rỗng theo API v8.
+      const actual = name === 'class-public'
+        ? classPublicRoute.meta({ loaderData: { classPublic: null } } as Parameters<typeof classPublicRoute.meta>[0])
+        : route.meta();
+      expect(actual).toEqual([{ title: `${expectedTitle} · Giáo khoa` }]);
     });
   }
 });
