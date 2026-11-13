@@ -6,6 +6,7 @@ import { ExtractJwt, Strategy as JwtStrategy } from 'passport-jwt';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { resolveDedicatedSpace } from '../tenants/space-resolution';
+import { isPublicLearningHost } from '../tenants/public-learning';
 import { TenantsService } from '../tenants/tenants.service';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
@@ -110,7 +111,17 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
     if (payload.scope !== undefined || !payload.sid) {
       throw new UnauthorizedException({ message: 'Token is not an access token', code: 'auth.unauthenticated' });
     }
-    const space = await resolveDedicatedSpace(this.spaceDb, req.headers?.host);
+    // Token vận hành có audience riêng và danh tính CHỈ trong kho
+    // chung; không lấy principal từ kho công cộng dù cùng hostname.
+    const space = payload.aud === 'platform'
+      ? null
+      : await resolveDedicatedSpace(this.spaceDb, req.headers?.host);
+    // Khi đã tách host gốc, token nghiệp vụ thiếu định danh kho
+    // không được nhận từ kho vận hành (kể cả khi user đó là siteadmin).
+    // Chỉ audience vận hành riêng được tra kho chung.
+    if (isPublicLearningHost(req.headers?.host) && payload.aud !== 'platform' && !payload.centre_id) {
+      throw new UnauthorizedException({ message: 'Public learning requires a store-bound session', code: 'auth.centre_mismatch' });
+    }
     // Token của trung tâm A/B không dùng được ở địa chỉ khác hay
     // hostname gốc. Ngoại lệ có kiểm chứng: Trang chính còn dùng
     // địa chỉ gốc và kho chung cho phiên của tenant platform trong

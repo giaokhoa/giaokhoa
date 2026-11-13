@@ -27,6 +27,14 @@ không bao giờ import code backend hay schema cơ sở dữ liệu.
 - PostgreSQL 18.6 tại `localhost:5432` (người dùng `postgres`/`postgres`, DB `giaokhoa` và hai DB test riêng `giaokhoa_test_api`/`giaokhoa_test_worker`) — bắt buộc bản 18.x: khoá chính mặc định dùng hàm `uuidv7()` native
 - Redis tại `localhost:6379`
 
+### Triển khai khu học tập công cộng (issue #8)
+
+Khi triển khai **mới**, khu học tập công cộng sử dụng database và
+role riêng, độc lập với các trung tâm và kho ngân hàng hệ thống. Xem
+[quy trình cấp phát kho, đăng ký và cô lập phiên](docs/public-learning.md)
+trước khi bật `PUBLIC_LEARNING_ENABLED`; mặc định công tắc tắt để
+không thay đổi dữ liệu dùng chung hiện hữu.
+
 ## Phát triển trong Dev Container
 
 Chỉ cần Docker và VS Code với extension Dev Containers trên máy host.

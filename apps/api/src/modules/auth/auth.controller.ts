@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
@@ -6,6 +6,9 @@ import type { Request, Response } from 'express';
 import { clientIpOf } from '../../common/client-ip';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { Public } from '../../common/public.decorator';
+import { SkipSpaceContext } from '../tenants/skip-space-context.decorator';
+import { PlatformRoute } from '../../common/platform-route.decorator';
+import { isPublicLearningHost } from '../tenants/public-learning';
 import { RequireCapability } from '../../common/require-capability.decorator';
 import { UsersService } from '../users/users.service';
 import { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, refreshTokenSchema, type ChangePasswordDto, type LoginAsDto, type LoginDto, type MfaTotpCodeDto, type MfaTotpSetupDto, type MfaVerifyDto, type RefreshDto } from './dto/auth.dto';
@@ -127,8 +130,13 @@ export class AuthController {
    * User bật MFA thì dừng ở challenge của luồng platform.
    */
   @Public()
+  @SkipSpaceContext()
+  @PlatformRoute()
   @Post('platform/login')
   async platformLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request) {
+    if (process.env.PUBLIC_LEARNING_ENABLED === 'true' && !isPublicLearningHost(req.headers.host)) {
+      throw new ForbiddenException({ message: 'Platform login is only available on the root host', code: 'auth.platform_root_only' });
+    }
     const outcome = await this.auth.platformLogin(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']);
     if (outcome.mfaRequired) {
       return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
@@ -142,8 +150,13 @@ export class AuthController {
    * access token platform (không có refresh token).
    */
   @Public()
+  @SkipSpaceContext()
+  @PlatformRoute()
   @Post('platform/mfa/verify')
   async platformMfaVerify(@Body({ schema: mfaVerifySchema }) dto: MfaVerifyDto, @Req() req: Request) {
+    if (process.env.PUBLIC_LEARNING_ENABLED === 'true' && !isPublicLearningHost(req.headers.host)) {
+      throw new ForbiddenException({ message: 'Platform login is only available on the root host', code: 'auth.platform_root_only' });
+    }
     const { user, accessToken, expiresIn } = await this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']);
     return { user: { id: user.id, username: user.username, forcePasswordChange: user.forcePasswordChange }, accessToken, expiresIn };
   }

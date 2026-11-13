@@ -51,6 +51,10 @@ export const envSchema = z.object({
   // kho không còn traffic bị đóng để trả ngân sách kết nối về cụm.
   SPACE_ROUTING_CACHE_TTL_MS: z.coerce.number().int().positive().default(5_000),
   SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+  // #8: bật sau khi provision-public và cài SPACE_CONG_CONG_DATABASE_URL.
+  // Tắt = tương thích kho chung cũ; bật = host gốc bắt buộc kho riêng.
+  PUBLIC_LEARNING_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  SPACE_CONG_CONG_DATABASE_URL: z.string().min(1).optional(),
   SPACE_DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   // Bật TLS cho kết nối PostgreSQL khi nhà cung cấp bắt buộc (một số
   // nhà cung cấp PostgreSQL chỉ nhận kết nối có mã hoá). Mặc định tắt:
@@ -255,6 +259,14 @@ export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
     throw new Error(`Invalid environment variables: ${parsed.error.message}`);
+  }
+  if (parsed.data.PUBLIC_LEARNING_ENABLED) {
+    for (const key of ['BETTER_AUTH_URL', 'CONTROL_PLANE_DATABASE_URL', 'SPACE_CONG_CONG_DATABASE_URL', 'BETTER_AUTH_SECRET'] as const) {
+      if (!parsed.data[key]) throw new Error(`PUBLIC_LEARNING_ENABLED=true requires ${key} (public requests must never fall back to the shared database)`);
+    }
+    if (!parsed.data.BETTER_AUTH_ENABLED) {
+      throw new Error('PUBLIC_LEARNING_ENABLED=true requires BETTER_AUTH_ENABLED=true');
+    }
   }
   return parsed.data;
 }

@@ -3,12 +3,16 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
+import { Reflector } from '@nestjs/core';
+import { IS_PLATFORM_ROUTE_KEY } from '../../common/platform-route.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { resolveDedicatedSpace } from './space-resolution';
+import { isPublicLearningHost, PUBLIC_LEARNING_SLUG } from './public-learning';
 import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import { tenantAls } from './tenant-als';
 import { TenantsService } from './tenants.service';
@@ -51,6 +55,7 @@ export class TenantGuard implements CanActivate {
     private readonly evaluator: PermissionEvaluator,
     private readonly tenantContext: TenantContextService,
     private readonly spaceDb: SpaceDatabaseService,
+    @Optional() private readonly reflector?: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -78,6 +83,27 @@ export class TenantGuard implements CanActivate {
     // trong các test đơn vị không boot app đầy đủ): không gắn ngữ cảnh.
     if (!zero) return true;
     const user = request.user;
+    // Với request ẩn danh tới trang công cộng, tenant hiệu lực phải
+    // được đọc trong kho công cộng; tenant-zero của kho vận hành có ID
+    // khác và không được dùng làm GUC app.tenant_id của kho này.
+    const platformRoute = this.reflector?.getAllAndOverride<boolean>(IS_PLATFORM_ROUTE_KEY, [
+      context.getHandler(), context.getClass(),
+    ]);
+    if (!user && !platformRoute && isPublicLearningHost(request.headers?.host)) {
+      const space = await resolveDedicatedSpace(this.spaceDb, request.headers?.host);
+      if (!space || space.slug !== PUBLIC_LEARNING_SLUG) {
+        throw new UnauthorizedException({ message: 'Public learning store is not ready', code: 'public_learning.store_unavailable' });
+      }
+      const publicTenant = await this.spaceDb.withSpaceKysely(space.slug, () =>
+        this.repo.getTenantBySlug(PUBLIC_LEARNING_SLUG),
+      );
+      if (!publicTenant || publicTenant.kind !== 'platform' || publicTenant.status !== 'active') {
+        throw new UnauthorizedException({ message: 'Public learning tenant is not active', code: 'public_learning.tenant_unavailable' });
+      }
+      this.tenantContext.enter({ tenantId: publicTenant.id });
+      request.tenantId = publicTenant.id;
+      return true;
+    }
     // Nhánh kho riêng (issue #584): request đã xác thực ở địa chỉ
     // của trung tâm ở kho riêng thì tenant hiệu lực là dòng tenant
     // trong CHÍNH kho của trung tâm đó — không tra kho chung, không

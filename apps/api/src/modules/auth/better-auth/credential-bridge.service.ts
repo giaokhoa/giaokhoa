@@ -12,6 +12,8 @@ export interface CreateUserWithCredentialInput {
   firstName: string;
   lastName: string;
   password: string;
+  /** Tài khoản công cộng tự khai email CHƯA được xác minh. */
+  emailVerified?: boolean;
 }
 
 /**
@@ -195,7 +197,7 @@ export class CredentialBridgeService {
           email: input.email,
           name: input.firstName,
           username: input.username,
-          emailVerified: true,
+          emailVerified: input.emailVerified ?? true,
         },
         { method: 'admin' },
       );

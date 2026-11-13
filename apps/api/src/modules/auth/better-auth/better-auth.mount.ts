@@ -21,6 +21,10 @@ import { BETTER_AUTH_BASE_PATH, type BetterAuthInstance } from './better-auth.in
  */
 const LEGACY_AUTH_SEGMENTS = new Set([
   'login',
+  // Đăng ký công cộng do Nest gác kho và gán vai, không dùng BA sign-up.
+  'public',
+  // Đường token riêng của nhân sự vận hành là Nest, không phải BA.
+  'platform',
   'token',
   'mfa',
   'refresh',

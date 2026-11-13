@@ -3,11 +3,15 @@
  * chạy ngoài NestJS như các công cụ fleet (`node
  * dist/modules/tenants/space-provision.js <lệnh> [--khóa giá-trị]`).
  *
- * Ba lệnh:
+ * Bốn lệnh:
  * - `provision`: chạy toàn bộ pipeline 7 bước (xem
  *   `space-provision-runner.ts`); bắt buộc `--slug`, `--name`,
  *   `--admin-email`, `--actor-id` (UUID tài khoản quản trị vận hành
  *   — ghi vào lịch sử sổ đăng ký, không có giá trị mặc định).
+ * - `provision-public`: dùng cùng pipeline, slug cố định `cong-cong`,
+ *   kind `platform`, kho/role riêng và danh mục học tập gốc, dành cho
+ *   khu học tập công cộng ở hostname gốc; bắt buộc `--admin-email`,
+ *   `--actor-id`. Không tạo nhân sự vận hành platform trong kho này.
  * - `invite`: cấp lại lời mời kích hoạt cho một tài khoản của trung
  *   tâm (huỷ lời mời đang chờ rồi tạo mới); bắt buộc `--slug`,
  *   `--email`; `--revoke` thì chỉ huỷ, không tạo mới.
@@ -23,10 +27,11 @@
  * database mới sinh và token lời mời chỉ xuất hiện ở đầu ra này,
  * đúng một lần — không ghi xuống đĩa, không ghi vào sổ đăng ký,
  * không ghi log nơi khác.
- * Sau `provision`, vận hành còn phải thêm biến môi trường
+ * Sau `provision` hoặc `provision-public`, vận hành còn phải thêm biến môi trường
  * `SPACE_<SLUG>_DATABASE_URL` vào môi trường triển khai thì tầng
  * ứng dụng mới phân giải được trung tâm mới (in rõ ở cuối đầu ra).
  */
+import { PUBLIC_LEARNING_SLUG } from './public-learning';
 import { installSpaceRoleBaseline, manageCentreInvite, runSpaceProvision } from './space-provision-runner';
 
 /** Phân tích tham số dạng `--khóa giá-trị` / `--cờ` từ argv. */
@@ -63,16 +68,18 @@ function optional(args: Record<string, string | true>, key: string): string | un
 
 const USAGE = `Usage:
   node dist/modules/tenants/space-provision.js provision --slug <slug> --name <name> --admin-email <email> --actor-id <uuid> [--plan <plan>] [--admin-username <username>] [--admin-first-name <name>] [--admin-last-name <name>] [--database-name <db>] [--database-password <password>]
+  node dist/modules/tenants/space-provision.js provision-public --admin-email <email> --actor-id <uuid> [--admin-username <username>] [--database-password <password>]
   node dist/modules/tenants/space-provision.js invite --slug <slug> --email <email> [--revoke]
   node dist/modules/tenants/space-provision.js install-roles --slug <slug>`;
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (command === 'provision') {
+  if (command === 'provision' || command === 'provision-public') {
     const result = await runSpaceProvision({
-      slug: required(args, 'slug'),
-      name: required(args, 'name'),
+      slug: command === 'provision-public' ? PUBLIC_LEARNING_SLUG : required(args, 'slug'),
+      name: command === 'provision-public' ? 'Khu học tập công cộng' : required(args, 'name'),
+      ...(command === 'provision-public' ? { kind: 'platform' as const } : {}),
       plan: optional(args, 'plan'),
       adminUsername: optional(args, 'admin-username'),
       adminEmail: required(args, 'admin-email'),

@@ -68,6 +68,10 @@ x-api-env: &api-env
   # chưa đặt thì không có đường phân giải nào dùng tới biến và ứng
   # dụng không gãy kiểm tra biến môi trường.
   SPACE_NHANTIN_DATABASE_URL:
+  # Kho riêng công cộng; cấu hình sau provision-public, truyền cả
+  # cho API lẫn worker để giao nhận bài/điểm không vào kho chung.
+  SPACE_CONG_CONG_DATABASE_URL:
+  PUBLIC_LEARNING_ENABLED: ${PUBLIC_LEARNING_ENABLED:-false}
   REDIS_URL: redis://redis:6379
   JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
   # Các biến tuỳ chọn có kiểm tra độ dài tối thiểu phía ứng dụng
@@ -169,6 +173,7 @@ services:
       CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
       SYSTEM_BANK_DATABASE_URL:
       SPACE_NHANTIN_DATABASE_URL:
+      SPACE_CONG_CONG_DATABASE_URL:
       DATABASE_POOL_MAX: ${WORKER_DATABASE_POOL_MAX:-10}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}

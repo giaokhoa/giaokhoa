@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLoaderData, useNavigate, useSearchParams } from 'react-router';
+import { Link, useLoaderData, useNavigate, useSearchParams } from 'react-router';
 import type { OAuthProvidersResponse } from '@giaokhoa/contracts';
 import { fetchApiJson } from '#lib/server-api';
 import type { OAuthIssuer } from '@giaokhoa/contracts';
@@ -323,6 +323,9 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
         <CardHeader>
           <CardTitle>{t('loginTitle')}</CardTitle>
           <CardDescription>{t('loginDescription')}</CardDescription>
+          <CardDescription>
+            <Link to="/register" className="underline">{t('registrationLink')}</Link>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
