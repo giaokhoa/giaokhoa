@@ -130,7 +130,8 @@ export class QuizSharedService {
     for (const s of slots) {
       const base = {
         id: s.id, pinId: s.pinId, slot: s.slot, page: s.page,
-        questionId: s.questionId, categoryId: s.categoryId, maxMark: s.maxMark,
+        questionId: !revealSource && quiz.sharedSource && s.sourceDomain === 'bank-system'
+          ? null : s.questionId, categoryId: s.categoryId, maxMark: s.maxMark,
         matrixCellId: s.matrixCellId,
         versionMode: null as 'pinned' | 'follow_latest' | null,
         pinnedVersion: null as number | null,
@@ -201,6 +202,12 @@ export class QuizSharedService {
       sumGrades: slots.reduce((sum, s) => sum + s.maxMark, 0),
       variants: quiz.variants ?? [],
     };
+  }
+
+  public maskSourceQuestionIds(quiz: PinRow, summary: QuizAttemptSummary): QuizAttemptSummary {
+    if (!quiz.sharedSource || !summary.appliedSettings) return summary;
+    const { questionOrder: _questionOrder, ...appliedSettings } = summary.appliedSettings;
+    return { ...summary, appliedSettings };
   }
 
   public usageTotalMax(usage: UsageView): number {

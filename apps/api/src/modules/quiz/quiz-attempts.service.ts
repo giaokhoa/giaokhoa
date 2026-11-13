@@ -173,9 +173,9 @@ export class QuizAttemptsService {
   }
 
   private async gradeTotalsPublished(quiz: PinRow): Promise<boolean> {
-    if (!quiz.cmId) return true;
+    if (!quiz.cmId) return !quiz.sharedSource;
     const item = await this.grades.getItemForCm(quiz.course, quiz.cmId).catch(() => undefined);
-    if (!item) return true;
+    if (!item) return !quiz.sharedSource;
     return (await this.grades.itemPublicationState(item)).published;
   }
 
@@ -236,9 +236,10 @@ export class QuizAttemptsService {
     const summaries: QuizAttemptSummary[] = [];
     for (const [index, a] of mine.entries()) {
       const summary = rawSummaries[index]!;
-      summaries.push(!isStaffViewer && !a.preview
+      const visible = !isStaffViewer && !a.preview
         ? await this.maskOwnerTotals(quiz, summary, await this.ownerMarksVisible(quiz, a, new Date()))
-        : summary);
+        : summary;
+      summaries.push(isStaffViewer ? visible : this.shared.maskSourceQuestionIds(quiz, visible));
     }
     const eligibility = await this.attemptEligibility(quiz, actorId, new Date());
     const effective = await this.resolveEffectiveSettings(quiz, actorId);
@@ -408,6 +409,7 @@ export class QuizAttemptsService {
     const usage = await this.questions.getUsage(row.usageId);
     const slots = await this.shared.effectiveSlots(quiz);
     const pageBySlot = new Map(slots.map((s) => [s.slot, s.page]));
+    const slotByNumber = new Map(slots.map((s) => [s.slot, s]));
     const submitted = row.state !== 'inprogress';
     const viewer = viewerId ?? row.userId;
     let privileged = row.preview || viewer !== row.userId;
@@ -425,6 +427,7 @@ export class QuizAttemptsService {
     const marksPublished = privileged || !quiz.questionSnapshots || await this.gradeTotalsPublished(quiz);
     const showAspects = submitted && (privileged || !hideContent);
     const aspectOn = (mask: number): boolean => privileged ? submitted : (showAspects && (mask & windowBit) !== 0);
+    const revealAnswerKey = privileged || (aspectOn(quiz.reviewRightAnswer) && marksPublished);
     const questions: QuizAttemptQuestionView[] = [];
     for (const a of usage.attempts) {
       if (hideContent && !privileged) break;
@@ -432,12 +435,15 @@ export class QuizAttemptsService {
       const questionText = content.questionText as RichTextDocument;
       let answers = content.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
       const options = content.options;
-      const stimulus = content.stimulus ? { id: content.stimulus.id, content: content.stimulus.content as RichTextDocument } : null;
+      const stimulus = content.stimulus ? {
+        id: !privileged && quiz.sharedSource ? (slotByNumber.get(a.slot)?.id ?? a.id) : content.stimulus.id,
+        content: content.stimulus.content as RichTextDocument,
+      } : null;
       const feedbackByAnswerId = new Map(content.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
       const generalFeedback = (content.generalFeedback ?? null) as RichTextDocument | null;
       const pinnedAnswers = content.answers;
       const answerKey = content.answerKey;
-      if (!privileged && content.qtype === 'shortanswer' && !aspectOn(quiz.reviewRightAnswer)) {
+      if (!privileged && content.qtype === 'shortanswer' && !revealAnswerKey) {
         answers = [];
       }
       const lastResponse = [...a.steps].reverse().find((s) => s.data.answer !== undefined)?.data.answer ?? null;
@@ -446,7 +452,7 @@ export class QuizAttemptsService {
         .reverse()
         .find((s) => s.data.gradedBy != null && typeof s.data.comment === 'string' && s.data.comment !== '');
       let solution: QuestionSolution | null = null;
-      if (aspectOn(quiz.reviewRightAnswer)) {
+      if (revealAnswerKey && submitted) {
         if (content.qtype === 'essay') {
           solution = (answerKey.solution as QuestionSolution | null) ?? null;
         } else if (content.qtype === 'truefalse') {
@@ -469,11 +475,11 @@ export class QuizAttemptsService {
         slot: a.slot,
         page: pageBySlot.get(a.slot) ?? 1,
         questionAttemptId: a.id,
-        questionId: a.questionId,
+        questionId: !privileged && quiz.sharedSource ? (slotByNumber.get(a.slot)?.id ?? a.id) : a.questionId,
         qtype: content.qtype,
         questionExcerpt: excerptText.length > 120 ? `${excerptText.slice(0, 120)}…` : excerptText,
         questionText,
-        guidance: (answerKey.guidance ?? null) as RichTextDocument | null,
+        guidance: revealAnswerKey ? (answerKey.guidance ?? null) as RichTextDocument | null : null,
         solution,
         stimulus,
         answers,
@@ -483,7 +489,7 @@ export class QuizAttemptsService {
         response: lastResponse,
         fraction: submitted && marksPublished && aspectOn(quiz.reviewCorrectness) ? a.fraction : null,
         mark: (submitted && marksPublished && aspectOn(quiz.reviewMarks) && a.fraction !== null) ? a.fraction * a.maxMark : null,
-        rightAnswer: aspectOn(quiz.reviewRightAnswer) ? a.rightAnswer : null,
+        rightAnswer: revealAnswerKey && submitted ? a.rightAnswer : null,
         feedback: aspectOn(quiz.reviewSpecificFeedback) && lastResponse !== null
           ? (feedbackByAnswerId.get(lastResponse) ?? null)
           : null,
@@ -516,12 +522,13 @@ export class QuizAttemptsService {
       }
     }
     const rawSummary = await this.shared.attemptSummary(quiz, row);
-    const attemptSummary = !privileged && submitted
+    const visibleSummary = !privileged && submitted
       ? await this.maskOwnerTotals(quiz, rawSummary, aspectOn(quiz.reviewMarks))
       : rawSummary;
+    const attemptSummary = privileged ? visibleSummary : this.shared.maskSourceQuestionIds(quiz, visibleSummary);
     return {
       attempt: attemptSummary,
-      quiz: await this.shared.pinView(quiz),
+      quiz: await this.shared.pinView(quiz, privileged),
       questions,
       totalMax: this.shared.usageTotalMax(usage),
       pendingManualCount: pendingManual,

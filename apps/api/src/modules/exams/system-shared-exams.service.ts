@@ -1,4 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createHmac, randomUUID } from 'node:crypto';
 import { systemBankPackageSchema, systemExamPackageSchema, type CreateExamPin, type SystemExamPackage } from '@giaokhoa/contracts';
 import type { ExamQuestionSnapshot } from '@giaokhoa/db';
 import { ExamsRepository } from '@giaokhoa/db/repositories/exams';
@@ -12,13 +14,14 @@ import { QuestionsService } from '../questions/questions.service';
 import { ExamQuestionSnapshotsService } from '../quiz/exam-question-snapshots.service';
 import { QuizService } from '../quiz/quiz.service';
 import { SystemBankMediaService } from '../system-bank/system-bank-media.service';
-import { checksumPackage, packageValidationError } from '../system-bank/system-bank-package';
+import { canonicalizeJson, checksumPackage, packageValidationError } from '../system-bank/system-bank-package';
 import { tenantAls } from '../tenants/tenant-als';
 import { ExamsService } from './exams.service';
 
 @Injectable()
 export class SystemSharedExamsService {
   constructor(
+    private readonly config: ConfigService,
     private readonly repo: SystemExamsRepository,
     private readonly centreRepo: SystemBankCentreRepository,
     private readonly examsRepo: ExamsRepository,
@@ -224,7 +227,7 @@ export class SystemSharedExamsService {
       if (!Number.isFinite(parsed.getTime())) throw new BadRequestException({ code: 'quiz.bad_window' });
       return parsed.toISOString();
     };
-    return checksumPackage({
+    const normalized = {
       courseId,
       sharedExamVersionId: input.sharedExamVersionId,
       sectionId: input.sectionId,
@@ -251,7 +254,10 @@ export class SystemSharedExamsService {
       variantCount: input.variantCount ?? 1,
       targetGroupId: input.targetGroupId ?? null,
       versionMode: input.versionMode ?? 'pinned',
-    });
+    };
+    const key = createHmac('sha256', this.config.getOrThrow<string>('JWT_SECRET'))
+      .update('giaokhoa:system-shared-exam-pin-idempotency:v1').digest();
+    return createHmac('sha256', key).update(canonicalizeJson(normalized)).digest('hex');
   }
 
   async assign(actorId: string, courseId: string, input: CreateExamPin) {
@@ -312,7 +318,7 @@ export class SystemSharedExamsService {
             sourceDomain: 'bank-system', questionId: slot.questionId, versionId: slot.versionId,
             versionNumber: slot.versionNumber, qtype: slot.qtype, defaultMark: 1,
             checksum: slot.checksum, package: slot.package,
-            answerIds: slot.package.answers.map((_, index) => `${slot.versionId}-${index + 1}`),
+            answerIds: slot.package.answers.map(() => randomUUID()),
           };
           return {
             examVersionId: version.id, position: slot.position, section: slot.section,

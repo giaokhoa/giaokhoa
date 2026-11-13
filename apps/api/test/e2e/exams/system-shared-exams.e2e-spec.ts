@@ -190,7 +190,9 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(studentPin.status, JSON.stringify(studentPin.body)).toBe(200);
     expect(teacherPin.status, JSON.stringify(teacherPin.body)).toBe(200);
     expect(studentPin.body.quiz).not.toHaveProperty('sharedSource');
+    expect(studentPin.body.quiz.slots[0].questionId).toBeNull();
     expect(teacherPin.body.quiz.sharedSource).toEqual({ examId, versionId: publishedId, versionNumber: 1 });
+    expect(teacherPin.body.quiz.slots[0].questionId).toBe(localQuestionId);
     const studentList = await http(app).get(`/api/v1/courses/${courseA}/exam-pins`).set(bearer(studentA));
     const managerList = await http(app).get(`/api/v1/courses/${courseA}/exam-pins`).set(bearer(managerA));
     expect(studentList.status).toBe(200);
@@ -245,6 +247,17 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
 
     expect(startedB.status, JSON.stringify(startedB.body)).toBe(201);
     expect(startedA.body.questions[0].questionExcerpt).toBe(startedB.body.questions[0].questionExcerpt);
+    expect(startedA.body.quiz.slots[0].questionId).toBeNull();
+    expect(startedB.body.quiz.slots[0].questionId).toBeNull();
+    for (const started of [startedA, startedB]) {
+      expect(started.body.questions[0].questionId).toBe(started.body.quiz.slots[0].id);
+      expect(started.body.questions[0].questionId).not.toBe(localQuestionId);
+      expect(started.body.attempt.appliedSettings).not.toHaveProperty('questionOrder');
+    }
+    expect(startedA.body.questions[0].questionId).not.toBe(startedB.body.questions[0].questionId);
+    expect(startedA.body.questions[0].answers[0].id).toMatch(/^[a-f0-9-]{36}$/);
+    expect(startedB.body.questions[0].answers[0].id).toMatch(/^[a-f0-9-]{36}$/);
+    expect(startedA.body.questions[0].answers[0].id).not.toBe(startedB.body.questions[0].answers[0].id);
     expect(startedA.body.questions[0].questionAttemptId).not.toBe(startedB.body.questions[0].questionAttemptId);
     expect((await http(offlineApp).post(`/api/v1/exam-pins/${assignB.body.id}/attempts`).set(bearer(studentA)).send({})).status).not.toBe(201);
     for (const started of [startedA, startedB]) {
@@ -266,6 +279,11 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     const ownerReview = await http(offlineApp).get(`/api/v1/quiz-attempts/${startedA.body.attempt.id}`).set(bearer(studentA));
     expect(ownerReview.status).toBe(200);
     expect(ownerReview.body.quiz).not.toHaveProperty('sharedSource');
+    expect(ownerReview.body.questions[0].questionId).not.toBe(localQuestionId);
+    expect(ownerReview.body.attempt.appliedSettings).not.toHaveProperty('questionOrder');
+    const learnerDetails = await http(offlineApp).get(`/api/v1/exam-pins/${assignA.body.id}`).set(bearer(studentA));
+    expect(learnerDetails.status).toBe(200);
+    expect(learnerDetails.body.myAttempts[0].appliedSettings).not.toHaveProperty('questionOrder');
 
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
   }, 150_000);
@@ -281,8 +299,8 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     const essayPackage = {
       questionText: { type: 'doc', content: [...text('Tự luận có ảnh không đổi').content,
         { type: 'image', attrs: { src: `bank-media://${hash}`, alt: 'Ảnh của đề' } }] },
-      generalFeedback: null, stimulusContent: null, answers: [],
-      answerKey: { guidance: null, solution: { answer: text('Lời giải được khóa') } },
+      generalFeedback: null, stimulusContent: text('Ngữ liệu tự luận độc lập'), answers: [],
+      answerKey: { guidance: text('Rubric tự luận tuyệt mật'), solution: { answer: text('Lời giải được khóa') } },
       options: null, outcomes: [], media: [{ contentHash: hash, fileName: 'minh-hoa.png', mimeType: 'image/png' }],
     };
     const published = await http(app).post('/api/v1/system-bank/questions')
@@ -315,7 +333,10 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect((await http(app).post(`/api/v1/system-bank/exams/${sharedId}/approve`).set(bearer(admin))).status).toBe(201);
 
     const requestId = randomUUID();
-    const body = { sharedExamVersionId: sharedId, sectionId: sectionB, requestId };
+    const body = {
+      sharedExamVersionId: sharedId, sectionId: sectionB, requestId,
+      reviewAttempt: 0x11110, reviewRightAnswer: 0x11110,
+    };
     await storage.delete(SYSTEM_FILE_DOMAIN, key);
     const failedPin = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`)
       .set(bearer(managerB)).send(body);
@@ -326,6 +347,11 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       .set(bearer(managerB)).send(body);
     expect(assigned.status, JSON.stringify(assigned.body)).toBe(201);
     const pinId = assigned.body.id as string;
+    const gradeItemId = (await centre.query('SELECT id FROM grade_items WHERE item_instance = $1',
+      [assigned.body.cmId])).rows[0].id as string;
+    const manualGradeRelease = await http(app).put(`/api/v1/grade-items/${gradeItemId}/posting-policy`)
+      .set(bearer(managerB)).send({ policy: 'manual' });
+    expect(manualGradeRelease.status, JSON.stringify(manualGradeRelease.body)).toBe(200);
     expect((await http(app).post(`/api/v1/courses/${courseB}/exam-pins`)
       .set(bearer(managerB)).send(body)).body.id).toBe(pinId);
     const snapshot = (await centre.query('SELECT question_snapshots FROM exam_pins WHERE id = $1', [pinId])).rows[0];
@@ -337,7 +363,17 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       .set(bearer(studentB)).send({});
     expect(started.status, JSON.stringify(started.body)).toBe(201);
     expect(started.body.questions).toHaveLength(2);
+    expect(started.body.questions[1].guidance).toBeNull();
+    expect(started.body.questions[1].solution).toBeNull();
+    expect(started.body.questions[1].stimulus.id).toBe(started.body.quiz.slots[1].id);
+    expect(JSON.stringify(started.body.questions[1].stimulus.content)).toContain('Ngữ liệu tự luận độc lập');
+    expect(started.body.questions[0].answers[0].id).toMatch(/^[a-f0-9-]{36}$/);
+    expect(JSON.stringify(started.body)).not.toContain('Rubric tự luận tuyệt mật');
     expect(JSON.stringify(started.body)).not.toContain('Lời giải được khóa');
+    const beforeSubmission = await http(offlineApp!).get(`/api/v1/quiz-attempts/${started.body.attempt.id}`)
+      .set(bearer(studentB));
+    expect(beforeSubmission.status).toBe(200);
+    expect(beforeSubmission.body.questions[1].guidance).toBeNull();
     const imageNode = started.body.questions[1].questionText.content.find((n: { type: string }) => n.type === 'image');
     const imageResponse = await http(offlineApp!).get(imageNode.attrs.src);
     expect(imageResponse.status).toBe(200);
@@ -358,12 +394,30 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     ).set(bearer(managerB)).send({ mark: 1, comment: 'Nhận xét nằm tại trung tâm B' });
     expect(graded.status, JSON.stringify(graded.body)).toBe(201);
     expect(graded.body.attempt.grade).toBe(2);
+    const beforePublication = await http(offlineApp!).get(`/api/v1/quiz-attempts/${started.body.attempt.id}`)
+      .set(bearer(studentB));
+    expect(beforePublication.status).toBe(200);
+    expect(beforePublication.body.questions[1].guidance).toBeNull();
+    expect(beforePublication.body.questions[1].solution).toBeNull();
+    expect(JSON.stringify(beforePublication.body)).not.toContain('Rubric tự luận tuyệt mật');
+    const staffReview = await http(offlineApp!).get(`/api/v1/quiz-attempts/${started.body.attempt.id}`)
+      .set(bearer(managerB));
+    expect(staffReview.status).toBe(200);
+    expect(JSON.stringify(staffReview.body.questions[1].guidance)).toContain('Rubric tự luận tuyệt mật');
+    const publishedGrade = await http(offlineApp!).post(`/api/v1/grade-items/${gradeItemId}/publish`)
+      .set(bearer(managerB)).send({});
+    expect(publishedGrade.status, JSON.stringify(publishedGrade.body)).toBe(201);
+    const afterPublication = await http(offlineApp!).get(`/api/v1/quiz-attempts/${started.body.attempt.id}`)
+      .set(bearer(studentB));
+    expect(afterPublication.status).toBe(200);
+    expect(JSON.stringify(afterPublication.body.questions[1].guidance)).toContain('Rubric tự luận tuyệt mật');
+    expect(JSON.stringify(afterPublication.body.questions[1].solution)).toContain('Lời giải được khóa');
     expect((await centre.query('SELECT count(*)::int AS n FROM exam_attempts WHERE pin_id = $1', [pinId])).rows[0].n).toBe(1);
   }, 120_000);
 
   it('retry giữ một bản thực thi và một pin; sai nguồn hoặc section không thể tái dùng requestId', async () => {
     const requestId = randomUUID();
-    const body = { sharedExamVersionId: publishedId, requestId, sectionId: sectionB };
+    const body = { sharedExamVersionId: publishedId, requestId, sectionId: sectionB, password: 'Mật khẩu kiểm tra retry #15' };
     await centre.query(`CREATE FUNCTION reject_system_exam_pin() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'pin write interrupted'; END $$;
       CREATE TRIGGER reject_system_exam_pin BEFORE INSERT ON exam_pins
@@ -375,6 +429,10 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       await centre.query('DROP TRIGGER reject_system_exam_pin ON exam_pins; DROP FUNCTION reject_system_exam_pin()');
     }
     expect((await centre.query('SELECT count(*)::int AS n FROM exams WHERE pin_request_id = $1', [requestId])).rows[0].n).toBe(1);
+    const stored = (await centre.query('SELECT shared_request_checksum FROM exams WHERE pin_request_id = $1',
+      [requestId])).rows[0].shared_request_checksum as string;
+    expect(stored).toMatch(/^[a-f0-9]{64}$/);
+    expect(stored).not.toContain('Mật khẩu kiểm tra retry #15');
     const changedDuringResume = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
       .send({ ...body, timeClose: '2026-12-15T12:00:00.000Z' });
     expect(changedDuringResume.status).toBe(409);
@@ -515,13 +573,14 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       }
 
       const [userA, userB] = sessions;
+      const testNow = Date.now();
       const sendPin = (index: number) => {
         const u = sessions[index]!;
         const body = {
           sharedExamVersionId: publishedId, sectionId: u.sectionId, requestId: randomUUID(),
           name: `Đợt ${index === 0 ? 'A' : 'B'}`,
-          timeOpen: `2026-10-0${index + 1}T08:00:00.000Z`,
-          timeClose: `2026-12-2${index + 1}T08:00:00.000Z`,
+          timeOpen: new Date(testNow - (index + 2) * 60_000).toISOString(),
+          timeClose: new Date(testNow + (index + 2) * 3_600_000).toISOString(),
           timeLimitSeconds: index === 0 ? 900 : 1800,
           reviewAttempt: 0x11110, reviewMarks: 0x11110, reviewRightAnswer: 0, reviewCorrectness: 0x11110,
         };
@@ -533,6 +592,8 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       expect(pinA.status, JSON.stringify(pinA.body)).toBe(201);
       expect(pinB.status, JSON.stringify(pinB.body)).toBe(201);
       expect(pinA.body.id).not.toBe(pinB.body.id);
+      expect(pinA.body.slots[0].questionId).toBe(localQuestionId);
+      expect(pinB.body.slots[0].questionId).toBe(localQuestionId);
       expect(pinA.body.sharedSource).toEqual(pinB.body.sharedSource);
       expect(pinA.body.sharedSource.versionId).toBe(publishedId);
       expect(pinA.body.timeLimitSeconds).toBe(900);
@@ -579,6 +640,11 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
             .set('Host', hosts[index]!).set(bearer(u.student)).send({});
           expect(begin.status, JSON.stringify(begin.body)).toBe(201);
           expect(begin.body.quiz).not.toHaveProperty('sharedSource');
+          expect(begin.body.quiz.slots[0].questionId).toBeNull();
+          expect(begin.body.questions[0].questionId).toBe(begin.body.quiz.slots[0].id);
+          expect(begin.body.questions[0].questionId).not.toBe(localQuestionId);
+          expect(begin.body.attempt.appliedSettings).not.toHaveProperty('questionOrder');
+          expect(begin.body.questions[0].answers[0].id).toMatch(/^[a-f0-9-]{36}$/);
           started.push(begin);
           const saved = await http(offline).post(`/api/v1/quiz-attempts/${begin.body.attempt.id}/responses`)
             .set('Host', hosts[index]!).set(bearer(u.student)).send({
