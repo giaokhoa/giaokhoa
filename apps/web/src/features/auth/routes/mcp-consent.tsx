@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -55,9 +55,18 @@ function readConsentContext(rawQuery: string): ConsentContext | null {
   };
 }
 
+/**
+ * React Router giữ nguyên route component khi query string đổi. Khóa form
+ * bằng query để mỗi yêu cầu OAuth có quyền chọn và oauth_query độc lập.
+ */
 export default function McpConsentPage() {
   const location = useLocation();
-  const initialContext = useMemo(() => readConsentContext(location.search), [location.search]);
+  return <McpConsentRequest key={location.search} rawQuery={location.search} />;
+}
+
+/** State và request bất đồng bộ của duy nhất một yêu cầu OAuth. */
+function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
+  const initialContext = useMemo(() => readConsentContext(rawQuery), [rawQuery]);
   const [context, setContext] = useState<ConsentContext | null>(initialContext);
   const [loadError] = useState<string | null>(() => initialContext ? null : 'Liên kết uỷ quyền không hợp lệ (thiếu thông tin ứng dụng). Hãy bắt đầu lại từ ứng dụng AI của bạn.');
   const [selected, setSelected] = useState<Set<string>>(() => new Set(
@@ -65,39 +74,56 @@ export default function McpConsentPage() {
   ));
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitControllerRef = useRef<AbortController | null>(null);
+
+  // Khi URL đổi, form bị tháo và mọi submit cũ bị hủy;
+  // phản hồi ứng dụng A không được điều hướng trang của B.
+  useEffect(() => () => {
+    submitControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     const parsed = initialContext;
     if (!parsed) return;
+    const controller = new AbortController();
     void (async () => {
       try {
         const res = await fetch(
           `/api/v1/auth/oauth2/public-client?client_id=${encodeURIComponent(parsed.clientId)}`,
-          { credentials: 'include' },
+          { credentials: 'include', signal: controller.signal },
         );
+        if (controller.signal.aborted) return;
         if (res.status === 401) {
-          // Chưa có phiên BA → quay về trang đăng nhập, giữ nguyên query.
-          window.location.assign(`/mcp-login${window.location.search}`);
+          // Chưa có phiên BA → quay về trang đăng nhập của đúng yêu cầu.
+          window.location.assign(`/mcp-login${rawQuery}`);
           return;
         }
         const body = (await res.json().catch(() => null)) as { name?: unknown } | null;
+        if (controller.signal.aborted) return;
         if (res.ok && body && typeof body.name === 'string' && body.name.length > 0) {
-          setContext((current) => (current ? { ...current, clientName: body.name as string } : current));
+          const clientName = body.name;
+          setContext((current) => (
+            current?.oauthQuery === parsed.oauthQuery ? { ...current, clientName } : current
+          ));
         }
       } catch {
         // Không lấy được tên client thì hiển thị client_id — vẫn dùng được.
       }
     })();
-  }, [initialContext]);
+    return () => controller.abort();
+  }, [initialContext, rawQuery]);
 
   async function submit(accept: boolean) {
     if (!context) return;
     setBusy(true);
     setSubmitError(null);
+    const controller = new AbortController();
+    submitControllerRef.current = controller;
     try {
       const res = await fetch('/api/v1/auth/oauth2/consent', {
         method: 'POST',
         credentials: 'include',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accept,
@@ -106,6 +132,7 @@ export default function McpConsentPage() {
         }),
       });
       const body = (await res.json().catch(() => null)) as { url?: unknown } | null;
+      if (controller.signal.aborted) return;
       if (res.ok && body && typeof body.url === 'string') {
         // Đi tiếp theo URL máy chủ trả — không tự ghép redirect.
         window.location.assign(body.url);
@@ -114,8 +141,11 @@ export default function McpConsentPage() {
       setSubmitError('Máy chủ không chấp nhận lựa chọn này. Hãy thử lại hoặc từ chối và bắt đầu lại từ ứng dụng AI.');
       setBusy(false);
     } catch {
+      if (controller.signal.aborted) return;
       setSubmitError('Không kết nối được máy chủ. Thử lại sau ít phút.');
       setBusy(false);
+    } finally {
+      if (submitControllerRef.current === controller) submitControllerRef.current = null;
     }
   }
 

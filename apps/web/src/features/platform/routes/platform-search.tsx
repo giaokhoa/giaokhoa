@@ -102,7 +102,9 @@ export function SearchPage() {
   if (previousUrlQ !== urlQ) {
     setPreviousUrlQ(urlQ);
     if (urlQ !== null) setQ(urlQ);
-    if (urlQ === '') {
+    // URL có q chỉ gồm khoảng trắng cũng xóa kết quả tìm kiếm cũ.
+    // Effect bên dưới tăng runId để chặn request trước đó về muộn.
+    if (urlQ !== null && !urlQ.trim()) {
       setResults([]);
       setSearched(false);
     }
