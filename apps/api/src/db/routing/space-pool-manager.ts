@@ -175,11 +175,9 @@ export class SpacePoolManager<TDatabase> {
   async closeAll(): Promise<void> {
     this.stopIdleSweeper();
     this.disposed = true;
-    const entries = [...this.entries.values()];
-    await Promise.all(entries.map((entry) => (
-      entry.state === 'closing' && entry.closing
-        ? entry.closing.catch(() => undefined)
-        : entry.handle.pool.end().catch(() => undefined)
+    const entries = [...this.entries];
+    await Promise.all(entries.map(([databaseName, entry]) => (
+      this.closeEntry(databaseName, entry).catch(() => undefined)
     )));
     this.entries.clear();
   }

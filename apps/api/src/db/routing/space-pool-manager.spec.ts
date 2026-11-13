@@ -279,6 +279,33 @@ describe('Trình quản lý pool theo database', () => {
     expect(created).toBe(1);
   });
 
+  it('tắt manager khi pool đang drain không gọi end lần hai hoặc mở pool mới', async () => {
+    const manager = new SpacePoolManager<string>({ idleTimeoutMs: 1000, maxPools: 1 });
+    const pool = new FakePool();
+    let finishDrain!: () => void;
+    let endCalls = 0;
+    pool.end = () => {
+      endCalls += 1;
+      return new Promise<void>((resolve) => { finishDrain = resolve; });
+    };
+    await manager.getHandleForIdentity('a', 'first', (databaseName) => ({
+      databaseName, pool, db: databaseName,
+    }));
+    let created = 0;
+    const rotate = manager.getHandleForIdentity('a', 'second', (databaseName) => {
+      created += 1;
+      return { databaseName, pool: new FakePool(), db: databaseName };
+    });
+    const rejected = expect(rotate).rejects.toThrow(/closed/);
+    const closing = manager.closeAll();
+    expect(endCalls).toBe(1);
+    finishDrain();
+    await closing;
+    await rejected;
+    expect(created).toBe(0);
+    expect(manager.size).toBe(0);
+  });
+
   it('đóng pool cũ thất bại giữ slot và báo lỗi chính xác thay vì từ chối giả một lần', async () => {
     let now = 0;
     const errors: string[] = [];
