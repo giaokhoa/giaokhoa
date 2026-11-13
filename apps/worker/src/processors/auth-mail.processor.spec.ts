@@ -424,7 +424,15 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     const unknownKind = await processor.process(makeJob({ kind: 'marketing', to: 'user@example.com' }));
     const missingRecipient = await processor.process(makeJob({ kind: 'email_otp', otp: '123456', otpType: 'sign-in' }));
     const emptyPayload = await processor.process(makeJob(null));
+    const invalidOtp = await processor.process(makeJob({
+      kind: 'email_otp', to: 'user@example.com', otp: 123456, otpType: 'sign-in',
+    }));
+    const missingResetUrl = await processor.process(makeJob({
+      kind: 'password_reset', to: 'user@example.com',
+    }));
 
+    expect(invalidOtp.status).toBe('invalid');
+    expect(missingResetUrl.status).toBe('invalid');
     expect(unknownKind.status).toBe('invalid');
     expect(missingRecipient.status).toBe('invalid');
     expect(emptyPayload.status).toBe('invalid');

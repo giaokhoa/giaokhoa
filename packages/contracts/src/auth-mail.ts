@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Bề mặt dùng chung của sự kiện outbox `auth_mail_requested` (aggregate
  * `auth`): hợp đồng payload + hàm dựng nội dung mail auth.
@@ -44,6 +46,28 @@ export interface EmailOtpMailPayload {
 
 /** Payload đầy đủ của sự kiện `auth_mail_requested`: đúng một trong hai loại mail auth. */
 export type AuthMailPayload = PasswordResetMailPayload | EmailOtpMailPayload;
+
+/**
+ * Kiểm tra payload ngay tại biên job: dữ liệu Redis/outbox là dữ liệu
+ * runtime, không thể tin type assertion TypeScript. Phân nhánh theo
+ * kind để không thể gửi mail có URL thiếu hoặc OTP sai hình dạng.
+ *
+ * Không ghi giá trị URL/token/OTP vào log khi validation thất bại.
+ */
+export const authMailPayloadSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('password_reset'),
+    to: z.email(),
+    url: z.url(),
+  }),
+  z.strictObject({
+    kind: z.literal('email_otp'),
+    to: z.email(),
+    otp: z.string().regex(/^\d{6}$/),
+    otpType: z.string().min(1),
+  }),
+]);
+
 
 /**
  * Một bức mail auth đã dựng xong từ payload: người nhận, tiêu đề và nội dung ở cả hai dạng text (luôn có) và HTML. Hình dạng này khớp bề mặt nhận của transport Resend ở cả hai phía (API và worker) — nơi gửi chỉ việc truyền thẳng kết quả dựng vào transport của phía mình.

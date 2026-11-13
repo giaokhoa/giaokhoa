@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { DelayedError, type Job } from 'bullmq';
 import Redis from 'ioredis';
-import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
+import { authMailPayloadSchema, renderAuthMail } from '@giaokhoa/contracts';
 import { redisConnectionFromUrl } from '../config/env';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { OutboxEventJobData } from '../outbox-event-routes';
@@ -322,13 +322,16 @@ export class AuthMailProcessor extends WorkerHost {
   /** Thân xử lý một job mail auth trong phiên đã mở — xem `process`. */
   private async processInContext(job: Job<OutboxEventJobData>, token?: string): Promise<AuthMailProcessResult> {
     const data = job.data;
-    const parsed = (data?.payload ?? null) as AuthMailPayload | null;
-    if (!parsed || (parsed.kind !== 'password_reset' && parsed.kind !== 'email_otp') || !parsed.to) {
+    const result = authMailPayloadSchema.safeParse(data?.payload ?? null);
+    if (!result.success) {
+      // Không đưa payload thô vào log: reset URL mang token bí mật,
+      // OTP cũng là mã đăng nhập còn hiệu lực.
       this.logger.error(
-        `Payload mail auth không hợp lệ, bỏ qua job của dòng outbox ${data?.outboxId}: ${JSON.stringify(parsed)?.slice(0, 200)}`,
+        `Payload mail auth không hợp lệ, bỏ qua job ${data?.outboxId ?? 'unknown'}; trường lỗi: ${result.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
       );
       return { status: 'invalid' };
     }
+    const parsed = result.data;
 
     // Hàng rào idempotent, trạng thái ĐÃ GỬI — lần đọc nhanh
     // trước khi chiếm lease: dấu chỉ tồn tại khi transport đã
