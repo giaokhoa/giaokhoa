@@ -121,6 +121,38 @@ jobs:
           grep -qi '^cache-control: private, no-cache' smoke-login.headers
           curl -fsS -o /dev/null http://127.0.0.1:8080/
 
+      # Health phải trả 503 TRÊN HTTP THẬT khi một phụ thuộc ngừng
+      # (unit test controller không kiểm chứng wiring Redis/PG hay
+      # healthcheck lắng nghe). Chạy sau smoke để không làm nhiễu các
+      # bước xác minh khác; gọi HTTP loopback từ chính container API,
+      # không đi qua gateway đang tự chặn upstream unhealthy.
+      - name: Verify HTTP 503 on real Redis and PostgreSQL outages
+        run: |
+          # Luôn khởi động lại phụ thuộc trước khi bước cleanup/log chạy,
+          # kể cả khi assertion 503 thất bại.
+          trap 'docker compose -f compose.yaml -f compose.ci.yaml start redis postgres || true' EXIT
+          assert_down() {
+            docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$1" <<'NODE'
+          const expected = process.argv[2];
+          const response = await fetch('http://127.0.0.1:3100/api/v1/health', {
+            signal: AbortSignal.timeout(15000),
+          });
+          const data = await response.json();
+          console.log(JSON.stringify({
+            status: response.status, overall: data.status, checks: data.checks,
+          }));
+          if (response.status !== 503 || data.status !== 'error' || data.checks?.[expected] !== 'down') {
+            process.exitCode = 1;
+          }
+          NODE
+          }
+          docker compose -f compose.yaml -f compose.ci.yaml stop redis
+          assert_down redis
+          docker compose -f compose.yaml -f compose.ci.yaml start redis
+          docker compose -f compose.yaml -f compose.ci.yaml stop postgres
+          assert_down database
+          docker compose -f compose.yaml -f compose.ci.yaml start postgres
+
       # Lưu chứng cứ trước khi dọn stack, kể cả khi một container chưa
       # qua healthcheck và Compose trả lỗi ngay ở bước khởi động.
       - name: Diagnose failed stack before cleanup
