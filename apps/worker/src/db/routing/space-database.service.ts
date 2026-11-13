@@ -84,7 +84,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     this.kyselyPools = new SpacePoolManager<CentreDb>({
       idleTimeoutMs,
       maxPools: config.get<number>('SPACE_DB_MAX_POOLS') ?? 6,
-      // Pool của một kho bị gỡ (đóng vì nhàn rỗi, hoặc bị thay vì sổ đổi danh tính kết nối) thì các trung tâm trỏ vào kho đó cũng hết trạng thái "đã chuẩn bị": handle của pool đã chết không còn được dùng. Việc chuẩn bị lại diễn ra ở lần gọi `getKyselyForSpace`/`withSpaceKysely` kế tiếp; riêng đường ĐỒNG BỘ của `routedKysely` không chuẩn bị lại được, nên với slug đã chuẩn bị ở kho riêng nó fail-closed (xem `dedicatedSlugs` và `currentKysely`) thay vì chạm vào handle đã chết hoặc rơi về kho chung.
+
       onPoolClosed: (databaseName) => {
         for (const [slug, entry] of [...this.preparedKysely]) {
           if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
@@ -95,9 +95,9 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     this.routedKysely = this.createRoutedHandle(() => this.currentKysely());
   }
 
-  /**
-   * Gắn handle Kysely kho chung — `worker.module.ts` gọi đúng một lần lúc khởi động, bằng handle dựng trên pool kho chung. Mọi đích `shared` và mọi ngữ cảnh chưa chuẩn bị trung tâm riêng đều uỷ thác về handle này qua `routedKysely`.
-   */
+
+
+
   bindSharedKysely(db: CentreDb, pool?: { end(): Promise<void> }): void {
     this.sharedKysely = db;
     this.sharedPool = pool ?? null;
@@ -126,7 +126,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
         `Resolved dedicated target for space ${slug} has no connection string`,
       );
     }
-    const handle = this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
+    const handle = await this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
       const connection = databaseConnectionFromEnv(connectionString, this.ssl);
       const pool = new TenantAwarePool(
         typeof connection === 'string'

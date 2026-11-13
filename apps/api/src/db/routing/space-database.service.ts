@@ -123,15 +123,15 @@ export class SpaceDatabaseService implements OnModuleDestroy {
 
   async getKyselyForSpace(slug: string): Promise<CentreDb> {
     const target = await this.resolver.resolve(slug);
-    const db = this.prepareKyselySide(slug, target);
+    const db = await this.prepareKyselySide(slug, target);
     this.recordSpaceMode(slug, target);
     return db;
   }
 
-  private prepareKyselySide(
+  private async prepareKyselySide(
     slug: string,
     target: ResolvedSpaceConnection,
-  ): CentreDb {
+  ): Promise<CentreDb> {
     if (target.mode === 'shared') {
       const shared = this.requireSharedKysely();
       this.preparedKysely.set(slug, { db: shared, databaseName: target.databaseName, spaceId: target.spaceId });
@@ -144,7 +144,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
         `Resolved dedicated target for space ${slug} has no connection string`,
       );
     }
-    const handle = this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
+    const handle = await this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
       const connection = databaseConnectionFromEnv(connectionString, this.ssl);
       const pool = new TenantAwarePool(
         typeof connection === 'string'
