@@ -356,6 +356,7 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     // chung, thêm membership bằng API, rồi sao dòng user + dòng
     // membership vào kho A và đóng dấu phân biệt lên dòng user ở
     // kho A.
+    await helpers.grantTenantManagerFixture(app, adminToken, tenantAId);
     const teacher = await helpers.createUserViaApi(app, adminToken);
     teacherUsername = teacher.username;
     teacherId = teacher.id;

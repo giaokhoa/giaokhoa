@@ -1,6 +1,11 @@
 import { INestApplication, VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
+import { TenantsService } from '../../src/modules/tenants/tenants.service';
+import { RolesService } from '../../src/modules/access/roles.service';
+import { ContextsService } from '../../src/modules/access/contexts.service';
+import { tenantAls } from '../../src/modules/tenants/tenant-als';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { enableTrustedProxy } from '../../src/common/client-ip';
@@ -93,4 +98,33 @@ export async function hasCapability(app: INestApplication, token: string, userId
   const res = await http(app).get('/api/v1/access/has-capability').query({ userId, capability, contextId }).set('Authorization', `Bearer ${token}`);
   if (res.status !== 200) throw new Error(`has-capability failed: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body.allowed as boolean;
+}
+
+
+/**
+ * Tiền điều kiện E2E khi dựng một tenant kho chung: tài khoản quản trị
+ * platform không được tự quản lý người dùng của tenant bằng quyền nền.
+ * Cấp membership + vai manager ngay trong context tenant bằng fixture,
+ * rồi mọi request nghiệp vụ vẫn phải đi qua HTTP như người dùng thật.
+ * KHÔNG dùng đường này trong product code hay biến quyền platform
+ * thành quyền nghiệp vụ toàn hệ.
+ */
+export async function grantTenantManagerFixture(app: INestApplication, token: string, tenantId: string): Promise<void> {
+  const actor = await app.get(JwtService, { strict: false }).verifyAsync<{ sub: string }>(token);
+  const tenants = app.get(TenantsService, { strict: false });
+  const roles = app.get(RolesService, { strict: false });
+  const contexts = app.get(ContextsService, { strict: false });
+  await tenantAls.run({ platform: true }, async () => {
+    await tenants.ensureActiveMembership(tenantId, actor.sub);
+    const manager = await roles.getRoleByShortname('manager');
+    if (!manager) throw new Error('Thiếu vai manager mặc định trong fixture');
+    const context = await contexts.ensureTenantContext(tenantId);
+    await roles.assignRole(actor.sub, manager.id, context.id);
+  });
+}
+
+/** Seed thành viên trong fixture khi chủ đích kiểm cổng KHÔNG cấp vai quản trị platform cho người gọi. */
+export async function seedTenantMembershipFixture(app: INestApplication, tenantId: string, userId: string): Promise<void> {
+  const tenants = app.get(TenantsService, { strict: false });
+  await tenantAls.run({ platform: true }, () => tenants.ensureActiveMembership(tenantId, userId));
 }

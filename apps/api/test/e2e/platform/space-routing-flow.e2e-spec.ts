@@ -9,6 +9,7 @@ import {
   STRONG_PASSWORD,
   createTestApp,
   createUserViaApi,
+  grantTenantManagerFixture,
   http,
   login,
 } from '../../support/identity-access-helpers';
@@ -28,7 +29,7 @@ import {
  *     family refresh được tạo trong kho A (không tạo ở kho chung), tài khoản chỉ có ở kho chung thì đăng nhập tại địa chỉ A thất bại, và hồ sơ đọc tại địa chỉ A mang dữ kiện của kho A trong khi cùng token đọc ở địa chỉ gốc cho dữ kiện của kho chung;
  * (4) trung tâm bị đình chỉ trên sổ thì traffic nghiệp vụ tại
  *     địa chỉ của nó bị từ chối 403 `space.not_active`, dữ kiện trong kho của nó còn nguyên, và đường vận hành platform
- *     (quản trị viên site chính ở tenant platform) vẫn vào được;
+ *     (quản trị viên site chính ở tenant platform) cũng bị từ chối trên Host trung tâm;
  * (5) trung tâm ở kho chung giữ nguyên hành vi hiện tại ở cả địa
  *     chỉ gốc lẫn tên miền con của nó.
  */
@@ -299,6 +300,7 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     // thêm membership bằng API, rồi sao dòng user + dòng
     // membership vào kho A và đóng dấu phân biệt lên dòng user
     // ở kho A.
+    await grantTenantManagerFixture(app, adminToken, tenantAId);
     const teacher = await createUserViaApi(app, adminToken);
     teacherId = teacher.id;
     teacherUsername = teacher.username;
@@ -350,6 +352,7 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
       'list tenants',
     )) as Array<{ id: string; slug: string }>;
     sharedTenantId = tenantsList.find((tenant) => tenant.slug === SHARED_SLUG)!.id;
+    await grantTenantManagerFixture(app, adminToken, sharedTenantId);
   }, 300_000);
 
   afterAll(async () => {
@@ -444,7 +447,7 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     expect(res.status).toBe(401);
   });
 
-  it('trung tâm bị đình chỉ thì traffic nghiệp vụ tại địa chỉ của nó bị từ chối 403 space.not_active, dữ kiện còn nguyên, và đường vận hành platform vẫn vào được', async () => {
+  it('trung tâm đình chỉ từ chối nghiệp vụ kể cả nhân sự platform, dữ kiện vẫn nguyên', async () => {
     await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
       await client.query('UPDATE space_registry SET status = $1 WHERE slug = $2', ['suspended', CENTRE_A_SLUG]);
     });
@@ -454,10 +457,10 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
       expect(blocked.status).toBe(403);
       expect((blocked.body as { code?: string }).code).toBe('space.not_active');
 
-      // Đường vận hành platform tường minh: quản trị viên ở
-      // tenant platform không bị chặn bởi trạng thái của trung tâm.
+      // Quyền vận hành platform không miễn cổng Host. Các route metadata
+      // platform riêng đã có kiểm chứng tại public-learning-flow.
       const operations = await http(app).get('/api/v1/users/me').set('Host', HOST_A).set(auth(adminToken));
-      expect(operations.status).toBe(200);
+      expect(operations.status).toBe(403); // Không được dùng quyền platform để đi vào Host trung tâm.
 
       // Dữ kiện của trung tâm trong kho của nó còn nguyên vẹn.
       const tenantRows = await withClient(

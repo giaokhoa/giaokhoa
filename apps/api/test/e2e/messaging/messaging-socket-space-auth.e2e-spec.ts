@@ -384,6 +384,8 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     await copyRowById(process.env.DATABASE_URL!, centreUrl, 'tenants', tenantId);
 
     // Hai thành viên của trung tâm: tạo ở kho chung, thêm membership bằng API, sao user + membership vào kho riêng.
+    // Fixture cấp vai quản trị trong tenant; quyền platform tự nó không được phép thêm thành viên.
+    await helpers.grantTenantManagerFixture(app, adminToken, tenantId);
     const memberA = await helpers.createUserViaApi(app, adminToken);
     const memberB = await helpers.createUserViaApi(app, adminToken);
     memberAId = memberA.id;

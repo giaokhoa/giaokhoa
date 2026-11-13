@@ -54,7 +54,9 @@ admin platform vào một trung tâm. Trên Host trung tâm, token thiếu
 centre_id tương ứng bị chặn, kể cả khi chủ token là nhân sự platform.
 Quản trị của trung tâm phải có membership hoạt động trong chính kho
 và nằm trong siteadmins của kho hoặc được gán capability tại tenant
-đó để quản lý tài khoản. Trên địa chỉ gốc, nhân sự vận hành tiếp tục
+đó để quản lý tài khoản. Cổng HTTP control-plane được đánh dấu audience platform và bỏ qua gắn kho theo Host vì chỉ thao tác registry metadata; CapabilityGuard và phép gác quyền vận hành vẫn được áp dụng. Những route nghiệp vụ không có ngoại lệ này.
+
+Trên địa chỉ gốc, nhân sự vận hành tiếp tục
 quản lý registry, trạng thái, gói và migration theo capability riêng;
 không có quyền đọc hồ sơ, bài nộp hoặc điểm trung tâm mặc định. Quyền
 hỗ trợ do trung tâm cấp sẽ được thiết kế ở issue #19, không mở ngoại lệ

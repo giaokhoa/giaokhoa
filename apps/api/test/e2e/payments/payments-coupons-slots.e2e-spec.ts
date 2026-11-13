@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import {
-  adminToken, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, uniqueName,
+  adminToken, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, uniqueName, grantTenantManagerFixture,
 } from '../../support/identity-access-helpers';
 import { createCategory, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 // Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
@@ -119,6 +119,7 @@ describe('Coupon + giới hạn slot gói (issue #189, lát còn lại 2)', () =
   /** Dựng một tenant trường + các thành viên; trả id tenant và context của tenant. */
   async function schoolWithMembers(memberCount: number) {
     const tenantId = await createSchoolTenant();
+    await grantTenantManagerFixture(app, admin, tenantId);
     const ctxId = await tenantContextId(tenantId);
     const users: { id: string; username: string }[] = [];
     for (let i = 0; i < memberCount; i++) {

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import {
   ADMIN, assignRole, createRoleViaApi, createTestApp, createUserViaApi,
-  http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName,
+  http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName, grantTenantManagerFixture,
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 import { TenantConfigService } from '../../../src/modules/tenants/tenant-config.service';
@@ -400,6 +400,7 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
       .send({ name: 'Trung tâm (spec lát 3)', slug, kind: 'school' });
     expect(tenantRes.status).toBeLessThan(300);
     const tenantId = (tenantRes.body as { id: string }).id;
+    await grantTenantManagerFixture(app, admin, tenantId);
 
     const centerMgr = await createUserViaApi(app, admin);
     const buyerUser = await createUserViaApi(app, admin);
@@ -407,7 +408,7 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
       const res = await http(app).post(`/api/v1/tenants/${tenantId}/members`).set('Authorization', `Bearer ${admin}`).send({ userId });
       expect(res.status).toBeLessThan(300);
     };
-    await addMember(adminId);
+    // Admin đã có membership active do fixture gán vai manager tường minh.
     await addMember(centerMgr.id);
     await addMember(buyerUser.id);
 
@@ -416,7 +417,6 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
       .find((c) => c.contextLevel === 20 && c.instanceId === tenantId);
     expect(tenantCtx).toBeTruthy();
     const managerRole = await roleIdByShortname(app, admin, 'manager');
-    await assignRole(app, admin, adminId, managerRole, tenantCtx!.id);
     await assignRole(app, admin, centerMgr.id, managerRole, tenantCtx!.id);
 
     const switchTo = async (token: string) => {
