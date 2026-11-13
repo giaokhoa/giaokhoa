@@ -28,6 +28,8 @@ import { createEmailOtpPlugin, type AuthMailPort } from '../../mail/email-otp.pl
 import { createMfaGateHook, type MfaGateDeps } from './mfa-gate';
 import type { LockoutGuardPort } from '../login-lockout.service';
 import { lockoutHooks } from './lockout.hooks';
+import { MCP_OAUTH_SCOPES } from '../../mcp/mcp-scopes';
+export { MCP_OAUTH_SCOPES } from '../../mcp/mcp-scopes';
 
 /** Đường dẫn gốc mà handler của Better Auth được mount tại (xem better-auth.mount.ts). */
 export const BETTER_AUTH_BASE_PATH = '/api/v1/auth';
@@ -77,16 +79,6 @@ function withPostgresArrays<T extends {
   }
   return adapter;
 }
-
-/**
- * Bộ scope OAuth mà AS phát cho resource `/mcp` (issue #163): trần quyền của access token — quyết định quyền thật vẫn là capability tại context ở tầng tool như MCP-0. PRM ở mcp.mount.ts quảng bá đúng bộ này (MCP_SCOPES) — hai nơi phải khớp nhau.
- */
-export const MCP_OAUTH_SCOPES = [
-  'giaokhoa.questions.read',
-  'giaokhoa.questions.draft',
-  'giaokhoa.questions.write',
-  'giaokhoa.banks.contribute',
-] as const;
 
 /** TTL (giây) của access token cho resource `/mcp` — JWT đã phát không thu hồi server-side được (RFC 7009) nên TTL ngắn là đường bù đã chốt ở addendum. */
 export const MCP_ACCESS_TOKEN_TTL_SECONDS = 3600;
