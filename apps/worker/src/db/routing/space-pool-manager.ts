@@ -48,6 +48,12 @@ interface PoolEntry<TDatabase> {
 export interface SpacePoolManagerDeps {
   /** Ngưỡng nhàn rỗi (mili giây): pool không có traffic lâu hơn ngưỡng này bị đóng ở vòng quét. */
   idleTimeoutMs: number;
+  /**
+   * Trần pool kho riêng còn sống trong một tiến trình. Khi đạt giới hạn,
+   * không mở kết nối mới ngoài ngân sách; người gọi nhận lỗi rõ để retry
+   * sau khi pool nhàn đã được thu hồi. Mặc định 3 cho Docker.
+   */
+  maxPools?: number;
   /** Đồng hồ — tách ra để kiểm chứng vòng quét bằng thời gian giả. */
   now?: () => number;
   /** Báo cho chủ sở hữu mỗi khi một pool bị gỡ khỏi sổ (đóng vì nhàn rỗi, hoặc bị thay vì danh tính kết nối đã đổi) để đồng bộ các bảng tra cứu theo kho. */
@@ -125,6 +131,9 @@ export class SpacePoolManager<TDatabase> {
       this.entries.delete(databaseName);
       void existing.handle.pool.end().catch(() => undefined);
       this.deps.onPoolClosed?.(databaseName);
+    }
+    if (this.entries.size >= (this.deps.maxPools ?? Number.POSITIVE_INFINITY)) {
+      throw new Error(`Đã đạt trần pool kho riêng (${this.deps.maxPools}); từ chối mở thêm kho ${databaseName}`);
     }
     const handle = create(databaseName);
     const entry: PoolEntry<TDatabase> = { handle, lastUsedAt: this.now(), identity };

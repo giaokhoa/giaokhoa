@@ -80,4 +80,14 @@ describe('Trình quản lý pool theo database — bản sao phía worker', () =
     expect(closedNotifications).toEqual(['kho_a', 'kho_b']);
     expect(manager.size).toBe(0);
   });
+  it('không mở vượt số pool kho riêng tối đa; tái dùng pool cũ không tính thêm', () => {
+    const manager = new SpacePoolManager({ idleTimeoutMs: 60_000, maxPools: 1 });
+    const pool = { totalCount: 0, idleCount: 0, end: async () => {}, on: () => {} };
+    const make = (databaseName: string) => ({ databaseName, pool, db: databaseName });
+    expect(manager.getHandle('kho-a', make).databaseName).toBe('kho-a');
+    expect(manager.getHandle('kho-a', make).databaseName).toBe('kho-a');
+    expect(() => manager.getHandle('kho-b', make)).toThrow(/trần pool kho riêng/);
+    expect(manager.size).toBe(1);
+  });
+
 });

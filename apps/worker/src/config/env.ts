@@ -25,6 +25,9 @@ export const envSchema = z.object({
   // Trần lượt quét outbox theo trung tâm chạy ĐỒNG THỜI ở mỗi nhịp relay (issue #582): mỗi lượt quét đang chạy giữ pool của kho riêng tương ứng mở, nên trần này là một phần của ngân sách kết nối của cụm — chỉ phía worker đọc biến này.
   SPACE_SWEEP_CONCURRENCY: z.coerce.number().int().positive().default(3),
   SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+  // Trần số kho riêng có pool đồng thời trong MỘT tiến trình, khác
+  // SPACE_DB_POOL_MAX là số kết nối tối đa BÊN TRONG mỗi pool.
+  SPACE_DB_MAX_POOLS: z.coerce.number().int().positive().max(100).default(3),
   SPACE_DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   JWT_SECRET: z.string().min(16),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

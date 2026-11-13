@@ -66,7 +66,7 @@ jobs:
       - name: Migrate worker database from empty
         run: DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
       # Sau khi main nhận migration chương trình học chung (#17), kho
-      # system-bank phải có 11 bảng nghiệp vụ và 3 dòng nhật ký. Runner
+      # system-bank phải có 14 bảng nghiệp vụ và 4 dòng nhật ký. Runner
       # tự fail khi hậu kiểm lệch, đồng thời kiểm tra mode --verify-only.
       - name: Migrate system-bank from empty and verify exact counts
         run: |
