@@ -20,4 +20,4 @@
 
 ## Kỹ thuật tối thiểu
 
-- Chỉ có các file JSON tsconfig; `typecheck`/`test`/`build` của package là no-op theo `package.json`.
+- Chỉ có các file JSON tsconfig; `package.json` không khai script `typecheck`/`test`/`build`. Turbo bỏ qua các tác vụ không tồn tại cho package này; tính đúng đắn được kiểm chứng qua typecheck của app/package tiêu thụ.

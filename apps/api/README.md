@@ -6,6 +6,14 @@
 
 `apps/api` là backend duy nhất của sản phẩm: toàn bộ nghiệp vụ của một Giáo khoa cho **lớp học online** tương thích nghiệp vụ sư phạm Việt Nam (Moodle là sàn tối thiểu) chạy qua API này — khoá học, lớp học, ghi danh, ngân hàng câu hỏi/đề/ma trận, quiz, bài tập, điểm theo bài, nhắn tin, thông báo, thanh toán học phí, chấm bài giấy bằng camera, MCP cho AI nhập câu hỏi, quản trị tenant (trung tâm) và nền tảng. Mọi quy tắc nghiệp vụ bất biến phải được thực thi **ở đây, phía server** — client không bao giờ là nơi gác nghiệp vụ duy nhất.
 
+## Vòng đời tệp theo miền sở hữu (issue #10)
+
+- Byte vật lý được lưu theo dạng storage_domain/ab/cd/sha256: miền space-<space_registry.id> cho trung tâm và khu công cộng; miền bank-system cho ngân hàng/Trang chính. Định danh đăng ký bất biến: thay hostname/slug không đổi key lưu, hash không tự xác định sở hữu.
+- Cột files.storage_domain ghi cùng metadata khi upload. API kiểm tra miền trước khi trả metadata, tải byte, phát HMAC và URL S3 đã ký; HMAC ràng buộc miền và ID bản ghi. Dedupe chỉ trong cùng miền.
+- Khi xóa bản ghi cuối, job file-cleanup phải mang contentHash, storageDomain và spaceSlug nếu là trung tâm. Worker đối chiếu với sổ, kiểm tra refcount đúng kho và miền rồi xóa đúng key local/S3. Job thiếu/sai miền không fallback.
+- Bản ghi cũ nhận miền legacy, giữ nguyên bố cục hash cũ và chỉ đọc khi context được xác minh thuộc đúng tenant của host/phiên hiện tại (hoặc context toàn cục hợp lệ ở Trang chính). Không ghi mới và không cleanup legacy; di trú byte cũ nằm ngoài phạm vi issue này. Chữ ký HMAC của file legacy còn gắn miền hiệu lực để không dùng lại giữa các host.
+- Driver local/S3 của API và worker dùng cùng fileContentKey. Khi triển khai S3, cả API và worker phải có cùng FILE_STORAGE_DRIVER, FILE_STORAGE_S3_ENDPOINT/REGION/BUCKET/ACCESS_KEY_ID/SECRET_ACCESS_KEY/FORCE_PATH_STYLE qua biến môi trường. Không ghi bí mật vào repository. Backup/restore đầy đủ không thuộc issue này.
+
 ## Quyết định nghiệp vụ còn hiệu lực
 
 | Quyết định                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Nguồn                                                                              |

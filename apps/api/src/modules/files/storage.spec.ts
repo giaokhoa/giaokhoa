@@ -9,6 +9,11 @@ import { FileSigningService } from './file-signing.service';
 import { contentKey, LocalObjectStorage, sha256Hex, type ObjectStorage } from './storage';
 import { S3ObjectStorage } from './storage-s3';
 import { createObjectStorage } from './storage-factory';
+import { fileDomainForSpace, LEGACY_FILE_DOMAIN, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+
+const DOMAIN_A = fileDomainForSpace('11111111-1111-7111-8111-111111111111');
+const DOMAIN_B = fileDomainForSpace('22222222-2222-7222-8222-222222222222');
+const DOMAIN_PUBLIC = fileDomainForSpace('33333333-3333-7333-8333-333333333333');
 
 /** Config giả tối thiểu cho các adapter/service — giá trị ở đây là fixture test, không phải khoá thật. */
 function fakeConfig(values: Record<string, unknown>): ConfigService {
@@ -86,36 +91,60 @@ function storageContract(name: string, make: () => Promise<{ storage: ObjectStor
     it('put → exists=true và get trả đúng các byte', async () => {
       const { storage, cleanup } = await make();
       try {
-        expect(await storage.exists(hash)).toBe(false);
-        await storage.put(hash, dataA);
-        expect(await storage.exists(hash)).toBe(true);
-        expect((await storage.get(hash)).equals(dataA)).toBe(true);
+        expect(await storage.exists(DOMAIN_A, hash)).toBe(false);
+        await storage.put(DOMAIN_A, hash, dataA);
+        expect(await storage.exists(DOMAIN_A, hash)).toBe(true);
+        expect((await storage.get(DOMAIN_A, hash)).equals(dataA)).toBe(true);
       } finally { await cleanup(); }
     });
 
     it('put với hash đã có là no-op khử trùng (không bao giờ ghi đè)', async () => {
       const { storage, cleanup } = await make();
       try {
-        await storage.put(hash, dataA);
-        await storage.put(hash, dataB);
-        expect((await storage.get(hash)).equals(dataA)).toBe(true);
+        await storage.put(DOMAIN_A, hash, dataA);
+        await storage.put(DOMAIN_A, hash, dataB);
+        expect((await storage.get(DOMAIN_A, hash)).equals(dataA)).toBe(true);
       } finally { await cleanup(); }
     });
 
     it('delete xoá object; get sau đó ném lỗi', async () => {
       const { storage, cleanup } = await make();
       try {
-        await storage.put(hash, dataA);
-        await storage.delete(hash);
-        expect(await storage.exists(hash)).toBe(false);
-        await expect(storage.get(hash)).rejects.toThrow();
+        await storage.put(DOMAIN_A, hash, dataA);
+        await storage.delete(DOMAIN_A, hash);
+        expect(await storage.exists(DOMAIN_A, hash)).toBe(false);
+        await expect(storage.get(DOMAIN_A, hash)).rejects.toThrow();
+      } finally { await cleanup(); }
+    });
+
+    it('A/B/công cộng/ngân hàng giữ byte độc lập dù cùng hash; xoá A không đụng miền còn lại', async () => {
+      const { storage, cleanup } = await make();
+      const domains = [DOMAIN_A, DOMAIN_B, DOMAIN_PUBLIC, SYSTEM_FILE_DOMAIN];
+      try {
+        for (const domain of domains) await storage.put(domain, hash, dataA);
+        for (const domain of domains) expect(await storage.exists(domain, hash)).toBe(true);
+        await storage.delete(DOMAIN_A, hash);
+        expect(await storage.exists(DOMAIN_A, hash)).toBe(false);
+        for (const domain of domains.slice(1)) {
+          expect((await storage.get(domain, hash)).equals(dataA)).toBe(true);
+        }
+      } finally { await cleanup(); }
+    });
+
+    it('từ chối traversal và không cho ghi/xoá vùng legacy', async () => {
+      const { storage, cleanup } = await make();
+      try {
+        await expect(storage.put('../evil', hash, dataA)).rejects.toThrow();
+        await expect(storage.put(LEGACY_FILE_DOMAIN, hash, dataA)).rejects.toThrow();
+        await expect(storage.delete(LEGACY_FILE_DOMAIN, hash)).rejects.toThrow();
+        expect(() => storage.keyFor(DOMAIN_A, '../escape')).toThrow();
       } finally { await cleanup(); }
     });
 
     it('get trên hash thiếu ném lỗi', async () => {
       const { storage, cleanup } = await make();
       try {
-        await expect(storage.get(sha256Hex(Buffer.from('khong-ton-tai')))).rejects.toThrow();
+        await expect(storage.get(DOMAIN_A, sha256Hex(Buffer.from('khong-ton-tai')))).rejects.toThrow();
       } finally { await cleanup(); }
     });
   });
@@ -140,8 +169,8 @@ describe('Đặc thù S3ObjectStorage', () => {
       FILE_STORAGE_S3_REGION: 'us-east-1',
     }));
     const hash = sha256Hex(Buffer.from('presign-me'));
-    const url = await storage.presignGetUrl(hash, 300, { fileName: 'phieu.png', mimeType: 'image/png' });
-    expect(url).toContain(contentKey(hash));
+    const url = await storage.presignGetUrl(DOMAIN_A, hash, 300, { fileName: 'phieu.png', mimeType: 'image/png' });
+    expect(url).toContain(contentKey(DOMAIN_A, hash));
     expect(url).toContain('X-Amz-Signature=');
     expect(url).toContain('X-Amz-Expires=300');
   });
@@ -173,14 +202,21 @@ describe('Hàm createObjectStorage (chọn driver theo env)', () => {
 
 describe('Đích tải xuống của FileSigningService', () => {
   const signingConfig = fakeConfig({ JWT_SECRET: 'fixture-jwt-secret-for-tests-only', FILE_SIGNED_URL_TTL_SECONDS: 300 });
-  const file = { id: '11111111-1111-7111-8111-111111111111', contentHash: sha256Hex(Buffer.from('sign-me')), fileName: 'phieu.png', mimeType: 'image/png' };
+  const file = { id: '11111111-1111-7111-8111-111111111111', storageDomain: DOMAIN_A, contentHash: sha256Hex(Buffer.from('sign-me')), fileName: 'phieu.png', mimeType: 'image/png' };
 
   it('adapter local (không có khả năng presign) → URL API HMAC, kiểm chứng được bằng verify()', async () => {
     const signing = new FileSigningService(signingConfig, new LocalObjectStorage(fakeConfig({ FILE_STORAGE_DIR: '/tmp/x' })));
     const target = await signing.createDownloadTarget(file);
     expect(target.url.startsWith(`/api/v1/files/${file.id}/download?sig=`)).toBe(true);
     const token = decodeURIComponent(target.url.split('sig=')[1]);
-    expect(() => signing.verify(file.id, token)).not.toThrow();
+    expect(() => signing.verify(file.id, DOMAIN_A, token)).not.toThrow();
+  });
+
+  it('HMAC đã cấp ở A không hợp lệ tại B dù file ID trùng', async () => {
+    const signing = new FileSigningService(signingConfig);
+    const target = await signing.createDownloadTarget(file);
+    const token = decodeURIComponent(target.url.split('sig=')[1]);
+    expect(() => signing.verify(file.id, DOMAIN_B, token)).toThrow();
   });
 
   it('không inject storage nào → URL API HMAC (cách dựng tương thích ngược)', async () => {
@@ -198,7 +234,7 @@ describe('Đích tải xuống của FileSigningService', () => {
     const signing = new FileSigningService(signingConfig, s3);
     const target = await signing.createDownloadTarget(file);
     expect(target.url).toContain('X-Amz-Signature=');
-    expect(target.url).toContain(contentKey(file.contentHash));
+    expect(target.url).toContain(contentKey(DOMAIN_A, file.contentHash));
     expect(target.url).not.toContain('/api/v1/files/');
     expect(target.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });

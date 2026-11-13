@@ -18,3 +18,4 @@ export {
  */
 export { sql, type RawBuilder, type Selectable, type SqlBool } from 'kysely';
 export type { JsonValue } from './types/centre-db';
+export { SYSTEM_FILE_DOMAIN, LEGACY_FILE_DOMAIN, fileDomainForSpace, fileContentKey, assertFileStorageDomain } from './file-storage-domain';

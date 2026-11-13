@@ -53,16 +53,6 @@ export async function fetchBuilderCourseList() {
 }
 
 /**
- * Đọc nội dung của khoá nguồn đang chọn để dùng lại; lỗi → null.
- *
- * @param courseId - Định danh khoá nguồn.
- * @returns Nội dung khoá hoặc null.
- */
-export function fetchCourseContent(courseId: string) {
-  return probe<CourseContent>(`/api/v1/courses/${courseId}/content`);
-}
-
-/**
  * Lưu thông tin khoá (PATCH /courses/:id).
  *
  * @param courseId - Định danh khoá.

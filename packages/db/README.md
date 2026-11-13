@@ -19,6 +19,10 @@ Package này là tầng dữ liệu **Kysely** duy nhất của hệ: kiểu sin
 | Dự án xây từ đầu: **reset dữ liệu thoải mái tới khi chốt version** — schema tiến hoá bằng baseline mới, không thiết kế migration giữ dữ liệu live.                                                                                                                                         | Sổ mục F, chốt 23/10/2026                           |
 | Hai dòng tiền tách bạch trong schema thanh toán: bản ghi thanh toán gắn tenant sở hữu và tài khoản nhận của chính chủ sở hữu; platform không thu hộ học phí trung tâm.                                                                                                                     | Sổ mục E; issue #189                                |
 
+## Miền sở hữu byte file (issue #10)
+
+Cột files.storage_domain thuộc migration native 20261113050000_file_storage_domain. Mỗi file mới phải có miền space-<space_registry.id> (trung tâm/khu công cộng) hoặc bank-system (ngân hàng/Trang chính). Định danh miền không phụ thuộc hostname/tên; hai kho có cùng content_hash không dùng chung byte hoặc refcount. FilesRepository.countByHash(hash, domain) yêu cầu miền. Hàm thuần fileDomainForSpace, fileContentKey và assertFileStorageDomain từ barrel @giaokhoa/db là hợp đồng chung của API/worker. Bản ghi trước migration có miền legacy và đọc tương thích qua kiểm tra tenant sở hữu context, kể cả trên host trung tâm có quyền; HMAC còn gắn miền host hiện hành. Cleanup không xóa legacy, không di trú byte/hash cũ trong issue này.
+
 ## Khung Kysely
 
 ### Kiểu sinh từ DB thật (codegen)
@@ -56,8 +60,8 @@ Package này là tầng dữ liệu **Kysely** duy nhất của hệ: kiểu sin
 
 ## Kỹ thuật tối thiểu
 
-- Nguồn theo miền: `src/<miền>.schema.ts`, hạ tầng chung ở `src/infrastructure.schema.ts`, xuất qua `src/index.ts`.
-- Ngoại lệ có chủ đích: schema control plane (`src/control-plane.schema.ts`, issue #580) thuộc **database riêng** trên cùng cụm Postgres với bộ migration riêng ở `packages/db/migrations/control-plane/`, nên xuất qua subpath `@giaokhoa/db/control-plane` (`src/control-plane.ts`) và KHÔNG qua `src/index.ts` — đưa vào barrel chung sẽ làm bộ migration của kho nghiệp vụ sinh lệnh cho các bảng control plane và ngược lại. Kho ngân hàng hệ thống theo cùng khuôn qua `@giaokhoa/db/system-bank`. Factory và kiểu handle của từng kho đi theo đúng các điểm vào này.
+- Hình dạng dữ liệu canonical được sinh từ database thật vào `src/types/{centre-db,control-plane-db,system-bank-db}.d.ts`; package **không còn** các file `*.schema.ts` hay `infrastructure.schema.ts` viết tay. Factory và kiểu handle ở `src/client.ts`; repository Kysely theo bounded context ở `src/repositories/<miền>.ts`. Ba bộ SQL migration tách dưới `migrations/{centre,control-plane,system-bank}/`; runner ở `src/migrate/`.
+- Các kho có điểm vào riêng theo public `exports`: `@giaokhoa/db` (`src/index.ts`, kho trung tâm), `@giaokhoa/db/control-plane` (`src/control-plane.ts`), `@giaokhoa/db/system-bank` (`src/system-bank.ts`), `@giaokhoa/db/repositories/*` (repository), `@giaokhoa/db/migrate` và `@giaokhoa/db/test-support`. Không đưa các kho khác vào barrel trung tâm để tránh trộn quyền truy cập và migration giữa các database. Test của package colocate: unit `src/**/*.spec.ts`, integration với DB thật `src/**/*.int-spec.ts`, chạy hai Vitest project riêng. Đây là ngoại lệ của package dữ liệu so với bố trí `test/integration/` của các backend app; không di chuyển hàng loạt spec nếu chưa kiểm soát được import và fixture.
 - Subpath repository khai bằng **một** wildcard duy nhất (`"./repositories/*"` trong `package.json`, một dòng `paths` wildcard tương ứng trong tsconfig của `apps/api` và `apps/worker`) — không khai thêm đường dẫn riêng cho từng module repository.
 - App tiêu thụ dùng bản `dist` — sửa package xong phải build lại trước khi typecheck/migrate ở app (dist cũ = lỗi giả kinh điển). Build của package chép cả ba file kiểu sinh vào `dist/types/` (tsc không tự chép file `.d.ts` đầu vào).
 

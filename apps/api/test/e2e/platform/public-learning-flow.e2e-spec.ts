@@ -2,6 +2,13 @@ import { INestApplication, VersioningType } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { v7 as uuidv7 } from 'uuid';
+import { fileDomainForSpace, LEGACY_FILE_DOMAIN } from '@giaokhoa/db';
+import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
+import { FileSigningService } from '../../../src/modules/files/file-signing.service';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import http from 'supertest';
@@ -461,6 +468,91 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
     );
     expect(centreUser.rows[0]?.email).toBe(ADMIN_EMAIL);
     expect(centreUser.rows[0]?.id).not.toBe(publicUserId);
+  });
+
+  it('HTTP tải file legacy sau nâng cấp tại đúng host trung tâm/công cộng, chữ ký không dùng chéo dù trùng file id', async () => {
+    // Tái hiện metadata trước migration: cả hai kho đều có cùng id và
+    // contentHash nhưng chủ sở hữu context khác nhau. Byte vật lý chưa
+    // được di trú nên vẫn ở thư mục hash cũ.
+    const fileId = uuidv7();
+    const bytes = Buffer.from('legacy-hosts-8-' + SFX);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const signing = app.get(FileSigningService);
+    const path = storage.keyFor(LEGACY_FILE_DOMAIN, hash);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, bytes);
+    const spaces = [publicSpace, centreSpace];
+    try {
+      for (const space of spaces) {
+        await withClient(storeUrl(space), async (db) => {
+          await db.query("SELECT set_config('app.platform', 'on', false)");
+          const parent = await db.query<{ id: string; path: string; depth: number }>(
+            'SELECT id, path, depth FROM context WHERE context_level = 20 AND instance_id = $1', [space.tenantId],
+          );
+          expect(parent.rows).toHaveLength(1);
+          // files:view có mức tối thiểu 50; dựng context khoá con của
+          // đúng tenant để kiểm cả metadata đã qua cổng capability.
+          const child = uuidv7();
+          await db.query(
+            'INSERT INTO context (id,context_level,instance_id,path,depth) VALUES ($1,50,$2,$3,$4)',
+            [child, uuidv7(), parent.rows[0]!.path + '/' + child, parent.rows[0]!.depth + 1],
+          );
+          await db.query(
+            'INSERT INTO files (id,content_hash,context_id,component,file_area,file_name,file_size,storage_domain) ' +
+            'VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+            [fileId, hash, child, 'core_user', 'profile', 'legacy.txt', bytes.length, 'legacy'],
+          );
+          if (space.slug === CENTRE_SLUG) {
+            // Cấp files:view đúng cách cho tài khoản kiểm thử tại
+            // context con; không hạ yêu cầu capability của endpoint.
+            const manager = await db.query<{ id: string }>(
+              "SELECT id FROM role WHERE short_name = 'manager'",
+            );
+            const user = await db.query<{ id: string }>(
+              'SELECT id FROM users WHERE username = $1', [CENTRE_ADMIN_USERNAME],
+            );
+            if (manager.rows.length !== 1 || user.rows.length !== 1) {
+              throw new Error('Fixture trung tâm thiếu đúng một manager hoặc quản trị viên');
+            }
+            await db.query(
+              'INSERT INTO role_assignments (role_id,user_id,context_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+              [manager.rows[0]!.id, user.rows[0]!.id, parent.rows[0]!.id],
+            );
+            await db.query(
+              'INSERT INTO role_capabilities (context_id,role_id,capability,permission) ' +
+              'VALUES ($1,$2,$3,1) ON CONFLICT (context_id,role_id,capability) ' +
+              'DO UPDATE SET permission = 1',
+              [child, manager.rows[0]!.id, 'files:view'],
+            );
+          }
+        });
+      }
+      const publicSig = signing.sign(fileId, fileDomainForSpace(publicSpace.spaceId)).token;
+      const centreSig = signing.sign(fileId, fileDomainForSpace(centreSpace.spaceId)).token;
+      const download = (host: string, sig: string) =>
+        http(app.getHttpServer()).get('/api/v1/files/' + fileId + '/download')
+          .set('Host', host).query({ sig });
+      const publicOk = await download(ROOT_HOST, publicSig);
+      const centreOk = await download(CENTRE_HOST, centreSig);
+      expect(publicOk.status, JSON.stringify(publicOk.body)).toBe(200);
+      expect(centreOk.status, JSON.stringify(centreOk.body)).toBe(200);
+      expect(Buffer.from(publicOk.body)).toEqual(bytes);
+      expect(Buffer.from(centreOk.body)).toEqual(bytes);
+      const wrongCentre = await download(CENTRE_HOST, publicSig);
+      const wrongPublic = await download(ROOT_HOST, centreSig);
+      expect(wrongCentre.status).toBe(401);
+      expect(wrongPublic.status).toBe(401);
+      // Quyền metadata vẫn do capability tại context quyết định.
+      const centreMeta = await http(app.getHttpServer()).get('/api/v1/files/' + fileId)
+        .set('Host', CENTRE_HOST).set('Authorization', 'Bearer ' + centreJwt);
+      expect(centreMeta.status, JSON.stringify(centreMeta.body)).toBe(200);
+    } finally {
+      for (const space of spaces) {
+        await withClient(storeUrl(space), (db) => db.query('DELETE FROM files WHERE id = $1', [fileId]));
+      }
+      await rm(path, { force: true });
+    }
   });
 
   it('mật khẩu/đình chỉ ở A không ảnh hưởng học viên có cùng email ở công cộng', async () => {

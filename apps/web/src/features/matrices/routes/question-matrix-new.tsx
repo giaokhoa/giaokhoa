@@ -1,6 +1,7 @@
 export { MatrixNewPage as default } from './question-matrix';
 
-import { curriculumSubjectsQueryOptions, matrixBanksQueryOptions } from '../queries/matrix';
+import { matrixBanksQueryOptions } from '../queries/matrix';
+import { curriculumSubjectsQueryOptions } from '#lib/curriculum';
 import { queryClient } from '#lib/query-client';
 
 /**

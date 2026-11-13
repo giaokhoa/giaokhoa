@@ -13,6 +13,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
     "@giaokhoa/contracts": "workspace:*",
     "@giaokhoa/db": "workspace:*",
     "@giaokhoa/enrol": "workspace:*",
