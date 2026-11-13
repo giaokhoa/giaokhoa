@@ -5,11 +5,19 @@
   "too_small": {
     "string": "{property} quá ngắn (tối thiểu {minimum} ký tự)",
     "number": "{property} phải lớn hơn hoặc bằng {minimum}",
-    "array": "{property} phải có ít nhất {minimum} phần tử"
+    "array": "{property} phải có ít nhất {minimum} phần tử",
+    "default": "{property} chưa đạt giới hạn tối thiểu"
   },
   "too_big": {
     "string": "{property} quá dài (tối đa {maximum} ký tự)",
-    "number": "{property} phải nhỏ hơn hoặc bằng {maximum}"
+    "number": "{property} phải nhỏ hơn hoặc bằng {maximum}",
+    "array": "{property} có quá nhiều phần tử (tối đa {maximum})",
+    "default": "{property} vượt giới hạn cho phép"
   },
-  "unrecognized_keys": "Payload chứa trường không được phép: {keys}"
+  "unrecognized_keys": "Payload chứa trường không được phép: {keys}",
+  "custom": "{property} không hợp lệ",
+  "not_multiple_of": "{property} không phải bội số cho phép",
+  "invalid_union": "{property} không phù hợp bất kỳ kiểu cho phép nào",
+  "invalid_key": "Khóa của {property} không hợp lệ",
+  "invalid_element": "Phần tử của {property} không hợp lệ"
 }

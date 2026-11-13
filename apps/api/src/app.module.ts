@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import { BadRequestException, Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { createCentreKysely } from '@giaokhoa/db';
@@ -206,7 +206,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
         const poolMax = config.get<number>('DATABASE_POOL_MAX');
         const pool = new TenantAwarePool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
-        spaceDatabase.bindSharedKysely(createCentreKysely(pool));
+        spaceDatabase.bindSharedKysely(createCentreKysely(pool), pool);
         return pool;
       },
     },
@@ -232,7 +232,23 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
      * `StandardSchemaValidationPipe` thuần; KHÔNG dùng `I18nValidationPipe`
      * (đường class-validator) vì dự án validate 100% bằng Zod.
      */
-    { provide: APP_PIPE, useValue: new I18nStandardSchemaValidationPipe() },
+    {
+      provide: APP_PIPE,
+      useValue: new I18nStandardSchemaValidationPipe({
+        // Giữ path từ Standard Schema sau dịch: dạng chuỗi mất định vị
+        // lỗi, khiến giao diện không biết trường nào cần sửa.
+        exceptionFactory: (issues) => new BadRequestException({
+          message: issues.map((issue) => ({
+            ...(issue.path?.length
+              ? { field: issue.path.map((part) =>
+                  typeof part === 'object' && part !== null && 'key' in part
+                    ? String(part.key) : String(part)).join('.') }
+              : {}),
+            message: issue.message,
+          })),
+        }),
+      }),
+    },
   ],
 })
 export class AppModule implements NestModule {

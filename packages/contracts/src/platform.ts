@@ -307,7 +307,7 @@ export const createContentBankContentSchema = z.strictObject({
   curriculumNodeId: uuidIdSchema.optional(),
   outcomeIds: z.array(uuidIdSchema).optional(),
   questionCategoryId: uuidIdSchema.optional(),
-  externalUrl: z.string().url().optional(),
+  externalUrl: z.url().optional(),
   description: z.string().max(5000).optional(),
   keywords: z.array(z.string().min(1).max(100)).max(20).optional(),
   targetAudience: contentBankTargetAudienceSchema.optional(),

@@ -38,6 +38,14 @@ describe('Khối ProblemDetailsFilter', () => {
     expect(body.errors).toHaveLength(2);
   });
 
+  it('trả lại path của trường Zod để client chỉ ra đúng ô nhập sai', () => {
+    const { json } = runFilter(new BadRequestException({
+      message: [{ field: 'items.0.name', message: 'Không đúng định dạng' }],
+    }));
+    const body = json.mock.calls[0][0];
+    expect(body.errors).toEqual([{ field: 'items.0.name', message: 'Không đúng định dạng' }]);
+  });
+
   it('giấu chi tiết nội bộ với lỗi chưa biết (500)', () => {
     const { json } = runFilter(new Error('db password is hunter2'));
     const body = json.mock.calls[0][0];
