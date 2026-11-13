@@ -17,6 +17,23 @@ describe('Hàm validateEnv (fail-fast)', () => {
     expect(env.PORT).toBe(3000);
   });
 
+  it('chấp nhận đúng email bootstrap của Compose và vẫn chặn email tùy ý sai định dạng', () => {
+    const base = {
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
+      REDIS_URL: 'redis://localhost:6379',
+      JWT_SECRET: 'a-secret-with-16+chars',
+    };
+    expect(validateEnv(base).ADMIN_EMAIL).toBe('admin@localhost');
+    expect(validateEnv({ ...base, ADMIN_EMAIL: 'admin@localhost' }).ADMIN_EMAIL)
+      .toBe('admin@localhost');
+    expect(validateEnv({ ...base, ADMIN_EMAIL: 'admin@example.org' }).ADMIN_EMAIL)
+      .toBe('admin@example.org');
+    expect(() => validateEnv({ ...base, ADMIN_EMAIL: 'not-an-email' }))
+      .toThrow(/Invalid environment variables/);
+    expect(() => validateEnv({ ...base, ADMIN_EMAIL: 'somebody@internal' }))
+      .toThrow(/Invalid environment variables/);
+  });
+
   it('từ chối khi thiếu DATABASE_URL', () => {
     expect(() =>
       validateEnv({ REDIS_URL: 'redis://localhost:6379', JWT_SECRET: 'a-secret-with-16+chars' }),

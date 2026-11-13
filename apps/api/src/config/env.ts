@@ -147,7 +147,11 @@ export const envSchema = z.object({
   // Admin khởi tạo (được seed ở lần khởi động đầu tiên khi chưa có admin của site)
   ADMIN_USERNAME: z.string().min(1).default('admin'),
   ADMIN_PASSWORD: z.string().min(8).default('Admin123!'),
-  ADMIN_EMAIL: z.email().default('admin@localhost'),
+  // Địa chỉ admin bootstrap đã hiện hữu trong Compose từ trước audit
+  // là admin@localhost (email nội bộ không có public TLD). Giữ đúng
+  // ngoại lệ đó để không chặn boot; email cấu hình khác vẫn phải qua
+  // z.email(), không nới thành min(3) như phiên bản cũ.
+  ADMIN_EMAIL: z.union([z.email(), z.literal('admin@localhost')]).default('admin@localhost'),
 });
 
 export type Env = z.infer<typeof envSchema>;
