@@ -79,6 +79,7 @@ import { SystemMaterialsController } from './system-materials.controller';
     SystemBankSubmissionsService,
     SystemBankService,
   ],
-  exports: [SystemBankService, SystemBankConnection, SystemMaterialsService],
+  exports: [SystemBankService, SystemBankConnection, SystemBankMediaService, SystemMaterialsService],
+
 })
 export class SystemBankModule {}

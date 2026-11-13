@@ -19,7 +19,7 @@
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
-import type { ExamVariant } from '../jsonb-types';
+import type { ExamQuestionSnapshot, ExamVariant } from '../jsonb-types';
 import { EXAM_COLUMNS, EXAM_SLOT_COLUMNS, EXAM_VERSION_COLUMNS, type ExamRow, type ExamSlotRow, type ExamVersionRow } from './exams';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
@@ -49,6 +49,11 @@ function jsonbValue<T>(value: T): RawBuilder<T> {
 
 /** Một dòng của bảng `exam_pins` (hình dạng camelCase phía tiêu thụ dùng). */
 export interface ExamPinRow {
+  questionSnapshots: ExamQuestionSnapshot[] | null;
+  requestId: string | null;
+  requestedSectionId: string | null;
+  preparationState: string;
+  pendingSnapshotId: string | null;
   attemptsAllowed: number;
   cmId: string | null;
   courseId: string;
@@ -86,6 +91,11 @@ export interface ExamPinRow {
 
 /** Dữ kiện ghi một dòng `exam_pins` mới (trường có mặc định ở DB hoặc nullable thì tùy chọn). */
 export interface NewExamPin {
+  questionSnapshots?: ExamQuestionSnapshot[] | null;
+  requestId?: string | null;
+  requestedSectionId?: string | null;
+  preparationState?: string;
+  pendingSnapshotId?: string | null;
   attemptsAllowed?: number;
   cmId?: string | null;
   courseId: string;
@@ -123,6 +133,11 @@ export interface NewExamPin {
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng `exam_pins` (dùng cho cả select lẫn returning). */
 const EXAM_PIN_COLUMNS = [
+  'question_snapshots as questionSnapshots',
+  'request_id as requestId',
+  'requested_section_id as requestedSectionId',
+  'preparation_state as preparationState',
+  'pending_snapshot_id as pendingSnapshotId',
   'attempts_allowed as attemptsAllowed',
   'cm_id as cmId',
   'course_id as courseId',
@@ -172,6 +187,11 @@ function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_p
     exam_version_id: values.examVersionId,
     variants: jsonbValue(values.variants),
   };
+  if (values.questionSnapshots !== undefined) row.question_snapshots = values.questionSnapshots === null ? null : jsonbValue(values.questionSnapshots);
+  if (values.requestId !== undefined) row.request_id = values.requestId;
+  if (values.requestedSectionId !== undefined) row.requested_section_id = values.requestedSectionId;
+  if (values.preparationState !== undefined) row.preparation_state = values.preparationState;
+  if (values.pendingSnapshotId !== undefined) row.pending_snapshot_id = values.pendingSnapshotId;
   if (values.attemptsAllowed !== undefined) row.attempts_allowed = values.attemptsAllowed;
   if (values.cmId !== undefined) row.cm_id = values.cmId;
   if (values.createdAt !== undefined) row.created_at = values.createdAt;
@@ -212,6 +232,10 @@ function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_p
  */
 function examPinUpdateSet(patch: Partial<ExamPinRow>): UpdateObject<CentreDB, 'exam_pins'> {
   const set: UpdateObject<CentreDB, 'exam_pins'> = {};
+  if (patch.questionSnapshots !== undefined) set.question_snapshots = patch.questionSnapshots === null ? null : jsonbValue(patch.questionSnapshots);
+  if (patch.requestedSectionId !== undefined) set.requested_section_id = patch.requestedSectionId;
+  if (patch.preparationState !== undefined) set.preparation_state = patch.preparationState;
+  if (patch.pendingSnapshotId !== undefined) set.pending_snapshot_id = patch.pendingSnapshotId;
   if (patch.attemptsAllowed !== undefined) set.attempts_allowed = patch.attemptsAllowed;
   if (patch.cmId !== undefined) set.cm_id = patch.cmId;
   if (patch.courseId !== undefined) set.course_id = patch.courseId;
@@ -1182,6 +1206,23 @@ export class QuizRepository {
   }
 
   /**
+   * Khóa session theo (course, actor, requestId) xuyên cả saga tạo đề + pin.
+   * Không mở transaction chồng lên transaction của ExamsRepository;
+   * PostgreSQL giải phóng khóa session khi connection đứt do crash.
+   */
+  async withPinRequestLock<T>(courseId: string, actorId: string, requestId: string, action: () => Promise<T>): Promise<T> {
+    const key = `exam-pin:${courseId}:${actorId}:${requestId}`;
+    return this.db().connection().execute(async (connection) => {
+      await sql`select pg_advisory_lock(hashtextextended(${key}, 0))`.execute(connection);
+      try {
+        return await action();
+      } finally {
+        await sql`select pg_advisory_unlock(hashtextextended(${key}, 0))`.execute(connection);
+      }
+    });
+  }
+
+  /**
    * Chèn bản ghi lần ghim.
    */
   async insertPin(v: NewExamPin, db: QuizDb = this.db()): Promise<ExamPinRow> {
@@ -1191,6 +1232,12 @@ export class QuizRepository {
   /**
    * Lấy lần ghim theo id.
    */
+  /** Tìm thao tác giao đã ghi theo khoá retry, luôn trong kho được caller định tuyến. */
+  async getPinByRequest(courseId: string, actorId: string, requestId: string): Promise<ExamPinRow | undefined> {
+    return this.db().selectFrom('exam_pins').select(EXAM_PIN_COLUMNS)
+      .where('course_id', '=', courseId).where('created_by', '=', actorId).where('request_id', '=', requestId).executeTakeFirst();
+  }
+
   async getPin(id: string, db: QuizDb = this.db()): Promise<ExamPinRow | undefined> {
     return db.selectFrom('exam_pins').select(EXAM_PIN_COLUMNS).where('id', '=', id).executeTakeFirst();
   }
@@ -1202,6 +1249,7 @@ export class QuizRepository {
       .selectFrom('exam_pins')
       .select(EXAM_PIN_COLUMNS)
       .where('course_id', '=', courseId)
+      .where('preparation_state', '=', 'ready')
       .orderBy('created_at', 'asc')
       .orderBy('id', 'asc')
       .execute();

@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ForbiddenException, BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { FilesRepository, type FileRow } from '@giaokhoa/db/repositories/files';
@@ -293,6 +293,8 @@ export class FilesService {
    */
   async deleteFile(id: string, actor?: { id: string }): Promise<{ deleted: true; contentHash: string; refcount: number }> {
     const row = await this.getFile(id);
+    /** Media thi đã chụp giữ bất biến dù giáo viên sửa hoặc xoá file nguồn. */
+    if (actor && row.fileArea === 'exam_snapshot') throw new ForbiddenException({ code: 'file.snapshot_locked' });
     if (actor) await this.assertSubmissionLockForDelete(row, actor);
     await this.repo.deleteById(id);
     const refcount = await this.repo.countByHash(row.contentHash, row.storageDomain);
@@ -307,6 +309,17 @@ export class FilesService {
       );
     }
     return { deleted: true, contentHash: row.contentHash, refcount };
+  }
+
+  /**
+   * Thu hồi media STAGING của lần chuẩn bị thất bại, chỉ gọi khi chắc chắn
+   * snapshot đó chưa được công bố ready. Reuse đường xoá có refcount
+   * và cleanup queue: byte cùng hash đang được dùng nơi khác vẫn còn.
+   */
+  async cleanupExamSnapshotFiles(itemId: string): Promise<void> {
+    for (const file of await this.repo.listExamSnapshotFiles(itemId)) {
+      await this.deleteFile(file.id);
+    }
   }
 
   /**
@@ -408,8 +421,14 @@ export class FilesService {
    * @throws NotFoundException nếu file không ở đúng miền/host/chủ sở hữu.
    */
   async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
-    const slug = tenantAls.getStore()?.spaceSlug;
-    const platformScope = { platform: true, ...(slug ? { spaceSlug: slug } : {}) };
+    const store = tenantAls.getStore();
+    const slug = store?.spaceSlug;
+    // Scope vận hành tạm phải giữ nguyên identity kho do guard đã ghim.
+    // Chỉ truyền slug sẽ làm routedKysely từ chối kho riêng sau khi
+    // main bật kiểm tra spaceId + object handle để chống đọc chéo kho.
+    const platformScope = { platform: true, ...(slug ? {
+      spaceSlug: slug, spaceId: store?.spaceId, spaceHandle: store?.spaceHandle,
+    } : {}) };
     const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
     if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
 

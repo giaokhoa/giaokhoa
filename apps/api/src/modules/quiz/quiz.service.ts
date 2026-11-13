@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type {
   ExamMatrixView,
   MatrixCellAvailability,
@@ -48,6 +48,7 @@ import {
   type ExamPinFeedbackRow,
   type ExamPinRow,
 } from '@giaokhoa/db/repositories/quiz';
+import { ExamQuestionSnapshotsService } from './exam-question-snapshots.service';
 import { QuizSharedService } from './quiz-shared.service';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import { QuizPinsService } from './quiz-pins.service';
@@ -280,6 +281,7 @@ export type PinRow = ExamPinRow & {
 
 /** Slot hiệu lực suy ra từ exam version đã ghim (không còn bảng quiz_slots). */
 export interface EffectiveSlotRow {
+  sourceDomain?: string;
   id: string;
   pinId: string;
   slot: number;
@@ -320,6 +322,7 @@ export class QuizService {
   private readonly generation: QuizGenerationService;
 
   constructor(
+    private readonly snapshots: ExamQuestionSnapshotsService,
     private readonly repo: QuizRepository,
     private readonly courses: CoursesService,
     private readonly contexts: ContextsService,
@@ -339,9 +342,34 @@ export class QuizService {
   ) {
     this.shared = new QuizSharedService(this.repo, this.contexts, this.evaluator, this.questions, this.banks, this.tenantContext, this.tenants);
     this.attempts = new QuizAttemptsService(this.repo, this.courses, this.questions, this.grades, this.users, this.enrol, this.passwords, this.groups, this.outbox, this.files, this.shared);
-    this.pins = new QuizPinsService(this.repo, this.courses, this.evaluator, this.questions, this.grades, this.users, this.passwords, this.groups, this.outbox, this.shared, this.attempts);
+    this.pins = new QuizPinsService(this.snapshots, this.files, this.repo, this.courses, this.evaluator, this.questions, this.grades, this.users, this.passwords, this.groups, this.outbox, this.shared, this.attempts);
     this.matrices = new QuizMatricesService(this.repo, this.evaluator, this.banks, this.curriculum, this.outbox, this.tenantContext, this.shared);
     this.generation = new QuizGenerationService(this.repo, this.questions, this.curriculum, this.outbox, this.shared, this.attempts);
+  }
+
+  /** Tuần tự hóa retry cùng khóa, bao trùm cả tạo đề từ course builder. */
+  async withPinRequestLock<T>(courseId: string, actorId: string, requestId: string, action: () => Promise<T>): Promise<T> {
+    return this.repo.withPinRequestLock(courseId, actorId, requestId, action);
+  }
+
+  /**
+   * Pin đã ready trả về ngay; pin đang chuẩn bị sau crash được tiếp
+   * tục từng bước còn thiếu, không nhân bản cm, grade item hoặc đề.
+   */
+  async getPinByRequest(courseId: string, actorId: string, requestId: string, sectionId?: string): Promise<QuizView | undefined> {
+    const pin = await this.repo.getPinByRequest(courseId, actorId, requestId);
+    if (!pin) return undefined;
+    // Cùng requestId phải giữ nguyên section dù pin đã ready;
+    // không trả kết quả của lần giao cũ cho payload section khác.
+    if (sectionId && pin.requestedSectionId && pin.requestedSectionId !== sectionId) {
+      throw new ConflictException({ code: 'exam.pin_request_conflict' });
+    }
+    await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(courseId));
+    if (pin.preparationState !== 'ready') {
+      if (!sectionId) throw new ConflictException({ code: 'exam.pin_preparing' });
+      return this.pins.resumePinRecord(actorId, courseId, pin, sectionId);
+    }
+    return this.shared.pinView(await this.shared.getPin(pin.id));
   }
 
   /**
@@ -380,6 +408,7 @@ export class QuizService {
   }
 
   async createPinRecord(actorId: string, courseId: string, input: {
+    requestId?: string;
     sectionId: string; examId: string; examVersionId: string;
     name?: string; intro?: string;
     timeOpen?: string | null; timeClose?: string | null; timeLimitSeconds?: number | null;

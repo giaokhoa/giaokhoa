@@ -1,3 +1,4 @@
+import type { ExamSlotInput } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type {
   CreateExamPaperBody,
@@ -85,7 +86,7 @@ export function updateExamPaperMeta(paperId: string, body: UpdateExamPaperMetaBo
  */
 export function replaceExamPaperSlots(
   paperId: string,
-  slots: { questionId: string; maxMark: number; section?: string }[],
+  slots: ExamSlotInput[],
 ) {
   return apiJson<PaperView>(`/api/v1/exams/${paperId}/slots`, {
     method: 'PUT',
@@ -106,4 +107,18 @@ export function swapExamPaperSlot(paperId: string, position: number, questionId:
     method: 'POST',
     body: JSON.stringify({ position, questionId }),
   });
+}
+
+/** Metadata nguồn công bố cho picker của đề; không gọi đường Copy/Import. */
+export function fetchSystemExamQuestions(offset: number) {
+  return apiJson<{ items: { id: string; qtype: string; versions: { version: number }[] }[]; total: number }>(
+    `/api/v1/system-bank/discovery?limit=20&offset=${offset}`,
+  );
+}
+
+/** Xem trước nội dung phiên bản công bố qua cổng quyền nguồn của API. */
+export function fetchSystemExamQuestionPreview(questionId: string, version: number) {
+  return apiJson<{ package: import('@giaokhoa/contracts').SystemBankPackage }>(
+    `/api/v1/system-bank/questions/${questionId}/versions/${version}`,
+  );
 }

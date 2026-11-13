@@ -68,7 +68,6 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const contexts = await http(app).get('/api/v1/access/contexts').set('Authorization', `Bearer ${admin}`);
     const courseCtx = (contexts.body as { id: string; contextLevel: number; instanceId: string }[])
       .find((c) => c.contextLevel === 50 && c.instanceId === course.id)!;
-    const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
 
     const teacherUser = await createUserViaApi(app, admin);
     await assignRole(app, admin, teacherUser.id, await roleIdByShortname(app, admin, 'editingteacher'), courseCtx.id);
@@ -86,7 +85,7 @@ describe('Cổng chủ sở hữu usage câu hỏi (issue #60)', () => {
     const userIdA = studentA.userId;
 
     const bankRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'Gate bank', contextId: systemCtx.id });
+      .send({ name: 'Gate bank', contextId: courseCtx.id });
     const qRes = await http(app).post('/api/v1/questions').set('Authorization', `Bearer ${admin}`)
       .send({
         categoryId: bankRes.body.id, qtype: 'truefalse', questionText: TF_TEXT,

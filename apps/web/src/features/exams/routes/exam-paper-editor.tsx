@@ -1,3 +1,4 @@
+/** Soạn đề trộn hai nguồn, giữ phiên bản câu hệ thống và giao trực tiếp bằng snapshot trung tâm. */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,13 +19,16 @@ import { courseGroupsQueryOptions } from '#features/progress-report/queries/prog
 import { queryKeys } from '#lib/query-keys';
 import { queryKeys as examsQueryKeys } from '../queries/keys';
 import { useDeployExamPin } from '#features/questions/queries/questions';
-import { examQuestionDiscoveryQueryOptions, useCreateExamPaper, useExamPaper, useExamPaperPins, useReplaceExamPaperSlots, useSwapExamPaperSlot, useUpdateExamPaperMeta } from '../queries/exam-paper';
+import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
+import { systemExamQuestionPreviewQueryOptions, systemExamQuestionsQueryOptions, examQuestionDiscoveryQueryOptions, useCreateExamPaper, useExamPaper, useExamPaperPins, useReplaceExamPaperSlots, useSwapExamPaperSlot, useUpdateExamPaperMeta } from '../queries/exam-paper';
 import type { DiscoveryItemLite, PaperView } from '../types/exam-paper';
 import { clearQuestionBankListCache } from '#features/questions/queries/questions';
 import { withApiReason } from '#features/questions/utils/shared';
 
 /** Slot đang soạn trong form (chưa ghim — server ghim bản ready mới nhất khi lưu). */
 interface SlotDraft {
+  sourceDomain?: 'centre' | 'bank-system';
+  sourceVersionNumber?: number;
   questionId: string;
   questionName: string;
   maxMark: string;
@@ -91,6 +95,13 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   //
   // Form ghim chỉ mở khi đề đã `ready` và người xem có cờ deploy tại bank của đề — đúng điều kiện hiện nút ghim của panel "Đề của tôi" ở trang ngân hàng. Các query chọn khoá/chương/nhóm và đột biến ghim dùng chung đúng bộ của hộp ghim ở panel đó (không có đường ghim thứ hai): danh sách khoá là query dùng chung toàn app, chương và nhóm nạp theo khoá đã chọn.
   const deployPin = useDeployExamPin();
+  const pinRequest = useRef<{ key: string; id: string } | null>(null);
+  const [systemPreview, setSystemPreview] = useState<{ id: string; version: number } | null>(null);
+  const previewQuery = useQuery({ ...systemExamQuestionPreviewQueryOptions(systemPreview?.id ?? '', systemPreview?.version ?? 1), enabled: !!systemPreview });
+  const [showSystem, setShowSystem] = useState(false);
+  const [systemOffset, setSystemOffset] = useState(0);
+  const [systemVersions, setSystemVersions] = useState<Record<string, number>>({});
+  const systemQuestions = useQuery({ ...systemExamQuestionsQueryOptions(systemOffset), enabled: showSystem });
   const canPin = mode === 'edit' && !!original && original.paper.status === 'ready' && original.capabilities.deploy;
   const [pinCourseId, setPinCourseId] = useState('');
   const [pinSectionId, setPinSectionId] = useState('');
@@ -120,15 +131,19 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     if (!paperId || !original || !pinCourseId || !pinSectionId) return;
     setMessage(null);
     try {
+      const requestKey = JSON.stringify([paperId, original.version.id, pinCourseId, pinSectionId, pinGroupId, pinVariantCount]);
+      if (pinRequest.current?.key !== requestKey) pinRequest.current = { key: requestKey, id: crypto.randomUUID() };
       await deployPin.mutateAsync({
         courseId: pinCourseId,
         body: {
+          requestId: pinRequest.current.id,
           sectionId: pinSectionId,
           examId: paperId,
           variantCount: Math.min(50, Math.max(1, Number(pinVariantCount) || 1)),
           ...(pinGroupId ? { targetGroupId: pinGroupId } : {}),
         },
       });
+      pinRequest.current = null;
       setMessage(t('pinOk', { version: original.paper.latestVersion }));
       void queryClient.invalidateQueries({ queryKey: examsQueryKeys.examPaperPins(paperId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.courseBuilder(pinCourseId) });
@@ -142,6 +157,8 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   function toSlotDrafts(view: PaperView): SlotDraft[] {
     return view.slots.map((s) => ({
       questionId: s.questionId,
+      sourceDomain: s.sourceDomain,
+      sourceVersionNumber: s.sourceDomain === 'bank-system' ? s.pinnedVersionNumber ?? undefined : undefined,
       questionName: s.questionName ?? s.questionId,
       maxMark: String(s.maxMark),
       section: s.section,
@@ -226,6 +243,7 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   function slotPayload() {
     return slots.map((s) => ({
       questionId: s.questionId,
+      ...(s.sourceDomain === 'bank-system' ? { sourceDomain: s.sourceDomain, sourceVersionNumber: s.sourceVersionNumber } : {}),
       maxMark: Number(s.maxMark) > 0 ? Number(s.maxMark) : 1,
       ...(s.section.trim() ? { section: s.section.trim() } : {}),
     }));
@@ -263,7 +281,9 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
         Number(totalScore) !== original.version.totalScore;
       const slotsChanged = JSON.stringify(slotPayload()) !== JSON.stringify(
         original.slots.map((s) => ({
-          questionId: s.questionId, maxMark: s.maxMark, ...(s.section ? { section: s.section } : {}),
+          questionId: s.questionId,
+          ...(s.sourceDomain === 'bank-system' ? { sourceDomain: s.sourceDomain, sourceVersionNumber: s.pinnedVersionNumber ?? undefined } : {}),
+          maxMark: s.maxMark, ...(s.section ? { section: s.section } : {}),
         })),
       );
       let view: PaperView = original;
@@ -356,7 +376,7 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
                 {slots.map((slot, index) => (
                   <li key={slot.questionId} className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1">
-                      {index + 1}. {slot.questionName}
+                      {index + 1}. {slot.questionName}{slot.sourceDomain === 'bank-system' ? ` · ${t('examSystemPicker')} v${slot.sourceVersionNumber}` : ''}
                       {slot.pinnedVersionNumber != null ? (
                         <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-xs">
                           {t('examSlotPinned', { version: slot.pinnedVersionNumber })}
@@ -410,6 +430,37 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
             )}
             <div className="space-y-3 border-t pt-4">
               <Label htmlFor="paper-pick">{t('examPickQuestions')}</Label>
+              {swapPosition == null && <Button type="button" variant="outline" onClick={() => setShowSystem(!showSystem)}>{t('examSystemPicker')}</Button>}
+              {showSystem && swapPosition == null && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <p>{t('examSystemSnapshotHint')}</p>
+                  {systemQuestions.isError && <ErrorAlert>{withApiReason(t('examPaperSaveFailed'), systemQuestions.error)}</ErrorAlert>}
+                  {systemQuestions.isFetching && <p>{t('loading')}</p>}
+                  {previewQuery.isError && <ErrorAlert>{withApiReason(t('examPaperSaveFailed'), previewQuery.error)}</ErrorAlert>}
+                  {previewQuery.data && <p className="rounded-md bg-muted p-3">{extractRichTextPlainText(previewQuery.data.package.questionText as RichTextDocument)}</p>}
+                  {(systemQuestions.data?.items ?? []).map((item) => {
+                    const version = systemVersions[item.id] ?? item.versions.at(-1)?.version ?? 1;
+                    return <div key={item.id} className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-0 flex-1">{t(({ multichoice: 'qtypeMultichoice', truefalse: 'qtypeTruefalse', shortanswer: 'qtypeShortanswer', essay: 'qtypeEssay' } as Record<string, string>)[item.qtype] ?? 'questionType')} · {item.id}</span>
+                      <Label className="sr-only" htmlFor={`system-version-${item.id}`}>{t('examSystemVersion')}</Label>
+                      <select id={`system-version-${item.id}`} className="rounded-md border p-2" value={version}
+                        onChange={(e) => setSystemVersions({ ...systemVersions, [item.id]: Number(e.target.value) })}>
+                        {item.versions.map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
+                      </select>
+                      <Button type="button" variant="outline" onClick={() => setSystemPreview({ id: item.id, version })}>{t('examSystemPreview')}</Button>
+                      <Button type="button" variant="outline" disabled={slots.some((s) => s.questionId === item.id)} onClick={() => setSlots([...slots, {
+                        questionId: item.id, questionName: `${t('examSystemPicker')} · ${item.id}`,
+                        sourceDomain: 'bank-system', sourceVersionNumber: version, maxMark: '1', section: '',
+                        pinnedVersionNumber: version, latestReadyVersionNumber: null, hasNewerVersion: false,
+                      }])}>{t('examAddQuestion')}</Button>
+                    </div>;
+                  })}
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" disabled={systemOffset === 0} onClick={() => setSystemOffset(Math.max(0, systemOffset - 20))}>{t('examSystemPrevious')}</Button>
+                    <Button type="button" variant="outline" disabled={systemOffset + 20 >= (systemQuestions.data?.total ?? 0)} onClick={() => setSystemOffset(systemOffset + 20)}>{t('examSystemNext')}</Button>
+                  </div>
+                </div>
+              )}
               {swapPosition != null ? (
                 <p className="text-sm text-muted-foreground">{t('swapPickHint', { position: swapPosition })}</p>
               ) : null}

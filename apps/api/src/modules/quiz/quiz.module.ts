@@ -16,6 +16,8 @@ import { UsersModule } from '../users/users.module';
 import { QuizAttemptsController } from './quiz.controller';
 import { MatrixBanksService } from './matrix-banks.service';
 import { MatrixImportService } from './matrix-import.service';
+import { SystemBankModule } from '../system-bank/system-bank.module';
+import { ExamQuestionSnapshotsService } from './exam-question-snapshots.service';
 import { QuizService } from './quiz.service';
 
 /**
@@ -30,14 +32,14 @@ import { QuizService } from './quiz.service';
   * QuizService đã tách cấu trúc bên trong theo 4 cụm ca sử dụng của issue #295 (ghim đề / ma trận / sinh đề-đặc tả / lượt làm-chấm-kết quả) cộng tầng thấp dùng chung, giữ nguyên bề mặt công khai và wiring của module — xem docblock của facade QuizService.
  */
 @Module({
-  imports: [AccessModule, CoursesModule, QuestionsModule, GradesModule, UsersModule, GroupsModule, CurriculumModule, EventsModule, TenantsModule, EnrolModule, FilesModule, SpaceRoutingModule],
+  imports: [SystemBankModule, AccessModule, CoursesModule, QuestionsModule, GradesModule, UsersModule, GroupsModule, CurriculumModule, EventsModule, TenantsModule, EnrolModule, FilesModule, SpaceRoutingModule],
   controllers: [QuizAttemptsController],
   providers: [
     // QuizRepository nhận handle định tuyến theo không gian để GUC/RLS và kho dữ liệu khớp với ngữ cảnh của request.
     { provide: QuizRepository, useFactory: (spaceDb: SpaceDatabaseService) => new QuizRepository(spaceDb.routedKysely), inject: [SpaceDatabaseService] },
-    QuizService, MatrixBanksService, MatrixImportService,
+    QuizService, ExamQuestionSnapshotsService, MatrixBanksService, MatrixImportService,
   ],
-  exports: [QuizService, MatrixBanksService, MatrixImportService],
+  exports: [ExamQuestionSnapshotsService, QuizService, MatrixBanksService, MatrixImportService],
 })
 /** Module hoạt động Quiz (đề thi trong khoá học). */
 export class QuizModule {}

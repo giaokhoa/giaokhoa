@@ -1,3 +1,4 @@
+import type { ExamQuestionSnapshot } from '@giaokhoa/db';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   cognitiveLevelSchema, extractRichTextPlainText, getTrueFalseStatements, toRichTextDocument, uuidIdSchema,
@@ -755,6 +756,28 @@ export class QuestionsService {
     return this.listVersions(questionId);
   }
   /**
+   * Nội dung nội bộ của câu trong lượt làm: ưu tiên snapshot trung tâm; đường
+   * lượt cũ đọc đúng version local. Đáp án chỉ ra HTTP sau mặt nạ review của quiz.
+   */
+  async getAttemptContent(attempt: AttemptRow) {
+    const snapshot = await this.repo.getAttemptSnapshot(attempt.id);
+    if (snapshot) {
+      const pkg = snapshot.package;
+      return { qtype: snapshot.qtype, questionText: pkg.questionText, generalFeedback: pkg.generalFeedback,
+        answers: pkg.answers.map((a, i) => ({ ...a, id: snapshot.answerIds[i]! })),
+        answerKey: pkg.answerKey ?? { guidance: null, solution: null }, options: pkg.options,
+        stimulus: pkg.stimulusContent ? { id: snapshot.versionId, content: pkg.stimulusContent } : null };
+    }
+    const view = await this.getQuestion(attempt.questionId);
+    const content = attempt.questionVersionId ? await this.getVersionContent(attempt.questionId, attempt.questionVersionId) : null;
+    const version = content?.version ?? view.latestVersion;
+    const stimulus = version.stimulusId ? await this.getStimulus(version.stimulusId) : null;
+    return { qtype: view.question.qtype, questionText: version.questionText, generalFeedback: version.generalFeedback,
+      answers: content?.answers ?? view.answers, answerKey: content?.answerKey ?? view.answerKey,
+      options: content?.options ?? view.options, stimulus };
+  }
+
+  /**
    * Nội dung một version cụ thể (answers + options) — dùng cho hiển thị và kiểm chứng theo version.
    */
   /**
@@ -1074,7 +1097,7 @@ export class QuestionsService {
    */
   async createUsage(actorId: string, input: {
     component: string; instanceId?: string; contextId?: string; preferredBehaviour?: string;
-    slots: { questionId: string; maxMark?: number; pinnedVersionId?: string }[];
+    slots: { questionId: string; maxMark?: number; pinnedVersionId?: string; snapshot?: ExamQuestionSnapshot }[];
   }): Promise<UsageView> {
     const behaviour = input.preferredBehaviour ?? 'deferredfeedback';
     if (!BEHAVIOURS[behaviour]) {
@@ -1087,6 +1110,14 @@ export class QuestionsService {
     });
     let slot = 1;
     for (const s of input.slots) {
+      if (s.snapshot) {
+        await this.repo.insertAttempt({ questionUsageId: usage.id, slot: slot++, behaviour,
+          questionId: s.snapshot.questionId, questionVersionId: s.snapshot.versionId,
+          contentSnapshot: s.snapshot, maxMark: s.maxMark ?? s.snapshot.defaultMark,
+          questionSummary: extractRichTextPlainText(s.snapshot.package.questionText as RichTextDocument),
+          userId: actorId, state: 'notstarted' });
+        continue;
+      }
       const view = await this.getQuestion(s.questionId);
       void view;
       // Câu còn draft (nạp qua MCP chờ duyệt) không được rút vào đề ở
@@ -1185,6 +1216,8 @@ export class QuestionsService {
       const system = await this.contexts.ensureSystemContext();
       if (!(await this.canUseBank(actorId, system.id))) throw this.usageNotFound(id);
     }
+    /** Usage thi có snapshot luôn đi qua quiz để không bỏ qua mặt nạ review/công bố điểm. */
+    if (await this.repo.usageHasSnapshots(id)) throw this.usageNotFound(id);
     return this.getUsage(id);
   }
 
@@ -1386,7 +1419,7 @@ export class QuestionsService {
    */
   private async requireNotLockedByQuizAttempt(usageId: string): Promise<void> {
     const link = await this.repo.findQuizAttemptByUsageId(usageId);
-    if (link && link.state === 'inprogress') {
+    if (link && (link.state === 'inprogress' || await this.repo.usageHasSnapshots(usageId))) {
       throw new ForbiddenException({
         message: 'This usage belongs to a quiz attempt in progress; answer and submit through the quiz',
         code: 'question.usage_managed_by_quiz',
@@ -1477,12 +1510,22 @@ export class QuestionsService {
     const behaviour = BEHAVIOURS[attempt.behaviour];
     if (!behaviour) throw new BadRequestException({ message: `Unknown behaviour ${attempt.behaviour}`, code: 'question.unknown_behaviour' });
     if (!attempt.questionVersionId) throw new BadRequestException({ message: 'Attempt has no pinned version', code: 'question.no_version' });
-    const version = await this.repo.getVersion(attempt.questionVersionId);
-    if (!version) throw new NotFoundException({ message: 'Pinned question version missing', code: 'question.version_missing' });
-    const q = await this.repo.getQuestion(attempt.questionId);
+    const content = await this.getAttemptContent(attempt);
     const response = await this.latestResponse(attempt.id);
-    const gradingData = await this.gradingDataFor(version, q?.qtype ?? '', tfScale);
-    const outcome = behaviour.gradeAtFinish(q?.qtype ?? '', gradingData, response);
+    const options = content.options ?? {};
+    const gradingData: GradingData = {
+      answers: content.answers.map((a) => ({ id: a.id, text: extractRichTextPlainText(a.answer as RichTextDocument), isCorrect: a.isCorrect })),
+    };
+    if (content.qtype === 'truefalse') {
+      const solution = content.answerKey.solution as { answers?: { statementId: string; value: boolean }[] } | null;
+      gradingData.truefalseStatements = solution?.answers ?? [];
+      if (tfScale) gradingData.tfScale = tfScale;
+    } else if (content.qtype === 'shortanswer') {
+      gradingData.shortanswer = { useCase: options.useCase === true, numericAnswer: options.numericAnswer === true,
+        numericMaxLength: typeof options.numericMaxLength === 'number' ? options.numericMaxLength : null,
+        numericAllowSign: options.numericAllowSign !== false, numericAllowDecimal: options.numericAllowDecimal !== false };
+    }
+    const outcome = behaviour.gradeAtFinish(content.qtype, gradingData, response);
     let state: QuestionState;
     let fraction: number | null;
     if (outcome === null) { state = 'gaveup'; fraction = 0; }
