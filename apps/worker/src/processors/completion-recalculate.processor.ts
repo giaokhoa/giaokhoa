@@ -1,5 +1,6 @@
 import { InjectQueue, Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job, Queue } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
@@ -29,6 +30,7 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
    */
   async process(job: Job<CompletionRecalculateJobData>): Promise<CompletionRecalculateResult> {
     // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    validateWorkerJobPayload(workerPayloadSchemas['completion-recalculate'], job.data, 'completion-recalculate');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

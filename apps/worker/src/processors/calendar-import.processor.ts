@@ -1,5 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job } from 'bullmq';
 import { parseIcs } from '../domain/ics';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
@@ -27,6 +28,7 @@ export class CalendarImportProcessor extends ObservedWorkerHost {
    */
   async process(job: Job<CalendarImportJobData>): Promise<CalendarImportResult> {
     // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    validateWorkerJobPayload(workerPayloadSchemas['calendar-import'], job.data, 'calendar-import');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

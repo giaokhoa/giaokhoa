@@ -1,5 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { ResendMailService } from '../resend-mail.service';
@@ -70,6 +71,7 @@ export class NotificationDispatchProcessor extends ObservedWorkerHost {
    */
   async process(job: Job<NotificationDispatchJobData>): Promise<NotificationDispatchResult> {
     // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    validateWorkerJobPayload(workerPayloadSchemas['notification-dispatch'], job.data, 'notification-dispatch');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

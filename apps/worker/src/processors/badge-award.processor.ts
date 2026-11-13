@@ -1,5 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
@@ -174,6 +175,7 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
    */
   async process(job: Job<BadgeAwardJobData>): Promise<BadgeAwardResult> {
     // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    validateWorkerJobPayload(workerPayloadSchemas['badge-award'], job.data, 'badge-award');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
