@@ -3,6 +3,15 @@
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
+## Kiểm thử đường phân phối sự kiện
+
+Các integration test kiểm tra nội dung/phân phối thông báo, digest,
+cohort và messaging kích hoạt `OutboxRelayScheduler.relayTick()` sau khi
+ghi fixture outbox, rồi chờ kết quả của hàng đợi thật. Điểm vào này tự
+gắn ngữ cảnh platform, nên vẫn chạy qua role DB thường và RLS như nhịp
+production; không phải chờ lịch 5 giây trong từng ca. Lịch production và
+các khẳng định chống trùng, cách ly tenant, chặn nội dung giữ nguyên.
+
 ## Package phụ trách nghiệp vụ gì
 
 `apps/worker` là tiến trình nền (không HTTP): chạy mọi việc **không đồng bộ và theo

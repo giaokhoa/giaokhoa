@@ -198,7 +198,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     return id;
   }
 
-  /** Ghi một tin + sự kiện message_sent như transaction gửi tin phía API, rồi relay và chờ phân phối chốt. */
+  /** Ghi tin + sự kiện rồi kích hoạt nhịp relay thật với ngữ cảnh platform, không đợi lịch 5 giây. */
   async function sendAndDistribute(opts: {
     conversationId: string; userIdFrom: string; seq: number; text: string; tenantId: string | null;
     replyToMessageId?: string;
@@ -207,7 +207,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const outboxId = await insertOutbox('message_sent', {
       conversationId: opts.conversationId, messageId, seq: opts.seq, fromUserId: opts.userIdFrom,
     }, opts.tenantId);
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(outboxId);
     return { messageId, outboxId };
   }
@@ -318,7 +318,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
 
     await setLastReadSeq(convId, b, 1);
     const outboxId = await insertOutbox('message_conversation_read', { conversationId: convId, userId: b, lastReadSeq: 1 }, tenantId);
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(outboxId);
 
     await waitUntil(() => eventsOf('a2', 'message.read').length === 1, 10000, 'A nhận message.read');
@@ -341,7 +341,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     await new Promise((resolve) => { setTimeout(resolve, 5); });
     const m2 = await makeMessage({ conversationId: convId, userIdFrom: a, seq: 2, text: 'thứ hai' });
     const e2 = await insertOutbox('message_sent', { conversationId: convId, messageId: m2, seq: 2, fromUserId: a }, tenantId);
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(e1);
     await waitDistributed(e2);
 
@@ -392,7 +392,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
       recalledAt: new Date(), recalledBy: a,
     });
     const outboxId = await insertOutbox('message_recalled', { conversationId: convId, messageId }, tenantId);
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(outboxId);
 
     await waitUntil(() => eventsOf('b5', 'message.deleted').length === 1, 10000, 'B nhận message.deleted');
@@ -422,7 +422,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const outboxId = await insertOutbox('message_deleted_for_me', {
       conversationId: convId, messageId, seq: 1, actorId: a,
     }, tenantId);
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(outboxId);
 
     await waitUntil(() => eventsOf('a6', 'message.deleted').length === 1, 10000, 'A nhận message.deleted của chính mình');
@@ -445,7 +445,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     // SAU (consumer tiêu thụ sự kiện sau khi chặn đã hiệu lực).
     const outboxId = await insertOutbox('message_conversation_read', { conversationId: convId, userId: a, lastReadSeq: 1 }, tenantId);
     await db.insertInto('message_users_blocked').values({ user_id: a, blocked_user_id: b }).execute();
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(outboxId);
 
     await settle();
@@ -466,7 +466,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
       conversationId: convId, messageId, seq: 1, fromUserId: a,
     }, tenantId);
     await db.insertInto('message_users_blocked').values({ user_id: b, blocked_user_id: a }).execute();
-    await relay.publishPending();
+    await relay.relayTick();
     await waitDistributed(outboxId);
 
     await settle();
@@ -486,7 +486,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const completedBefore = (await queue.getJobCounts('completed')).completed;
 
     // Relay chạy lại: dòng đã có publishedAt nên không job mới nào sinh ra.
-    await relay.publishPending();
+    await relay.relayTick();
     // Processor xử lý lại đúng job đó (mô phỏng job bị phát lại
     // ngoài cửa sổ chống trùng của hàng đợi): dấu theo outboxId chặn.
     const row = await db.selectFrom('outbox_events').selectAll().where('id', '=', outboxId).executeTakeFirst();

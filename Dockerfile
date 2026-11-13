@@ -21,8 +21,12 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 WORKDIR /repo
+# Tải dependency theo lockfile trước khi chép nguồn: sửa code không làm
+# mất layer tải gói; bước install sau chỉ liên kết workspace và chạy build native.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm fetch
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --offline --frozen-lockfile
 RUN pnpm exec turbo run build --filter=@giaokhoa/api --filter=@giaokhoa/worker --filter=@giaokhoa/web
 RUN pnpm --filter @giaokhoa/api deploy --prod /out/api \
   && pnpm --filter @giaokhoa/worker deploy --prod /out/worker \

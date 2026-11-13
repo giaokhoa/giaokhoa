@@ -3,6 +3,7 @@
 # `pnpm install --frozen-lockfile`, dist/build được biên dịch mới trong
 # image), và loại file .env thật để bí mật không lọt vào image.
 .git
+.worktrees
 **/node_modules
 **/dist
 apps/web/build

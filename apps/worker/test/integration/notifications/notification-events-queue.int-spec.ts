@@ -3,6 +3,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { sql, type RawBuilder } from '@giaokhoa/db';
+import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
 import { NotificationEventsMarker } from '../../../src/notification-events-marker.service';
 import { NotificationEventsProcessor } from '../../../src/processors/notification-events.processor';
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
@@ -106,7 +107,9 @@ describe('Worker notification events queue mechanism (viết lại reanchor ở 
     return row.id;
   }
 
+  /** Kích hoạt relay thật với ngữ cảnh platform rồi chờ job hoàn tất, không đợi lịch 5 giây. */
   async function waitJobCompleted(outboxId: string, timeoutMs = 90000): Promise<void> {
+    await context.get(OutboxRelayScheduler).relayTick();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const job = await eventsQueue.getJob(outboxId);

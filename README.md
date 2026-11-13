@@ -272,6 +272,19 @@ pnpm install
 turbo run build typecheck test
 ```
 
+CI chạy các suite ngoài API ở `verify-workspace`, unit/integration API
+ở `test-api`, và e2e API ở bốn shard độc lập. Mỗi job có PostgreSQL/Redis
+riêng; `verify` là cổng tổng hợp, chỉ thành công khi mọi job kiểm chứng và
+job gộp báo cáo e2e đều thành công. Cấu trúc này giữ đủ test nhưng không
+bắt API chờ worker chạy xong.
+
+GitHub Actions lưu `.turbo/cache` giữa các lượt để tái sử dụng build,
+lint và typecheck theo input của Turbo. Task `test` đặt `cache: false`:
+test luôn chạy trên PostgreSQL/Redis của lượt hiện tại, kể cả khi mã
+nguồn không đổi. Docker tải dependency bằng `pnpm fetch` trước khi chép
+nguồn, rồi `pnpm install --offline --frozen-lockfile`; sửa nguồn không
+làm mất layer tải gói khi lockfile và cấu hình pnpm không đổi.
+
 ## Vận hành
 
 Bảo vệ ở biên HTTP: các header bảo mật tiêu chuẩn trên mọi
