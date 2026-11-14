@@ -6,7 +6,7 @@ export interface ProgrammePackageMeta {
   scope: string;
   checksum: string;
   outcomeCount: number;
-  status: "pending" | "published" | "rejected";
+  status: "pending" | "published" | "rejected" | "withdrawn";
   centreSlug: string | null;
   createdAt: string;
   reviewedAt: string | null;
@@ -87,6 +87,12 @@ export function reviewProgramme(
       ...(approve ? {} : { body: JSON.stringify({ reason }) }),
     },
   );
+}
+
+export function withdrawProgramme(version: string, reason: string) {
+  return apiJson<ProgrammePackageMeta>(`${base}/${encodeURIComponent(version)}/withdraw`, {
+    method: 'POST', body: JSON.stringify({ reason }),
+  });
 }
 
 export function installProgramme(version: string) {

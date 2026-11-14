@@ -489,4 +489,40 @@ describe("Gói chương trình #17 — gửi, duyệt, cài qua HTTP và kho ri�
       .send({});
     expect(installed.status).toBe(403);
   });
+
+  it('rút gói chương trình: B giữ phiên bản cài, A chưa cài không thể nhận mới', async () => {
+    const base = '/api/v1/system-bank/outcome-packages';
+    const revoked = await http(app!).post(`${base}/${version1}/withdraw`)
+      .set(auth(platformToken)).send({ reason: 'Chương trình đã được thay thế' });
+    expect(revoked.status, JSON.stringify(revoked.body)).toBe(201);
+    expect(revoked.body.status).toBe('withdrawn');
+    const discovered = await http(app!).get(base).set('Host', hostB).set(auth(tokenB));
+    expect(discovered.status).toBe(200);
+    expect(discovered.body.some((row: { version: string }) => row.version === version1)).toBe(false);
+    const installed = await http(app!).get(`${base}/installed`).set('Host', hostB).set(auth(tokenB));
+    expect(installed.status).toBe(200);
+    expect(installed.body.some((row: { packageVersion: string }) => row.packageVersion === version1)).toBe(true);
+    const reused = await http(app!).post(`${base}/${version1}/install`)
+      .set('Host', hostB).set(auth(tokenB)).send({});
+    expect(reused.status, JSON.stringify(reused.body)).toBe(201);
+    expect(reused.body.unchanged).toBe(true);
+    const denied = await http(app!).post(`${base}/${version1}/install`)
+      .set('Host', hostA).set(auth(tokenA)).send({});
+    expect(denied.status).toBe(404);
+    const version = await http(app!).get(`${base}/${version1}`).set('Host', hostB).set(auth(tokenB));
+    expect(version.status).toBe(200);
+    const events = await http(app!).get('/api/v1/system-bank/events/pending')
+      .set('Host', hostB).set(auth(tokenB));
+    expect(events.status, JSON.stringify(events.body)).toBe(200);
+    const event = events.body.find((item: { type: string }) => item.type === 'programme_withdrawn');
+    expect(event?.resourceKey).toBe(subjectSlug);
+    const acknowledgement = await http(app!).post(`/api/v1/system-bank/events/${event.id}/acknowledge`)
+      .set('Host', hostB).set(auth(tokenB)).send({});
+    expect(acknowledgement.status).toBe(201);
+    const after = await http(app!).get('/api/v1/system-bank/events/pending')
+      .set('Host', hostB).set(auth(tokenB));
+    expect(after.status).toBe(200);
+    expect(after.body.some((row: { id: string }) => row.id === event.id)).toBe(false);
+  });
+
 });

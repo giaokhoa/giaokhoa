@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomUUID } from 'node:crypto';
-import { systemBankPackageSchema, systemExamPackageSchema, type CreateExamPin, type SystemExamPackage } from '@giaokhoa/contracts';
+import { systemBankPackageSchema, systemExamPackageSchema, type CreateExamPin, type RichTextInput, type SystemExamPackage } from '@giaokhoa/contracts';
 import type { ExamQuestionSnapshot } from '@giaokhoa/db';
 import { ExamsRepository } from '@giaokhoa/db/repositories/exams';
 import { SystemExamsRepository, type SystemExamVersionRow } from '@giaokhoa/db/repositories/system-exams';
@@ -10,7 +10,7 @@ import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
-import { QuestionsService } from '../questions/questions.service';
+import { QuestionsService, type QuestionContentInput } from '../questions/questions.service';
 import { ExamQuestionSnapshotsService } from '../quiz/exam-question-snapshots.service';
 import { QuizService } from '../quiz/quiz.service';
 import { SystemBankMediaService } from '../system-bank/system-bank-media.service';
@@ -140,11 +140,20 @@ export class SystemSharedExamsService {
       source: { centreSlug, examId, versionId: version.id, versionNumber: version.version },
       slots: sources,
     });
-    const row = await this.repo.submit({
-      centreSlug, sourceExamId: examId, sourceVersionId: version.id, sourceVersionNumber: version.version,
-      package: pkg, checksum: checksumPackage(pkg), submittedBy: actorId,
-    });
+    let row;
+    try {
+      row = await this.repo.submit({
+        centreSlug, sourceExamId: examId, sourceVersionId: version.id, sourceVersionNumber: version.version,
+        package: pkg, checksum: checksumPackage(pkg), submittedBy: actorId,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'system_exam.source_withdrawn') {
+        throw new ConflictException({ code: 'system_exam.source_withdrawn' });
+      }
+      throw error;
+    }
     if (row.status === 'rejected') throw new ConflictException({ code: 'system_exam.rejected_source_version' });
+    if (row.status === 'withdrawn') throw new ConflictException({ code: 'system_exam.source_withdrawn' });
     return this.summary(row);
   }
 
@@ -155,6 +164,23 @@ export class SystemSharedExamsService {
 
   async listPublished(actorId: string, courseId: string) {
     await this.deployer(actorId, courseId);
+    return (await this.repo.listPublished()).map((row) => this.summary(row));
+  }
+
+  async listUsed(actorId: string) {
+    const tenantId = tenantAls.getStore()?.tenantId;
+    if (!tenantId) throw new ForbiddenException({ code: 'system_exam.centre_required' });
+    const permitted = await this.evaluator.hasCapabilityFromRealAssignmentAnywhere(actorId, 'exam:use');
+    const manager = await this.contexts.getTenantContext(tenantId);
+    const manages = manager ? await this.evaluator.hasCapability(actorId, 'tenant:manage', manager.id) : false;
+    if (!permitted && !manages) throw new ForbiddenException({ code: 'access.capability_denied' });
+    const ids = await this.centreRepo.listSharedExamVersionIds();
+    const rows = await Promise.all(ids.map((id) => this.repo.get(id)));
+    return rows.filter((row): row is SystemExamVersionRow => row !== null).map((row) => this.summary(row));
+  }
+
+  async listApprovedForReview(actorId: string) {
+    await this.reviewer(actorId);
     return (await this.repo.listPublished()).map((row) => this.summary(row));
   }
 
@@ -210,6 +236,83 @@ export class SystemSharedExamsService {
     const updated = await this.repo.review(id, actorId, 'approved');
     if (!updated || updated.status !== 'approved') throw new ConflictException({ code: 'system_exam.already_reviewed' });
     return this.summary(updated);
+  }
+
+  async fork(actorId: string, id: string) {
+    const tenantId = tenantAls.getStore()?.tenantId;
+    if (!tenantId) throw new ForbiddenException({ code: 'system_exam.centre_required' });
+    const row = await this.repo.get(id);
+    if (!row || (row.status !== 'approved' &&
+      !(row.status === 'withdrawn' && await this.centreRepo.hasSharedExamVersion(id)))) {
+      throw new NotFoundException({ code: 'system_exam.not_published' });
+    }
+    const pkg = this.validate(row);
+    const examBank = await this.banks.ensurePersonalBank(actorId, 'exam', { forCopy: true });
+    await this.exams.getExamBank(actorId, examBank.id);
+    await this.evaluator.requireCapability(actorId, 'exam:add', examBank.contextId);
+    if (examBank.tenantId !== tenantId) throw new ForbiddenException({ code: 'system_exam.centre_required' });
+    const questionBank = await this.banks.ensurePersonalBank(actorId, 'question', { forCopy: true });
+    const category = await this.banks.defaultCategoryOfBank(questionBank);
+    await this.evaluator.requireCapability(actorId, 'question:add', category.contextId);
+    const copies: Array<{ position: number; section: string; questionId: string; pinnedVersionId: string; maxMark: number }> = [];
+    for (const slot of pkg.slots) {
+      const local = await this.media.materialize(slot.package, category.contextId, actorId);
+      const stimulusId = local.stimulusContent
+        ? (await this.questions.createStimulus(actorId, {
+          categoryId: category.id, content: local.stimulusContent as RichTextInput,
+        })).id
+        : null;
+      const options = local.options ? { ...local.options } : undefined;
+      if (options) {
+        for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
+          if (options[key] === null) delete options[key];
+        }
+      }
+      const created = await this.questions.createQuestion(actorId, {
+        categoryId: category.id,
+        qtype: slot.qtype,
+        questionText: local.questionText as RichTextInput,
+        generalFeedback: (local.generalFeedback ?? undefined) as RichTextInput | undefined,
+        guidance: (local.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
+        stimulusId,
+        answers: local.answers.map((answer) => ({
+          text: answer.answer as RichTextInput, correct: answer.isCorrect,
+          feedback: (answer.feedback ?? undefined) as RichTextInput | undefined,
+        })),
+        options: options as QuestionContentInput['options'],
+        solution: local.answerKey?.solution
+          ? local.answerKey.solution as QuestionContentInput['solution'] : undefined,
+      });
+      copies.push({
+        position: slot.position, section: slot.section, questionId: created.question.id,
+        pinnedVersionId: created.latestVersion.id, maxMark: slot.maxMark,
+      });
+    }
+    return this.examsRepo.transaction(async (tx) => {
+      const paper = await this.examsRepo.insertPaper({
+        tenantId, bankId: examBank.id, kind: 'snapshot', status: 'draft',
+        createdBy: actorId, systemExamForkVersionId: id, latestVersion: 1,
+        derivedFromVersionNumber: row.sourceVersionNumber,
+      }, tx);
+      const version = await this.examsRepo.insertVersion({
+        examId: paper.id, version: 1, name: pkg.name, grade: pkg.grade, examKind: pkg.examKind,
+        totalScore: pkg.totalScore, durationMinutes: pkg.durationMinutes, tfScale: pkg.tfScale,
+        createdBy: actorId,
+      }, tx);
+      await this.examsRepo.insertSlots(copies.map((copy) => ({
+        examVersionId: version.id, position: copy.position, section: copy.section,
+        questionId: copy.questionId, pinnedVersionId: copy.pinnedVersionId,
+        pinnedVersionNumber: 1, maxMark: copy.maxMark, sourceDomain: 'centre',
+      })), tx);
+      return { paperId: paper.id, versionId: version.id, sourceExamVersionId: id, questionIds: copies.map((copy) => copy.questionId) };
+    });
+  }
+
+  async withdraw(actorId: string, id: string, reason: string) {
+    await this.reviewer(actorId);
+    const row = await this.repo.withdrawSource(id, reason);
+    if (!row) throw new ConflictException({ code: 'system_exam.not_published' });
+    return this.summary(row);
   }
 
   async reject(actorId: string, id: string, reason: string) {
@@ -294,7 +397,10 @@ export class SystemSharedExamsService {
     let paper = previous;
     if (!paper) {
       const row = await this.repo.get(sharedId);
-      if (!row || row.status !== 'approved') throw new NotFoundException({ code: 'system_exam.not_published' });
+      if (!row || (row.status !== 'approved' &&
+        !(row.status === 'withdrawn' && await this.centreRepo.hasSharedExamVersion(sharedId)))) {
+        throw new NotFoundException({ code: 'system_exam.not_published' });
+      }
       const pkg = this.validate(row);
       const tenantId = tenantAls.getStore()?.tenantId;
       if (!tenantId) throw new ForbiddenException({ code: 'system_exam.centre_required' });

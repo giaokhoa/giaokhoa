@@ -39,16 +39,31 @@ export interface SystemSharedExamSummary {
   totalScore: number;
   durationMinutes: number | null;
   slotCount: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
   createdAt: string;
   rejectionReason: string | null;
+}
+
+export function forkSharedExam(id: string) {
+  return apiJson<{ paperId: string; versionId: string; sourceExamVersionId: string; questionIds: string[] }>(
+    `/api/v1/system-bank/exams/${id}/fork`, { method: 'POST' });
+}
+
+export function withdrawSharedExam(id: string, reason: string) {
+  return apiJson<SystemSharedExamSummary>(`/api/v1/system-bank/exams/${id}/withdraw`, {
+    method: 'POST', body: JSON.stringify({ reason }),
+  });
 }
 
 export function fetchSharedExams(courseId: string) {
   return apiJson<SystemSharedExamSummary[]>(`/api/v1/system-bank/exams?courseId=${encodeURIComponent(courseId)}`);
 }
 
-export function fetchSharedExamSubmissions(scope: 'mine' | 'pending') {
+export function fetchUsedSharedExams() {
+  return apiJson<SystemSharedExamSummary[]>('/api/v1/system-bank/exams/used');
+}
+
+export function fetchSharedExamSubmissions(scope: 'mine' | 'pending' | 'approved') {
   return apiJson<SystemSharedExamSummary[]>(`/api/v1/system-bank/exams/${scope}`);
 }
 
@@ -151,6 +166,42 @@ export interface SystemPublishedVersion {
   version: number;
   checksum: string;
   package: SystemQuestionSubmission['package'];
+}
+
+export interface SystemUsedQuestion {
+  questionId: string;
+  sourceQuestionId: string;
+  sourceVersionId: string;
+  sourceVersionNumber: number;
+  packageChecksum: string;
+  kind: 'pristine' | 'derived';
+  sourceStatus: 'published' | 'withdrawn' | 'unavailable';
+  latestVersionNumber: number | null;
+  hasNewVersion: boolean;
+}
+
+export interface SystemQuestionEvent {
+  id: string;
+  type: 'question_version_published' | 'question_withdrawn' |
+    'exam_version_published' | 'exam_withdrawn' |
+    'material_version_published' | 'material_withdrawn' |
+    'programme_version_published' | 'programme_withdrawn';
+  sourceQuestionId: string | null;
+  resourceKind: 'exam' | 'material' | 'programme' | null;
+  resourceKey: string | null;
+  payload: { versionNumber?: number; version?: number | string; reason?: string };
+}
+
+export function fetchUsedSystemQuestions() {
+  return apiJson<SystemUsedQuestion[]>('/api/v1/system-bank/imports');
+}
+
+export function fetchSystemQuestionEvents() {
+  return apiJson<SystemQuestionEvent[]>('/api/v1/system-bank/events/pending');
+}
+
+export function acknowledgeSystemQuestionEvent(id: string) {
+  return apiJson<unknown>(`/api/v1/system-bank/events/${id}/acknowledge`, { method: 'POST' });
 }
 
 export function fetchSystemPublishedQuestions(params: { qtype?: string; offset?: number; limit?: number }) {

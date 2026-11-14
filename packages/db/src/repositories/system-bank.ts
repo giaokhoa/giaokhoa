@@ -46,7 +46,9 @@ export interface SystemQuestionImporterRow {
 export interface SystemBankEventRow {
   id: string;
   type: string;
-  sourceQuestionId: string;
+  sourceQuestionId: string | null;
+  resourceKind: string | null;
+  resourceKey: string | null;
   payload: unknown;
   createdAt: Date;
 }
@@ -64,6 +66,8 @@ export interface SystemOutcomePackageRow {
   reviewedBy: string | null;
   reviewedAt: Date | null;
   rejectionReason: string | null;
+  withdrawnAt: Date | null;
+  withdrawnReason: string | null;
 }
 
 export interface SystemOutcomePackageCurriculumRow {
@@ -162,6 +166,8 @@ const SYSTEM_BANK_EVENT_COLUMNS = [
   'id',
   'type',
   'source_question_id as sourceQuestionId',
+  'resource_kind as resourceKind',
+  'resource_key as resourceKey',
   'payload',
   'created_at as createdAt',
 ] as const;
@@ -179,6 +185,8 @@ const SYSTEM_OUTCOME_PACKAGE_COLUMNS = [
   'reviewed_by as reviewedBy',
   'reviewed_at as reviewedAt',
   'rejection_reason as rejectionReason',
+  'withdrawn_at as withdrawnAt',
+  'withdrawn_reason as withdrawnReason',
 ] as const;
 
 const SYSTEM_OUTCOME_PACKAGE_CURRICULUM_COLUMNS = [
@@ -324,6 +332,15 @@ export class SystemBankRepository {
             )
             .execute();
         }
+        await tx.insertInto('system_bank_events').values({
+          type: 'question_version_published',
+          source_question_id: questionId,
+          payload: jsonbColumn<Json>({
+            versionId: version.id,
+            versionNumber: version.version,
+            checksum: version.checksum,
+          }),
+        }).execute();
         return version;
       });
   }
@@ -372,20 +389,27 @@ export class SystemBankRepository {
   async markWithdrawn(
     id: string,
     input: { reason: string; by: string | null },
-  ): Promise<SystemQuestionRow | null> {
-    const rows = await this.db()
-      .updateTable('system_questions')
-      .set({
+  ): Promise<{ question: SystemQuestionRow; event: SystemBankEventRow } | null> {
+    return this.db().transaction().execute(async (tx) => {
+      const withdrawnAt = new Date();
+      const question = await tx.updateTable('system_questions').set({
         status: 'withdrawn',
         withdrawn_reason: input.reason,
         withdrawn_by: input.by,
-        withdrawn_at: new Date(),
-        updated_at: new Date(),
-      })
-      .where('id', '=', id)
-      .returning(SYSTEM_QUESTION_COLUMNS)
-      .execute();
-    return rows[0] ?? null;
+        withdrawn_at: withdrawnAt,
+        updated_at: withdrawnAt,
+      }).where('id', '=', id).where('status', '=', 'published')
+        .returning(SYSTEM_QUESTION_COLUMNS).executeTakeFirst();
+      if (!question) return null;
+      const event = await tx.insertInto('system_bank_events').values({
+        type: 'question_withdrawn',
+        source_question_id: id,
+        payload: jsonbColumn<Json>({
+          reason: input.reason, withdrawnBy: input.by, withdrawnAt: withdrawnAt.toISOString(),
+        }),
+      }).returning(SYSTEM_BANK_EVENT_COLUMNS).executeTakeFirstOrThrow();
+      return { question, event };
+    });
   }
 
   async recordEvent(input: {
@@ -474,6 +498,31 @@ export class SystemBankRepository {
       .where('centre_slug', '=', centreSlug)
       .execute();
     return rows.map((row) => row.sourceQuestionId);
+  }
+
+  async listResourceEvents(keys: Array<{ kind: 'exam' | 'material' | 'programme'; key: string }>): Promise<SystemBankEventRow[]> {
+    if (keys.length === 0) return [];
+    const kinds = [...new Set(keys.map((entry) => entry.kind))];
+    const resourceKeys = [...new Set(keys.map((entry) => entry.key))];
+    const allowed = new Set(keys.map((entry) => `${entry.kind}/${entry.key}`));
+    const events = await this.db().selectFrom('system_bank_events')
+      .select(SYSTEM_BANK_EVENT_COLUMNS)
+      .where('resource_kind', 'in', kinds)
+      .where('resource_key', 'in', resourceKeys)
+      .orderBy('created_at', 'asc')
+      .execute();
+    return events.filter((event) => allowed.has(`${event.resourceKind}/${event.resourceKey}`));
+  }
+
+  async listExamSourcesForVersions(versionIds: string[]): Promise<Array<{ id: string; centreSlug: string; sourceExamId: string; status: string }>> {
+    if (versionIds.length === 0) return [];
+    return this.db().selectFrom('system_exam_versions')
+      .select(['id', 'centre_slug as centreSlug', 'source_exam_id as sourceExamId', 'status'])
+      .where('id', 'in', versionIds).execute();
+  }
+
+  async listResourceEventsForScope(kind: 'exam' | 'material' | 'programme', key: string): Promise<SystemBankEventRow[]> {
+    return this.listResourceEvents([{ kind, key }]);
   }
 
   async listEventsForQuestions(sourceQuestionIds: string[]): Promise<SystemBankEventRow[]> {
@@ -635,6 +684,22 @@ export class SystemBankRepository {
       });
   }
 
+  async withdrawPackage(version: string, actorId: string, reason: string): Promise<SystemOutcomePackageRow | null> {
+    return this.db().transaction().execute(async (tx) => {
+      const row = await tx.selectFrom('system_outcome_packages').select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
+        .where('version', '=', version).forUpdate().executeTakeFirst();
+      if (!row || row.status !== 'published') return null;
+      const withdrawn = await tx.updateTable('system_outcome_packages').set({
+        status: 'withdrawn', withdrawn_at: new Date(), withdrawn_reason: reason,
+      }).where('id', '=', row.id).returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS).executeTakeFirstOrThrow();
+      await tx.insertInto('system_bank_events').values({
+        type: 'programme_withdrawn', resource_kind: 'programme', resource_key: row.scope,
+        payload: jsonbColumn<Json>({ version: row.version, reason, withdrawnBy: actorId }),
+      }).execute();
+      return withdrawn;
+    });
+  }
+
   async getPackageByVersion(version: string): Promise<SystemOutcomePackageRow | null> {
     const row = await this.db()
       .selectFrom('system_outcome_packages')
@@ -674,13 +739,20 @@ export class SystemBankRepository {
         if ((approve && row.status === 'published') || (!approve && row.status === 'rejected')) return row;
         throw new Error('system_bank.package_already_reviewed');
       }
-      return (await tx.updateTable('system_outcome_packages')
+      const reviewed = await tx.updateTable('system_outcome_packages')
         .set({
           status: approve ? 'published' : 'rejected',
           reviewed_by: actorId,
           reviewed_at: new Date(),
           rejection_reason: approve ? null : reason,
-        }).where('id', '=', row.id).returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS).executeTakeFirst()) ?? null;
+        }).where('id', '=', row.id).returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS).executeTakeFirstOrThrow();
+      if (approve) {
+        await tx.insertInto('system_bank_events').values({
+          type: 'programme_version_published', resource_kind: 'programme', resource_key: row.scope,
+          payload: jsonbColumn<Json>({ version: row.version, checksum: row.checksum }),
+        }).execute();
+      }
+      return reviewed;
     });
   }
 

@@ -81,6 +81,11 @@ export const withdrawSystemBankQuestionSchema = z.strictObject({
 });
 export type WithdrawSystemBankQuestion = z.infer<typeof withdrawSystemBankQuestionSchema>;
 
+export const withdrawSystemResourceSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(500),
+});
+export type WithdrawSystemResource = z.infer<typeof withdrawSystemResourceSchema>;
+
 export const discoverSystemBankQuestionsSchema = z.strictObject({
   qtype: z.enum(SYSTEM_BANK_QUESTION_TYPES).optional(),
   outcomeId: uuidIdSchema.optional(),

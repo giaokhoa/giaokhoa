@@ -203,6 +203,66 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(read.body.latestVersion.questionText).toMatchObject(doc('Câu để nhập'));
   });
 
+  it('phiên bản mới phát thông báo, trung tâm chủ động chọn bản sau và bản riêng cũ không bị sửa', async () => {
+    const created = await publish('Câu gốc phiên bản đầu');
+    const imported = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send({
+      sourceQuestionId: created.question.id,
+      sourceVersionNumber: 1,
+    });
+    expect(imported.status).toBe(201);
+    const localId = imported.body.question.question.id as string;
+    const published = await http(app).post(`/api/v1/system-bank/questions/${created.question.id}/versions`)
+      .set(bearer(admin)).send({ package: multichoicePackage('Câu phiên bản mới') });
+    expect(published.status).toBe(201);
+    const used = await http(app).get('/api/v1/system-bank/imports').set(bearer(teacher.token));
+    expect(used.status).toBe(200);
+    expect(used.body).toEqual(expect.arrayContaining([expect.objectContaining({
+      questionId: localId, sourceQuestionId: created.question.id, sourceVersionNumber: 1,
+      latestVersionNumber: 2, hasNewVersion: true, sourceStatus: 'published',
+    })]));
+    const provenance = await http(app).get(`/api/v1/system-bank/imports/${localId}`).set(bearer(teacher.token));
+    expect(provenance.status).toBe(200);
+    expect(provenance.body.sourceVersionId).toBe(created.version.id);
+    const pending = await http(app).get('/api/v1/system-bank/events/pending').set(bearer(teacher.token));
+    const event = (pending.body as { id: string; sourceQuestionId: string; type: string; payload: { versionNumber: number } }[])
+      .find((row) => row.sourceQuestionId === created.question.id && row.type === 'question_version_published');
+    expect(event?.payload.versionNumber).toBe(2);
+    const local = await http(app).get(`/api/v1/questions/${localId}`).set(bearer(teacher.token));
+    expect(local.body.latestVersion.questionText).toMatchObject(doc('Câu gốc phiên bản đầu'));
+    const next = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send({
+      sourceQuestionId: created.question.id,
+      sourceVersionNumber: 2,
+    });
+    expect(next.status).toBe(201);
+    expect(next.body.question.question.id).not.toBe(localId);
+    expect(next.body.question.latestVersion.questionText).toMatchObject(doc('Câu phiên bản mới'));
+    const acknowledgement = await http(app).post(`/api/v1/system-bank/events/${event!.id}/acknowledge`)
+      .set(bearer(teacher.token)).send();
+    expect(acknowledgement.status).toBe(201);
+    const after = await http(app).get('/api/v1/system-bank/events/pending').set(bearer(teacher.token));
+    expect((after.body as { id: string }[]).some((row) => row.id === event!.id)).toBe(false);
+  });
+
+  it('API trực tiếp không cho nhận nguồn rút nếu trung tâm chưa từng nhận phiên bản', async () => {
+    const created = await publish('Câu rút trước khi tiếp nhận');
+    const withdrawal = await http(app).post(`/api/v1/system-bank/questions/${created.question.id}/withdraw`)
+      .set(bearer(admin)).send({ reason: 'Nguồn không còn hợp lệ' });
+    expect(withdrawal.status).toBe(201);
+    const importResult = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send({
+      sourceQuestionId: created.question.id, sourceVersionNumber: 1,
+    });
+    expect(importResult.status).toBe(400);
+    expect(importResult.body.code).toBe('system_bank.question_withdrawn');
+    const read = await http(app).get(`/api/v1/system-bank/questions/${created.question.id}/versions/1`)
+      .set(bearer(teacher.token));
+    expect(read.status).toBe(404);
+    expect(read.body.code).toBe('system_bank.question_not_found');
+    const ignored = await http(app).post(`/api/v1/system-bank/events/${randomUUID()}/acknowledge`)
+      .set(bearer(teacher.token)).send();
+    expect(ignored.status).toBe(404);
+    expect(ignored.body.code).toBe('system_bank.event_not_found');
+  });
+
   it('checksum lệch thì nhập bị từ chối', async () => {
     const created = await publish('Câu để phá checksum');
     const questionId = created.question.id;
@@ -218,13 +278,16 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect((imported.body as { code?: string }).code).toBe('system_bank.checksum_mismatch');
   });
 
-  it('rút câu: khám phá + nhập mới không còn thấy, sự kiện rút được ghi và trung tâm ghi nhận', async () => {
+  it('rút câu: ẩn khám phá, giữ quyền dùng lại phiên bản đã nhận và ghi nhận sự kiện', async () => {
     const created = await publish('Câu sẽ rút');
     const questionId = created.question.id;
     const imported = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send({
       sourceQuestionId: questionId,
     });
     expect(imported.status).toBe(201);
+    const newSourceVersion = await http(app).post(`/api/v1/system-bank/questions/${questionId}/versions`)
+      .set(bearer(admin)).send({ package: multichoicePackage('Câu phiên bản chưa nhận') });
+    expect(newSourceVersion.status).toBe(201);
     const withdrawn = await http(app).post(`/api/v1/system-bank/questions/${questionId}/withdraw`).set(bearer(admin)).send({
       reason: 'Nội dung lỗi thời',
     });
@@ -233,9 +296,24 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect((discovery.body.items as { id: string }[]).find((item) => item.id === questionId)).toBeUndefined();
     const reimport = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send({
       sourceQuestionId: questionId,
+      sourceVersionNumber: 1,
     });
-    expect(reimport.status).toBe(400);
-    expect((reimport.body as { code?: string }).code).toBe('system_bank.question_withdrawn');
+    expect(reimport.status).toBe(201);
+    expect(reimport.body.import.sourceVersionId).toBe(created.version.id);
+    const source = await http(app).get(`/api/v1/system-bank/questions/${questionId}/versions/1`).set(bearer(teacher.token));
+    expect(source.status).toBe(200);
+    expect(source.body.package.questionText).toMatchObject(doc('Câu sẽ rút'));
+    const blockedVersion = await http(app).get(`/api/v1/system-bank/questions/${questionId}/versions/2`)
+      .set(bearer(teacher.token));
+    expect(blockedVersion.status).toBe(404);
+    const blockedImport = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token))
+      .send({ sourceQuestionId: questionId, sourceVersionNumber: 2 });
+    expect(blockedImport.status).toBe(400);
+    const versions = await http(app).get(`/api/v1/system-bank/questions/${questionId}/versions`)
+      .set(bearer(teacher.token));
+    expect(versions.status).toBe(200);
+    expect(versions.body).toHaveLength(1);
+    expect(versions.body[0].version).toBe(1);
     const events = await bankPg.query(
       `SELECT id FROM system_bank_events WHERE source_question_id = $1 AND type = 'question_withdrawn'`,
       [questionId],

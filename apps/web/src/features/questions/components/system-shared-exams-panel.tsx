@@ -11,8 +11,9 @@ import { coursesListQueryOptions } from '#features/course-builder/queries/course
 import { courseGroupsQueryOptions } from '#features/progress-report/queries/progress-report';
 import {
   approveSharedExam, assignSharedExam, fetchSharedExamForReview, fetchSharedExamSubmissions,
-  fetchSharedExams, rejectSharedExam,
+  fetchSharedExams, fetchUsedSharedExams, forkSharedExam, rejectSharedExam, withdrawSharedExam,
 } from '../api/questions';
+import { SystemSourceNotices } from './system-source-notices';
 import { SystemSubmissionReviewPreview } from './system-submission-review-preview';
 import type { SystemQuestionSubmission } from '../api/questions';
 
@@ -48,6 +49,17 @@ export function SystemSharedExamsPanel() {
     queryFn: () => fetchSharedExams(courseId),
     enabled: !!courseId,
   });
+  const used = useQuery({
+    queryKey: ['system-shared-exams', 'used'],
+    queryFn: fetchUsedSharedExams,
+    enabled: permissions.ready && contexts.some((ctx) =>
+      ctx.contextLevel >= 20 && (ctx.capabilities.includes('exam:use') || ctx.capabilities.includes('tenant:manage'))),
+  });
+  const approved = useQuery({
+    queryKey: ['system-shared-exams', 'approved'],
+    queryFn: () => fetchSharedExamSubmissions('approved'),
+    enabled: canReview,
+  });
   const mine = useQuery({
     queryKey: ['system-shared-exams', 'mine'],
     queryFn: () => fetchSharedExamSubmissions('mine'),
@@ -66,6 +78,40 @@ export function SystemSharedExamsPanel() {
   const content = useQuery({ ...courseContentQueryOptions(courseId), enabled: !!courseId }).data;
   const groups = useQuery({ ...courseGroupsQueryOptions(courseId), enabled: !!courseId }).data ?? [];
   const sections = content?.sections ?? [];
+
+  async function fork() {
+    if (!versionId || busy) return;
+    setBusy(true); setNotice(null);
+    try {
+      const local = await forkSharedExam(versionId);
+      setNotice(t('sharedExamForkSuccess', { id: local.paperId }));
+    } catch {
+      setNotice(t('sharedExamForkFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function withdraw(selectedId = versionId) {
+    if (!selectedId || busy) return;
+    const reason = window.prompt(t('sharedExamWithdrawReason'));
+    if (!reason?.trim()) return;
+    setBusy(true); setNotice(null);
+    try {
+      await withdrawSharedExam(selectedId, reason.trim());
+      if (selectedId === versionId) setVersionId('');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['system-shared-exams', 'published'] }),
+        queryClient.invalidateQueries({ queryKey: ['system-shared-exams', 'approved'] }),
+        queryClient.invalidateQueries({ queryKey: ['system-shared-exams', 'used'] }),
+      ]);
+      setNotice(t('systemResourceWithdrawn'));
+    } catch {
+      setNotice(t('sharedExamWithdrawFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function deploy() {
     if (!versionId || !courseId || !sectionId || busy) return;
@@ -117,6 +163,8 @@ export function SystemSharedExamsPanel() {
       <h3 className="font-semibold">{t('sharedExamTitle')}</h3>
       <p className="text-sm text-muted-foreground">{t('sharedExamHint')}</p>
       {notice ? <p role="status">{notice}</p> : null}
+      {(canSubmit || (permissions.ready && contexts.some((ctx) =>
+        ctx.capabilities.includes('exam:use')))) ? <SystemSourceNotices resourceKind="exam" /> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="shared-exam-course">{t('deployPickCourse')}</Label>
@@ -140,6 +188,10 @@ export function SystemSharedExamsPanel() {
                 {exam.name} · v{exam.sourceVersionNumber} · {t('examPaperSlotsCount', { count: exam.slotCount })}
               </option>
             ))}
+            {(used.data ?? []).filter((exam) => exam.status === 'withdrawn').map((exam) =>
+              <option key={`used:${exam.id}`} value={exam.id}>
+                {exam.name} · v{exam.sourceVersionNumber} · {t('systemUsedWithdrawn')}
+              </option>)}
           </select>
         </div>
       </div>
@@ -186,9 +238,17 @@ export function SystemSharedExamsPanel() {
                 onChange={(event) => { setTimeClose(event.target.value); setRequestId(''); }} />
             </div>
           </div>
-          <Button disabled={busy || !sectionId} onClick={() => void deploy()}>
-            {t('sharedExamAssign')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy || !sectionId} onClick={() => void deploy()}>
+              {t('sharedExamAssign')}
+            </Button>
+            <Button variant="outline" disabled={busy} onClick={() => void fork()}>
+              {t('sharedExamFork')}
+            </Button>
+            {canReview ? <Button variant="outline" disabled={busy} onClick={() => void withdraw()}>
+              {t('sharedExamWithdraw')}
+            </Button> : null}
+          </div>
         </div>
       ) : null}
 
@@ -209,6 +269,13 @@ export function SystemSharedExamsPanel() {
       ) : null}
       {canReview ? (
         <div className="space-y-3">
+          <h4 className="font-medium">{t('sharedExamWithdraw')}</h4>
+          {(approved.data ?? []).map((exam) => <div key={exam.id} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="flex-1">{exam.name} · v{exam.sourceVersionNumber}</span>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void withdraw(exam.id)}>
+              {t('sharedExamWithdraw')}
+            </Button>
+          </div>)}
           <h4 className="font-medium">{t('sharedExamPending')}</h4>
           {(pending.data ?? []).map((exam) => (
             <div key={exam.id} className="flex flex-wrap items-center gap-2 text-sm">

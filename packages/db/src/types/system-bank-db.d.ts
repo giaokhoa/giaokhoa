@@ -24,7 +24,9 @@ export interface SystemBankEvents {
   created_at: Generated<Timestamp>;
   id: Generated<string>;
   payload: Generated<Json>;
-  source_question_id: string;
+  resource_key: string | null;
+  resource_kind: string | null;
+  source_question_id: string | null;
   type: string;
 }
 
@@ -42,12 +44,17 @@ export interface SystemExamVersions {
   source_version_number: number;
   status: Generated<string>;
   submitted_by: string;
+  withdrawn_at: Timestamp | null;
+  withdrawn_reason: string | null;
 }
 
 export interface SystemMaterials {
   centre_slug: string;
   id: Generated<string>;
   source_content_id: string;
+  status: Generated<string>;
+  withdrawn_at: Timestamp | null;
+  withdrawn_reason: string | null;
 }
 
 export interface SystemMaterialSubmissions {
@@ -131,6 +138,8 @@ export interface SystemOutcomePackages {
   scope: string;
   status: Generated<string>;
   version: string;
+  withdrawn_at: Timestamp | null;
+  withdrawn_reason: string | null;
 }
 
 export interface SystemQuestionImporters {

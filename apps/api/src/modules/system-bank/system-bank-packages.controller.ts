@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { withdrawSystemResourceSchema, type WithdrawSystemResource } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemBankService } from './system-bank.service';
 import {
@@ -57,6 +58,12 @@ export class SystemBankPackagesController {
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.bank.reviewOutcomePackage(actor.id, version, false, dto.reason);
+  }
+
+  @Post(':version/withdraw')
+  withdraw(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser,
+    @Body({ schema: withdrawSystemResourceSchema }) input: WithdrawSystemResource) {
+    return this.bank.withdrawOutcomePackage(actor.id, version, input.reason);
   }
 
   @Get(':version')

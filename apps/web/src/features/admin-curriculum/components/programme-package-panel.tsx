@@ -19,12 +19,14 @@ import {
   fetchProgrammeForReview,
   fetchPublishedProgrammes,
   installProgramme,
+  withdrawProgramme,
   reviewProgramme,
   submitProgramme,
   type ProgrammePackageDetail,
   type ProgrammePackageInstall,
   type ProgrammePackageMeta,
 } from "../api/programme-packages";
+import { SystemSourceNotices } from "#features/questions/components/system-source-notices";
 
 function programmeInstallError(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiError) {
@@ -162,6 +164,22 @@ export function ProgrammePackagePanel({
     }
   }
 
+  async function withdraw(selected: ProgrammePackageMeta) {
+    if (!canReview || busy) return;
+    const withdrawalReason = window.prompt(t('programmeWithdrawalReason'));
+    if (!withdrawalReason?.trim()) return;
+    setBusy(true); setNotice(null);
+    try {
+      await withdrawProgramme(selected.version, withdrawalReason.trim());
+      await refresh();
+      setNotice(t('systemResourceWithdrawn'));
+    } catch {
+      setNotice(t('programmeWithdrawalFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openReview(selected: ProgrammePackageMeta) {
     setBusy(true);
     setNotice(null);
@@ -219,6 +237,7 @@ export function ProgrammePackagePanel({
             {notice}
           </p>
         ) : null}
+        {canSubmit ? <SystemSourceNotices resourceKind="programme" /> : null}
 
         {canSubmit ? (
           <section className="space-y-3">
@@ -347,6 +366,15 @@ export function ProgrammePackagePanel({
 
         {canReview ? (
           <section className="space-y-3">
+            <h3 className="font-medium">{t("programmeWithdrawal")}</h3>
+            <ul className="space-y-2">
+              {published.map((entry) => <li key={entry.id} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+                <span className="flex-1">{entry.version} · {entry.scope}</span>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void withdraw(entry)}>
+                  {t('programmeWithdrawal')}
+                </Button>
+              </li>)}
+            </ul>
             <h3 className="font-medium">{t("programmePackagesPending")}</h3>
             {pending.length ? (
               <ul className="space-y-2">

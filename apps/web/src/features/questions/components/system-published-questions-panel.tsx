@@ -4,8 +4,10 @@ import { Button } from '@giaokhoa/ui/components/button';
 import { Label } from '@giaokhoa/ui/components/label';
 import { usePermissions } from '#lib/permissions';
 import {
+  acknowledgeSystemQuestionEvent, fetchSystemQuestionEvents, fetchUsedSystemQuestions,
   fetchSystemPublishedQuestions, fetchSystemPublishedVersion, importSystemPublishedQuestion,
   type SystemPublishedDiscovery, type SystemPublishedQuestion, type SystemPublishedVersion,
+  type SystemUsedQuestion, type SystemQuestionEvent,
 } from '../api/questions';
 import { QTYPE_LABEL_KEYS, systemBankPlainText } from '../utils/shared';
 
@@ -27,6 +29,47 @@ export function SystemPublishedQuestionsPanel() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [used, setUsed] = useState<SystemUsedQuestion[]>([]);
+  const [events, setEvents] = useState<SystemQuestionEvent[]>([]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    let active = true;
+    void Promise.all([fetchUsedSystemQuestions(), fetchSystemQuestionEvents()])
+      .then(([imports, pending]) => {
+        if (active) { setUsed(imports); setEvents(pending.filter((event) => event.sourceQuestionId !== null)); }
+      })
+      .catch(() => { if (active) setNotice(t('systemUsedLoadFailed')); });
+    return () => { active = false; };
+  }, [allowed, refreshKey, t]);
+
+  async function receiveNewVersion(entry: SystemUsedQuestion) {
+    if (!entry.latestVersionNumber || entry.sourceStatus !== 'published') return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await importSystemPublishedQuestion(entry.sourceQuestionId, entry.latestVersionNumber);
+      setNotice(t('systemPublishedImportSuccess'));
+      setRefreshKey((v) => v + 1);
+    } catch {
+      setNotice(t('systemPublishedImportFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acknowledge(eventId: string) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await acknowledgeSystemQuestionEvent(eventId);
+      setEvents((prior) => prior.filter((entry) => entry.id !== eventId));
+    } catch {
+      setNotice(t('systemEventAcknowledgeFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!allowed) return;
@@ -71,6 +114,7 @@ export function SystemPublishedQuestionsPanel() {
     try {
       await importSystemPublishedQuestion(item.id, version);
       setNotice(t('systemPublishedImportSuccess'));
+      setRefreshKey((v) => v + 1);
     } catch {
       setNotice(t('systemPublishedImportFailed'));
     } finally {
@@ -90,6 +134,45 @@ export function SystemPublishedQuestionsPanel() {
         </Button>
       </div>
       {notice ? <p className="text-sm" role="status">{notice}</p> : null}
+      <section className="space-y-3" aria-label={t('systemUsedTitle')}>
+        <h4 className="font-semibold">{t('systemUsedTitle')}</h4>
+        {used.length === 0 ? <p className="text-sm text-muted-foreground">{t('systemUsedEmpty')}</p> : null}
+        <ul className="space-y-2">
+          {used.map((entry) => (
+            <li key={entry.questionId} className="space-y-1 rounded-md border p-3 text-sm">
+              <p>{t('systemUsedLocalQuestion')}: <code className="break-all">{entry.questionId}</code></p>
+              <p>{t('systemUsedSource')}: <code className="break-all">{entry.sourceQuestionId}</code> · v{entry.sourceVersionNumber}</p>
+              <p>{t('systemUsedKind')}: {entry.kind === 'derived' ? t('systemUsedDerived') : t('systemUsedPristine')}</p>
+              <p>{t('systemUsedStatus')}: {entry.sourceStatus === 'withdrawn'
+                ? t('systemUsedWithdrawn') : entry.sourceStatus === 'published'
+                  ? t('systemUsedPublished') : t('systemUsedUnavailable')}</p>
+              {entry.hasNewVersion ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>{t('systemUsedNewVersion', { version: entry.latestVersionNumber })}</span>
+                  {entry.sourceStatus === 'published' ? (
+                    <Button size="sm" disabled={busy}
+                      onClick={() => void receiveNewVersion(entry)}>{t('systemUsedReceiveNew')}</Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        {events.length > 0 ? (
+          <div className="space-y-2">
+            <h4 className="font-semibold">{t('systemEventsTitle')}</h4>
+            {events.map((event) => (
+              <div key={event.id} className="flex flex-wrap items-center gap-2 rounded-md border p-3 text-sm">
+                <span>{event.type === 'question_withdrawn'
+                  ? t('systemEventWithdrawn') : t('systemEventNewVersion', { version: event.payload.versionNumber })}</span>
+                <code className="break-all">{event.sourceQuestionId}</code>
+                <Button size="sm" variant="outline" disabled={busy}
+                  onClick={() => void acknowledge(event.id)}>{t('systemEventAcknowledge')}</Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
       <div className="max-w-64">
         <Label htmlFor="system-published-qtype">{t('systemPublishedType')}</Label>
         <select id="system-published-qtype" value={qtype}

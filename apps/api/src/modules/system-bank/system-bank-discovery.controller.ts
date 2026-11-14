@@ -26,6 +26,19 @@ export class SystemBankDiscoveryController {
     return this.bank.importSystemQuestion(actor.id, dto);
   }
 
+  @Get('imports')
+  async listUsedQuestionVersions(@CurrentUser() actor: AuthenticatedUser) {
+    return this.bank.listUsedQuestionVersions(actor.id);
+  }
+
+  @Get('imports/:id')
+  async getUsedQuestionVersion(
+    @Param('id', { schema: uuidIdSchema }) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.bank.getUsedQuestionVersion(actor.id, id);
+  }
+
   @Get('events/pending')
   async listPendingEvents(@CurrentUser() actor: AuthenticatedUser) {
     return this.bank.listPendingEvents(actor.id);

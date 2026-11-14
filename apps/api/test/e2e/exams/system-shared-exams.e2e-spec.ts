@@ -737,4 +737,67 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       await dropTestDatabase(adminUrl, cpName);
     }
   }, 180_000);
+
+  it('rút đề nguồn: B dùng lại bản đã ghim, tạo bản riêng chỉnh sửa, không nhận phiên bản chưa ghim', async () => {
+    const lifecycleApp = await testApp();
+    try {
+    const version2 = await bank.query<{ id: string }>(
+      'select id from system_exam_versions where source_exam_id=$1 and source_version_number=2 and status=$2',
+      [examId, 'approved'],
+    );
+    expect(version2.rowCount).toBe(1);
+    const reviewer = await adminToken(lifecycleApp);
+    const before = await http(lifecycleApp).get('/api/v1/system-bank/exams/approved').set(bearer(reviewer));
+    expect(before.status).toBe(200);
+    expect(before.body.some((row: { id: string }) => row.id === publishedId)).toBe(true);
+    const withdrawal = await http(lifecycleApp).post(`/api/v1/system-bank/exams/${publishedId}/withdraw`)
+      .set(bearer(reviewer)).send({ reason: 'Đề nguồn cần thu hồi' });
+    expect(withdrawal.status, JSON.stringify(withdrawal.body)).toBe(201);
+    expect(withdrawal.body.status).toBe('withdrawn');
+    const availableToReview = await http(lifecycleApp).get('/api/v1/system-bank/exams/approved').set(bearer(reviewer));
+    expect(availableToReview.body.some((row: { id: string }) => row.id === publishedId)).toBe(false);
+    const used = await http(lifecycleApp).get('/api/v1/system-bank/exams/used').set(bearer(managerB));
+    expect(used.status, JSON.stringify(used.body)).toBe(200);
+    expect(used.body).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: publishedId, status: 'withdrawn', sourceExamId: examId,
+    })]));
+    const published = await http(lifecycleApp).get(`/api/v1/system-bank/exams?courseId=${courseB}`).set(bearer(managerB));
+    expect(published.status).toBe(200);
+    expect(published.body.some((item: { id: string }) => item.id === publishedId)).toBe(false);
+    const rejected = await http(lifecycleApp).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
+      .send({ sharedExamVersionId: version2.rows[0]!.id, requestId: randomUUID(), sectionId: sectionB });
+    expect(rejected.status).toBe(404);
+    const reissued = await http(lifecycleApp).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
+      .send({ sharedExamVersionId: publishedId, requestId: randomUUID(), sectionId: sectionB });
+    expect(reissued.status, JSON.stringify(reissued.body)).toBe(201);
+    expect(reissued.body.sharedSource.versionId).toBe(publishedId);
+    const fork = await http(lifecycleApp).post(`/api/v1/system-bank/exams/${publishedId}/fork`)
+      .set(bearer(managerB)).send({});
+    expect(fork.status, JSON.stringify(fork.body)).toBe(201);
+    expect(fork.body.sourceExamVersionId).toBe(publishedId);
+    expect(fork.body.questionIds).toHaveLength(1);
+    expect(fork.body.questionIds[0]).not.toBe(localQuestionId);
+    const local = await centre.query('select kind, system_exam_fork_version_id from exams where id=$1', [fork.body.paperId]);
+    expect(local.rows[0]).toMatchObject({ kind: 'snapshot', system_exam_fork_version_id: publishedId });
+    const edited = await http(lifecycleApp).patch(`/api/v1/exams/${fork.body.paperId}`)
+      .set(bearer(managerB)).send({ name: 'Đề bản riêng B đã chỉnh sửa' });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    const neverAdopted = await http(lifecycleApp).post(`/api/v1/system-bank/exams/${version2.rows[0]!.id}/fork`)
+      .set(bearer(managerB)).send({});
+    expect(neverAdopted.status).toBe(404);
+    const pending = await http(lifecycleApp).get('/api/v1/system-bank/events/pending').set(bearer(managerB));
+    expect(pending.status, JSON.stringify(pending.body)).toBe(200);
+    const event = pending.body.find((item: { type: string }) => item.type === 'exam_withdrawn');
+    expect(event?.resourceKey).toMatch(examId);
+    const ack = await http(lifecycleApp).post(`/api/v1/system-bank/events/${event.id}/acknowledge`)
+      .set(bearer(managerB)).send({});
+    expect(ack.status).toBe(201);
+    expect((await http(lifecycleApp).get('/api/v1/system-bank/events/pending').set(bearer(managerB)))
+      .body.some((item: { id: string }) => item.id === event.id)).toBe(false);
+    } finally {
+      await lifecycleApp.close();
+      await lifecycleApp.get<Pool>('SHARED_CENTRE_KYSELY').end();
+    }
+  });
+
 });
