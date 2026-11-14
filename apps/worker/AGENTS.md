@@ -13,7 +13,7 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 ## Ranh giới phạm vi
 
 - 1 issue = 1 feat = 1 PR; việc phát sinh của cùng feat comment vào đúng issue đó.
-- Worker chỉ thực thi luật đã chốt. Cần luật mới → đó là việc của API/sổ quyết định, không tự chế luật trong processor/scheduler.
+- Worker chỉ thực thi luật đã chốt. Cần luật mới → đặc tả và cập nhật tại issue, API và test liên quan; không tự chế luật trong processor/scheduler.
 
 ## Điều cấm package-specific
 
@@ -42,6 +42,6 @@ Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/
 ## Bản đồ flow của package
 
 - **Điểm vào:** `src/main.ts` khởi động tiến trình nền (không HTTP); `src/worker.module.ts` lắp scheduler, processor và service. Cấu hình ở `src/config/env.ts`, bản dịch ở `src/i18n/`.
-- **Luồng việc nền tổng thể:** lịch/kích hoạt → scheduler (`*.scheduler.ts`) quét điều kiện (outbox chờ chuyển tiếp, hạn hoạt động/ghi danh tới, mốc retention, chu kỳ đối soát) → đẩy job vào hàng đợi BullMQ (custom jobId **không chứa dấu `:`**) → processor trong `src/processors/` thực thi luật đã chốt ở API/sổ quyết định → ghi DB dùng chung với API (schema lấy từ `packages/db`, ngữ cảnh tenant qua `src/db/` — `tenant-pool`, `tenant-als`, `relations`, `default-tenant`) → phát ra ngoài qua `notification-delivery.service.ts` và hàm luật phân phối chung (kênh ngoài tối thiểu hoá theo P4) → ghi vết bằng `event-log-writer.service.ts` / `task-log.service.ts`. Consumer outbox giữ watermark và **tự neo lại** khi seq của DB thấp hơn watermark sau reset.
+- **Luồng việc nền tổng thể:** lịch/kích hoạt → scheduler (`*.scheduler.ts`) quét điều kiện (outbox chờ chuyển tiếp, hạn hoạt động/ghi danh tới, mốc retention, chu kỳ đối soát) → đẩy job vào hàng đợi BullMQ (custom jobId **không chứa dấu `:`**) → processor trong `src/processors/` thực thi luật đã được đặc tả trong issue và thể hiện ở API/test → ghi DB dùng chung với API (schema lấy từ `packages/db`, ngữ cảnh tenant qua `src/db/` — `tenant-pool`, `tenant-als`, `relations`, `default-tenant`) → phát ra ngoài qua `notification-delivery.service.ts` và hàm luật phân phối chung (kênh ngoài tối thiểu hoá theo P4) → ghi vết bằng `event-log-writer.service.ts` / `task-log.service.ts`. Consumer outbox giữ watermark và **tự neo lại** khi seq của DB thấp hơn watermark sau reset.
 - **Scheduler hiện có:** `outbox-relay` (chuyển tiếp outbox sang realtime), `activity-due-reminder` (nhắc hạn hoạt động), `enrol-expiry` (nhắc/hết hạn ghi danh), `guardian-digest` (digest phụ huynh), `notification-retention` (dọn thông báo theo retention), `class-enrol-reconcile` (đối soát ghi danh lớp theo roster).
 - **Processor hiện có:** `notification-dispatch`, `activity-due-reminder`, `calendar-reminder`, `calendar-import`, `badge-award`, `completion-recalculate`, `enrol-expiry`, `class-enrol-reconcile`, `file-cleanup`, `guardian-digest`, `notification-retention`, `platform-services`.

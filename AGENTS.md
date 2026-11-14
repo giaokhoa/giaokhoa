@@ -12,9 +12,15 @@ Code và cấu hình thực thi là nguồn sự thật duy nhất về hành vi
 4. Tài liệu còn giữ trong thư mục `docs/` của repo — gồm các quyết định kiến trúc đã được ghi thành văn bản trong repo.
 5. Issue đặc tả của việc đang làm — bối cảnh, phạm vi, quyết định liên quan (viết trọn vẹn trong issue) và tiêu chí nghiệm thu.
 
+## Cổng bắt buộc trước khi đụng code
+
+1. **Ponytail mức `full` cho mọi Agent:** trước khi viết, sửa, tái cấu trúc hoặc review code, **mỗi Agent** phải đọc `.agents/skills/ponytail/SKILL.md` và áp dụng đầy đủ mức **`full`** trong lượt làm việc của chính mình. Dùng cơ chế kích hoạt skill của môi trường nếu có; nếu không, đọc và thực thi trực tiếp nội dung skill, **không giả định có lệnh `/ponytail`**. Agent reviewer cũng phải tự áp dụng, không kế thừa lời xác nhận của Agent code. Không tự spawn Agent để thực hiện bước này. Nếu không truy cập được skill, dừng trước khi đụng code và bàn giao trở ngại, không tự nhận đã áp dụng.
+2. **Docs và pattern là điều kiện tiên quyết:** trước khi code, Agent bắt buộc đọc `AGENTS.md`, `README.md` áp dụng cho phạm vi công việc; kiểm tra cách triển khai đang được sử dụng trong repo; và đối chiếu tài liệu chính thức đúng phiên bản của framework, thư viện liên quan. Phải tuân thủ pattern đã được xác minh, không tự nghĩ ra cách triển khai khác.
+3. **Chưa xác minh thì chưa code:** nếu thiếu tài liệu cần thiết, pattern mâu thuẫn hoặc không xác định được phiên bản/hợp đồng thực tế, phải làm rõ hoặc bàn giao trở ngại **trước khi viết code liên quan**, không bịa nguồn và không bỏ qua cổng này vì tiến độ. Trong PR/bàn giao phải ghi tài liệu và pattern đã đối chiếu, phần áp dụng, ngoại lệ được chấp thuận và điều chưa kiểm chứng; reviewer phải kiểm tra bằng chứng này. Yêu cầu này không buộc mọi Agent có cùng CLI, công cụ truy cập hay quyền GitHub.
+
 ## Quy tắc làm việc chung
 
-- **Bám pattern chính thức của package/framework bên ngoài:** khi dùng hay cấu hình bất kỳ package hay framework bên ngoài nào (thư viện bên thứ ba, ví dụ Vitest, NestJS, Kysely hay plugin ESLint), đội thi công PHẢI nghiên cứu pattern chính thức của chính thư viện đó trước — tài liệu, cách dùng khuyến nghị, bộ rule và quy ước của nhà phát hành — và dùng đúng như vậy. Cấm đoán hành vi của thư viện hay uốn nó theo thói quen từ nơi khác.
+- **Không được bỏ qua docs và pattern:** cổng bắt buộc ở mục trên áp dụng cho mọi thay đổi có liên quan package/framework bên ngoài (ví dụ Vitest, NestJS, Kysely, ESLint), kể cả chỉnh cấu hình, test, nâng version hoặc tích hợp API. Phải ưu tiên cơ chế được hỗ trợ chính thức, tuân thủ convention của repo và nêu căn cứ trong PR. Không tự phỏng đoán hành vi thư viện hoặc áp đặt pattern quen thuộc từ hệ thống khác.
 - **Không sinh script hạ tầng nếu framework đã hỗ trợ:** trước khi tạo file `.js`/`.mjs`/`.sh`/`.sql` phục vụ bootstrap, build, proxy, CI hoặc devcontainer, phải đối chiếu tài liệu chính thức của công cụ hiện tại (pnpm, Docker Compose/PostgreSQL, Dev Containers, Nest CLI, React Router, Kysely, Vitest). Ưu tiên cấu hình khai báo và CLI có sẵn. Chỉ viết code điều phối riêng khi có hành vi thật sự chưa được hỗ trợ và có kiểm chứng tương đương; ghi rõ trách nhiệm và thời điểm chạy của nó. Không coi việc chuyển đoạn shell sang script mới là dọn sạch code.
 - **Thay đổi tối thiểu theo đúng task:** mọi thay đổi phải là tối thiểu cần thiết cho task: không mở rộng phạm vi, không refactor tiện tay, không đụng code không liên quan. Phát hiện ngoài phạm vi thì ghi lại và báo cáo, không đưa vào thay đổi.
 
@@ -36,8 +42,8 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 
 ### Worktree bắt buộc khi xử lý Issue
 
-1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/` (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác. Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code trong worktree gốc đang checkout `main` hoặc `dev`; chỉ được dùng worktree gốc để quản lý Git worktree.
-2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy `git status --short` và `git worktree list` trước khi tạo worktree. Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main` làm nhánh gốc nếu `dev` chưa được thiết lập. Quy tắc tên nhánh vẫn theo mục "Đặt tên branch" ở dưới. **Ngay sau mỗi lần tạo worktree, bắt buộc sao chép cả hai file `.env` local từ worktree gốc sang worktree mới** trước khi chạy install, build, migrate, test hoặc dev. Chạy từ thư mục gốc repo (thay `<worktree>` bằng tên thư mục vừa tạo):
+1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/` (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác. Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code trong worktree gốc đang checkout `main`; chỉ được dùng worktree gốc để quản lý Git worktree.
+2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy `git status --short` và `git worktree list` trước khi tạo worktree. Tạo từ `main` đã đồng bộ với `origin/main` bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> main`. Quy tắc tên nhánh vẫn theo mục "Đặt tên branch" ở dưới. **Ngay sau mỗi lần tạo worktree, bắt buộc sao chép cả hai file `.env` local từ worktree gốc sang worktree mới** trước khi chạy install, build, migrate, test hoặc dev. Chạy từ thư mục gốc repo (thay `<worktree>` bằng tên thư mục vừa tạo):
 
    ```bash
    cp -n apps/api/.env .worktrees/<worktree>/apps/api/.env
@@ -50,15 +56,12 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 4. **Bảo toàn thay đổi.** Khi phát hiện sửa nhầm trong worktree gốc, phải sao lưu, chuyển và đối chiếu đầy đủ thay đổi trước khi dọn bản sai chỗ. Cấm dùng `git reset --hard` hoặc `git clean -fd` để xoá dữ liệu chưa được xác minh đã chuyển an toàn.
 5. **Kiểm chứng và bàn giao.** Chạy lint, typecheck, test trong worktree của Issue. Báo rõ đường dẫn worktree, nhánh, trạng thái Git và giữ worktree gốc sạch (ngoại trừ thay đổi do người dùng chủ động giữ lại).
 
-### Flow nhánh dev và main
+### Flow nhánh hiện hành
 
-Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đợt tái cấu trúc repo; trước thời điểm đó, mọi PR vẫn mở vào `main` như quy trình hiện tại trong tài liệu này.
-
-1. **Hai nhánh dài hạn.** `dev` là nhánh tích hợp và là default branch của repo. `main` là nhánh production.
-2. **Việc thường theo issue.** Mỗi issue mở một branch từ `dev` (đặt tên theo mục "Đặt tên branch" trong tài liệu này), đúng một PR vào `dev` cho mỗi issue theo luật 1 issue = 1 PR, thân PR có `Closes #<issue>`, squash merge vào `dev`. Chuẩn Issue và PR trong tài liệu này (văn bản tự chứa, mẫu issue/PR, task list trong thân PR, mục Nghiệm thu) giữ nguyên, không đổi.
-3. **CI.** PR vào `dev` không chờ CI đầy đủ, và CI đầy đủ không chạy theo từng commit/push trên branch của PR vào `dev`. CI đầy đủ — job `verify` trong `.github/workflows/ci.yml` và job `verify-stack` trong `.github/workflows/deploy-check.yml` — chỉ chạy tại PR phát hành `dev → main` và PR hotfix vào `main`; cả hai job phải success trên head cuối của các PR đó mới được merge.
-4. **Phát hành.** Phát hành bằng PR từ `dev` vào `main`, merge bằng merge commit (không squash), cần 1 approval của chủ dự án. Sau khi merge, gắn tag phát hành dạng `vYYYY.MM.DD.N` trên `main` (`N` là số thứ tự của đợt phát hành trong ngày).
-5. **Hotfix.** Việc khẩn cấp trên production mở branch từ `main`, mở PR vào `main`, squash merge vào `main`. Sau khi hotfix đã vào `main`, bắt buộc mở PR đồng bộ `main → dev` để hai nhánh không lệch nhau.
+1. **Nhánh tích hợp và phát hành:** `main` đang là default branch và nhánh đích của PR. Không giả định `dev` đã tồn tại; chỉ chuyển sang flow hai nhánh khi GitHub và CI thực sự được cấu hình, đồng thời cập nhật tài liệu này.
+2. **Việc theo issue:** mỗi issue dùng một branch từ `main`, một worktree, một PR vào `main`; PR có `Closes #<issue>` và squash merge sau vòng review bắt buộc.
+3. **CI đúng cấu hình:** `.github/workflows/ci.yml` chạy trên mọi `pull_request`; job `verify` tổng hợp kiểm chứng. `.github/workflows/deploy-check.yml` chạy `verify-stack` trên PR vào `main`. Ruleset của `main` hiện yêu cầu `verify-workspace` và `verify-stack`; ngoài các check bắt buộc của GitHub, phải kiểm chứng `verify` thành công trên head cuối trước merge. CI không thay thế review.
+4. **Hotfix:** mở branch từ `main` và PR vào `main`, không được bỏ qua vòng Agent review hoặc cổng CI. Không tạo PR đồng bộ tới nhánh không tồn tại.
 
 ### Văn bản tự chứa
 
@@ -71,10 +74,9 @@ Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đ
 
 ### Đặt tên branch
 
-1. Mỗi issue mở một branch riêng từ nhánh tích hợp (`dev`; trong giai đoạn chuyển tiếp chưa có `dev` thì từ `main`).
+1. Mỗi issue mở một branch riêng từ `main` (nhánh tích hợp hiện hành).
 2. Tên branch theo mẫu `<type>/<số issue>-<slug>`: `type` thuộc nhóm type của Conventional Commits (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`); `slug` là cụm tiếng Anh dạng kebab-case, ngắn, mô tả việc. Ví dụ: `fix/442-tenant-api-prefix`.
 3. Branch hotfix mở từ `main`, đặt tên `hotfix/<số issue>-<slug>`.
-4. Branch đồng bộ sau hotfix (PR `main → dev`) đặt tên cố định `sync/main-to-dev`.
 
 ### Tạo Issue
 
@@ -99,17 +101,34 @@ Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đ
 
 ### Tạo PR
 
-1. Một nhánh từ `dev` cho mỗi issue, mở đúng một PR vào `dev` cho mỗi issue (theo mục "Flow nhánh dev và main" ở trên; trong giai đoạn chuyển tiếp chưa có nhánh `dev` thì nhánh từ `main`, PR vào `main`).
+1. Một nhánh từ `main` và đúng một PR vào `main` cho mỗi issue (theo mục "Flow nhánh hiện hành" ở trên).
 2. Thân PR theo `.github/pull_request_template.md`, gồm: `Closes #<số issue>`; tóm tắt thay đổi; bản đồ thay đổi theo phạm vi; task list toàn bộ việc con của issue (mang từ issue sang) và tích khi xong từng mục; đối chiếu nghiệm thu từng tiêu chí kèm bằng chứng; kết quả kiểm chứng và CI.
 3. Toàn bộ việc con nằm trong PR duy nhất này (nhiều commit là bình thường). Tuyệt đối không mở PR thứ hai cho cùng một issue. Nếu PR có nguy cơ quá lớn tới mức không đánh giá nổi thì dừng và báo điều phối — việc chia là ngoại lệ hiếm, phải được duyệt trước, giữ số PR ở mức tối thiểu và vẫn theo dõi bằng task list trong issue.
 4. Thân PR có đủ các mục "Việc con", "Bản đồ thay đổi theo phạm vi" và "Kỷ luật đã giữ" theo mẫu PR của repo, mở đầu bằng mục "Liên kết issue". Dòng `Closes #<số issue>` ở các điểm trên là bắt buộc — đây là cơ chế đóng issue được triển khai, theo mục "Đóng issue" trong tài liệu này.
 
-### Review và merge
+### Phối hợp nhiều Agent và nhiều môi trường
 
-1. Khi chủ repo yêu cầu merge PR, người được giao có thể thực hiện trực tiếp sau khi kiểm tra các điều kiện kỹ thuật. **Không bắt buộc phán quyết review, số lớp review, approval hay sự đồng thuận giữa các AI.** Review mã nguồn là bước hỗ trợ theo nhu cầu, không phải cổng chặn merge.
-2. Cổng kỹ thuật trước merge: CI bắt buộc thành công trên head cuối theo phạm vi của loại PR (PR vào `main` phải có job `verify` và `verify-stack` thành công); PR không ở trạng thái draft và mergeable sạch. Phải kiểm tra lại head, CI và mergeable ngay trước lệnh merge.
-3. PR của issue merge kiểu squash; issue tự đóng qua `Closes #<issue>` trong thân PR. PR phát hành `dev → main` merge bằng merge commit theo mục "Flow nhánh dev và main" ở trên.
-4. Ghi kết quả merge và tình trạng issue trên PR hoặc issue. Không tự đóng issue triển khai bằng tay; nhãn triage theo `docs/agents/triage-labels.md`.
+1. **Quy trình độc lập công cụ:** mỗi Agent có thể làm việc trên máy, container, phiên và bộ quyền truy cập khác nhau. Không giả định mọi môi trường có `gh`, có cùng worktree, cùng tài khoản GitHub hay cùng công cụ điều phối. Dùng giao diện web, API, connector hoặc CLI **sẵn có và được cấp quyền** để thao tác PR/issue; không cài công cụ, yêu cầu bí mật hay tự mở quyền chỉ để đáp ứng một ví dụ lệnh. Git và remote repository là điểm chung cho code; PR/issue và comment trên hệ thống quản lý mã nguồn là điểm chung cho trạng thái.
+2. **Phân công và sở hữu rõ ràng:** người điều phối giao vai trò, phạm vi issue, nhánh đích, branch được phép push, người chịu trách nhiệm tích hợp, reviewer và bên có quyền merge. Mỗi Agent làm trong worktree/clone riêng của mình; không sửa, xóa hoặc dọn worktree/branch do bên khác đang dùng. Không tự khởi chạy hoặc giao thêm Agent, không tự nhận vai trò reviewer/merger.
+3. **Nhiều bên cùng làm:** các việc khác issue dùng branch/PR riêng. Nếu nhiều bên cùng xử lý **một issue**, người tích hợp được giao quản lý **một PR chính**; các bên triển khai phần việc trên branch/clone riêng hoặc theo cơ chế phối hợp được giao, bàn giao commit/patch để người tích hợp đưa vào PR chính. Không đồng thời push hoặc force-push cùng một branch khi chưa có thỏa thuận quyền ghi; kiểm tra remote head trước push và không ghi đè commit của bên khác. Xung đột hoặc phụ thuộc chưa giải quyết phải trả về người điều phối.
+4. **Bàn giao có thể kiểm chứng:** mỗi lần chuyển vai phải nêu issue, repo/remote, PR URL hoặc trạng thái chưa tạo được PR, branch và head commit SHA, người đang giữ quyền sửa, phạm vi thay đổi, kết quả kiểm chứng, các finding chưa giải quyết và việc tiếp theo cần giao. Nơi lưu trạng thái chính là PR/issue khi có quyền; nếu không có quyền đăng, bàn giao nội dung và trạng thái **chưa được đăng** cho người điều phối, không giả vờ thao tác đã thành công.
+
+### Vòng Agent triển khai → Agent review → đồng thuận
+
+1. **Agent code:** hoàn thành phạm vi được giao, kiểm chứng local phù hợp, commit và **push ngay lên branch được phân công**. Mở/cập nhật PR nếu môi trường có quyền; nếu không, bàn giao branch, SHA và thông tin để người có quyền tạo/cập nhật PR. **Không chờ CI hoàn thành**, không theo dõi/poll CI trước khi kết thúc lượt và không tự spawn reviewer. Ghi đúng trạng thái CI `chưa kiểm tra/đang chạy`, không nhận xanh khi thiếu bằng chứng.
+2. **Agent review độc lập:** người điều phối chuyển PR cho reviewer được giao. Reviewer đọc diff và bằng chứng trên **head SHA mới nhất**, không sửa branch của Agent code. Ngay khi review xong, phải công bố kết luận **CHANGES_REQUESTED** hoặc **APPROVED** kèm SHA, findings (mức độ, vị trí, bằng chứng) hoặc xác nhận không có finding, và giới hạn kiểm chứng **trực tiếp trên PR** bằng phương thức được cấp quyền (giao diện, API, connector, CLI). Không chỉ báo trong chat. Nếu reviewer không có quyền đăng, chuyển nguyên nội dung cho đầu mối có quyền đăng ngay; trạng thái vẫn là **chưa công bố/chưa hoàn tất review** cho đến khi xác nhận comment hiện trên PR. Comment Agent không tự động là approval chính thức của nền tảng.
+3. **Kiểm chứng finding trước khi sửa:** Agent code/đầu mối tích hợp phải đọc đầy đủ comment review trên PR, xác định SHA và bối cảnh mà reviewer đã kiểm tra, rồi **tự thẩm định từng finding trước khi thay đổi code để xử lý**. Đối chiếu với hành vi thực tế, yêu cầu issue, pattern của repo và tài liệu chính thức liên quan; tái hiện hoặc kiểm tra bằng chứng khi cần. Phân loại từng finding là **đúng**, **sai/không còn áp dụng** hoặc **chưa đủ bằng chứng** và nêu cơ sở. Finding đúng mới sửa nguyên nhân; finding sai phải phản biện kèm bằng chứng trên PR, **không sửa theo chỉ vì reviewer đã nêu finding**; finding chưa rõ phải yêu cầu làm rõ, chưa sửa theo suy đoán. Không tự gạt bỏ finding chặn khi chưa có căn cứ hoặc chưa đạt thống nhất.
+4. **Sửa và review lại trên cùng PR:** Với finding đã xác minh đúng, Agent code/đầu mối tích hợp sửa trong phạm vi được giao, kiểm chứng local, push SHA mới rồi phản hồi tại PR, nêu kết quả thẩm định và bằng chứng xử lý; **không chờ CI**. Với finding không đúng hoặc chưa rõ, trao đổi bằng chứng trên PR thay vì sửa máy móc. Reviewer phải đánh giá phản biện hoặc SHA mới, kiểm tra ảnh hưởng và đăng kết luận mới trên PR. Kết luận ở SHA cũ không còn hiệu lực; nếu có nhiều bên đang làm, người tích hợp phải chốt và công bố head để tránh review nhầm phiên bản.
+5. **Đồng thuận:** mọi finding chặn phải được sửa sau khi xác minh đúng, hoặc được hai bên thống nhất là không hợp lệ; Agent code xác nhận trạng thái từng finding và reviewer công bố **APPROVED** cho đúng SHA cuối, không còn bất đồng hay thảo luận tồn đọng. Không suy diễn đồng thuận từ im lặng, CI xanh hoặc lời xác nhận của một Agent tự đóng hai vai. Bất đồng chưa giải quyết được trả về người điều phối, không tự bỏ qua.
+6. **Merge do vai trò được giao thực hiện:** chỉ sau khi đồng thuận và mọi required CI/status check trên **head cuối** đều thành công theo nguồn thật; repo hiện yêu cầu cả `verify`, `verify-stack` và các check bắt buộc. Kiểm tra lại SHA, quyền merge, trạng thái PR không draft và mergeable trước khi squash merge. **Agent code không chịu trách nhiệm đợi CI**; khâu merge/điều phối phụ trách cổng này.
+
+### Dọn worktree và branch sau merge
+
+1. Chỉ bên được giao dọn tài nguyên mới thực hiện, sau khi xác minh PR **đã merge** bằng thông tin từ giao diện/API/công cụ đang có, nhánh đích đã tích hợp thay đổi và issue đã đóng. Không giả định cùng máy, cùng clone hoặc công cụ với Agent code. Không dọn worktree/branch do bên khác sở hữu hoặc đang dùng; không xóa tài nguyên của PR còn mở hay dữ liệu đang làm dở.
+2. **Kiểm kê cả dữ liệu Git ignore trước khi xóa:** từ worktree gốc, chạy `git -C .worktrees/<worktree> status --porcelain --untracked-files=all` và `git -C .worktrees/<worktree> ls-files --others --ignored --exclude-standard`. `git status --porcelain` báo sạch **không** bảo đảm worktree không có dữ liệu: `git worktree remove` có thể xóa cả file bị ignore như `.env` và `data/files/*`. Nếu có file sửa/chưa theo dõi, dừng và bảo toàn dữ liệu. Với mọi file bị ignore, phân loại rõ dữ liệu cần giữ và sản phẩm tái tạo được; so sánh `.env` với bản gốc bằng cách không in bí mật ra log, sao lưu bản khác biệt và chuyển dữ liệu local cần giữ ra ngoài worktree, kiểm tra bản sao có đủ trước khi tiếp tục. Không mặc định mọi file bị ignore đều có thể bỏ.
+3. **Chỉ remove sau khi bảo toàn:** xác minh không có thay đổi chưa lưu, không còn file bị ignore có giá trị chưa được sao lưu, và những file còn lại được phép loại bỏ; khi đó mới chạy `git worktree remove .worktrees/<worktree>`. Cấm `reset --hard`, `clean -fd`, `worktree remove --force` để giải quyết cảnh báo.
+4. Dọn **chỉ branch local thuộc quyền quản lý của mình** bằng `git branch -d <branch>`. Với squash merge, Git có thể không coi commit nhánh là tổ tiên của `main`: chỉ dùng `git branch -D <branch>` **sau khi xác minh PR đã merge, không còn commit/dữ liệu cần giữ và không còn bên nào đang làm trên branch**. Việc xóa remote branch chỉ do đầu mối có quyền thực hiện sau khi xác nhận không còn PR hoặc Agent khác cần branch; có thể dùng `git push origin --delete <branch>` nếu được giao và hệ thống chưa tự xóa. Không xóa `main` hoặc branch của bên khác.
+5. Đồng bộ `main`, kiểm tra `git worktree list`, `git branch -vv` và tình trạng issue. Ghi kết quả cleanup vào PR/issue; nếu còn nhánh/worktree cần giữ vì có dữ liệu, ghi rõ lý do và bàn giao thay vì tuyên bố đã dọn xong.
 
 ### Đóng issue
 
