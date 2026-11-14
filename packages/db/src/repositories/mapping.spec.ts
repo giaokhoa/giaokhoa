@@ -86,6 +86,19 @@ describe('applyDefined — chỉ ghi field có trong patch', () => {
     expect(target).toEqual({ data: 'null-đã-biến-đổi' });
     expect(seen).toEqual([null]);
   });
+
+  it('transform dạng arrow nhận đúng giá trị đã định nghĩa khác null và trả về giá trị đã biến đổi', () => {
+    const target: Record<string, unknown> = {};
+    const seen: unknown[] = [];
+    applyDefined(target, { data: [1, 2] }, [
+      ['data', 'data', (value) => {
+        seen.push(value);
+        return JSON.stringify(value);
+      }],
+    ]);
+    expect(seen).toEqual([[1, 2]]);
+    expect(target).toEqual({ data: '[1,2]' });
+  });
 });
 
 describe('pickDefined — chỉ lấy field có trong patch để spread', () => {
@@ -156,5 +169,19 @@ describe('pickDefined — chỉ lấy field có trong patch để spread', () =>
       ['note', 'note'],
     ]);
     expect(source).toEqual({ name: 'giữ nguyên', note: undefined });
+  });
+
+  it('transform dạng tham chiếu hàm trần nhận đúng giá trị đã định nghĩa khác null', () => {
+    function prefixName(value: unknown): string {
+      return `ten:${String(value)}`;
+    }
+    const picked = pickDefined({ name: 'Lan' }, [['name', 'name', prefixName]]);
+    expect(picked).toEqual({ name: 'ten:Lan' });
+  });
+
+  it('transform trả về undefined thì khóa vẫn được đặt với giá trị undefined', () => {
+    const picked = pickDefined({ name: 'Lan' }, [['name', 'name', () => undefined]]);
+    expect('name' in picked).toBe(true);
+    expect(picked.name).toBeUndefined();
   });
 });
