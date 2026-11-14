@@ -17,6 +17,7 @@ import {
   type SupportAuditRow,
 } from "@giaokhoa/db/repositories/support-grants";
 import { SpaceDatabaseService } from "../../db/routing/space-database.service";
+import { SpaceRoutingError } from "../../db/routing/space-connection-resolver";
 import { TenantsService } from "../tenants/tenants.service";
 import { UsersService } from "../users/users.service";
 import { TenantContextService } from "../tenants/tenant-context.service";
@@ -187,7 +188,18 @@ export class SupportService {
         message: "Invalid slug",
         code: "support.invalid_centre",
       });
-    const target = await this.spaceDb.resolveTarget(slug);
+    let target;
+    try {
+      target = await this.spaceDb.resolveTarget(slug);
+    } catch (error) {
+      if (error instanceof SpaceRoutingError && error.code === "space_routing.shared_not_supported") {
+        throw new ForbiddenException({
+          message: "Shared centre databases are no longer supported",
+          code: "space_routing.shared_not_supported",
+        });
+      }
+      throw error;
+    }
     if (target.status !== "active")
       throw new ForbiddenException({
         message: "Centre inactive",

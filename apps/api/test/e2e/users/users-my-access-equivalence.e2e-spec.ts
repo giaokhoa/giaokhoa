@@ -8,6 +8,9 @@ import {
   seedTenantMembershipFixture,
 } from '../../support/identity-access-helpers';
 import { EXPECTED_SNAPSHOTS } from '../../support/users-my-access-snapshot.fixture';
+import { ContextsService } from '../../../src/modules/access/contexts.service';
+import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
 describe('Người dùng: tương đương phân giải batch my-access', () => {
   let app: INestApplication;
@@ -103,10 +106,8 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     await addUser('plainUser');
 
     const slug = uniqueName('tenant').toLowerCase();
-    const tenantRes = await http(app).post('/api/v1/tenants').set('Authorization', `Bearer ${admin}`)
-      .send({ slug, name: `Trường ${slug}`, kind: 'school' });
-    expect([200, 201]).toContain(tenantRes.status);
-    const tenantId = (tenantRes.body as { id: string }).id;
+    const tenantId = await seedLegacyCentreInShared({ slug, name: `Trường ${slug}` });
+    await tenantAls.run({ platform: true }, () => app.get(ContextsService).ensureTenantContext(tenantId));
     const contextsRes = await http(app).get('/api/v1/access/contexts').set('Authorization', `Bearer ${admin}`);
     const tenantCtx = (contextsRes.body as { id: string; contextLevel: number; instanceId: string }[])
       .find((c) => c.contextLevel === 20 && c.instanceId === tenantId);

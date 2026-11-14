@@ -251,6 +251,6 @@ describe('Bước cài gói YCCĐ vào kho đích (tích hợp)', () => {
   });
 
   it('trung tâm còn ở kho chung thì bước cài từ chối fail-closed', async () => {
-    await expect(service.installIntoSpace(SHARED_SLUG, TENANT_ID)).rejects.toThrow(/not dedicated/);
+    await expect(service.installIntoSpace(SHARED_SLUG, TENANT_ID)).rejects.toMatchObject({ code: 'space_routing.shared_not_supported' });
   });
 });

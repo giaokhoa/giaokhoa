@@ -1,9 +1,8 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { CreateTenant, CreateUser } from '@giaokhoa/contracts';
+import type { CreateUser } from '@giaokhoa/contracts';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
   addTenantMember,
-  createTenant,
   createTenantUser,
   fetchCurrentTenant,
   fetchTenantMembers,
@@ -42,14 +41,6 @@ export function tenantUsersQueryOptions(tenantId: string) {
     queryKey: queryKeys.tenantUsers(tenantId),
     queryFn: () => fetchTenantUsers(tenantId),
     enabled: tenantId !== '',
-  });
-}
-
-export function useCreateTenant() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (draft: CreateTenant) => createTenant(draft),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.tenantsRoot }),
   });
 }
 

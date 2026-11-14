@@ -110,7 +110,10 @@ export class SpaceConnectionResolver {
       connectionRole: entry.connectionRoleRef,
     };
     if (entry.storageMode === 'shared') {
-      return { ...base, mode: 'shared' };
+      throw new SpaceRoutingError(
+        'space_routing.shared_not_supported',
+        `Space ${entry.slug} is registered in an unsupported shared database`,
+      );
     }
     if (entry.storageMode !== 'dedicated') {
       throw new SpaceRoutingError(

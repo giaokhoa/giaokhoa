@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
@@ -22,7 +23,8 @@ describe('Worker guardian digest delivery (PH-2, issue #159; chuyển worker ở
   const suffix = Date.now();
   const DAY = 24 * 3600_000;
 
-  const uid = (n: number) => `01900000-0000-7000-8000-${String(730000 + n * 37 + (suffix % 991)).padStart(12, '0')}`;
+  const runId = randomUUID().replaceAll('-', '').slice(0, 6);
+  const uid = (n: number) => `01900000-0000-7000-8000-${runId}${n.toString(16).padStart(6, '0')}`;
 
   async function execRows<T>(query: RawBuilder<unknown>): Promise<T[]> {
     const result = await query.execute(db);

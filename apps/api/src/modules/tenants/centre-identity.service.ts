@@ -121,6 +121,9 @@ export class CentreIdentityService {
       if (err.code === 'space_routing.space_not_found') {
         return new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
       }
+      if (err.code === 'space_routing.shared_not_supported') {
+        return new ForbiddenException({ message: 'Shared centre databases are no longer supported', code: 'space_routing.shared_not_supported' });
+      }
       if (err.code === 'space_routing.not_configured') {
         return new ServiceUnavailableException({ message: 'Control plane is not configured', code: 'control_plane.not_configured' });
       }

@@ -30,16 +30,23 @@ async function pg(url: string): Promise<Client> {
 }
 
 async function tryAdminLogin(): Promise<boolean> {
+  let res: Response;
   try {
-    const res = await fetch(`${APP_BASE}/api/v1/auth/token`, {
+    res = await fetch(`${APP_BASE}/api/v1/auth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'Admin123!' }),
+      signal: AbortSignal.timeout(5_000),
     });
-    return res.status === 200 || res.status === 201;
   } catch {
     return false;
   }
+  if (res.status === 200 || res.status === 201) return true;
+  if (res.status >= 400 && res.status < 500) {
+    const payload = await res.json() as { code?: string };
+    throw new Error(`Bootstrap admin login rejected HTTP ${res.status}: ${payload.code ?? 'unknown'}`);
+  }
+  return false;
 }
 
 async function apiCall(
@@ -156,20 +163,20 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
     await expect(tryAdminLogin()).resolves.toBe(true);
   });
 
-  it('seed đã gieo tenant nền tảng + tenant trường mặc định + membership của admin (đọc trong ngữ cảnh platform)', async () => {
+  it('bootstrap sạch chỉ gieo tenant nền tảng và membership admin, không gieo trường shared', async () => {
     const client = await pg(urlFor(SCRATCH_DB, APP_ROLE, APP_ROLE_PASSWORD));
     try {
       await client.query(`SELECT set_config('app.platform', 'on', false)`);
       const tenants = await client.query<{ slug: string }>(
         `SELECT slug FROM tenants WHERE slug IN ('trang-chinh', 'truong-mac-dinh') ORDER BY slug`,
       );
-      expect(tenants.rows.map((r) => r.slug)).toEqual(['trang-chinh', 'truong-mac-dinh']);
+      expect(tenants.rows.map((r) => r.slug)).toEqual(['trang-chinh']);
       const memberships = await client.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM tenant_memberships tm
            JOIN users u ON u.id = tm.user_id
           WHERE u.username = 'admin' AND tm.status = 'active'`,
       );
-      expect(Number(memberships.rows[0]!.count)).toBeGreaterThanOrEqual(2);
+      expect(Number(memberships.rows[0]!.count)).toBe(1);
     } finally {
       await client.end();
     }
@@ -183,38 +190,23 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
     expect(slugs).toEqual(['trang-chinh']);
   });
 
-  it('quản trị bootstrap có vai manager tường minh ở trường mẫu và chuyển phiên trong cùng kho', async () => {
+  it('API từ chối tạo cả school và center tại kho nền tảng mà không ghi registry', async () => {
     const tok = await adminToken();
-    const registry = await apiCall('GET', '/tenants', tok);
-    expect(registry.status, 'Cổng registry của platform phải hoạt động').toBe(200);
-    const school = (registry.body as { id: string; slug: string }[]).find((t) => t.slug === 'truong-mac-dinh');
-    expect(school, 'registry phải có tenant trường mặc định').toBeDefined();
+    const before = await apiCall('GET', '/tenants', tok);
+    expect(before.status).toBe(200);
+    expect((before.body as { slug: string }[]).map((tenant) => tenant.slug)).toEqual(['trang-chinh']);
 
-    const list = await apiCall('GET', '/tenants', tok);
-    expect(list.status, `GET /tenants: ${JSON.stringify(list.body)}`).toBe(200);
-    expect((list.body as { slug: string }[]).map((t) => t.slug).sort()).toEqual(['trang-chinh', 'truong-mac-dinh']);
+    for (const kind of ['school', 'center']) {
+      const rejected = await apiCall('POST', '/tenants', tok, {
+        name: 'Đơn vị không có kho riêng', slug: `legacy-${kind}`, kind,
+      });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body).toMatchObject({ code: 'centre.provision_required' });
+    }
 
-    const created = await apiCall('POST', '/users', tok, {
-      username: 'seedrls.member',
-      email: 'seedrls.member@example.com',
-      password: 'Member123!',
-      firstName: 'Seed',
-      lastName: 'Member',
-    });
-    expect(created.status, `POST /users: ${JSON.stringify(created.body)}`).toBe(201);
-    const userId = (created.body as { id: string }).id;
-
-    const added = await apiCall('POST', `/tenants/${school!.id}/members`, tok, { userId });
-    expect(added.status, `POST members: ${JSON.stringify(added.body)}`).toBe(201);
-    expect((added.body as { status: string }).status).toBe('active');
-
-    const members = await apiCall('GET', `/tenants/${school!.id}/members`, tok);
-    expect(members.status, `GET members: ${JSON.stringify(members.body)}`).toBe(200);
-    expect((members.body as { userId: string }[]).map((m) => m.userId)).toContain(userId);
-
-    const switched = await apiCall('POST', `/auth/switch-tenant/${school!.id}`, tok);
-    expect(switched.status, `switch-tenant: ${JSON.stringify(switched.body)}`).toBe(201);
-    expect((switched.body as { accessToken?: string }).accessToken).toBeTruthy();
+    const after = await apiCall('GET', '/tenants', tok);
+    expect(after.status).toBe(200);
+    expect(after.body).toEqual(before.body);
   });
 
   it('role thường ngoài ngữ cảnh vẫn bị RLS chặn (fail-closed còn nguyên — boot qua được là nhờ ngữ cảnh platform của seed)', async () => {

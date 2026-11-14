@@ -84,7 +84,7 @@ describe('Kích hoạt ghi danh cấp lớp ở worker — chèn thành viên v�
   beforeAll(async () => {
     pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
-    harness = await bootWorkerModuleAsOrdinaryRole();
+    harness = await bootWorkerModuleAsOrdinaryRole({ centreSlug: `trung-tam-w552-${tag}` });
     adapter = harness.context.get(WorkerPaidClassEnrolActivationService);
     enrolOutbox = harness.context.get(WorkerEnrolOutboxService);
     tenantId = uid();

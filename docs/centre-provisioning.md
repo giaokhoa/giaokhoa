@@ -2,7 +2,7 @@
 
 ## Quy tắc bắt buộc
 
-Trung tâm giáo dục mới (`kind: center`) **không được tạo trong database chung**. API `POST /api/v1/tenants` với `kind: center` trả `400 centre.provision_required`. Chỉ người vận hành có quyền cấp role/database PostgreSQL chạy pipeline 7 bước. Form quản trị tenant cũ chỉ được tạo trường học `kind: school` trong kho chung để duy trì khả năng tương thích; không dùng form này để mở trung tâm giáo dục.
+Trung tâm giáo dục mới (`kind: center`) **không được tạo trong database chung**. Chỉ người vận hành có quyền cấp role/database PostgreSQL chạy pipeline 7 bước. Bootstrap control plane chỉ đăng ký `trang-chinh` với `storageMode=dedicated`, không tự cấp một trường mặc định trong database platform. `POST /api/v1/tenants` từ chối cả `kind: school` lẫn `kind: center` với `400 centre.provision_required`; UI chỉ hiển thị hướng dẫn cấp kho riêng và không còn biểu mẫu tạo trường trong kho chung. Các luồng/fixture khác vẫn cần nghiệm thu tích hợp đầy đủ trước khi đóng #20.
 
 Mỗi trung tâm có một database, một role runtime, một tenant, hồ sơ người dùng và membership độc lập. Định danh lấy từ slug đã đăng ký ở control plane; hostname không khớp hoặc thiếu bí mật kết nối không được phép quay về kho chung. Tài khoản cùng email ở hai trung tâm vẫn là hai người dùng khác nhau.
 

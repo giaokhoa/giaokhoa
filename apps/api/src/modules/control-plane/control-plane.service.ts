@@ -20,7 +20,7 @@ import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ControlPlaneConnection } from '../../db/control-plane-connection.service';
 
-export const SHARED_DATABASE_SCHEMA_VERSION = '20261025163710_baseline';
+export const PLATFORM_DATABASE_SCHEMA_VERSION = '20261025163710_baseline';
 
 export type ExistingSpaceSeed = {
   slug: string;
@@ -431,22 +431,29 @@ export class ControlPlaneRegistryService {
     if (!this.isConfigured) return 0;
     let created = 0;
     for (const space of spaces) {
+      if (space.kind !== 'platform' || space.slug !== 'trang-chinh') {
+        throw new Error('Bootstrap registry only accepts the dedicated platform store');
+      }
       const inserted = await this.repo.insertSpaceIfAbsent({
         slug: space.slug,
         name: space.name,
         kind: space.kind,
         status: 'active',
         databaseName: space.databaseName,
-        storageMode: 'shared',
+        storageMode: 'dedicated',
         connectionRoleRef: space.connectionRoleRef,
         secretRef: space.secretRef,
-        schemaVersion: SHARED_DATABASE_SCHEMA_VERSION,
+        schemaVersion: PLATFORM_DATABASE_SCHEMA_VERSION,
         plan: space.plan,
       });
       const row = inserted ?? (await this.repo.findSpaceBySlug(space.slug));
-      if (!row) continue;
+      if (!row) throw new Error(`Platform ${space.slug} was not registered`);
+      if (row.storageMode !== 'dedicated' || row.databaseName !== space.databaseName
+        || row.connectionRoleRef !== space.connectionRoleRef || row.secretRef !== space.secretRef) {
+        throw new Error(`Platform ${space.slug} has an incompatible registry entry; use a clean installation`);
+      }
       if (inserted) created += 1;
-      await this.repo.ensureSchemaRegistry(row.id, SHARED_DATABASE_SCHEMA_VERSION);
+      await this.repo.ensureSchemaRegistry(row.id, PLATFORM_DATABASE_SCHEMA_VERSION);
     }
     for (const space of spaces) emitSpaceRegistryChanged(space.slug);
     if (created > 0) this.logger.log(`Seeded ${created} existing space registration(s) into the control plane registry`);

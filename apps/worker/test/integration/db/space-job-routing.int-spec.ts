@@ -28,6 +28,12 @@ const CENTRE_DATABASE = 'giaokhoa_test_centre_a_582w';
 const CENTRE_ROLE = 'giaokhoa_centre_a_582w_app';
 const CENTRE_PASSWORD = 'centre-a-582w';
 const CENTRE_SLUG = 'trung-tam-a-582w';
+const PUBLIC_DATABASE = 'giaokhoa_test_public_582w';
+const PUBLIC_ROLE = 'giaokhoa_public_582w_app';
+const PUBLIC_PASSWORD = 'public-582w';
+const PUBLIC_SLUG = 'cong-cong';
+const PUBLIC_TENANT_ID = '01958200-0000-7000-8000-0000000000a7';
+const PUBLIC_OUTBOX_ID = '01958200-0000-7000-8000-0000000000f7';
 const B_DATABASE = 'giaokhoa_test_centre_b_582w';
 const B_ROLE = 'giaokhoa_centre_b_582w_app';
 const B_PASSWORD = 'centre-b-582w';
@@ -144,32 +150,38 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
 
   beforeAll(async () => {
     await withClient(clusterUrl('postgres'), async (admin) => {
-      for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE]) {
+      for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE, PUBLIC_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
       }
-      for (const role of [CP_ROLE, CENTRE_ROLE, B_ROLE]) {
+      for (const role of [CP_ROLE, CENTRE_ROLE, B_ROLE, PUBLIC_ROLE]) {
         await admin.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       }
       await admin.query(`CREATE ROLE ${CP_ROLE} LOGIN PASSWORD '${CP_PASSWORD}'`);
       await admin.query(`CREATE ROLE ${CENTRE_ROLE} LOGIN PASSWORD '${CENTRE_PASSWORD}'`);
       await admin.query(`CREATE ROLE ${B_ROLE} LOGIN PASSWORD '${B_PASSWORD}'`);
+      await admin.query(`CREATE ROLE ${PUBLIC_ROLE} LOGIN PASSWORD '${PUBLIC_PASSWORD}'`);
       await admin.query(`CREATE DATABASE ${CP_DATABASE} OWNER ${CP_ROLE}`);
       await admin.query(`CREATE DATABASE ${CENTRE_DATABASE} OWNER ${CENTRE_ROLE}`);
       await admin.query(`CREATE DATABASE ${B_DATABASE} OWNER ${B_ROLE}`);
+      await admin.query(`CREATE DATABASE ${PUBLIC_DATABASE} OWNER ${PUBLIC_ROLE}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${CP_DATABASE} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${CP_DATABASE} TO ${CP_ROLE}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${CENTRE_DATABASE} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${CENTRE_DATABASE} TO ${CENTRE_ROLE}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${B_DATABASE} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${B_DATABASE} TO ${B_ROLE}`);
+      await admin.query(`REVOKE CONNECT ON DATABASE ${PUBLIC_DATABASE} FROM PUBLIC`);
+      await admin.query(`GRANT CONNECT ON DATABASE ${PUBLIC_DATABASE} TO ${PUBLIC_ROLE}`);
     });
 
     await applyControlPlaneMigrations(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD));
     await applyBusinessBaseline(clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD));
     await applyBusinessBaseline(clusterUrl(B_DATABASE, B_ROLE, B_PASSWORD));
+    await applyBusinessBaseline(clusterUrl(PUBLIC_DATABASE, PUBLIC_ROLE, PUBLIC_PASSWORD));
 
     process.env.SPACE_TEST_A_582W_URL = clusterUrl('postgres', CENTRE_ROLE, CENTRE_PASSWORD);
     process.env.SPACE_TEST_B_582W_URL = clusterUrl('postgres', B_ROLE, B_PASSWORD);
+    process.env.SPACE_TEST_PUBLIC_582W_URL = clusterUrl('postgres', PUBLIC_ROLE, PUBLIC_PASSWORD);
 
     const config = fakeConfig({
       CONTROL_PLANE_DATABASE_URL: clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD),
@@ -201,6 +213,11 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
         slug: B_SLUG, name: 'Trung tâm B 582w', kind: 'center', status: 'active',
         database_name: B_DATABASE, storage_mode: 'dedicated',
         connection_role_ref: B_ROLE, secret_ref: 'env:SPACE_TEST_B_582W_URL', schema_version: 'v1',
+      }).execute();
+      await cpDb.insertInto('space_registry').values({
+        slug: PUBLIC_SLUG, name: 'Khu công cộng 582w', kind: 'platform', status: 'active',
+        database_name: PUBLIC_DATABASE, storage_mode: 'dedicated',
+        connection_role_ref: PUBLIC_ROLE, secret_ref: 'env:SPACE_TEST_PUBLIC_582W_URL', schema_version: 'v1',
       }).execute();
     } finally {
       await cpSeedPool.end();
@@ -278,16 +295,17 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     await sharedPool?.end().catch(() => undefined);
     delete process.env.SPACE_TEST_A_582W_URL;
     delete process.env.SPACE_TEST_B_582W_URL;
+    delete process.env.SPACE_TEST_PUBLIC_582W_URL;
     await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       await client.query('DELETE FROM outbox_events WHERE id = $1', [SHARED_OUTBOX_ID]);
       await client.query('DELETE FROM tenants WHERE id = $1', [SHARED_TENANT_ID]);
     }).catch(() => undefined);
     await withClient(clusterUrl('postgres'), async (admin) => {
-      for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE]) {
+      for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE, PUBLIC_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
       }
-      for (const role of [CP_ROLE, CENTRE_ROLE, B_ROLE]) {
+      for (const role of [CP_ROLE, CENTRE_ROLE, B_ROLE, PUBLIC_ROLE]) {
         await admin.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       }
     });
@@ -362,6 +380,50 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       return Number(result.rows[0]!.count);
     });
     expect(inShared).toBe(0);
+  });
+
+  it('relay PostgreSQL thật đọc outbox công cộng kind platform, gắn đúng spaceId, không ghi sang platform/A/B', async () => {
+    await tenantAls.run({ platform: true }, () => spaceDb.withSpaceKysely(PUBLIC_SLUG, async () => {
+      const db = spaceDb.routedKysely;
+      await db.insertInto('tenants').values({
+        id: PUBLIC_TENANT_ID, slug: PUBLIC_SLUG, name: 'Khu học tập công cộng', kind: 'platform',
+      }).execute();
+      await db.insertInto('users').values({
+        id: STUDENT_ID, username: 'hoc-vien-cong-cong-582w', email: 'hoc-vien-cong-cong-582w@example.com',
+      }).execute();
+      await db.insertInto('outbox_events').values({
+        id: PUBLIC_OUTBOX_ID, aggregate: 'grades', type: 'grade_updated',
+        tenant_id: PUBLIC_TENANT_ID, payload: { userId: STUDENT_ID, itemId: GRADE_ITEM_ID, finalGrade: 8 },
+      }).execute();
+    }));
+
+    const { relay, queue } = makeRelay();
+    const result = await tenantAls.run({ platform: true }, () => relay.publishPendingForCentres());
+    expect(result).toEqual({ published: 1, failedSlugs: [] });
+    const publicJob = queue.jobs.find((job) => job.data.outboxId === PUBLIC_OUTBOX_ID);
+    expect(publicJob?.data).toMatchObject({
+      tenantId: PUBLIC_TENANT_ID, spaceSlug: PUBLIC_SLUG, spaceId: expect.any(String),
+    });
+    const marked = await withClient(clusterUrl(PUBLIC_DATABASE, PUBLIC_ROLE, PUBLIC_PASSWORD), async (client) => {
+      const result = await client.query<{ published_at: Date | null }>(
+        'SELECT published_at FROM outbox_events WHERE id = $1', [PUBLIC_OUTBOX_ID],
+      );
+      return result.rows[0]?.published_at;
+    });
+    expect(marked).not.toBeNull();
+    for (const url of [process.env.DATABASE_URL!, clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD), clusterUrl(B_DATABASE, B_ROLE, B_PASSWORD)]) {
+      const count = await withClient(url, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        const result = await client.query<{ count: string }>(
+          'SELECT count(*)::text AS count FROM outbox_events WHERE id = $1', [PUBLIC_OUTBOX_ID],
+        );
+        return Number(result.rows[0]!.count);
+      });
+      expect(count).toBe(0);
+    }
+    const second = await tenantAls.run({ platform: true }, () => relay.publishPendingForCentres());
+    expect(second).toEqual({ published: 0, failedSlugs: [] });
+    expect(queue.jobs.filter((job) => job.data.outboxId === PUBLIC_OUTBOX_ID)).toHaveLength(1);
   });
 
   it('consumer thật xử lý job của trung tâm thì thông báo được ghi vào kho riêng của trung tâm, không vào kho chung', async () => {
@@ -526,4 +588,31 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       expect(Number(logs.rows[0]!.count)).toBeGreaterThanOrEqual(1);
     }
   }, 180_000);
+  it('nhịp worker đọc và xử lý ghi danh ở công cộng nhưng không nhân đôi hoặc chạm kho khác', async () => {
+    await tenantAls.run({ platform: true }, () => spaceDb.withSpaceKysely(PUBLIC_SLUG, async () => {
+      const db = spaceDb.routedKysely;
+      await db.insertInto('course_categories').values({ id: CATEGORY_ID, name: 'Danh mục công cộng', tenant_id: PUBLIC_TENANT_ID }).execute();
+      await db.insertInto('course').values({ id: COURSE_ID, tenant_id: PUBLIC_TENANT_ID, category: CATEGORY_ID, full_name: 'Khoá công cộng', short_name: 'PUBLIC582W', is_template: true }).execute();
+      await db.insertInto('enrol').values({ id: PERIODIC_ENROL_ID, course_id: COURSE_ID, enrol: 'manual', status: 0 }).execute();
+      await db.insertInto('user_enrolments').values({ id: PERIODIC_UE_ID, enrol_id: PERIODIC_ENROL_ID, user_id: STUDENT_ID, status: 0, time_start: new Date(Date.now() - 86400000), time_end: new Date(Date.now() + 3 * 86400000) }).execute();
+    }));
+    const expiry = new EnrolExpiryProcessor(spaceDb, new TaskLogService(spaceDb));
+    const first = await expiry.process({ data: {} } as never);
+    expect(first.warnedIds).toContain(PERIODIC_UE_ID);
+    await expiry.process({ data: {} } as never);
+    for (const [url, expected] of [
+      [clusterUrl(PUBLIC_DATABASE, PUBLIC_ROLE, PUBLIC_PASSWORD), 1],
+      [process.env.DATABASE_URL!, 0],
+      [clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD), 1],
+      [clusterUrl(B_DATABASE, B_ROLE, B_PASSWORD), 1],
+    ] as const) {
+      const count = await withClient(url, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        const rows = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM outbox_events WHERE type = 'enrol_expiry_warning' AND payload ->> 'enrolmentId' = $1", [PERIODIC_UE_ID]);
+        return Number(rows.rows[0]!.count);
+      });
+      expect(count).toBe(expected);
+    }
+  }, 180_000);
+
 });

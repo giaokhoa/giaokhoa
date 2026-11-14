@@ -123,8 +123,9 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
   });
 
   it('getKyselyForSpace trả đúng instance theo chế độ kho và nhớ lần chuẩn bị', async () => {
-    const shared = await service.getKyselyForSpace(SHARED_SLUG);
-    expect(shared).toBe(sharedKysely);
+    await expect(service.getKyselyForSpace(SHARED_SLUG)).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
+    });
     const a = await service.getKyselyForSpace(CENTRE_A_SLUG);
     expect(a).not.toBe(sharedKysely);
     expect(await service.getKyselyForSpace(CENTRE_A_SLUG)).toBe(a);

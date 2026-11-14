@@ -96,7 +96,7 @@ describe('Worker class enrol reconcile dưới RLS (hồi quy #292)', () => {
     const roleDb = createCentreKysely(rlsPool);
     const sharedScope = {
       routedKysely: roleDb,
-      sweepSharedAndDedicated: async <T>(sweep: () => Promise<T>) => tenantAls.run({ platform: true }, sweep),
+      sweepDedicatedSpaces: async <T>(sweep: () => Promise<T>) => tenantAls.run({ platform: true }, sweep),
     };
     processor = new ClassEnrolReconcileProcessor(
       sharedScope as never,

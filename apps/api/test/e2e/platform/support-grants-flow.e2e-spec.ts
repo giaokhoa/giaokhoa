@@ -250,7 +250,7 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
     expect(list.body).toContainEqual(expect.objectContaining({ id, status: 'expired' }));
   });
 
-  it('trung tâm legacy ở kho chung: cấp, sử dụng, thu hồi vẫn cách ly theo tenant và audit qua HTTP', async () => {
+  it('registry trung tâm legacy shared không thể cấp quyền hỗ trợ, không ghi grant và không ảnh hưởng A', async () => {
     const sharedSlug = `support-shared-${suffix}`;
     const platformAdmin = await adminToken(app);
     let sharedTenant = '';
@@ -280,39 +280,26 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
       const issued = await http(app).post('/api/v1/support-grants')
         .set('Host', `${sharedSlug}.test.local`).set(authed(centreToken))
         .send(draft(staffId, ['classes:read']));
-      expect(issued.status, JSON.stringify(issued.body)).toBe(201);
-      expect(issued.body.tenantId).toBe(sharedTenant);
-      const grantedId = issued.body.id as string;
+      expect(issued.status).toBe(401);
+      expect(issued.body).toMatchObject({ code: 'auth.unauthenticated' });
 
-      const allowed = await http(app).get(`/api/v1/support-centres/${sharedSlug}/classes`)
+      const deniedAccess = await http(app).get(`/api/v1/support-centres/${sharedSlug}/classes`)
         .set(authed(supportToken));
-      expect(allowed.status, JSON.stringify(allowed.body)).toBe(200);
-      const aFromShared = await http(app).get(`/api/v1/support-centres/${slugA}/classes`)
-        .set(authed(supportToken));
-      expect(aFromShared.status).toBe(403);
-      const outOfScope = await http(app).get(`/api/v1/support-centres/${sharedSlug}/courses`)
-        .set(authed(supportToken));
-      expect(outOfScope.status).toBe(403);
-      const other = await http(app).get(`/api/v1/support-centres/${sharedSlug}/classes`)
-        .set(authed(otherToken));
-      expect(other.status).toBe(403);
-
-      const revoked = await http(app).post(`/api/v1/support-grants/${grantedId}/revoke`)
-        .set('Host', `${sharedSlug}.test.local`).set(authed(centreToken));
-      expect(revoked.status).toBe(201);
-      expect(revoked.body.status).toBe('revoked');
-      const denied = await http(app).get(`/api/v1/support-centres/${sharedSlug}/classes`)
-        .set(authed(supportToken));
-      expect(denied.status).toBe(403);
+      expect(deniedAccess.status).toBe(403);
       const audit = await http(app).get('/api/v1/support-grants/audit')
         .set('Host', `${sharedSlug}.test.local`).set(authed(centreToken));
-      expect(audit.status).toBe(200);
-      expect((audit.body as Array<{ action: string }>).map((item) => item.action))
-        .toEqual(expect.arrayContaining(['grant_created', 'access_allowed', 'grant_revoked', 'access_denied']));
+      expect(audit.status).toBe(401);
+      const count = await withClient(process.env.DATABASE_URL!, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        const result = await client.query<{ count: string }>(
+          'SELECT count(*)::text AS count FROM support_grants WHERE tenant_id = $1', [sharedTenant],
+        );
+        return Number(result.rows[0]!.count);
+      });
+      expect(count).toBe(0);
       const auditA = await http(app).get('/api/v1/support-grants/audit')
         .set('Host', hostA).set(authed(adminA));
       expect(auditA.status).toBe(200);
-      expect((auditA.body as Array<{ grantId: string | null }>).every((item) => item.grantId !== grantedId)).toBe(true);
     } finally {
       if (sharedTenant) {
         await withClient(process.env.DATABASE_URL!, async (client) => {

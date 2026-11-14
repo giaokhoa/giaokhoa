@@ -413,6 +413,7 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
 
 describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => {
   const DEDICATED_SPACE: SpaceRegistryEntry = {
+    kind: 'center',
     id: 'id-dang-ky-a',
     slug: 'trung-tam-a',
     status: 'active',
@@ -481,6 +482,24 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
     bRow.publishedAt = null;
     await relay.publishPendingForCentres();
     expect(jobs.size).toBe(2);
+  });
+
+  it('registry platform trang-chinh bị loại; công cộng kind platform nhận job có đúng spaceId và không trùng khi quét lại', async () => {
+    const platform = { ...DEDICATED_SPACE, id: 'id-trang-chinh', slug: 'trang-chinh', kind: 'platform' };
+    const publicSpace = { ...DEDICATED_SPACE, id: 'id-cong-cong', slug: 'cong-cong', kind: 'platform' };
+    const row = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-public' });
+    const publicDb = makeFakeDb([row], { 'tenant-public': 'cong-cong' });
+    const spaceDb = makeFakeSpaceDb([platform, publicSpace], new Map([['cong-cong', publicDb.db]]));
+    const { relay, queues } = makeRelay([], ROUTES, { spaceDb });
+    const jobs = queues.get('outbox-auth-mail')!.jobs;
+
+    expect(await relay.publishPendingForCentres()).toEqual({ published: 1, failedSlugs: [] });
+    expect(jobs.get(`id-cong-cong-${row.id}`)?.data).toMatchObject({
+      spaceSlug: 'cong-cong', spaceId: 'id-cong-cong', tenantId: 'tenant-public',
+    });
+    expect(row.publishedAt).not.toBeNull();
+    expect(await relay.publishPendingForCentres()).toEqual({ published: 0, failedSlugs: [] });
+    expect(jobs.size).toBe(1);
   });
 
   it('trung tâm đã đóng (closed) và trung tâm ở kho chung không thuộc lượt quét theo trung tâm', async () => {

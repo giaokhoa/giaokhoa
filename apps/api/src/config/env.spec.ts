@@ -37,6 +37,49 @@ describe('Hàm validateEnv (fail-fast)', () => {
       .toThrow(/Invalid environment variables/);
   });
 
+  it('production từ chối mật khẩu quản trị mặc định, thiếu hoặc yếu trước khi khởi động', () => {
+    const base = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
+      REDIS_URL: 'redis://localhost:6379',
+      JWT_SECRET: 'a-secret-with-16+chars',
+    };
+    for (const password of [undefined, 'Admin123!', 'weakpass']) {
+      expect(() => validateEnv({ ...base, ADMIN_PASSWORD: password })).toThrow(
+        /ADMIN_PASSWORD/,
+      );
+    }
+    expect(
+      validateEnv({ ...base, ADMIN_PASSWORD: 'ProductionSecretLongEnough!' })
+        .ADMIN_PASSWORD,
+    ).toBe('ProductionSecretLongEnough!');
+    expect(validateEnv({ ...base, NODE_ENV: 'test' }).ADMIN_PASSWORD).toBe(
+      'Admin123!',
+    );
+  });
+
+  it('production có operator riêng chỉ khởi động khi mật khẩu riêng không còn là mật khẩu demo', () => {
+    const base = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
+      REDIS_URL: 'redis://localhost:6379',
+      JWT_SECRET: 'a-secret-with-16+chars',
+      ADMIN_PASSWORD: 'ProductionSecretLongEnough!',
+      PLATFORM_ADMIN_USERNAME: 'operator',
+    };
+    for (const password of [undefined, 'Platform123!', 'weakpass']) {
+      expect(() =>
+        validateEnv({ ...base, PLATFORM_ADMIN_PASSWORD: password }),
+      ).toThrow(/PLATFORM_ADMIN_PASSWORD/);
+    }
+    expect(() =>
+      validateEnv({
+        ...base,
+        PLATFORM_ADMIN_PASSWORD: 'AnotherProductionSecret!',
+      }),
+    ).not.toThrow();
+  });
+
   it('từ chối khi thiếu DATABASE_URL', () => {
     expect(() =>
       validateEnv({ REDIS_URL: 'redis://localhost:6379', JWT_SECRET: 'a-secret-with-16+chars' }),

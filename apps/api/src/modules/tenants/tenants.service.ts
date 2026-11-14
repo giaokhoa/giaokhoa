@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -30,8 +29,6 @@ import type {
   CreateTenantUserDto,
   UpdateTenantDto,
 } from './dto/tenants.dto';
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
 
 export function toTenantDto(row: TenantRow): TenantDto {
   return {
@@ -293,40 +290,12 @@ export class TenantsService {
     return toTenantDto(tenant);
   }
 
-  async createTenant(actorId: string, dto: CreateTenantDto): Promise<TenantDto> {
-    return tenantAls.run({ platform: true }, () => this.createTenantInContext(actorId, dto));
-  }
-
-  private async createTenantInContext(actorId: string, dto: CreateTenantDto): Promise<TenantDto> {
+  async createTenant(actorId: string, _dto: CreateTenantDto): Promise<TenantDto> {
     await this.assertPlatformManager(actorId);
-    if (dto.kind === 'center') {
-      throw new BadRequestException({
-        message: 'New centres require dedicated provisioning; use the space-provision operator command',
-        code: 'centre.provision_required',
-      });
-    }
-    const slug = dto.slug.trim().toLowerCase();
-    if (!SLUG_RE.test(slug)) {
-      throw new BadRequestException({ message: `Invalid tenant slug: ${dto.slug}`, code: 'tenant.invalid_slug' });
-    }
-    if (await this.repo.getTenantBySlug(slug)) {
-      throw new ConflictException({ message: `Tenant slug ${slug} is already taken`, code: 'tenant.slug_taken' });
-    }
-    const tenant = await this.repo.insertTenant({
-      slug,
-      name: dto.name.trim(),
-      kind: dto.kind,
-      status: 'active',
-      plan: dto.plan ?? null,
+    throw new BadRequestException({
+      message: 'New schools and centres require dedicated provisioning; use the space-provision operator command',
+      code: 'centre.provision_required',
     });
-    await this.contexts.ensureTenantContext(tenant.id);
-    await this.outbox.enqueueStandalone({
-      aggregate: 'tenant',
-      type: 'tenant_created',
-      payload: { tenantId: tenant.id, slug, kind: dto.kind, actorId },
-      tenantId: tenant.id,
-    });
-    return toTenantDto(tenant);
   }
 
   async updateTenant(actorId: string, tenantId: string, dto: UpdateTenantDto): Promise<TenantDto> {

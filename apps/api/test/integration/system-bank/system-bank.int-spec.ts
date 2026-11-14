@@ -12,11 +12,12 @@ import { SystemBankConnection } from '../../../src/modules/system-bank/system-ba
 import { checksumPackage } from '../../../src/modules/system-bank/system-bank-package';
 import { SystemBankService } from '../../../src/modules/system-bank/system-bank.service';
 
-const BANK_DATABASE = 'giaokhoa_test_bank_585';
-const BANK_ROLE = 'giaokhoa_bank_test_585';
+const TEST_SUFFIX = `${process.pid}_${Math.random().toString(36).slice(2, 9)}`;
+const BANK_DATABASE = `giaokhoa_test_bank_585_${TEST_SUFFIX}`;
+const BANK_ROLE = `giaokhoa_bank_test_585_${TEST_SUFFIX}`;
 const BANK_PASSWORD = 'bank585test';
-const CENTRE_DATABASE = 'giaokhoa_test_centre_585';
-const CENTRE_ROLE = 'giaokhoa_centre_test_585';
+const CENTRE_DATABASE = `giaokhoa_test_centre_585_${TEST_SUFFIX}`;
+const CENTRE_ROLE = `giaokhoa_centre_test_585_${TEST_SUFFIX}`;
 const CENTRE_PASSWORD = 'centre585test';
 const ADMIN_ID = '01958500-0000-7000-8000-000000000001';
 const SYSTEM_ID = '01958500-0000-7000-8000-000000000002';
@@ -89,8 +90,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       [CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD],
     ] as const) {
       await withClient(adminUrl, async (client) => {
-        await client.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
-        await client.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
         await client.query(`CREATE ROLE ${quoted(role)} LOGIN PASSWORD '${password}'`);
         await client.query(`CREATE DATABASE ${quoted(database)} OWNER ${quoted(role)}`);
         await client.query(`REVOKE CONNECT ON DATABASE ${quoted(database)} FROM PUBLIC`);
@@ -191,7 +190,7 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       [CENTRE_DATABASE, CENTRE_ROLE],
     ] as const) {
       await withClient(adminUrl, async (client) => {
-        await client.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
+        await client.query(`DROP DATABASE IF EXISTS ${quoted(database)}`);
         await client.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       });
     }
@@ -442,13 +441,11 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
   });
 
   it('trung tâm A/B có kho độc lập và cài hai phiên bản khác nhau mà không ghi chéo', async () => {
-    const database = 'giaokhoa_test_centre_17_b';
-    const role = 'giaokhoa_centre_test_17_b';
+    const database = `giaokhoa_test_centre_17_b_${TEST_SUFFIX}`;
+    const role = `giaokhoa_centre_test_17_b_${TEST_SUFFIX}`;
     const password = 'centre17testb';
     const adminUrl = clusterUrl('postgres');
     await withClient(adminUrl, async (client) => {
-      await client.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
-      await client.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       await client.query(`CREATE ROLE ${quoted(role)} LOGIN PASSWORD '${password}'`);
       await client.query(`CREATE DATABASE ${quoted(database)} OWNER ${quoted(role)}`);
       await client.query(`REVOKE CONNECT ON DATABASE ${quoted(database)} FROM PUBLIC`);
@@ -522,7 +519,7 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
     } finally {
       await otherDb?.destroy();
       await withClient(adminUrl, async (client) => {
-        await client.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
+        await client.query(`DROP DATABASE IF EXISTS ${quoted(database)}`);
         await client.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       });
     }

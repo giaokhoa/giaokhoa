@@ -18,7 +18,7 @@ import { ApiError } from '#lib/api';
 import { formatDate } from '#utils/date-format';
 import { tenantCapabilities, usePermissions } from '#lib/permissions';
 import { appKeyMeta } from '#lib/route-meta';
-import { currentTenantQueryOptions, tenantMembersQueryOptions, tenantUsersQueryOptions, tenantsQueryOptions, useAddTenantMember, useCreateTenant, useCreateTenantUser, useSetTenantMemberStatus } from '../queries/tenant-admin';
+import { currentTenantQueryOptions, tenantMembersQueryOptions, tenantUsersQueryOptions, tenantsQueryOptions, useAddTenantMember, useCreateTenantUser, useSetTenantMemberStatus } from '../queries/tenant-admin';
 import type { TenantMemberStatus, TenantUserSummary } from '../types/tenant-admin';
 
 interface TenantMemberRow {
@@ -36,7 +36,6 @@ export function AdminTenantsPage() {
   const platformMode = perms.canViewPlatformTenants;
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [tenantDraft, setTenantDraft] = useState({ name: '', slug: '', kind: 'school' as const, plan: '' });
   const [existingUserId, setExistingUserId] = useState('');
   const [newUserDraft, setNewUserDraft] = useState({ username: '', email: '', password: '', firstName: '', lastName: '' });
 
@@ -75,7 +74,6 @@ export function AdminTenantsPage() {
     enabled: perms.ready && Boolean(selectedTenant) && canViewSelected,
   });
 
-  const createTenantMutation = useCreateTenant();
   const addMemberMutation = useAddTenantMember();
   const createUserMutation = useCreateTenantUser();
   const setMemberStatusMutation = useSetTenantMemberStatus();
@@ -87,27 +85,6 @@ export function AdminTenantsPage() {
       user: usersById.get(membership.userId) ?? null,
     }));
   }, [membersQuery.data, usersQuery.data]);
-
-  function createTenant(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    createTenantMutation.mutate(
-      {
-        name: tenantDraft.name.trim(),
-        slug: tenantDraft.slug.trim(),
-        kind: tenantDraft.kind,
-        ...(tenantDraft.plan.trim() ? { plan: tenantDraft.plan.trim() } : {}),
-      },
-      {
-        onSuccess: (tenant) => {
-          setSelectedTenantId(tenant.id);
-          setTenantDraft({ name: '', slug: '', kind: 'school', plan: '' });
-          setMessage(t('tenantCreated'));
-        },
-        onError: () => setMessage(t('tenantCreateFailed')),
-      },
-    );
-  }
 
   function addMember(event: FormEvent) {
     event.preventDefault();
@@ -289,46 +266,7 @@ export function AdminTenantsPage() {
               <CardTitle>{t('tenantCreateTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-4 text-sm text-muted-foreground">{t('tenantProvisioningHint')}</p>
-              <form onSubmit={(event) => void createTenant(event)}>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="tenant-name">{t('tenantName')}</FieldLabel>
-                    <Input
-                      id="tenant-name"
-                      value={tenantDraft.name}
-                      onChange={(event) => setTenantDraft({ ...tenantDraft, name: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="tenant-slug">{t('tenantSlug')}</FieldLabel>
-                    <Input
-                      id="tenant-slug"
-                      value={tenantDraft.slug}
-                      onChange={(event) => setTenantDraft({ ...tenantDraft, slug: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel id="tenant-kind-label">{t('tenantKind')}</FieldLabel>
-                    <p className="text-sm" aria-labelledby="tenant-kind-label">{t('tenantKindSchool')}</p>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="tenant-plan">{t('tenantPlanOptional')}</FieldLabel>
-                    <Input
-                      id="tenant-plan"
-                      value={tenantDraft.plan}
-                      onChange={(event) => setTenantDraft({ ...tenantDraft, plan: event.target.value })}
-                    />
-                  </Field>
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={createTenantMutation.isPending}>
-                      {t('tenantCreate')}
-                    </Button>
-                  </div>
-                </FieldGroup>
-              </form>
+              <p className="text-sm text-muted-foreground">{t('tenantProvisioningHint')}</p>
             </CardContent>
           </Card>
         ) : null}

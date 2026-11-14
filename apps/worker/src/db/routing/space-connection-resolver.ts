@@ -2,6 +2,7 @@ import { onSpaceRegistryChanged } from './space-routing-events';
 
 
 export interface SpaceRegistryEntry {
+  kind: string;
   id: string;
   slug: string;
   status: string;
@@ -10,6 +11,10 @@ export interface SpaceRegistryEntry {
   connectionRoleRef: string;
   secretRef: string | null;
   schemaVersion: string | null;
+}
+
+export function isLearningSpace(space: Pick<SpaceRegistryEntry, 'kind' | 'slug'>): boolean {
+  return space.kind === 'center' || (space.kind === 'platform' && space.slug === 'cong-cong');
 }
 
 export type SpaceRegistryReader = (slug: string) => Promise<SpaceRegistryEntry | undefined>;
@@ -110,7 +115,10 @@ export class SpaceConnectionResolver {
       connectionRole: entry.connectionRoleRef,
     };
     if (entry.storageMode === 'shared') {
-      return { ...base, mode: 'shared' };
+      throw new SpaceRoutingError(
+        'space_routing.shared_not_supported',
+        `Space ${entry.slug} is registered in an unsupported shared database`,
+      );
     }
     if (entry.storageMode !== 'dedicated') {
       throw new SpaceRoutingError(

@@ -3,12 +3,13 @@ import type { ConfigService } from '@nestjs/config';
 import { tenantAls } from '../tenant-als';
 import { SpaceDatabaseService } from './space-database.service';
 
-describe('SpaceDatabaseService.sweepSharedAndDedicated', () => {
+describe('SpaceDatabaseService.sweepDedicatedSpaces', () => {
   const registry = [
-    { id: 'space-a', slug: 'a', storageMode: 'dedicated', status: 'active' },
-    { id: 'space-b', slug: 'b', storageMode: 'dedicated', status: 'active' },
-    { id: 'space-shared', slug: 'c', storageMode: 'shared', status: 'active' },
-    { id: 'space-closed', slug: 'closed', storageMode: 'dedicated', status: 'closed' },
+    { id: 'space-platform', slug: 'trang-chinh', kind: 'platform', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-a', slug: 'a', kind: 'center', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-b', slug: 'b', kind: 'center', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-public', slug: 'cong-cong', kind: 'platform', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-closed', slug: 'closed', kind: 'center', storageMode: 'dedicated', status: 'closed' },
   ];
   const config = { get: (key: string) => key === 'SPACE_SWEEP_CONCURRENCY' ? 2 : undefined } as ConfigService;
   const spaceDb = new SpaceDatabaseService(config);
@@ -38,20 +39,20 @@ describe('SpaceDatabaseService.sweepSharedAndDedicated', () => {
   afterAll(async () => { await spaceDb.onModuleDestroy(); });
 
   const task = async (): Promise<string[]> => {
-    const id = tenantAls.getStore()?.spaceId ?? 'shared';
+    const id = tenantAls.getStore()?.spaceId ?? 'unscoped';
     handled.push(id);
     return [`${id}:user-same-uuid`];
   };
   const merge = (a: string[], b: string[]) => [...a, ...b];
 
-  it('quét đúng 3 kho dù UUID nội bộ trùng; không chạy shared lần thứ hai', async () => {
-    const result = await spaceDb.sweepSharedAndDedicated(task, merge);
+  it('chỉ quét kho riêng đang hoạt động dù UUID nội bộ trùng', async () => {
+    const result = await spaceDb.sweepDedicatedSpaces(task, merge, []);
     expect(result).toEqual([
-      'shared:user-same-uuid', 'space-a:user-same-uuid', 'space-b:user-same-uuid',
+      'space-a:user-same-uuid', 'space-b:user-same-uuid', 'space-public:user-same-uuid',
     ]);
-    expect(handled).toEqual(['shared', 'space-a', 'space-b']);
-    expect(open).toHaveBeenCalledTimes(2);
-    expect(resolve).toHaveBeenCalledTimes(4);
+    expect(handled).toEqual(['space-a', 'space-b', 'space-public']);
+    expect(open).toHaveBeenCalledTimes(3);
+    expect(resolve).toHaveBeenCalledTimes(6);
   });
 
   it('A lỗi: B vẫn chạy, trả failed cho BullMQ retry; lượt sau không trộn phạm vi', async () => {
@@ -65,52 +66,67 @@ describe('SpaceDatabaseService.sweepSharedAndDedicated', () => {
     };
     const committed = new Set<string>();
     const idempotentTask = async () => {
-      const id = tenantAls.getStore()?.spaceId ?? 'shared';
+      const id = tenantAls.getStore()?.spaceId ?? 'unscoped';
       committed.add(`${id}:same-outbox-uuid`);
       handled.push(id);
       return [id];
     };
-    await expect(spaceDb.sweepSharedAndDedicated(idempotentTask, merge)).rejects.toThrow('A chưa mở được');
-    expect(handled).toEqual(['shared', 'space-b']);
-    await spaceDb.sweepSharedAndDedicated(idempotentTask, merge);
+    await expect(spaceDb.sweepDedicatedSpaces(idempotentTask, merge, [])).rejects.toThrow('A chưa mở được');
+    expect(handled).toEqual(['space-b', 'space-public']);
+    await spaceDb.sweepDedicatedSpaces(idempotentTask, merge, []);
     expect(committed).toEqual(new Set([
-      'shared:same-outbox-uuid', 'space-a:same-outbox-uuid', 'space-b:same-outbox-uuid',
+      'space-a:same-outbox-uuid', 'space-b:same-outbox-uuid', 'space-public:same-outbox-uuid',
     ]));
   });
 
   it('slug chuyển sang một identity khác giữa resolve và chuẩn bị: callback không chạy trong kho lạ', async () => {
-    onPrepare = async (slug) => slug === 'a' ? 'space-reassigned-to-b' : 'space-b';
-    await expect(spaceDb.sweepSharedAndDedicated(task, merge))
+    onPrepare = async (slug) => slug === 'a' ? 'space-reassigned-to-b' : registry.find((space) => space.slug === slug)!.id;
+    await expect(spaceDb.sweepDedicatedSpaces(task, merge, []))
       .rejects.toThrow('Prepared identity changed for a');
-    expect(handled).toEqual(['shared', 'space-b']);
+    expect(handled).toEqual(['space-b', 'space-public']);
   });
 
-  it('shared lỗi vẫn quét A/B, sau đó đánh dấu job thất bại để retry', async () => {
-    const failingShared = async () => {
-      const id = tenantAls.getStore()?.spaceId ?? 'shared';
-      if (id === 'shared') throw new Error('Kho chung chưa đọc được');
-      handled.push(id);
-      return [id];
-    };
-    await expect(spaceDb.sweepSharedAndDedicated(failingShared, merge)).rejects.toThrow('Kho chung chưa đọc được');
-    expect(handled).toEqual(['space-a', 'space-b']);
+  it('sổ có kho chung legacy thì từ chối trước khi chạy bất kỳ job nào', async () => {
+    list.mockResolvedValue([
+      ...registry,
+      { id: 'space-shared', slug: 'c', kind: 'center', storageMode: 'shared', status: 'active' },
+    ] as never);
+    await expect(spaceDb.sweepDedicatedSpaces(task, merge, [])).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
+    });
+    expect(handled).toEqual([]);
+  });
+
+  it('chỉ có trang chính và khu công cộng: quét công cộng, không quét platform', async () => {
+    list.mockResolvedValue(registry.filter((space) => space.kind !== 'center') as never);
+    expect(await spaceDb.sweepDedicatedSpaces(task, merge, [])).toEqual(['space-public:user-same-uuid']);
+    expect(handled).toEqual(['space-public']);
+  });
+
+  it('chỉ có trang chính hoặc registry rỗng: nhịp rỗng hoàn thành, không gọi callback', async () => {
+    list.mockResolvedValue(registry.filter((space) => space.slug === 'trang-chinh') as never);
+    expect(await spaceDb.sweepDedicatedSpaces(task, merge, [])).toEqual([]);
+    list.mockResolvedValue([]);
+    expect(await spaceDb.sweepDedicatedSpaces(task, merge, [])).toEqual([]);
+    expect(handled).toEqual([]);
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('control plane không đọc được: fail-closed thay vì báo thành công giả', async () => {
     list.mockRejectedValue(new Error('registry unavailable'));
-    await expect(spaceDb.sweepSharedAndDedicated(task, merge)).rejects.toThrow('registry unavailable');
-    expect(handled).toEqual(['shared']);
+    await expect(spaceDb.sweepDedicatedSpaces(task, merge, [])).rejects.toThrow('registry unavailable');
+    expect(handled).toEqual([]);
   });
 
   it('lượt B bị thu hồi/chuyển chế độ giữa snapshot và chạy: vẫn quét A, không đọc B', async () => {
     resolve.mockImplementation(async (slug) => ({
-      slug, spaceId: slug === 'a' ? 'space-a' : 'space-b',
+      slug, spaceId: registry.find((space) => space.slug === slug)!.id,
       status: slug === 'b' ? 'closed' : 'active',
       mode: 'dedicated', databaseName: slug, schemaVersion: 'v1',
       connectionRole: 'test', connectionString: 'postgres://test',
     }));
-    await expect(spaceDb.sweepSharedAndDedicated(task, merge))
+    await expect(spaceDb.sweepDedicatedSpaces(task, merge, []))
       .rejects.toThrow('Space identity changed for b');
-    expect(handled).toEqual(['shared', 'space-a']);
+    expect(handled).toEqual(['space-a', 'space-public']);
   });
 });

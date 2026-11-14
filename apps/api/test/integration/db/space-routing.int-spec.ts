@@ -385,23 +385,19 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     await Promise.all(transactions);
   });
 
-  it('trung tâm ở chế độ kho chung dùng đúng handle kho chung và ghi/đọc trên kho chung như hiện tại', async () => {
-    const db = await service.getKyselyForSpace(SHARED_SLUG);
-    expect(db).toBe(sharedKysely);
-    await tenantAls.run({ tenantId: SHARED_TENANT_ID }, async () => {
-      await service.routedKysely
-        .insertInto('tenants')
-        .values({ id: SHARED_TENANT_ID, slug: 'tenant-chung-581', name: 'Tenant kho chung 581', kind: 'center' })
-        .execute();
-      const rows = await service.routedKysely.selectFrom('tenants').selectAll().where('id', '=', SHARED_TENANT_ID).execute();
-      expect(rows).toHaveLength(1);
+  it('registry shared bị từ chối trước khi truy cập dữ liệu, không sinh tenant ở platform', async () => {
+    await expect(service.getKyselyForSpace(SHARED_SLUG)).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
     });
+    await expect(service.withSpaceKysely(SHARED_SLUG, async () => {
+      throw new Error('Unexpected database access');
+    })).rejects.toMatchObject({ code: 'space_routing.shared_not_supported' });
     const inShared = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       const result = await client.query<{ id: string }>('SELECT id FROM tenants WHERE id = $1', [SHARED_TENANT_ID]);
       return result.rows.map((row) => row.id);
     });
-    expect(inShared).toEqual([SHARED_TENANT_ID]);
+    expect(inShared).toEqual([]);
   });
 
   it('handle định tuyến uỷ thác về kho của trung tâm trong ngữ cảnh mang slug của trung tâm đó, và về kho chung ngoài ngữ cảnh', async () => {

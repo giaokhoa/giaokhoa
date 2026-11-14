@@ -190,11 +190,16 @@ describe('Khung định tuyến theo trung tâm phía worker (integration)', () 
     expect(direct).toEqual([CENTRE_TENANT_ID]);
   });
 
-  it('phiên theo trung tâm ở chế độ kho chung dùng đúng handle kho chung của worker', async () => {
-    const db = await service.getKyselyForSpace(SHARED_SLUG);
-    expect(db).toBe(sharedKysely);
-    const viaSession = await service.withSpaceKysely(SHARED_SLUG, async () => service.getKyselyForSpace(SHARED_SLUG));
-    expect(viaSession).toBe(sharedKysely);
+  it('registry shared bị từ chối trước khi mở handle hoặc chạy callback', async () => {
+    await expect(service.getKyselyForSpace(SHARED_SLUG)).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
+    });
+    let called = false;
+    await expect(service.withSpaceKysely(SHARED_SLUG, async () => {
+      called = true;
+      return null;
+    })).rejects.toMatchObject({ code: 'space_routing.shared_not_supported' });
+    expect(called).toBe(false);
   });
 
   it('sổ đổi role và bí mật của kho sau khi pool đã tạo: lần lấy handle kế tiếp của worker kết nối bằng role mới của sổ, pool cũ bị thay', async () => {

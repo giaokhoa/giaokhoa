@@ -6,6 +6,7 @@ import { generate } from 'otplib';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { CAP_ALLOW } from '../../../src/modules/access/domain/permission';
@@ -18,6 +19,7 @@ import {
   STRONG_PASSWORD,
   createTestApp,
   createUserViaApi,
+  grantTenantManagerFixture,
   http,
   login,
   uniqueName,
@@ -42,7 +44,7 @@ const MAIN_SLUG = 'trang-chinh';
 const HOST_A = `${CENTRE_A_SLUG}.test.local`;
 const HOST_B = `${CENTRE_B_SLUG}.test.local`;
 const HOST_MAIN = `${MAIN_SLUG}.test.local`;
-const SHARED_SLUG = 'truong-mac-dinh';
+const SHARED_SLUG = `legacy-584-${RUN_SUFFIX}`;
 const HOST_SHARED = `${SHARED_SLUG}.test.local`;
 const DUAL_NEW_PASSWORD = 'NewStrong123!';
 
@@ -261,20 +263,8 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
 
     adminToken = (await login(app, 'admin', 'Admin123!')).accessToken;
 
-    const createdA = (await must(
-      await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm A (spec 584)', slug: CENTRE_A_SLUG, kind: 'school',
-      }),
-      'create tenant A',
-    )) as { id: string };
-    tenantAId = createdA.id;
-    const createdB = (await must(
-      await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm B (spec 584)', slug: CENTRE_B_SLUG, kind: 'school',
-      }),
-      'create tenant B',
-    )) as { id: string };
-    tenantBId = createdB.id;
+    tenantAId = await seedLegacyCentreInShared({ slug: CENTRE_A_SLUG, name: 'Trung tâm A (spec 584)' });
+    tenantBId = await seedLegacyCentreInShared({ slug: CENTRE_B_SLUG, name: 'Trung tâm B (spec 584)' });
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), 'tenants', 'id', tenantAId);
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'tenants', 'id', tenantBId);
 
@@ -283,7 +273,10 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       'list tenants',
     )) as Array<{ id: string; slug: string }>;
     mainTenantId = tenantsList.find((tenant) => tenant.slug === MAIN_SLUG)!.id;
-    sharedTenantId = tenantsList.find((tenant) => tenant.slug === SHARED_SLUG)!.id;
+    sharedTenantId = await seedLegacyCentreInShared({
+      slug: SHARED_SLUG, name: 'Trường legacy kiểm cổng (spec 584)',
+    });
+    await grantTenantManagerFixture(app, adminToken, sharedTenantId);
     await copyRow(process.env.DATABASE_URL!, clusterUrl(MAIN_DATABASE, MAIN_ROLE, MAIN_PASSWORD), 'tenants', 'id', mainTenantId);
 
     const spaceDb = app.get(SpaceDatabaseService, { strict: false });
@@ -552,7 +545,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect(await countFamilies(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), dualBId)).toBe(0);
   });
 
-  it('đường kho chung giữ nguyên hành vi: đăng nhập, chuyển tenant, tạo người dùng ở địa chỉ gốc và tên miền con', async () => {
+  it('kho chung cũ chỉ đọc tại địa chỉ gốc, không được dùng hostname trường như một đường chung', async () => {
     const member = await createUserViaApi(app, adminToken);
     await must(
       await http(app).post(`/api/v1/tenants/${sharedTenantId}/members`).set(auth(adminToken)).send({ userId: member.id }),
@@ -567,8 +560,8 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect(payload['tid']).toBe(sharedTenantId);
     expect(payload['centre_id']).toBeUndefined();
     const atSubdomain = await http(app).get('/api/v1/users/me').set('Host', HOST_SHARED).set(auth(switched.accessToken));
-    expect(atSubdomain.status).toBe(200);
-    expect((atSubdomain.body as { id?: string }).id).toBe(member.id);
+    expect(atSubdomain.status).toBe(401);
+    expect((atSubdomain.body as { code?: string }).code).toBe('auth.unauthenticated');
     const atApex = await http(app).get('/api/v1/users/me').set(auth(switched.accessToken));
     expect(atApex.status).toBe(200);
     expect((atApex.body as { id?: string }).id).toBe(member.id);
@@ -577,12 +570,9 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
 
   it('trung tâm kho riêng lệch cấu hình bí mật: tạo người dùng qua API thất bại và không sinh dòng nào ở kho chung', async () => {
     const badSlug = `trung-tam-lech-${RUN_SUFFIX}`;
-    const createdBad = (await must(
-      await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm lệch cấu hình (spec 584)', slug: badSlug, kind: 'school',
-      }),
-      'create misconfigured tenant',
-    )) as { id: string };
+    const badTenantId = await seedLegacyCentreInShared({
+      slug: badSlug, name: 'Trung tâm lệch cấu hình (spec 584)',
+    });
     await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
       await client.query(
         `INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref, schema_version)
@@ -596,7 +586,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
 
     const badUsername = uniqueName('lech-cau-hinh');
     const badEmail = `${badUsername}@example.com`;
-    const res = await http(app).post(`/api/v1/tenants/${createdBad.id}/users`).set(auth(adminToken)).send({
+    const res = await http(app).post(`/api/v1/tenants/${badTenantId}/users`).set(auth(adminToken)).send({
       username: badUsername, email: badEmail, password: STRONG_PASSWORD, firstName: 'Lech', lastName: 'CauHinh',
     });
     expect(res.status).toBe(500);
@@ -678,12 +668,9 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     await applyBusinessBaseline(clusterUrl(centreCDatabase, centreCRole, centreCPassword));
     process.env.SPACE_TEST_C_584_URL = clusterUrl('postgres', centreCRole, centreCPassword);
     try {
-      const createdC = (await must(
-        await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-          name: 'Trung tâm C (spec 584)', slug: centreCSlug, kind: 'school',
-        }),
-        'create tenant C',
-      )) as { id: string };
+      const tenantCId = await seedLegacyCentreInShared({
+        slug: centreCSlug, name: 'Trung tâm C (spec 584)',
+      });
       await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
         await client.query(
           `INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref, schema_version)
@@ -700,7 +687,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       const username = uniqueName('refresh-missing');
       const user = await spaceDb.withSpaceKysely(centreCSlug, async () => users.createUser({
         username, email: `${username}@example.com`, password: STRONG_PASSWORD, firstName: 'Refresh', lastName: 'Missing',
-      }), { tenantId: createdC.id });
+      }), { tenantId: tenantCId });
       const refreshToken = randomBytes(48).toString('base64url');
       const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
       await withClient(clusterUrl(centreCDatabase, centreCRole, centreCPassword), async (client) => {
@@ -708,7 +695,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
         await client.query(
           `INSERT INTO refresh_token_family (family_id, user_id, tenant_id, current_token_hash, expires_at)
            VALUES ($1, $2, $3, $4, now() + interval '30 days')`,
-          [randomUUID(), user.id, createdC.id, tokenHash],
+          [randomUUID(), user.id, tenantCId, tokenHash],
         );
       });
 

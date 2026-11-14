@@ -4,12 +4,14 @@ import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
+import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
+import { ContextsService } from '../../../src/modules/access/contexts.service';
+import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
 import {
   STRONG_PASSWORD,
   createTestApp,
   createUserViaApi,
-  grantTenantManagerFixture,
   seedTenantMembershipFixture,
   http,
   login,
@@ -148,7 +150,6 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
   let adminToken = '';
   let tenantAId = '';
   let tenantBId = '';
-  let sharedTenantId = '';
   let registryAId = '';
   let teacherId = '';
   let teacherUsername = '';
@@ -194,6 +195,10 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
 
     app = await createTestApp();
 
+    const platformDbUrl = new URL(process.env.DATABASE_URL!);
+    const platformDbName = decodeURIComponent(platformDbUrl.pathname.replace(/^\//, ''));
+    const platformRole = decodeURIComponent(platformDbUrl.username);
+
     const cpPool = new Pool({ connectionString: clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD) });
     const cpDb = createControlPlaneKysely(cpPool);
     try {
@@ -222,6 +227,17 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
             secret_ref: 'env:SPACE_TEST_B_582_URL',
             schema_version: 'v1',
           },
+          {
+            slug: SHARED_SLUG,
+            name: 'Trung tâm legacy 582',
+            kind: 'center',
+            status: 'active',
+            database_name: platformDbName,
+            storage_mode: 'shared',
+            connection_role_ref: platformRole,
+            secret_ref: 'env:DATABASE_URL',
+            schema_version: 'v1',
+          },
         ])
         .returning(['id', 'slug'])
         .execute();
@@ -232,24 +248,15 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
 
     adminToken = (await login(app, 'admin', 'Admin123!')).accessToken;
 
-    const createdA = (await must(
-      await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm A (spec 582)',
-        slug: CENTRE_A_SLUG,
-        kind: 'school',
-      }),
-      'create tenant A',
-    )) as { id: string };
-    tenantAId = createdA.id;
-    const createdB = (await must(
-      await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm B (spec 582)',
-        slug: CENTRE_B_SLUG,
-        kind: 'school',
-      }),
-      'create tenant B',
-    )) as { id: string };
-    tenantBId = createdB.id;
+    const tenantsRepo = app.get(TenantsRepository, { strict: false });
+    const contexts = app.get(ContextsService, { strict: false });
+    const seedCentre = (slug: string, name: string) => tenantAls.run({ platform: true }, async () => {
+      const row = await tenantsRepo.insertTenant({ slug, name, kind: 'center', status: 'active', plan: null });
+      await contexts.ensureTenantContext(row.id);
+      return row.id;
+    });
+    tenantAId = await seedCentre(CENTRE_A_SLUG, 'Trung tâm A 582');
+    tenantBId = await seedCentre(CENTRE_B_SLUG, 'Trung tâm B 582');
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), 'tenants', 'id', tenantAId);
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'tenants', 'id', tenantBId);
 
@@ -289,12 +296,6 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     const sharedOnly = await createUserViaApi(app, adminToken);
     sharedOnlyUsername = sharedOnly.username;
 
-    const tenantsList = (await must(
-      await http(app).get('/api/v1/tenants').set(auth(adminToken)),
-      'list tenants',
-    )) as Array<{ id: string; slug: string }>;
-    sharedTenantId = tenantsList.find((tenant) => tenant.slug === SHARED_SLUG)!.id;
-    await grantTenantManagerFixture(app, adminToken, sharedTenantId);
   }, 300_000);
 
   afterAll(async () => {
@@ -312,23 +313,24 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     }).catch(() => undefined);
   });
 
-  it('token của phiên thuộc trung tâm kho riêng mang centre_id bằng định danh đăng ký của trung tâm; token ở kho chung không mang claim', async () => {
+  it('token tại A chỉ mang centre_id của A, phiên admin platform không giả làm phiên trung tâm', async () => {
     expect(decodeJwtPayload(teacherTokenA)['centre_id']).toBe(registryAId);
     expect(decodeJwtPayload(teacherTokenA)['tid']).toBe(tenantAId);
+    const { SpaceDatabaseService } = await import('../../../src/db/routing/space-database.service');
+    const platform = await app.get(SpaceDatabaseService, { strict: false }).resolveTarget('trang-chinh');
+    expect(decodeJwtPayload(adminToken)['centre_id']).toBe(platform.spaceId);
+  });
 
-    const member = await createUserViaApi(app, adminToken);
-    await must(
-      await http(app).post(`/api/v1/tenants/${sharedTenantId}/members`).set(auth(adminToken)).send({ userId: member.id }),
-      'add member to shared tenant',
-    );
-    const memberApex = await login(app, member.username, STRONG_PASSWORD);
-    const switched = (await must(
-      await http(app).post(`/api/v1/auth/switch-tenant/${sharedTenantId}`).set(auth(memberApex.accessToken)),
-      'switch member to shared tenant',
-    )) as { accessToken: string };
-    const payload = decodeJwtPayload(switched.accessToken);
-    expect(payload['tid']).toBe(sharedTenantId);
-    expect(payload['centre_id']).toBeUndefined();
+  it('API chặn tạo cả school và center trong kho platform, không ghi thêm tenant', async () => {
+    const before = await must(await http(app).get('/api/v1/tenants').set(auth(adminToken)), 'read tenant registry');
+    for (const kind of ['school', 'center']) {
+      const rejected = await http(app).post('/api/v1/tenants').set(auth(adminToken))
+        .send({ name: 'Trung tâm legacy', slug: `legacy-${kind}-${RUN_SUFFIX}`, kind });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body).toMatchObject({ code: 'centre.provision_required' });
+    }
+    const after = await must(await http(app).get('/api/v1/tenants').set(auth(adminToken)), 'read tenant registry after rejection');
+    expect(after).toEqual(before);
   });
 
   it('token của trung tâm A tới địa chỉ của trung tâm B bị từ chối 401 auth.centre_mismatch trước tầng dữ kiện — không một kết nối nào vào kho B', async () => {
@@ -388,7 +390,8 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
       expect((blocked.body as { code?: string }).code).toBe('space.not_active');
 
       const operations = await http(app).get('/api/v1/users/me').set('Host', HOST_A).set(auth(adminToken));
-      expect(operations.status).toBe(403);
+      expect(operations.status).toBe(401);
+      expect(operations.body).toMatchObject({ code: 'auth.centre_mismatch' });
 
       const tenantRows = await withClient(
         clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD),
@@ -410,32 +413,16 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     }
   });
 
-  it('trung tâm ở kho chung giữ nguyên hành vi hiện tại ở cả tên miền con của nó lẫn địa chỉ gốc', async () => {
-    const member = await createUserViaApi(app, adminToken);
-    await must(
-      await http(app).post(`/api/v1/tenants/${sharedTenantId}/members`).set(auth(adminToken)).send({ userId: member.id }),
-      'add member to shared tenant (regression)',
-    );
-    const memberApex = await login(app, member.username, STRONG_PASSWORD);
-    const switched = (await must(
-      await http(app).post(`/api/v1/auth/switch-tenant/${sharedTenantId}`).set(auth(memberApex.accessToken)),
-      'switch member to shared tenant (regression)',
-    )) as { accessToken: string };
-
-    const atSubdomain = await http(app).get('/api/v1/users/me').set('Host', HOST_SHARED).set(auth(switched.accessToken));
-    expect(atSubdomain.status).toBe(200);
-    expect((atSubdomain.body as { id?: string }).id).toBe(member.id);
-    const atApex = await http(app).get('/api/v1/users/me').set(auth(switched.accessToken));
-    expect(atApex.status).toBe(200);
-    expect((atApex.body as { id?: string }).id).toBe(member.id);
-  });
-  it('GET /centres/:slug/identity của trung tâm shared đã chuẩn bị trả 200 ở cả Host shared và platform', async () => {
+  it('registry legacy shared bị từ chối trên HTTP với đúng mã lỗi, không trả dữ liệu platform', async () => {
     const atShared = await http(app).get(`/api/v1/centres/${SHARED_SLUG}/identity`).set('Host', HOST_SHARED);
-    expect(atShared.status).toBe(200);
-    expect(atShared.body).toMatchObject({ tenantId: sharedTenantId });
+    expect(atShared.status).toBe(403);
+    expect(atShared.body).toMatchObject({ code: 'space_routing.shared_not_supported' });
     const atRoot = await http(app).get(`/api/v1/centres/${SHARED_SLUG}/identity`);
-    expect(atRoot.status).toBe(200);
-    expect(atRoot.body).toMatchObject({ tenantId: sharedTenantId });
+    expect(atRoot.status).toBe(403);
+    expect(atRoot.body).toMatchObject({ code: 'space_routing.shared_not_supported' });
+    const protectedRequest = await http(app).get('/api/v1/users/me').set('Host', HOST_SHARED).set(auth(adminToken));
+    expect(protectedRequest.status).toBe(401);
+    expect(protectedRequest.body).toMatchObject({ code: 'auth.unauthenticated' });
   });
 
   it('cùng userId ở A/B có chỉ mục tìm kiếm và cache quyền riêng; HTTP chỉ trả nội dung kho của Host', async () => {

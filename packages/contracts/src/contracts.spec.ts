@@ -1231,6 +1231,7 @@ describe('Hợp đồng control plane (sổ đăng ký không gian, #580)', () =
   it('loại không gian và chế độ kho ngoài tập đóng bị từ chối', () => {
     expect(() => createSpaceRegistrationSchema.parse({ ...validCreate, kind: 'school' })).toThrow();
     expect(() => createSpaceRegistrationSchema.parse({ ...validCreate, storageMode: 'pooled' })).toThrow();
+    expect(() => createSpaceRegistrationSchema.parse({ ...validCreate, storageMode: 'shared' })).toThrow();
   });
 
   it('schema tạo là strict: trường lạ (ví dụ trường bí mật dạng giá trị) bị từ chối', () => {
@@ -1242,6 +1243,8 @@ describe('Hợp đồng control plane (sổ đăng ký không gian, #580)', () =
     expect(() => updateSpaceRegistrationSchema.parse({ slug: 'slug-khac' })).toThrow();
     expect(() => updateSpaceRegistrationSchema.parse({ kind: 'platform' })).toThrow();
     expect(updateSpaceRegistrationSchema.parse({ plan: null, secretRef: null })).toEqual({ plan: null, secretRef: null });
+    expect(() => updateSpaceRegistrationSchema.parse({ storageMode: 'shared' })).toThrow();
+    expect(updateSpaceRegistrationSchema.parse({ storageMode: 'dedicated' })).toEqual({ storageMode: 'dedicated' });
   });
 
   it('đổi trạng thái chỉ nhận đúng bốn trạng thái vòng đời đã chốt', () => {

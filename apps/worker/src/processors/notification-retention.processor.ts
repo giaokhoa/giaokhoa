@@ -26,13 +26,13 @@ export class NotificationRetentionProcessor extends ObservedWorkerHost {
 
   async process(_job: Job): Promise<NotificationRetentionResult> {
     void _job;
-    return this.spaceDb.sweepSharedAndDedicated(() =>
+    return this.spaceDb.sweepDedicatedSpaces(() =>
       this.taskLog.run('notification-retention', () => this.sweepInContext(new Date()),
         (r) => `deleted ${r.readDeleted} read notification(s), ${r.unreadDeleted} unread notification(s), ${r.dispatchLogDeleted} dispatch log row(s)`), (a, b) => ({
           readDeleted: a.readDeleted + b.readDeleted,
           unreadDeleted: a.unreadDeleted + b.unreadDeleted,
           dispatchLogDeleted: a.dispatchLogDeleted + b.dispatchLogDeleted,
-        }));
+        }), { readDeleted: 0, unreadDeleted: 0, dispatchLogDeleted: 0 });
   }
 
   async sweep(now: Date): Promise<NotificationRetentionResult> {

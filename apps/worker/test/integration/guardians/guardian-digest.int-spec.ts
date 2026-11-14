@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type { INestApplicationContext } from '@nestjs/common';
 import { GuardianDigestProcessor } from '../../../src/processors/guardian-digest.processor';
 import { sql } from '@giaokhoa/db';
@@ -16,7 +17,8 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
   const suffix = Date.now();
   const DAY = 24 * 3600_000;
 
-  const uid = (n: number) => `01900000-0000-7000-8000-${String(920000 + n * 41 + (suffix % 997)).padStart(12, '0')}`;
+  const runId = randomUUID().replaceAll('-', '').slice(0, 6);
+  const uid = (n: number) => `01900000-0000-7000-8000-${runId}${n.toString(16).padStart(6, '0')}`;
 
   async function makeUser(id: string) {
     await sql`insert into users (id, username, email, suspended, deleted) values (${id}, ${`ph2-${id.slice(-6)}-${suffix}`}, ${`ph2-${id.slice(-6)}-${suffix}@x.io`}, false, false) on conflict (id) do nothing`.execute(db);
@@ -95,7 +97,7 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     return (cls.rows[0] as { id: string }).id;
   }
   beforeAll(async () => {
-    harness = await bootWorkerModuleAsOrdinaryRole();
+    harness = await bootWorkerModuleAsOrdinaryRole({ disableGuardianScheduler: true });
     context = harness.context;
     db = harness.adminDb;
     await sql`insert into tenants (slug, name, kind, status) values ('worker-fixture', 'Worker fixture tenant', 'school', 'active') on conflict (slug) do nothing`.execute(db);

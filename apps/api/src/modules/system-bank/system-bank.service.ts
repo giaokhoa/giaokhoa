@@ -513,7 +513,7 @@ export class SystemBankService {
       throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
     }
     await this.evaluator.requireCapability(actorId, 'tenant:manage', context.id);
-    const centreSlug = tenantAls.getStore()?.spaceSlug ?? await this.centreRepo.resolveTenantSlug(tenantId);
+    const centreSlug = tenantAls.getStore()?.spaceSlug;
     if (!centreSlug || !this.spaceDb || (await this.spaceDb.resolveTarget(centreSlug)).mode !== 'dedicated') {
       throw new ForbiddenException({
         message: 'Installing programme packages requires a dedicated centre store',

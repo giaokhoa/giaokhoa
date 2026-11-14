@@ -30,7 +30,7 @@ export class NotificationDigestProcessor extends ObservedWorkerHost {
 
   async process(job: Job): Promise<NotificationDigestSweepResult> {
     void job;
-    return this.spaceDb.sweepSharedAndDedicated(() => this.sweep(), (a, b) => ({
+    return this.spaceDb.sweepDedicatedSpaces(() => this.sweep(), (a, b) => ({
       usersSent: a.usersSent + b.usersSent,
       usersDeferred: a.usersDeferred + b.usersDeferred,
       usersSkipped: a.usersSkipped + b.usersSkipped,
@@ -38,7 +38,8 @@ export class NotificationDigestProcessor extends ObservedWorkerHost {
       itemsSent: a.itemsSent + b.itemsSent,
       itemsSuppressedAdmin: a.itemsSuppressedAdmin + b.itemsSuppressedAdmin,
       itemsSuppressedPreference: a.itemsSuppressedPreference + b.itemsSuppressedPreference,
-    }));
+    }), { usersSent: 0, usersDeferred: 0, usersSkipped: 0, usersFailed: 0,
+      itemsSent: 0, itemsSuppressedAdmin: 0, itemsSuppressedPreference: 0 });
   }
 
   private async sweep(): Promise<NotificationDigestSweepResult> {

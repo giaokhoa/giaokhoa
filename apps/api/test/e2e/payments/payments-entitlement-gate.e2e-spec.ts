@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -9,9 +9,10 @@ import { createCategory, createCourse, createEnrolInstance, grantActiveTeacherPl
 import { closeSepaySweepDriver, driveCohortSync, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
-const SEPAY_KEY = '<redacted>';
-const SEPAY_XID = 'xid-entitlement-gate-001';
-const BANK_ACCOUNT = '113366660001';
+const runBankSuffix = randomInt(100000, 1000000).toString();
+const SEPAY_KEY = `sk-test-entitlement-${runBankSuffix}`;
+const SEPAY_XID = `xid-entitlement-gate-${runBankSuffix}`;
+const BANK_ACCOUNT = `113366${runBankSuffix}`;
 const FEE_COST = 100000;
 const CLASS_FEE = 150000;
 
@@ -188,12 +189,21 @@ describe('Chốt chặn component cấp quyền: endpoint chung bị cấm + đ�
 
   it('(b2) matching: payment enrol_fee bị sửa tenant sang tenant khác tenant của khoá → needs_review, không ghi danh', async () => {
     const { course, buyer, payment } = await createSepayFeeCourse();
-    const others = await pg.query<{ id: string }>('select id from tenants where id <> $1 limit 1', [payment.tenantId]);
-    expect(others.rows[0]).toBeTruthy();
-    await pg.query('update payments set tenant_id = $1 where id = $2', [others.rows[0]!.id, payment.id]);
-    await postIpn(ipnBody(payment.paymentCode!, FEE_COST));
-    await waitPaymentStatus(payment.id, 'needs_review');
-    expect(await enrolmentActive(course.id, buyer.token)).toBe(false);
+    const forgedTenantId = randomUUID();
+    const forgedSlug = `forged-owner-${forgedTenantId.slice(0, 8)}`;
+    await pg.query(
+      "INSERT INTO tenants (id, slug, name, kind, status) VALUES ($1, $2, 'Tamper-only tenant', 'school', 'active')",
+      [forgedTenantId, forgedSlug],
+    );
+    try {
+      await pg.query('update payments set tenant_id = $1 where id = $2', [forgedTenantId, payment.id]);
+      await postIpn(ipnBody(payment.paymentCode!, FEE_COST));
+      await waitPaymentStatus(payment.id, 'needs_review');
+      expect(await enrolmentActive(course.id, buyer.token)).toBe(false);
+    } finally {
+      await pg.query('update payments set tenant_id = $1 where id = $2', [payment.tenantId, payment.id]);
+      await pg.query('delete from tenants where id = $1', [forgedTenantId]);
+    }
   });
 
   it('(b3) matching: payment class_fee bị sửa số tiền xuống 1 đồng → needs_review, không vào roster của lớp', async () => {

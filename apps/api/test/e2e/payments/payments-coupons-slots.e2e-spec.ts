@@ -1,15 +1,18 @@
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
+import { randomInt } from 'node:crypto';
 import {
   adminToken, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, uniqueName, grantTenantManagerFixture,
 } from '../../support/identity-access-helpers';
 import { createCategory, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
-const SEPAY_KEY = 'sk-test-coupon-slot-001';
-const SEPAY_XID = 'xid-test-coupon-slot-001';
-const BANK_ACCOUNT = '113366660001';
+const runBankSuffix = randomInt(100000, 1000000).toString();
+const SEPAY_KEY = `sk-test-coupon-slot-${runBankSuffix}`;
+const SEPAY_XID = `xid-test-coupon-slot-${runBankSuffix}`;
+const BANK_ACCOUNT = `113366${runBankSuffix}`;
 const TENANT_PLAN_DEFAULT_PRICE = 6000000;
 const TEACHER_PLAN_DEFAULT_PRICE = 990000;
 const DAY_MS = 86_400_000;
@@ -83,11 +86,7 @@ describe('Coupon + giới hạn slot gói (issue #189, lát còn lại 2)', () =
 
   async function createSchoolTenant(): Promise<string> {
     const slug = `cs-${uniqueName('t').toLowerCase()}`;
-    const created = await must(
-      await http(app).post('/api/v1/tenants').set(auth(admin)).send({ name: `Trung tâm ${slug}`, slug, kind: 'school' }),
-      'create school tenant',
-    ) as { id: string };
-    return created.id;
+    return seedLegacyCentreInShared({ slug, name: `Trung tâm ${slug}` });
   }
 
   async function tenantContextId(tenantId: string): Promise<string> {
