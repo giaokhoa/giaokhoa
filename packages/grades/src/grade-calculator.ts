@@ -54,6 +54,10 @@ export function adjustedGrade(item: CalcItemInput): number | null {
   return clamp(item.grade * mult + off, item.gradeMin, item.gradeMax);
 }
 
+function gradeRange(item: CalcItemInput): number {
+  return Math.max(0, item.gradeMax - item.gradeMin);
+}
+
 function norm(item: CalcItemInput, adjusted: number): number {
   const range = item.gradeMax - item.gradeMin;
   if (range <= 0) return 0;
@@ -67,6 +71,13 @@ interface Prepared {
   isExtra: boolean;
 }
 
+function weightedFraction(items: Prepared[], weightOf: (item: CalcItemInput) => number): number | null {
+  if (items.length === 0) return null;
+  const denominator = items.reduce((sum, prepared) => sum + weightOf(prepared.item), 0);
+  if (!(denominator > 0)) return null;
+  return items.reduce((sum, prepared) => sum + prepared.fraction * weightOf(prepared.item), 0) / denominator;
+}
+
 export function naturalWeights(items: CalcItemInput[]): Record<string, number> {
   const nonExtra = items.filter((i) => !i.extraCredit);
   const weights: Record<string, number> = {};
@@ -75,15 +86,15 @@ export function naturalWeights(items: CalcItemInput[]): Record<string, number> {
   const usedByOverride = overridden.reduce((s, i) => s + (i.weight ?? 0), 0);
   for (const i of overridden) weights[i.itemId] = i.weight ?? 0;
   const remaining = Math.max(0, 100 - usedByOverride);
-  const restRange = rest.reduce((s, i) => s + Math.max(0, i.gradeMax - i.gradeMin), 0);
+  const restRange = rest.reduce((s, i) => s + gradeRange(i), 0);
   for (const i of rest) {
-    weights[i.itemId] = restRange > 0 ? (remaining * Math.max(0, i.gradeMax - i.gradeMin)) / restRange : (rest.length ? remaining / rest.length : 0);
+    weights[i.itemId] = restRange > 0 ? (remaining * gradeRange(i)) / restRange : (rest.length ? remaining / rest.length : 0);
   }
-  const nonExtraRange = nonExtra.reduce((s, i) => s + Math.max(0, i.gradeMax - i.gradeMin), 0);
+  const nonExtraRange = nonExtra.reduce((s, i) => s + gradeRange(i), 0);
   for (const i of items) {
     if (i.extraCredit) {
       weights[i.itemId] = i.weightOverride ? (i.weight ?? 0)
-        : nonExtraRange > 0 ? (100 * Math.max(0, i.gradeMax - i.gradeMin)) / nonExtraRange : 0;
+        : nonExtraRange > 0 ? (100 * gradeRange(i)) / nonExtraRange : 0;
     }
   }
   return weights;
@@ -127,7 +138,7 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
   }
 
   const nonExtraAll = input.items.filter((i) => !i.excluded && !i.extraCredit);
-  const structuralRange = nonExtraAll.reduce((s, i) => s + Math.max(0, i.gradeMax - i.gradeMin), 0);
+  const structuralRange = nonExtraAll.reduce((s, i) => s + gradeRange(i), 0);
 
   let weights: Record<string, number> = {};
   if (input.aggregation === 'natural') {
@@ -159,7 +170,7 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
       gradeMax = input.gradeMin + structuralRange;
       const anyOverride = main.some((p) => p.item.weightOverride) || extras.some((p) => p.item.weightOverride);
       if (!anyOverride) {
-        const denom = main.reduce((s, p) => s + Math.max(0, p.item.gradeMax - p.item.gradeMin), 0);
+        const denom = main.reduce((s, p) => s + gradeRange(p.item), 0);
         const numer = main.reduce((s, p) => s + (p.adjusted - p.item.gradeMin), 0)
           + extras.reduce((s, p) => s + (p.adjusted - p.item.gradeMin), 0);
         fraction = denom > 0 ? numer / denom : (extras.length ? 1 : null);
@@ -190,17 +201,11 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
       break;
     }
     case 'weightedmean': {
-      const denom = main.reduce((s, p) => s + (p.item.aggregationCoef ?? p.item.weight ?? 1), 0);
-      if (main.length && denom > 0) {
-        fraction = main.reduce((s, p) => s + p.fraction * (p.item.aggregationCoef ?? p.item.weight ?? 1), 0) / denom;
-      }
+      fraction = weightedFraction(main, (item) => item.aggregationCoef ?? item.weight ?? 1);
       break;
     }
     case 'simpleweightedmean': {
-      const denom = main.reduce((s, p) => s + Math.max(0, p.item.gradeMax - p.item.gradeMin), 0);
-      if (main.length && denom > 0) {
-        fraction = main.reduce((s, p) => s + p.fraction * Math.max(0, p.item.gradeMax - p.item.gradeMin), 0) / denom;
-      }
+      fraction = weightedFraction(main, gradeRange);
       break;
     }
     case 'median': if (main.length) fraction = median(main.map((p) => p.fraction)); break;
@@ -212,7 +217,6 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
   if (fraction === null) return { finalGrade: null, gradeMin, gradeMax, weights, fraction: null };
   const capped = clamp(fraction, 0, 1);
   const finalGrade = gradeMin + capped * (gradeMax - gradeMin);
-  void EPS;
   return { finalGrade, gradeMin, gradeMax, weights, fraction: capped };
 }
 

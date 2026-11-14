@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateCategory, letterForGrade, type CalcItemInput } from './grade-calculator.js';
+import { calculateCategory, letterForGrade, naturalWeights, type CalcItemInput } from './grade-calculator.js';
 
 
 let nextId = 1;
@@ -200,6 +200,28 @@ describe('GradeCalculator — sổ điểm chuẩn (tổng hợp điểm MoodleD
       items: [item({ grade: 70, gradeMax: 100 }), item({ grade: 20, gradeMax: 80 }), item({ grade: 10, gradeMax: 10 })],
     });
     expect(mk().finalGrade).toBe(mk().finalGrade);
+  });
+
+  it('trung bình trọng số không tạo ra điểm khi tổng trọng số là NaN', () => {
+    resetIds();
+    const result = calculateCategory({
+      aggregation: 'weightedmean', gradeMin: 0, gradeMax: 100,
+      items: [item({ grade: 80, aggregationCoef: Number.NaN })],
+    });
+    expect(result.finalGrade).toBeNull();
+  });
+
+  it('trọng số tự nhiên bỏ qua khoảng điểm âm và phân bổ đều các mục không có khoảng điểm', () => {
+    resetIds();
+    const negativeRange = item({ grade: 15, gradeMin: 20, gradeMax: 10 });
+    const zeroRange = item({ grade: 10, gradeMin: 10, gradeMax: 10 });
+    const extraCredit = item({ grade: 12, gradeMin: 5, gradeMax: 15, extraCredit: true });
+
+    const weights = naturalWeights([negativeRange, zeroRange, extraCredit]);
+
+    expect(weights[negativeRange.itemId]).toBe(50);
+    expect(weights[zeroRange.itemId]).toBe(50);
+    expect(weights[extraCredit.itemId]).toBe(0);
   });
 
   it('chữ điểm ánh xạ theo ngưỡng phần trăm (ngưỡng cao nhất bằng hoặc dưới phần trăm)', () => {
