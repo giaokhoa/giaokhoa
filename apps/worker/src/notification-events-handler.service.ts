@@ -54,7 +54,8 @@ export class NotificationEventsHandlerService {
     if (!userId || !itemId || finalGrade === null) return;
     const item = await this.getGradeItemNotifyInfo(itemId);
     if (!item || item.hidden || NON_NOTIFIED_ITEM_TYPES.has(item.itemType)) return;
-    if (await this.isGradeHiddenForUser(itemId, userId)) return;
+    const grade = await this.getGradeRevision(itemId, userId);
+    if (!grade || grade.hidden) return;
     const courseName = (await this.getCourseFullName(item.courseId)) ?? '';
     const itemName = item.itemName || courseName;
     await this.delivery.notify(userId, 'grade_updated', {
@@ -63,7 +64,7 @@ export class NotificationEventsHandlerService {
       contextUrl: `/courses/${item.courseId}/grades`,
       courseId: item.courseId,
       tenantId: await this.resolveCourseTenantId(payload, item.courseId, userId),
-      eventId: `grade-${itemId}-${finalGrade}`,
+      eventId: `grade-${itemId}-${finalGrade}-${grade.updatedAt?.getTime() ?? 0}`,
     });
   }
 
@@ -78,6 +79,7 @@ export class NotificationEventsHandlerService {
       contextUrl: `/courses/${courseId}`,
       courseId,
       tenantId: await this.resolveCourseTenantId(payload, courseId, userId),
+      eventId: await this.courseCompletedEventId(userId, courseId),
     });
   }
 
@@ -95,6 +97,7 @@ export class NotificationEventsHandlerService {
       contextUrl: `/courses/${courseId}`,
       courseId,
       tenantId: await this.resolveCourseTenantId(payload, courseId, userId),
+      eventId: `enrol-expiry-${typeof payload.enrolmentId === 'string' ? payload.enrolmentId : 'unknown'}-${timeEnd}`,
     });
   }
 
@@ -120,6 +123,7 @@ export class NotificationEventsHandlerService {
         : `/courses/${courseId}/exams/${pinId}`,
       courseId,
       tenantId: await this.resolveCourseTenantId(payload, courseId, userId),
+      eventId: `activity-due-${isAssign ? assignmentId : pinId}-${timeClose}`,
     });
   }
 
@@ -138,6 +142,7 @@ export class NotificationEventsHandlerService {
     subject: string,
     body: string,
     courseId: string,
+    eventId: string,
   ): Promise<void> {
     const existing = await this.getUnreadNotification(userId, provider, contextUrl);
     if (existing) {
@@ -152,6 +157,7 @@ export class NotificationEventsHandlerService {
       contextUrl,
       courseId,
       tenantId: await this.getUserDefaultTenantId(userId),
+      eventId,
     });
   }
 
@@ -174,6 +180,7 @@ export class NotificationEventsHandlerService {
         this.t('platform.assignmentAssignedSubject', { assignment: info.name }),
         this.t('platform.assignmentAssignedBody', { assignment: info.name, course: courseName }),
         courseId,
+        `assignment-assigned-${assignmentId}`,
       );
     }
   }
@@ -183,6 +190,7 @@ export class NotificationEventsHandlerService {
     const courseId = typeof payload.courseId === 'string' ? payload.courseId : null;
     const userId = typeof payload.userId === 'string' ? payload.userId : null;
     if (!assignmentId || !courseId || !userId) return;
+    const attemptNumber = typeof payload.attemptNumber === 'number' ? payload.attemptNumber : null;
     const info = await this.getAssignmentNotifyInfo(assignmentId);
     if (!info) return;
     const courseName = (await this.getCourseFullName(courseId)) ?? '';
@@ -194,6 +202,7 @@ export class NotificationEventsHandlerService {
       this.t('platform.assignmentSubmitReceiptSubject', { assignment: info.name }),
       this.t('platform.assignmentSubmitReceiptBody', { assignment: info.name, course: courseName }),
       courseId,
+      `assignment-submitted-${assignmentId}-${userId}-${attemptNumber ?? 0}`,
     );
     const awaiting = await this.countAssignmentSubmissionsAwaitingGrading(assignmentId);
     const staffIds = await this.listCourseStaffUserIds(courseId);
@@ -206,6 +215,7 @@ export class NotificationEventsHandlerService {
         this.t('platform.assignmentSubmittedSubject', { assignment: info.name }),
         this.t('platform.assignmentSubmittedBody', { assignment: info.name, course: courseName, count: awaiting }),
         courseId,
+        `assignment-submitted-${assignmentId}-${userId}-${attemptNumber ?? 0}`,
       );
     }
   }
@@ -225,6 +235,7 @@ export class NotificationEventsHandlerService {
       this.t('platform.assignmentReturnedSubject', { assignment: info.name }),
       this.t('platform.assignmentReturnedBody', { assignment: info.name, course: courseName }),
       courseId,
+      `assignment-returned-${assignmentId}-${typeof payload.attemptNumber === 'number' ? payload.attemptNumber : 0}`,
     );
   }
 
@@ -247,6 +258,7 @@ export class NotificationEventsHandlerService {
         this.t('platform.quizAvailableSubject', { quiz: info.name }),
         this.t('platform.quizAvailableBody', { quiz: info.name, course: courseName }),
         courseId,
+        `quiz-available-${pinId}`,
       );
     }
   }
@@ -272,6 +284,7 @@ export class NotificationEventsHandlerService {
         this.t('platform.quizAttemptFinishedSubject', { quiz: info.name }),
         this.t('platform.quizAttemptFinishedBody', { quiz: info.name, course: courseName, count: awaiting }),
         courseId,
+        `quiz-attempt-finished-${pinId}-${typeof payload.attemptId === 'string' ? payload.attemptId : 'unknown'}`,
       );
     }
   }
@@ -298,6 +311,7 @@ export class NotificationEventsHandlerService {
         contextUrl,
         fromUserId: messageRow.userIdFrom,
         tenantId: conversationTenantId ?? await this.getUserDefaultTenantId(memberId),
+        eventId: `message-${messageId}`,
       });
     }
   }
@@ -325,14 +339,28 @@ export class NotificationEventsHandlerService {
     return row;
   }
 
-  private async isGradeHiddenForUser(itemId: string, userId: string): Promise<boolean> {
+  private async getGradeRevision(itemId: string, userId: string): Promise<{
+    hidden: boolean;
+    updatedAt: Date | null;
+  } | undefined> {
     const row = await this.spaceDb.routedKysely
       .selectFrom('grade_grades')
-      .select('hidden')
+      .select(['hidden', 'updated_at as updatedAt'])
       .where('item_id', '=', itemId)
       .where('user_id', '=', userId)
       .executeTakeFirst();
-    return row?.hidden ?? false;
+    return row ? { hidden: row.hidden, updatedAt: row.updatedAt ?? null } : undefined;
+  }
+
+  private async courseCompletedEventId(userId: string, courseId: string): Promise<string | undefined> {
+    const row = await this.spaceDb.routedKysely
+      .selectFrom('course_completions')
+      .select('time_completed as timeCompleted')
+      .where('user_id', '=', userId)
+      .where('course', '=', courseId)
+      .executeTakeFirst();
+    const completedAt = row?.timeCompleted ?? null;
+    return completedAt ? `course-completed-${courseId}-${completedAt.toISOString()}` : undefined;
   }
 
   private async getCourseFullName(courseId: string): Promise<string | undefined> {

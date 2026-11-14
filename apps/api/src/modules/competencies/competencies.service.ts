@@ -790,6 +790,7 @@ export class CompetenciesService implements OnModuleInit {
         externalSubject: this.i18n.t('platform.planReviewRequestedSubject', { args: { name: plan.name } }),
         externalBody: this.i18n.t('platform.planReviewRequestedExternalBody', { args: { name: plan.name } }),
         contextUrl: `/competencies/plans/${plan.id}`,
+        eventId: `competency-plan-review-${plan.id}`,
       }).catch(() => undefined);
     }
     await this.outbox.enqueueStandalone({

@@ -71,7 +71,7 @@ export class BadgesService implements OnModuleInit {
 
 
       jobId: backgroundJobId(`badge-award-${userId}-${trigger}`),
-      attempts: 3, removeOnComplete: true,
+      attempts: 3, removeOnComplete: true, removeOnFail: true,
     }).catch(() => undefined);
   }
 
@@ -359,6 +359,7 @@ export class BadgesService implements OnModuleInit {
       body: this.i18n.t('platform.badgeAwardedBody', { args: { name: badgeRow.name, issuer: badgeRow.issuerName } }),
       contextUrl: `/badges/${badgeId}`,
       courseId: badgeRow.courseId ?? undefined,
+      eventId: `badge-issued-${issued.id}`,
     }).catch(() => undefined);
     await this.repo.updateIssued(issued.id, { issuerNotified: true });
     return issued;

@@ -325,7 +325,7 @@ export class MessagingNotificationsService {
         : await this.isChannelEnabled(userId, providerName, channel, state);
       if (channelEnabled) {
         externalContent ??= this.resolveExternalContent(provider, userId, input);
-        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body])).digest('hex');
+        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body, input.fromUserId ?? null, input.contextUrl ?? null, input.courseId ?? null])).digest('hex');
         const eventKey = notificationId ?? (input.eventId ? `event-${input.eventId}` : `content-${inAppContentHash}`);
         const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-${channel}-${eventKey}`;
         await this.dispatchQueue.add('dispatch', {

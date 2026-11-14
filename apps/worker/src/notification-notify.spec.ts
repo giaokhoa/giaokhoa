@@ -138,7 +138,7 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     expect(firstResult.channels).toEqual({ popup: 'skipped-preference', email: 'queued' });
     const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
     expect(firstJobData.notificationId).toBeNull();
-    const contentHash = createHash('sha256').update(JSON.stringify([DIGEST_INPUT.subject, DIGEST_INPUT.body])).digest('hex');
+    const contentHash = createHash('sha256').update(JSON.stringify([DIGEST_INPUT.subject, DIGEST_INPUT.body, null, DIGEST_INPUT.contextUrl, null])).digest('hex');
     expect(firstJobData.dedupeKey).toBe(`tenant-1-dispatch-guardian_digest-user-guardian-email-content-${contentHash}`);
     const second = buildNotify({
       user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
@@ -194,6 +194,92 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
       body: `Kết quả mới đã công bố: 2. ${'y'.repeat(240)}`,
     });
     const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).not.toBe(firstJobData.dedupeKey);
+  });
+
+  it('popup tắt, tin nhắn mới ở hai cuộc hội thoại khác nhau nhưng cùng người gửi: dedupeKey khác nhau dù không có eventId', async () => {
+    const first = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await first.delivery.notify('user-guardian', 'message_new', {
+      subject: 'Tin nhắn mới từ An',
+      body: 'Bạn có tin nhắn mới đang chờ.',
+      contextUrl: '/messages?conversation=conv-1',
+      fromUserId: 'user-an',
+      tenantId: 'tenant-1',
+    });
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'message_new', {
+      subject: 'Tin nhắn mới từ An',
+      body: 'Bạn có tin nhắn mới đang chờ.',
+      contextUrl: '/messages?conversation=conv-2',
+      fromUserId: 'user-an',
+      tenantId: 'tenant-1',
+    });
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).not.toBe(firstJobData.dedupeKey);
+  });
+
+  it('popup tắt, hai tin nhắn khác nhau trong cùng một cuộc hội thoại: dedupeKey mang eventId của từng tin nhắn nên không bị nuốt', async () => {
+    const first = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await first.delivery.notify('user-guardian', 'message_new', {
+      subject: 'Tin nhắn mới từ An',
+      body: 'Bạn có tin nhắn mới đang chờ.',
+      contextUrl: '/messages?conversation=conv-1',
+      fromUserId: 'user-an',
+      tenantId: 'tenant-1',
+      eventId: 'message-msg-1',
+    });
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(firstJobData.dedupeKey).toBe('tenant-1-dispatch-message_new-user-guardian-email-event-message-msg-1');
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'message_new', {
+      subject: 'Tin nhắn mới từ An',
+      body: 'Bạn có tin nhắn mới đang chờ.',
+      contextUrl: '/messages?conversation=conv-1',
+      fromUserId: 'user-an',
+      tenantId: 'tenant-1',
+      eventId: 'message-msg-2',
+    });
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).toBe('tenant-1-dispatch-message_new-user-guardian-email-event-message-msg-2');
+    expect(secondJobData.dedupeKey).not.toBe(firstJobData.dedupeKey);
+  });
+
+  it('popup tắt, điểm quay lại giá trị cũ nhưng lần phát mới có revision khác: dedupeKey khác nhau nên lần phát sau không bị nuốt', async () => {
+    const first = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await first.delivery.notify('user-guardian', 'grade_updated', {
+      subject: 'Điểm mới trong khoá học "Toán"',
+      body: 'Bạn có điểm mới cho mục "Bài 1" trong khoá học "Toán".',
+      contextUrl: '/courses/course-1/grades',
+      courseId: 'course-1',
+      tenantId: 'tenant-1',
+      eventId: 'grade-item-1-8.5-1000',
+    });
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(firstJobData.dedupeKey).toBe('tenant-1-dispatch-grade_updated-user-guardian-email-event-grade-item-1-8.5-1000');
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'grade_updated', {
+      subject: 'Điểm mới trong khoá học "Toán"',
+      body: 'Bạn có điểm mới cho mục "Bài 1" trong khoá học "Toán".',
+      contextUrl: '/courses/course-1/grades',
+      courseId: 'course-1',
+      tenantId: 'tenant-1',
+      eventId: 'grade-item-1-8.5-2000',
+    });
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).toBe('tenant-1-dispatch-grade_updated-user-guardian-email-event-grade-item-1-8.5-2000');
     expect(secondJobData.dedupeKey).not.toBe(firstJobData.dedupeKey);
   });
 

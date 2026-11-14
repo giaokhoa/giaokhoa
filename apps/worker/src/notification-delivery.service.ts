@@ -289,7 +289,7 @@ export class NotificationDeliveryService implements OnModuleDestroy {
         channels['email'] = 'skipped-preference';
       } else {
         const external = this.resolveExternalContent(providerName, emailLaw, input);
-        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body])).digest('hex');
+        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body, input.fromUserId ?? null, input.contextUrl ?? null, input.courseId ?? null])).digest('hex');
         const eventKey = notificationId ?? (input.eventId ? `event-${input.eventId}` : `content-${inAppContentHash}`);
         const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${eventKey}`;
         await this.dispatchQueue.add('dispatch', {
