@@ -21,6 +21,7 @@ type project
     define reviewer: [user]
     define manager: [user]
     define can_view: (viewer or contributor or reviewer or manager) and eligible from namespace
+    define can_edit_own: (contributor or manager) and eligible from namespace
     define can_create_question: (contributor or manager) and eligible from namespace
     define can_create_exam: (contributor or manager) and eligible from namespace
     define can_create_matrix: (contributor or manager) and eligible from namespace
@@ -32,7 +33,7 @@ type question
     define project: [project]
     define author: [user]
     define can_view: can_view from project
-    define can_edit: author and can_view from project
+    define can_edit: author and can_edit_own from project
     define can_approve: can_approve from project
 
 type exam
@@ -40,7 +41,7 @@ type exam
     define project: [project]
     define author: [user]
     define can_view: can_view from project
-    define can_edit: author and can_view from project
+    define can_edit: author and can_edit_own from project
     define can_approve: can_approve from project
 
 type matrix
@@ -48,5 +49,5 @@ type matrix
     define project: [project]
     define author: [user]
     define can_view: can_view from project
-    define can_edit: author and can_view from project
+    define can_edit: author and can_edit_own from project
     define can_approve: can_approve from project

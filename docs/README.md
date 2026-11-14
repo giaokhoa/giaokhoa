@@ -1,8 +1,8 @@
 # Chuẩn kiến trúc danh tính, không gian và tài nguyên của Giáo khoa
 
-**Trạng thái:** Đặc tả mục tiêu, phiên bản tài liệu 0.1.0 (2026-11-14). Không mô tả các chức năng đã được triển khai.
+**Trạng thái:** Đề xuất đặc tả mục tiêu, phiên bản tài liệu 0.1.0 (2026-11-14), chờ review độc lập và phê duyệt qua PR. Không mô tả các chức năng đã được triển khai.
 
-Bộ tài liệu này cố định **một kiến trúc tham chiếu về tổ chức/ownership** và **một chuẩn máy đọc được về authorization**. Mọi thành phần là quyết định mục tiêu cho Giáo khoa; không tuyên bố tương thích API hoặc data model của bên thứ ba.
+Bộ tài liệu này quản lý **một kiến trúc tham chiếu về tổ chức/ownership** và **một hợp đồng máy đọc được về authorization** bằng revision Git. Phần cố định là nội dung thiết kế nội bộ tại revision được duyệt; các trang nguồn trực tuyến chỉ được ghi URL và ngày đối chiếu, chưa phải snapshot bất biến. Không tuyên bố tương thích API hoặc data model của bên thứ ba.
 
 ## Thứ tự đọc
 
@@ -11,8 +11,8 @@ Bộ tài liệu này cố định **một kiến trúc tham chiếu về tổ c
 3. [IDENTITY.md](IDENTITY.md) — danh tính chung, tài khoản tổ chức không email, thành viên đa tổ chức.
 4. [AUTHORIZATION.md](AUTHORIZATION.md) — quyền theo namespace/project/resource; phạm vi của OpenFGA.
 5. [RESOURCE_OWNERSHIP.md](RESOURCE_OWNERSHIP.md) — quyền sở hữu, version, chia sẻ và sao chép.
-6. [DECISIONS.md](DECISIONS.md) — các quyết định cố định, ngoại lệ, câu hỏi chưa chốt.
-7. [authz/model.fga](authz/model.fga) và [authz/model.fga.yaml](authz/model.fga.yaml) — mô hình quyền mẫu và kịch bản test để chốt hợp đồng (**OpenFGA CLI v0.9.0: 27/27 Check đạt**).
+6. [DECISIONS.md](DECISIONS.md) — trạng thái phê duyệt của quyết định và phạm vi bị chặn bởi câu hỏi chưa chốt.
+7. [authz/model.fga](authz/model.fga) và [authz/model.fga.yaml](authz/model.fga.yaml) — mô hình quyền mẫu và các kịch bản bắt buộc; lệnh và kết quả kiểm chứng nằm trong [REFERENCE_BASELINE.md](REFERENCE_BASELINE.md).
 
 ## Ranh giới của bộ tài liệu
 
@@ -24,9 +24,11 @@ Bộ tài liệu này cố định **một kiến trúc tham chiếu về tổ c
 
 ## Thuật ngữ điều hành
 
-- **BẮT BUỘC:** bất biến của domain đã chốt.
+- **BẮT BUỘC:** điều kiện phải đáp ứng trong đặc tả mục tiêu; chỉ trở thành quyết định được duyệt khi hoàn tất quy trình tại [DECISIONS.md](DECISIONS.md).
 - **MẶC ĐỊNH:** hành vi tiêu chuẩn, chỉ được thay bởi policy được ghi nhận.
 - **ĐỀ XUẤT:** bản thiết kế cần xác thực triển khai, chưa phải hành vi sản phẩm.
 - **CHƯA CHỐT:** thiếu dữ kiện/đòi hỏi quyết định tiếp theo.
 
 Mọi thay đổi kiến trúc phải nêu nguồn chính thức, thay đổi hợp đồng và bổ sung ca kiểm thử cho hành vi bị tác động; không dùng ví dụ tham khảo làm lý do tự bổ sung quyền truy cập.
+
+Nghiệm thu thiết kế gồm test quan hệ chạy bằng CLI, bảng trách nhiệm enforcement trong [AUTHORIZATION.md](AUTHORIZATION.md), và các tình huống đầu vào/kết quả mong đợi trong [IDENTITY.md](IDENTITY.md), [RESOURCE_OWNERSHIP.md](RESOURCE_OWNERSHIP.md). Review các bảng tình huống không phải bằng chứng runtime đã chạy; không dùng kết quả CLI để thay thế chúng.

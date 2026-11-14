@@ -45,6 +45,43 @@ tuples:
     relation: author
     object: exam:exam_a
 
+  - user: project:math_a
+    relation: project
+    object: question:question_a
+  - user: user:an
+    relation: author
+    object: question:question_a
+  - user: project:math_a
+    relation: project
+    object: matrix:matrix_a
+  - user: user:an
+    relation: author
+    object: matrix:matrix_a
+  - user: project:math_a
+    relation: project
+    object: question:question_linh
+  - user: user:linh
+    relation: author
+    object: question:question_linh
+  - user: project:math_a
+    relation: project
+    object: exam:exam_linh
+  - user: user:linh
+    relation: author
+    object: exam:exam_linh
+  - user: project:math_a
+    relation: project
+    object: matrix:matrix_linh
+  - user: user:linh
+    relation: author
+    object: matrix:matrix_linh
+  - user: user:linh
+    relation: owner
+    object: namespace:personal_linh
+  - user: namespace:personal_linh
+    relation: namespace
+    object: project:personal_linh
+
 tests:
   - name: "Người dùng thường chỉ tạo học liệu tại trung tâm được cấp quyền"
     check:
@@ -96,17 +133,318 @@ tests:
           can_view: false
           can_edit: false
           can_approve: false
-  - name: "Thu hồi membership chặn grant cũ ở project"
-    tuples:
       - user: user:an
-        relation: contributor
-        object: project:orphan_project
-      - user: namespace:center_b
-        relation: namespace
-        object: project:orphan_project
-    check:
-      - user: user:an
-        object: project:orphan_project
+        object: question:question_a
+        assertions:
+          can_view: true
+          can_edit: true
+          can_approve: false
+      - user: user:chi
+        object: question:question_a
         assertions:
           can_view: false
+          can_edit: false
+          can_approve: false
+      - user: user:an
+        object: matrix:matrix_a
+        assertions:
+          can_view: true
+          can_edit: true
+          can_approve: false
+      - user: user:chi
+        object: matrix:matrix_a
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+  - name: "Cùng một người tạo ở A, chỉ xem ở B và chưa được tạo cá nhân"
+    tuples:
+      - user: user:linh
+        relation: member
+        object: organization:center_a
+      - user: user:linh
+        relation: member
+        object: organization:center_b
+      - user: user:linh
+        relation: contributor
+        object: project:math_a
+      - user: user:linh
+        relation: viewer
+        object: project:math_b
+    check:
+      - user: user:linh
+        object: project:math_a
+        assertions:
+          can_view: true
+          can_create_question: true
+          can_create_exam: true
+          can_create_matrix: true
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: project:math_b
+        assertions:
+          can_view: true
+          can_create_question: false
           can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: project:personal_linh
+        assertions:
+          can_view: false
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: question:question_linh
+        assertions:
+          can_view: true
+          can_edit: true
+          can_approve: false
+      - user: user:linh
+        object: exam:exam_linh
+        assertions:
+          can_view: true
+          can_edit: true
+          can_approve: false
+      - user: user:linh
+        object: matrix:matrix_linh
+        assertions:
+          can_view: true
+          can_edit: true
+          can_approve: false
+  - name: "Membership không tự cấp quyền project hay quyền sửa cho tác giả"
+    tuples:
+      - user: user:linh
+        relation: member
+        object: organization:center_a
+      - user: user:linh
+        relation: member
+        object: organization:center_b
+    check:
+      - user: user:linh
+        object: project:math_a
+        assertions:
+          can_view: false
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: project:math_b
+        assertions:
+          can_view: false
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: question:question_linh
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+      - user: user:linh
+        object: exam:exam_linh
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+      - user: user:linh
+        object: matrix:matrix_linh
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+  - name: "Sau khi thu hồi membership A, grant cũ mất hiệu lực còn quyền ở B được giữ"
+    tuples:
+      - user: user:linh
+        relation: member
+        object: organization:center_b
+      - user: user:linh
+        relation: contributor
+        object: project:math_a
+      - user: user:linh
+        relation: viewer
+        object: project:math_b
+    check:
+      - user: user:linh
+        object: project:math_a
+        assertions:
+          can_view: false
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: project:math_b
+        assertions:
+          can_view: true
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: question:question_linh
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+      - user: user:linh
+        object: exam:exam_linh
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+      - user: user:linh
+        object: matrix:matrix_linh
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+  - name: "Sau khi hạ contributor xuống viewer, tác giả chỉ còn được xem cả ba loại học liệu"
+    tuples:
+      - user: user:linh
+        relation: member
+        object: organization:center_a
+      - user: user:linh
+        relation: member
+        object: organization:center_b
+      - user: user:linh
+        relation: viewer
+        object: project:math_b
+      - user: user:linh
+        relation: viewer
+        object: project:math_a
+    check:
+      - user: user:linh
+        object: project:math_a
+        assertions:
+          can_view: true
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: question:question_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: false
+      - user: user:linh
+        object: exam:exam_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: false
+      - user: user:linh
+        object: matrix:matrix_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: false
+  - name: "Cấp authoring cá nhân độc lập không cấp quyền project tổ chức"
+    tuples:
+      - user: user:linh
+        relation: member
+        object: organization:center_a
+      - user: user:linh
+        relation: contributor
+        object: project:personal_linh
+    check:
+      - user: user:linh
+        object: project:personal_linh
+        assertions:
+          can_view: true
+          can_create_question: true
+          can_create_exam: true
+          can_create_matrix: true
+          can_approve: false
+          can_share_external: false
+      - user: user:linh
+        object: project:math_a
+        assertions:
+          can_view: false
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: false
+          can_share_external: false
+  - name: "Reviewer được duyệt nhưng không sửa, manager được quản lý nhưng không tự sửa bài người khác"
+    tuples:
+      - user: user:linh
+        relation: member
+        object: organization:center_a
+      - user: user:linh
+        relation: reviewer
+        object: project:math_a
+      - user: user:mai
+        relation: member
+        object: organization:center_a
+      - user: user:mai
+        relation: manager
+        object: project:math_a
+    check:
+      - user: user:linh
+        object: project:math_a
+        assertions:
+          can_view: true
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+          can_approve: true
+          can_share_external: false
+      - user: user:mai
+        object: project:math_a
+        assertions:
+          can_view: true
+          can_create_question: true
+          can_create_exam: true
+          can_create_matrix: true
+          can_approve: true
+          can_share_external: true
+      - user: user:linh
+        object: question:question_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: true
+      - user: user:linh
+        object: exam:exam_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: true
+      - user: user:linh
+        object: matrix:matrix_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: true
+      - user: user:mai
+        object: question:question_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: true
+      - user: user:mai
+        object: exam:exam_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: true
+      - user: user:mai
+        object: matrix:matrix_linh
+        assertions:
+          can_view: true
+          can_edit: false
+          can_approve: true

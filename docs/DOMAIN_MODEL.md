@@ -26,17 +26,17 @@ Platform
 
 ## 2. Ánh xạ thuật ngữ GitLab → Giáo khoa (chỉ ở cấp logic)
 
-| GitLab | Giáo khoa | Giới hạn |
-| --- | --- | --- |
-| Instance | Platform | Không quyết định cách chia database |
-| User | Principal / Identity | Danh tính khác Credential |
-| User Namespace | Personal Namespace / Không gian cá nhân | Có namespace không đồng nghĩa có quyền tạo nội dung cá nhân |
-| Group Namespace | Organization Namespace | Tổ chức là owner, không phải người tạo |
-| Subgroup | Team / Tổ bộ môn | Kế thừa quyền phải có policy rõ |
-| Project | Project / Khu vực cộng tác | Có `project_type` theo domain |
-| Group/Project Member | Membership | Status và role gắn với scope, không phải tài khoản toàn cục |
-| Project Role | Scoped Role | Không sao chép nguyên role GitLab |
-| Project artifacts | Domain Resources | Question, Exam, Matrix, Class, Publication... |
+| GitLab               | Giáo khoa                               | Giới hạn                                                    |
+| -------------------- | --------------------------------------- | ----------------------------------------------------------- |
+| Instance             | Platform                                | Không quyết định cách chia database                         |
+| User                 | Principal / Identity                    | Danh tính khác Credential                                   |
+| User Namespace       | Personal Namespace / Không gian cá nhân | Có namespace không đồng nghĩa có quyền tạo nội dung cá nhân |
+| Group Namespace      | Organization Namespace                  | Tổ chức là owner, không phải người tạo                      |
+| Subgroup             | Team / Tổ bộ môn                        | Kế thừa quyền phải có policy rõ                             |
+| Project              | Project / Khu vực cộng tác              | Có `project_type` theo domain                               |
+| Group/Project Member | Membership                              | Status và role gắn với scope, không phải tài khoản toàn cục |
+| Project Role         | Scoped Role                             | Không sao chép nguyên role GitLab                           |
+| Project artifacts    | Domain Resources                        | Question, Exam, Matrix, Class, Publication...               |
 
 Không ánh xạ các thuật ngữ này sang tên bảng, service hay API cụ thể.
 
@@ -54,14 +54,14 @@ Các quan hệ nghiệp vụ (đề chứa câu hỏi, publication sử dụng p
 
 ## 4. Resource taxonomy
 
-| Nhóm | Loại điển hình | Mặc định được chuyển giao |
-| --- | --- | --- |
-| Học liệu | question, exam, matrix, document, rubric, media | Có, theo policy |
-| Container | bank, folder, team, class | Không copy toàn bộ tự động |
-| Phân phối | publication, assignment run, exam pin | Không |
-| Dữ liệu học sinh | attempt, submission, answer, grade | Không |
-| Quản trị | membership, role, policy, setting | Không |
-| Hạ tầng | data space, storage, job | Không thuộc domain học liệu |
+| Nhóm             | Loại điển hình                                  | Mặc định được chuyển giao   |
+| ---------------- | ----------------------------------------------- | --------------------------- |
+| Học liệu         | question, exam, matrix, document, rubric, media | Có, theo policy             |
+| Container        | bank, folder, team, class                       | Không copy toàn bộ tự động  |
+| Phân phối        | publication, assignment run, exam pin           | Không                       |
+| Dữ liệu học sinh | attempt, submission, answer, grade              | Không                       |
+| Quản trị         | membership, role, policy, setting               | Không                       |
+| Hạ tầng          | data space, storage, job                        | Không thuộc domain học liệu |
 
 Các domain giữ schema và vòng đời riêng. Không xây một bảng JSON tổng quát thay mọi loại tài nguyên.
 
