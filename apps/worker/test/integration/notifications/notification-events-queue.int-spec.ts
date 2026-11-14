@@ -159,6 +159,12 @@ describe('Worker notification events queue mechanism (viết lại reanchor ở 
     const courseId = await makeCourse('NQ520 Khoá phát lại');
     await enrolStudent(courseId, student);
     const item = await execRows<{ id: string }>(sql`insert into grade_items (course_id, item_name, item_type, grade_max, posting_policy) values (${courseId}, 'Bài phát lại', 'manual', 100, 'auto') returning id`);
+    await db.insertInto('grade_grades').values({
+      item_id: item[0]!.id,
+      user_id: student,
+      raw_grade: 9,
+      final_grade: 9,
+    }).execute();
 
     const jobData: OutboxEventJobData = {
       outboxId: uid(960), seq: 0, aggregate: 'grades', type: 'grade_updated',
