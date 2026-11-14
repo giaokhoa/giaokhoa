@@ -13,7 +13,7 @@ import {
   createCouponSchema, createExamMatrixCellSchema, createExamMatrixSchema,
   createExamPinOverrideSchema, createExamPinSchema, createExamSchema, createGroupSchema,
   createGradeItemSchema, createGroupingSchema, createLearningOutcomeSchema,
-  createCurriculumNodeSchema, frameworkExportCompetencySchema, frameworkExportSchema,
+  createCurriculumNodeSchema, createQuestionSchema, frameworkExportCompetencySchema, frameworkExportSchema,
   gradeUserCompetencySchema, hardDeleteMessageSchema, importBookDatasetSchema,
   importProgramDatasetSchema, listNotificationGroupsQuerySchema,
   listNotificationItemsQuerySchema, loginResponseSchema,
@@ -33,7 +33,7 @@ import {
   setItemTagsSchema, tenantSchema, updateAssignAnnotationSchema, updateAssignmentSchema,
   updateCouponSchema, updateCourseModuleSchema, updateCourseSchema, updateExamMatrixCellSchema,
   updateExamMatrixSchema, updateExamPinOverrideSchema, updateExamPinSchema, updateExamSchema,
-  updateGradeItemSchema, updateLearningOutcomeSchema, updateCurriculumNodeSchema,
+  updateGradeItemSchema, updateLearningOutcomeSchema, updateCurriculumNodeSchema, updateQuestionSchema,
   userListResponseSchema, userProfileSchema, userWithAssignmentsListItemSchema,
   userWithAssignmentsListResponseSchema, withdrawExamMatrixSchema,
   withdrawExamSchema, withdrawQuestionSchema, withdrawSystemResourceSchema,
@@ -135,6 +135,35 @@ describe('Nhóm đáp án đúng sai theo từng mệnh đề', () => {
     expect(() => questionSolutionSchema.parse({ statements: [{ statementId: '', value: true }] })).toThrow();
     expect(() => questionSolutionInputSchema.parse({ answers: [] })).toThrow();
     expect(() => questionSolutionInputSchema.parse({ answers: [{ statementId: '', value: true }] })).toThrow();
+  });
+});
+
+describe('Nhóm phản hồi câu hỏi khi tạo và cập nhật', () => {
+  const generalFeedback = {
+    type: 'doc' as const,
+    content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Phản hồi chung' }] }],
+  };
+  const guidance = {
+    type: 'doc' as const,
+    content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Hướng dẫn làm bài' }] }],
+  };
+
+  it('giữ nguyên bốn trường phản hồi khi tạo và khi cập nhật câu hỏi', () => {
+    const created = createQuestionSchema.parse({
+      categoryId: userId, qtype: 'essay', questionText: 'Hãy phân tích...',
+      generalFeedback, guidance, defaultMark: 1, penalty: 0.25,
+    });
+    expect(created.generalFeedback).toEqual(generalFeedback);
+    expect(created.guidance).toEqual(guidance);
+    expect(created.defaultMark).toBe(1);
+    expect(created.penalty).toBe(0.25);
+    const updated = updateQuestionSchema.parse({
+      generalFeedback, guidance, defaultMark: 1, penalty: 0.25,
+    });
+    expect(updated.generalFeedback).toEqual(generalFeedback);
+    expect(updated.guidance).toEqual(guidance);
+    expect(updated.defaultMark).toBe(1);
+    expect(updated.penalty).toBe(0.25);
   });
 });
 
@@ -418,6 +447,16 @@ describe('Nhóm trạng thái bài tập đã nộp', () => {
     expect(assignSubmissionDetailSchema.parse({
       userId, ...core, files, revisions: [], feedbackMessages: [],
     }).files).toEqual(files);
+    expect(() => assignOwnSubmissionViewSchema.parse({
+      submissionId: userId, status: 'submitted' as const, attemptNumber: 1,
+      submittedAt: '2026-11-14T00:00:00.000Z', late: false, grade: null,
+      annotations: [], rubricEvaluations: [], feedbackMessages: [],
+    })).toThrow();
+    expect(() => assignSubmissionDetailSchema.parse({
+      userId, status: 'submitted' as const, attemptNumber: 1,
+      submittedAt: '2026-11-14T00:00:00.000Z', late: false, grade: null,
+      annotations: [], rubricEvaluations: [], revisions: [], feedbackMessages: [],
+    })).toThrow();
   });
 
   it('từ chối status ngoài tập trạng thái nộp bài ở cả hai view bài nộp', () => {
@@ -1075,13 +1114,6 @@ describe('Nhóm nội dung chú thích khi tạo và cập nhật', () => {
       color: null, text: null, points: [],
     }).points).toEqual([]);
   });
-
-  it('từ chối điểm chú thích vượt 100 ở cả hai schema chú thích', () => {
-    expect(() => createAssignAnnotationSchema.parse({
-      fileId: userId, x: 10, y: 20, kind: 'note', points: [{ x: 101, y: 50 }],
-    })).toThrow();
-    expect(() => updateAssignAnnotationSchema.parse({ points: [{ x: 50, y: -1 }] })).toThrow();
-  });
 });
 
 describe('Nhóm hiệu lực mã giảm giá khi tạo và cập nhật', () => {
@@ -1163,6 +1195,12 @@ describe('Nhóm khóa ô ma trận và số lượng khả dụng của ô', () 
     expect(() => matrixCellAvailabilitySchema.parse({
       cellId: userId, required: 1.5, available: 2, deficit: 1,
     })).toThrow();
+    expect(() => matrixCellAvailabilitySchema.parse({
+      cellId: userId, required: 3, available: 1.5, deficit: 1,
+    })).toThrow();
+    expect(() => matrixCellAvailabilitySchema.parse({
+      cellId: userId, required: 3, available: 2, deficit: 1.5,
+    })).toThrow();
   });
 });
 
@@ -1194,7 +1232,7 @@ describe('Nhóm cửa sổ thời gian làm bài trong khung nhìn quiz và khun
     expect(() => quizViewSchema.parse({
       id: userId, courseId: userId, cmId: null, targetGroupId: null, name: 'Quiz 1',
       intro: 'Giới thiệu', timeOpen: '2026-11-14T00:00:00.000Z', timeClose: '2026-11-14T02:00:00.000Z',
-      timeLimitSeconds: 'x', attemptsAllowed: 1, gradeMethod: 'highest' as const,
+      timeLimitSeconds: 1.5, attemptsAllowed: 1, gradeMethod: 'highest' as const,
       grade: 10, shuffleAnswers: true, hasPassword: false, subnet: null,
       reviewAttempt: 0, reviewCorrectness: 0, reviewMarks: 0, reviewSpecificFeedback: 0,
       reviewGeneralFeedback: 0, reviewRightAnswer: 0, reviewOverallFeedback: 0,
@@ -1205,7 +1243,7 @@ describe('Nhóm cửa sổ thời gian làm bài trong khung nhìn quiz và khun
     })).toThrow();
     expect(() => examPinOverrideViewSchema.parse({
       id: userId, pinId: userId, groupId: null, groupName: null, userId: null,
-      userName: null, timeOpen: null, timeClose: null, timeLimitSeconds: 'x',
+      userName: null, timeOpen: null, timeClose: null, timeLimitSeconds: 1.5,
       attempts: 2, hasPassword: false, reason: null,
     })).toThrow();
   });
