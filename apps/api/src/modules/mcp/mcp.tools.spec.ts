@@ -176,6 +176,7 @@ function makeDeps(): McpToolDeps {
       getCategory: vi.fn(),
       createQuestion: vi.fn(),
       createStimulus: vi.fn(),
+      createStimulusWithQuestions: vi.fn(),
       listQuestionsForViewer: vi.fn(),
     },
     banks: {
@@ -240,6 +241,28 @@ function errorOf(result: { structuredContent?: Record<string, unknown> }): {
   return (result.structuredContent as { error: { code: string; message: string; fieldPath?: string } }).error;
 }
 
+function mockPersonalBankGate(deps: McpToolDeps): void {
+  (deps.banks.getBankOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({
+    id: '11111111-1111-4111-8111-111111111111',
+    scope: 'personal',
+    ownerId: 'user-1',
+    bankKind: 'question',
+  });
+  (deps.questions.getCategory as ReturnType<typeof vi.fn>).mockResolvedValue({
+    id: '22222222-2222-4222-8222-222222222222',
+  });
+  (deps.banks.categoryBelongsToBank as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+  (deps.banks.bankCapabilities as ReturnType<typeof vi.fn>).mockResolvedValue({
+    use: true,
+    add: true,
+    edit: true,
+    manageCategory: true,
+    copy: true,
+    share: true,
+    moderate: true,
+  });
+}
+
 describe('Bảng đăng ký tool MCP giữ nguyên hợp đồng công bố', () => {
   it('đăng ký đúng 11 tool theo đúng thứ tự đã công bố', () => {
     const { registrations } = register();
@@ -253,20 +276,25 @@ describe('Bảng đăng ký tool MCP giữ nguyên hợp đồng công bố', ()
     );
   });
 
-  it('mỗi tool giữ đúng inputSchema và outputSchema đã import từ contracts', () => {
+  it('tool list_my_banks có inputSchema rỗng và outputSchema đã import từ contracts', () => {
     const { registrations } = register();
-    expect(
-      registrations.map((found) => ({
-        name: found.name,
-        inputOk:
-          found.name === 'list_my_banks'
-            ? JSON.stringify(found.config.inputSchema) === '{}'
-            : found.config.inputSchema === INPUT_SCHEMAS[found.name],
-        outputOk: found.config.outputSchema === OUTPUT_SCHEMAS[found.name],
-        handlerOk: typeof found.handler === 'function',
-      })),
-    ).toEqual(EXPECTED.map((e) => ({ name: e.name, inputOk: true, outputOk: true, handlerOk: true })));
+    const found = registrations.find((r) => r.name === 'list_my_banks');
+    expect(found).toBeDefined();
+    expect(JSON.stringify(found!.config.inputSchema)).toBe('{}');
+    expect(found!.config.outputSchema).toBe(OUTPUT_SCHEMAS['list_my_banks']);
+    expect(typeof found!.handler).toBe('function');
   });
+
+  for (const expected of EXPECTED.filter((e) => e.name !== 'list_my_banks')) {
+    it(`tool ${expected.name} giữ đúng inputSchema và outputSchema đã import từ contracts`, () => {
+      const { registrations } = register();
+      const found = registrations.find((r) => r.name === expected.name);
+      expect(found).toBeDefined();
+      expect(found!.config.inputSchema).toBe(INPUT_SCHEMAS[expected.name]);
+      expect(found!.config.outputSchema).toBe(OUTPUT_SCHEMAS[expected.name]);
+      expect(typeof found!.handler).toBe('function');
+    });
+  }
 
   it('tool chỉ đọc có readOnlyHint còn tool ghi không có annotations', () => {
     const { registrations } = register();
@@ -448,5 +476,258 @@ describe('Hành vi handler của các tool MCP', () => {
       expect.objectContaining({ code: 'question.bank_not_found', fieldPath: '/bankId' }),
     );
     expect(deps.questions.createQuestion).not.toHaveBeenCalled();
+  });
+
+  it('list_categories trả về category thuộc bank kèm questionCount khi bank tồn tại', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    (deps.banks.getBankOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'bank-1' });
+    (deps.questions.listCategories as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'cat-1', name: 'Đại số', parent: null },
+      { id: 'cat-2', name: 'Hình học', parent: null },
+    ]);
+    (deps.banks.categoryBelongsToBank as ReturnType<typeof vi.fn>).mockImplementation(
+      (cat: { id: string }) => Promise.resolve(cat.id === 'cat-1'),
+    );
+    (deps.questions.listQuestionIdsInCategory as ReturnType<typeof vi.fn>).mockResolvedValue(['q-1', 'q-2']);
+    const result = await handlerOf(registrations, 'list_categories')({ bankId: 'bank-1' });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      bankId: 'bank-1',
+      categories: [{ id: 'cat-1', name: 'Đại số', parentId: null, questionCount: 2 }],
+    });
+    expect(result.content[0]?.text).toBe('Bank has 1 category.');
+  });
+
+  it('search_questions trả về câu hỏi khớp query kèm metadata và loại câu không khớp', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    (deps.banks.getBankOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'bank-1' });
+    (deps.questions.listCategories as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'cat-1', name: 'Đại số', parent: null },
+    ]);
+    (deps.banks.categoryBelongsToBank as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    const doc = (text: string) => ({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+    });
+    (deps.questions.listQuestionsForViewer as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        question: { id: 'q-1', qtype: 'essay', createdBy: 'user-1' },
+        entry: { status: 'draft' },
+        latestVersion: { questionText: doc('Bài toán cộng hai số') },
+      },
+      {
+        question: { id: 'q-2', qtype: 'essay', createdBy: 'user-khac' },
+        entry: { status: 'ready' },
+        latestVersion: { questionText: doc('Bài văn tả cảnh') },
+      },
+    ]);
+    const result = await handlerOf(registrations, 'search_questions')({ bankId: 'bank-1', query: 'toán' });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      bankId: 'bank-1',
+      questions: [
+        {
+          id: 'q-1',
+          qtype: 'essay',
+          status: 'draft',
+          categoryId: 'cat-1',
+          categoryName: 'Đại số',
+          mine: true,
+        },
+      ],
+      truncated: false,
+    });
+  });
+
+  it('check_duplicates trả về verdict exact, near và none cho từng item', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    (deps.banks.getBankOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'bank-1' });
+    (deps.banks.findDuplicatesForPayload as ReturnType<typeof vi.fn>).mockImplementation(
+      (_bank: unknown, payload: { questionText: string }) => {
+        if (payload.questionText === 'Câu trùng y hệt') {
+          return Promise.resolve({ exactId: 'q-cu', nearId: null });
+        }
+        if (payload.questionText === 'Câu gần giống') {
+          return Promise.resolve({ exactId: null, nearId: 'q-gan' });
+        }
+        return Promise.resolve({ exactId: null, nearId: null });
+      },
+    );
+    const result = await handlerOf(registrations, 'check_duplicates')({
+      bankId: 'bank-1',
+      items: [
+        { clientItemId: 'i-1', qtype: 'essay', questionText: 'Câu trùng y hệt' },
+        { clientItemId: 'i-2', qtype: 'essay', questionText: 'Câu gần giống' },
+        { clientItemId: 'i-3', qtype: 'essay', questionText: 'Câu hoàn toàn mới' },
+      ],
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      bankId: 'bank-1',
+      results: [
+        { clientItemId: 'i-1', verdict: 'exact', existingQuestionId: 'q-cu', nearDuplicateOf: null },
+        { clientItemId: 'i-2', verdict: 'near', existingQuestionId: null, nearDuplicateOf: 'q-gan' },
+        { clientItemId: 'i-3', verdict: 'none', existingQuestionId: null, nearDuplicateOf: null },
+      ],
+    });
+  });
+
+  it('create_questions_batch tạo câu hỏi draft và trả kết quả per-item khi bank cá nhân hợp lệ', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    mockPersonalBankGate(deps);
+    (deps.banks.findDuplicatesForPayload as ReturnType<typeof vi.fn>).mockResolvedValue({
+      exactId: null,
+      nearId: null,
+    });
+    (deps.questions.createQuestion as ReturnType<typeof vi.fn>).mockResolvedValue({
+      question: { id: 'q-moi' },
+      entry: { id: 'entry-1' },
+      latestVersion: { version: 1 },
+    });
+    const result = await handlerOf(registrations, 'create_questions_batch')({
+      bankId: '11111111-1111-4111-8111-111111111111',
+      categoryId: '22222222-2222-4222-8222-222222222222',
+      idempotencyKey: 'key-1',
+      items: [{ clientItemId: 'i-1', qtype: 'essay', questionText: 'Câu hỏi mới?' }],
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      bankId: '11111111-1111-4111-8111-111111111111',
+      categoryId: '22222222-2222-4222-8222-222222222222',
+      stimuli: [],
+      results: [
+        {
+          clientItemId: 'i-1',
+          status: 'created',
+          questionId: 'q-moi',
+          existingQuestionId: null,
+          entryId: 'entry-1',
+          version: 1,
+          questionStatus: 'draft',
+          duplicate: 'none',
+          nearDuplicateOf: null,
+          reviewUrl: 'https://example.test/questions',
+          code: null,
+          message: null,
+          fieldPath: null,
+        },
+      ],
+      created: 1,
+      failed: 0,
+    });
+  });
+
+  it('create_stimulus_with_questions tạo stimulus kèm câu hỏi draft trong một lần gọi', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    mockPersonalBankGate(deps);
+    (deps.banks.findDuplicatesForPayload as ReturnType<typeof vi.fn>).mockResolvedValue({
+      exactId: null,
+      nearId: null,
+    });
+    (deps.questions.createStimulusWithQuestions as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stimulus: { id: 'stim-1' },
+      questions: [{ question: { id: 'q-1' }, entry: { id: 'e-1' }, latestVersion: { version: 1 } }],
+    });
+    const result = await handlerOf(registrations, 'create_stimulus_with_questions')({
+      bankId: '11111111-1111-4111-8111-111111111111',
+      categoryId: '22222222-2222-4222-8222-222222222222',
+      idempotencyKey: 'key-1',
+      stimulusContent: 'Đoạn văn đọc hiểu.',
+      questions: [{ qtype: 'essay', questionText: 'Câu hỏi về đoạn văn?' }],
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      stimulusId: 'stim-1',
+      results: [
+        {
+          status: 'created',
+          questionId: 'q-1',
+          existingQuestionId: null,
+          entryId: 'e-1',
+          version: 1,
+          questionStatus: 'draft',
+          duplicate: 'none',
+          nearDuplicateOf: null,
+          reviewUrl: 'https://example.test/questions',
+        },
+      ],
+      created: 1,
+    });
+    expect(deps.questions.createStimulusWithQuestions).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        categoryId: '22222222-2222-4222-8222-222222222222',
+        content: 'Đoạn văn đọc hiểu.',
+      }),
+    );
+  });
+
+  it('publish_questions chuyển câu draft của mình sang ready và trả kết quả per-question', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    (deps.questions.getQuestion as ReturnType<typeof vi.fn>).mockResolvedValue({
+      question: { createdBy: 'user-1', category: 'cat-1' },
+      entry: { status: 'draft' },
+    });
+    (deps.questions.getCategory as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'cat-1' });
+    (deps.banks.findBankForCategory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'bank-1',
+      scope: 'personal',
+      ownerId: 'user-1',
+      bankKind: 'question',
+    });
+    (deps.banks.bankCapabilities as ReturnType<typeof vi.fn>).mockResolvedValue({ edit: true });
+    const result = await handlerOf(registrations, 'publish_questions')({
+      questionIds: ['q-1'],
+      idempotencyKey: 'key-1',
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      results: [{ questionId: 'q-1', status: 'published', code: null, message: null }],
+      published: 1,
+      failed: 0,
+    });
+    expect(deps.banks.setQuestionStatus).toHaveBeenCalledWith('q-1', 'ready');
+    expect(deps.idempotency.find).toHaveBeenCalledWith('user-1', 'key-1');
+  });
+
+  it('submit_contribution tạo contribution pending khi câu hỏi thuộc về mình', async () => {
+    const deps = makeDeps();
+    const { registrations } = register(makeActor(), deps);
+    (deps.banks.getBankOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'bank-chung' });
+    (deps.questions.getQuestion as ReturnType<typeof vi.fn>).mockResolvedValue({
+      question: { createdBy: 'user-1' },
+    });
+    (deps.banks.proposeContribution as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'contrib-1' });
+    const result = await handlerOf(registrations, 'submit_contribution')({
+      targetBankId: 'bank-chung',
+      idempotencyKey: 'key-1',
+      questionIds: ['q-1'],
+      examIds: [],
+      matrixIds: [],
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      targetBankId: 'bank-chung',
+      results: [
+        {
+          questionId: 'q-1',
+          status: 'pending',
+          contributionId: 'contrib-1',
+          code: null,
+          message: null,
+        },
+      ],
+      examResults: [],
+      matrixResults: [],
+      created: 1,
+      failed: 0,
+    });
+    expect(deps.idempotency.find).toHaveBeenCalledWith('user-1', 'key-1');
   });
 });
