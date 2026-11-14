@@ -1,7 +1,9 @@
-import { INestApplication, VersioningType } from '@nestjs/common';
+import { INestApplication, VersioningType, type Type } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import Redis from 'ioredis';
 import { TenantsService } from '../../src/modules/tenants/tenants.service';
 import { RolesService } from '../../src/modules/access/roles.service';
 import { ContextsService } from '../../src/modules/access/contexts.service';
@@ -10,19 +12,62 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { enableTrustedProxy } from '../../src/common/client-ip';
 import { ProblemDetailsFilter } from '../../src/common/problem-details.filter';
+import { REDIS_THROTTLER_KEY_PREFIX } from '../../src/common/redis-throttler.storage';
+import { SpaceDatabaseService } from '../../src/db/routing/space-database.service';
+import { BetterAuthService } from '../../src/modules/auth/better-auth/better-auth.service';
+import { mountBetterAuth } from '../../src/modules/auth/better-auth/better-auth.mount';
+import { McpDepsService } from '../../src/modules/mcp/mcp-deps.service';
+import { mountMcp } from '../../src/modules/mcp/mcp.mount';
+import { MessagingRedisIoAdapter } from '../../src/modules/messaging/messaging-redis-io.adapter';
 
 process.env.FILE_STORAGE_DIR = process.env.FILE_STORAGE_DIR ?? '/tmp/giaokhoa-test-files';
 
 export const ADMIN = { username: 'admin', password: 'Admin123!' };
 export const STRONG_PASSWORD = 'Passw0rd!';
 
-export async function createTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+async function resetRedisThrottlerCounters(): Promise<void> {
+  const client = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+  });
+  try {
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await client.scan(cursor, 'MATCH', `${REDIS_THROTTLER_KEY_PREFIX}*`, 'COUNT', 100);
+      cursor = nextCursor;
+      if (keys.length > 0) await client.del(...keys);
+    } while (cursor !== '0');
+  } finally {
+    client.disconnect();
+  }
+}
+
+export async function createTestApp(options?: { controllers?: Array<Type<unknown>> }): Promise<INestApplication> {
+  await resetRedisThrottlerCounters().catch(() => undefined);
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule], controllers: options?.controllers ?? [] }).compile();
   const app = moduleRef.createNestApplication();
-  enableTrustedProxy(app as NestExpressApplication);
+  app.useSecurityHeaders();
+  const expressApp = app as NestExpressApplication;
+  enableTrustedProxy(expressApp);
+  const config = app.get(ConfigService);
+  const corsOrigins = (config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigins, credentials: true });
+  const betterAuth = app.get(BetterAuthService);
+  if (betterAuth.auth) {
+    mountBetterAuth(expressApp, betterAuth.requireAuth(), app.get(SpaceDatabaseService, { strict: false }));
+  }
+  mountMcp(expressApp, app.get(McpDepsService).createMountDeps());
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new ProblemDetailsFilter());
+  const socketAdapter = new MessagingRedisIoAdapter(app, config.getOrThrow<string>('REDIS_URL'), corsOrigins);
+  await socketAdapter.connectToRedis();
+  app.useWebSocketAdapter(socketAdapter);
+  app.enableShutdownHooks();
   await app.init();
   return app;
 }

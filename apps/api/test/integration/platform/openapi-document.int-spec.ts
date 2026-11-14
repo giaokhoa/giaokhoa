@@ -11,7 +11,7 @@ describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', (
     app = await createTestApp();
     document = SwaggerModule.createDocument(
       app,
-      new DocumentBuilder().setTitle('Giáo khoa API').setDescription('bootstrap parity probe').setVersion('1.0').build(),
+      new DocumentBuilder().setTitle('Giáo khoa API').setDescription('TypeScript Giáo khoa — Moodle core business equivalent (backend)').setVersion('1.0').addBearerAuth().build(),
     );
   });
 
@@ -23,6 +23,11 @@ describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', (
     expect(document).toBeDefined();
     expect(document.openapi).toMatch(/^3\./);
     expect(Object.keys(document.paths ?? {}).length).toBeGreaterThan(0);
+  });
+
+  it('khai báo bearer auth trong securitySchemes như bootstrap production', () => {
+    const schemes = document.components?.securitySchemes as Record<string, { type?: string; scheme?: string; bearerFormat?: string }> | undefined;
+    expect(schemes?.bearer).toMatchObject({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
   });
 
   it('ghi tài liệu cho GET /event-logs với from/to là chuỗi ngày-giờ ISO', () => {

@@ -5,9 +5,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { INestApplication } from '@nestjs/common';
 import Redis from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { validateEnv } from '../../config/env';
-import { CacheInfraModule } from './cache-infra.module';
-import { SessionCacheService } from './session-cache.service';
+import { validateEnv } from '../../../../src/config/env';
+import { CacheInfraModule } from '../../../../src/infra/cache/cache-infra.module';
+import { SessionCacheService } from '../../../../src/infra/cache/session-cache.service';
 
 describe('CacheInfraModule (2 chế độ MUC, Redis thật)', () => {
   let app: INestApplication;
