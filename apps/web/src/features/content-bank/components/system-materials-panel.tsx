@@ -11,7 +11,7 @@ import { ApiError } from '#lib/api';
 import { courseContentQueryOptions } from '#lib/course-content';
 import { materialSources, materialSubmissions, publishedMaterials, reviewMaterial, submitMaterial, attachPublishedMaterial,
   usedSystemMaterials, systemMaterialVersion, withdrawSystemMaterial, reviewPublishedMaterials } from '../api/system-materials';
-import { SystemSourceNotices } from '#features/questions/components/system-source-notices';
+import { SystemSourceNotices } from '#components/system-source-notices';
 import { queryKeys } from '../queries/keys';
 
 const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';

@@ -35,7 +35,7 @@ vi.mock('../api/system-materials', () => ({
   reviewMaterial: vi.fn(async () => ({})),
   attachPublishedMaterial: vi.fn(async () => ({ cmId: 'cm-b', resourceId: 'r-b' })),
 }));
-vi.mock('#features/questions/components/system-source-notices', () => ({
+vi.mock('#components/system-source-notices', () => ({
   SystemSourceNotices: () => null,
 }));
 const pkg: SystemMaterialPackage = {

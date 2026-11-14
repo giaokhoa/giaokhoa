@@ -12,6 +12,7 @@ import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 import { AppModule } from '../../../src/app.module';
+import { checksumPackage } from '../../../src/modules/system-bank/system-bank-package';
 import { ProblemDetailsFilter } from '../../../src/common/problem-details.filter';
 import { validateEnv } from '../../../src/config/env';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
@@ -738,6 +739,54 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     }
   }, 180_000);
 
+  it('fork đề gồm hai slot thất bại ở slot thứ hai không lưu câu rời, stimulus, đề hay outbox', async () => {
+    const forkApp = await testApp();
+    try {
+    const original = (await bank.query('SELECT * FROM system_exam_versions WHERE id = $1', [publishedId])).rows[0];
+    const versionId = (await bank.query<{ id: string }>('SELECT uuidv7() AS id')).rows[0]!.id;
+    const source = original.package as { source: Record<string, unknown>; slots: Array<Record<string, unknown>>; totalScore: number };
+    const pkg = {
+      ...source,
+      source: { ...source.source, versionId, versionNumber: 22 },
+      slots: [
+        { ...source.slots[0], position: 1 },
+        { ...source.slots[0], position: 2 },
+      ],
+      totalScore: source.totalScore * 2,
+    };
+    const inserted = await bank.query<{ id: string }>(
+      `INSERT INTO system_exam_versions
+       (centre_slug, source_exam_id, source_version_id, source_version_number, package, checksum,
+        submitted_by, status, reviewed_by, reviewed_at)
+       VALUES ($1, $2, $3, 22, $4, $5, $6, 'approved', $7, now()) RETURNING id`,
+      [original.centre_slug, original.source_exam_id, versionId,
+        JSON.stringify(pkg), checksumPackage(pkg), original.submitted_by, original.reviewed_by],
+    );
+    const sharedId = inserted.rows[0]!.id;
+    const beforeQuestions = (await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
+    const beforePapers = (await centre.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count;
+    const beforeOutbox = (await centre.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count;
+    await centre.query('ALTER TABLE exam_slots ADD CONSTRAINT reject_second_fork_slot CHECK (position <> 2) NOT VALID');
+    try {
+      const failed = await http(forkApp).post(`/api/v1/system-bank/exams/${sharedId}/fork`)
+        .set(bearer(managerB)).send({});
+      expect(failed.status, JSON.stringify(failed.body)).toBe(500);
+      expect((await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count).toBe(beforeQuestions);
+      expect((await centre.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count).toBe(beforePapers);
+      expect((await centre.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count).toBe(beforeOutbox);
+    } finally {
+      await centre.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_second_fork_slot');
+    }
+    const succeeded = await http(forkApp).post(`/api/v1/system-bank/exams/${sharedId}/fork`)
+      .set(bearer(managerB)).send({});
+    expect(succeeded.status, JSON.stringify(succeeded.body)).toBe(201);
+    expect(succeeded.body.questionIds).toHaveLength(2);
+    } finally {
+      await forkApp.close();
+      await forkApp.get<Pool>('SHARED_CENTRE_KYSELY').end();
+    }
+  });
+
   it('rút đề nguồn: B dùng lại bản đã ghim, tạo bản riêng chỉnh sửa, không nhận phiên bản chưa ghim', async () => {
     const lifecycleApp = await testApp();
     try {
@@ -750,10 +799,29 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     const before = await http(lifecycleApp).get('/api/v1/system-bank/exams/approved').set(bearer(reviewer));
     expect(before.status).toBe(200);
     expect(before.body.some((row: { id: string }) => row.id === publishedId)).toBe(true);
+    const original = (await bank.query('SELECT * FROM system_exam_versions WHERE id = $1', [publishedId])).rows[0];
+    const versionId = (await bank.query<{ id: string }>('SELECT uuidv7() AS id')).rows[0]!.id;
+    const pkg = {
+      ...original.package,
+      source: { ...original.package.source, versionId, versionNumber: 23 },
+    };
+    const pendingRow = await bank.query<{ id: string }>(
+      `INSERT INTO system_exam_versions
+       (centre_slug, source_exam_id, source_version_id, source_version_number, package, checksum, submitted_by)
+       VALUES ($1, $2, $3, 23, $4, $5, $6) RETURNING id`,
+      [original.centre_slug, original.source_exam_id, versionId,
+        JSON.stringify(pkg), checksumPackage(pkg), original.submitted_by],
+    );
+    const pendingId = pendingRow.rows[0]!.id;
     const withdrawal = await http(lifecycleApp).post(`/api/v1/system-bank/exams/${publishedId}/withdraw`)
       .set(bearer(reviewer)).send({ reason: 'Đề nguồn cần thu hồi' });
     expect(withdrawal.status, JSON.stringify(withdrawal.body)).toBe(201);
     expect(withdrawal.body.status).toBe('withdrawn');
+    const resurrect = await http(lifecycleApp).post(`/api/v1/system-bank/exams/${pendingId}/approve`)
+      .set(bearer(reviewer)).send({});
+    expect(resurrect.status, JSON.stringify(resurrect.body)).toBe(409);
+    expect(resurrect.body.code).toBe('system_exam.source_withdrawn');
+    expect((await bank.query('SELECT status FROM system_exam_versions WHERE id = $1', [pendingId])).rows[0].status).toBe('pending');
     const availableToReview = await http(lifecycleApp).get('/api/v1/system-bank/exams/approved').set(bearer(reviewer));
     expect(availableToReview.body.some((row: { id: string }) => row.id === publishedId)).toBe(false);
     const used = await http(lifecycleApp).get('/api/v1/system-bank/exams/used').set(bearer(managerB));

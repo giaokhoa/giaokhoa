@@ -4,7 +4,11 @@ Câu hỏi từ kho hệ thống được tiếp nhận dưới dạng bản ri�
 
 `GET /api/v1/system-bank/imports` liệt kê các bản có quyền xem cùng trạng thái nguồn, số phiên bản mới nhất và cờ `hasNewVersion`. `GET /api/v1/system-bank/imports/:id` trả thông tin truy vết của một bản riêng nếu người gọi có quyền đọc câu hỏi. Giáo viên chủ động chọn phiên bản mới bằng `POST /api/v1/system-bank/import` với `sourceQuestionId` và `sourceVersionNumber`; hệ thống không tự cập nhật bản cũ.
 
+Việc nhập câu, stimulus, liên kết YCCĐ và bản ghi phiên bản tại trung tâm hoàn tất trong cùng giao dịch cơ sở dữ liệu; thất bại giữa chừng không tạo bản nhập hoặc câu hỏi rời. Sau khi giao dịch trung tâm commit thành công, hệ thống mới ghi nhận trung tâm đã tiếp nhận tại kho ngân hàng dùng chung (`system_question_importers`). Hai kho sử dụng các kết nối khác nhau, không dùng giao dịch phân tán; việc ghi nhận ở kho hệ thống là bước xác nhận sau commit và có tính idempotent.
+
 Khi phát hành phiên bản mới, kho hệ thống ghi `question_version_published` trong cùng giao dịch với phiên bản. Khi rút câu, kho ghi sự kiện `question_withdrawn`. Chỉ trung tâm có bản tiếp nhận của nguồn đó thấy sự kiện trong `GET /api/v1/system-bank/events/pending` và được ghi nhận qua `POST /api/v1/system-bank/events/:id/acknowledge`; gửi ID sự kiện không thuộc nguồn đã tiếp nhận trả 404.
+
+Lệnh phát hành phiên bản câu hỏi mới khoá bản ghi nguồn và kiểm tra trạng thái ngay trong giao dịch. Lệnh rút nguồn cập nhật cùng bản ghi nguồn, nên không thể có phiên bản mới được commit sau khi lệnh rút hoàn tất.
 
 Nguồn rút không còn xuất hiện trong khám phá. Trung tâm chưa từng nhận nguồn không được nhập hay đọc gói nguồn đã rút bằng cách đoán ID. Trung tâm từng nhận chỉ được tiếp nhận lại **đúng phiên bản đã có** tại kho mình, không được nhận phiên bản chưa từng tiếp nhận trước khi rút. Bản đã giao và các phiên bản nguồn là dữ liệu độc lập, không có đồng bộ sống.
 
@@ -13,6 +17,8 @@ Kiểm thử HTTP: `apps/api/test/e2e/system-bank/system-bank-flow.e2e-spec.ts` 
 ## Đề chung
 
 Mỗi bản đề được phê duyệt là một phiên bản bất biến trong `system_exam_versions`; phát hành tạo `exam_version_published`. Giáo viên có thể **giao** đề theo snapshot, hoặc chọn `POST /api/v1/system-bank/exams/:id/fork` để tạo đề nháp riêng (`kind = snapshot`) và câu hỏi riêng trong ngân hàng cá nhân. Đề riêng lưu `system_exam_fork_version_id`; câu riêng có thể chỉnh sửa mà không làm thay đổi đề hệ thống hay đề đã giao.
+
+Duyệt phiên bản đang chờ, gửi phiên bản mới và rút đề được tuần tự hoá theo định danh nguồn trong giao dịch kho hệ thống. Khi bất kỳ phiên bản nào của nguồn đã bị rút, không thể duyệt hoặc gửi thêm phiên bản cho cùng nguồn. Tạo bản riêng của đề ghi toàn bộ câu hỏi, stimulus, sự kiện outbox, đề và slot cùng một giao dịch trung tâm; lỗi tại một slot làm rollback toàn bộ bản riêng mới.
 
 `POST /api/v1/system-bank/exams/:id/withdraw` (kèm `reason`) dành cho quyền duyệt; trạng thái nguồn chuyển `withdrawn`, thông báo `exam_withdrawn`. Phiên bản đã giao hoặc đã fork ở trung tâm vẫn dùng được; trung tâm không được giao/fork phiên bản chưa từng nhận sau khi rút. Danh sách khám phá không bao gồm nguồn bị rút.
 

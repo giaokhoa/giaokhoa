@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
-import { acknowledgeSystemQuestionEvent, fetchSystemQuestionEvents, type SystemQuestionEvent } from '../api/questions';
+import { acknowledgeSystemQuestionEvent, fetchSystemQuestionEvents, type SystemQuestionEvent } from '#lib/system-resource-events';
 
 export function SystemSourceNotices({ resourceKind }: { resourceKind: 'exam' | 'material' | 'programme' }) {
   const { t } = useTranslation('app');

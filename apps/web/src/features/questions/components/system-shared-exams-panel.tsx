@@ -13,7 +13,7 @@ import {
   approveSharedExam, assignSharedExam, fetchSharedExamForReview, fetchSharedExamSubmissions,
   fetchSharedExams, fetchUsedSharedExams, forkSharedExam, rejectSharedExam, withdrawSharedExam,
 } from '../api/questions';
-import { SystemSourceNotices } from './system-source-notices';
+import { SystemSourceNotices } from '#components/system-source-notices';
 import { SystemSubmissionReviewPreview } from './system-submission-review-preview';
 import type { SystemQuestionSubmission } from '../api/questions';
 

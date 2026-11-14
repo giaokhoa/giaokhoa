@@ -132,7 +132,14 @@ export class SystemBankService {
     }
     this.assertPackageForQtype(question.qtype, dto.package);
     const checksum = checksumPackage(dto.package);
-    return this.repo.createVersion(questionId, dto.package, checksum);
+    try {
+      return await this.repo.createVersion(questionId, dto.package, checksum);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'system_bank.question_withdrawn') {
+        throw new BadRequestException({ code: 'system_bank.question_withdrawn' });
+      }
+      throw error;
+    }
   }
 
   async withdrawQuestion(actorId: string, questionId: string, dto: WithdrawSystemBankQuestionDto) {
@@ -326,17 +333,6 @@ export class SystemBankService {
     const importPkg = this.media
       ? await this.media.materialize(pkg, targetCategory.contextId, actorId)
       : pkg;
-    await this.repo.recordImporter({
-      sourceQuestionId: dto.sourceQuestionId,
-      centreSlug,
-      importedBy: actorId,
-    });
-    const stimulusId = importPkg.stimulusContent
-      ? (await this.questions.createStimulus(actorId, {
-          categoryId: targetCategory.id,
-          content: importPkg.stimulusContent as RichTextInput,
-        })).id
-      : null;
     const importOptions = importPkg.options ? { ...importPkg.options } : undefined;
     if (importOptions) {
       for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
@@ -347,7 +343,6 @@ export class SystemBankService {
       questionText: importPkg.questionText as RichTextInput,
       generalFeedback: (importPkg.generalFeedback ?? undefined) as RichTextInput | undefined,
       guidance: (importPkg.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
-      stimulusId,
       answers: importPkg.answers.map((answer) => ({
         text: answer.answer as RichTextInput,
         correct: answer.isCorrect,
@@ -358,24 +353,31 @@ export class SystemBankService {
         ? (importPkg.answerKey.solution as QuestionContentInput['solution'])
         : undefined,
     };
-    const created = await this.questions.createQuestion(actorId, {
-      categoryId: targetCategory.id,
-      qtype: question.qtype,
-      ...content,
-    });
-    for (const outcome of importPkg.outcomes) {
-      await this.questions.attachOutcome(actorId, created.question.id, outcome.outcomeId, outcome.cognitiveLevel);
-    }
-    const importRow = await this.centreRepo.insertImportRow({
-      questionId: created.question.id,
+    const importRow = await this.questions.createQuestionCopies(
+      actorId, targetCategory.id,
+      [{
+        qtype: question.qtype,
+        stimulusContent: importPkg.stimulusContent as RichTextInput | null,
+        content,
+        outcomes: importPkg.outcomes,
+      }],
+      (tx, copies) => this.centreRepo.insertImportRow({
+        questionId: copies[0]!.questionId,
+        sourceQuestionId: dto.sourceQuestionId,
+        sourceVersionId: version.id,
+        sourceVersionNumber: version.version,
+        packageChecksum: version.checksum,
+        importedVersionNumber: 1,
+        importedBy: actorId,
+        kind: 'pristine',
+      }, tx),
+    );
+    await this.repo.recordImporter({
       sourceQuestionId: dto.sourceQuestionId,
-      sourceVersionId: version.id,
-      sourceVersionNumber: version.version,
-      packageChecksum: version.checksum,
-      importedVersionNumber: 1,
+      centreSlug,
       importedBy: actorId,
-      kind: 'pristine',
     });
+    const created = await this.questions.getQuestion(importRow.questionId);
     return { question: created, import: importRow, source: { questionId: question.id, version: version.version } };
   }
 

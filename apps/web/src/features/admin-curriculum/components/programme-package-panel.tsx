@@ -26,7 +26,7 @@ import {
   type ProgrammePackageInstall,
   type ProgrammePackageMeta,
 } from "../api/programme-packages";
-import { SystemSourceNotices } from "#features/questions/components/system-source-notices";
+import { SystemSourceNotices } from "#components/system-source-notices";
 
 function programmeInstallError(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiError) {

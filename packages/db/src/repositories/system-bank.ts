@@ -301,6 +301,9 @@ export class SystemBankRepository {
     return this.db()
       .transaction()
       .execute(async (tx) => {
+        const source = await tx.selectFrom('system_questions')
+          .select('status').where('id', '=', questionId).forUpdate().executeTakeFirst();
+        if (!source || source.status !== 'published') throw new Error('system_bank.question_withdrawn');
         const latest = await tx
           .selectFrom('system_question_versions')
           .select(['version'])

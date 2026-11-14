@@ -111,6 +111,31 @@ describe('Repository kho ngân hàng hệ thống (issue #650)', () => {
     expect(latest?.version).toBe(2);
   });
 
+  it('phát hành cạnh tranh với rút nguồn không được tạo phiên bản sau khi trạng thái rút đã commit', async () => {
+    const { question } = await repo.createQuestionWithFirstVersion({
+      qtype: 'multichoice', createdBy: ADMIN_ID,
+      package: samplePackage('Bản đầu trước khi rút'), checksum: 'checksum-race-1',
+    });
+    const lock = await pool.connect();
+    try {
+      await lock.query('BEGIN');
+      await lock.query(
+        `UPDATE system_questions SET status = 'withdrawn', withdrawn_at = now(),
+         withdrawn_by = $2, withdrawn_reason = 'Thu hồi nguồn' WHERE id = $1`,
+        [question.id, ADMIN_ID],
+      );
+      const publishing = repo.createVersion(question.id, samplePackage('Phiên bản tranh chấp'), 'checksum-race-2');
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await lock.query('COMMIT');
+      await expect(publishing).rejects.toThrow('system_bank.question_withdrawn');
+      expect((await repo.listVersions(question.id)).map((version) => version.version)).toEqual([1]);
+      expect(await repo.listEventsForQuestions([question.id])).toEqual([]);
+    } finally {
+      await lock.query('ROLLBACK').catch(() => undefined);
+      await lock.release();
+    }
+  });
+
   it('rút câu + ghi sự kiện + sổ importer: truy vết nguồn giữ nguyên và ghi importer trùng là idempotent', async () => {
     const { question } = await repo.createQuestionWithFirstVersion({
       qtype: 'multichoice',

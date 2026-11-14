@@ -1,6 +1,6 @@
 import { sql, type RawBuilder } from 'kysely';
 import type { SystemExamPackage } from '@giaokhoa/contracts';
-import type { SystemBankDb } from '../client';
+import type { SystemBankDb, SystemBankTx } from '../client';
 import type { Json } from '../types/system-bank-db';
 
 export interface SystemExamVersionRow {
@@ -45,11 +45,16 @@ export class SystemExamsRepository {
     return this.handle;
   }
 
+  private async lockSource(tx: SystemBankTx, centreSlug: string, sourceExamId: string): Promise<void> {
+    await sql`select pg_advisory_xact_lock(hashtextextended(${`system-exam:${centreSlug}/${sourceExamId}`}, 0))`.execute(tx);
+  }
+
   async submit(input: {
     centreSlug: string; sourceExamId: string; sourceVersionId: string;
     sourceVersionNumber: number; package: SystemExamPackage; checksum: string; submittedBy: string;
   }): Promise<SystemExamVersionRow> {
     return this.db().transaction().execute(async (tx) => {
+      await this.lockSource(tx, input.centreSlug, input.sourceExamId);
       const withdrawn = await tx.selectFrom('system_exam_versions').select('id')
         .where('centre_slug', '=', input.centreSlug)
         .where('source_exam_id', '=', input.sourceExamId)
@@ -91,6 +96,10 @@ export class SystemExamsRepository {
 
   async withdrawSource(id: string, reason: string): Promise<SystemExamVersionRow | null> {
     return this.db().transaction().execute(async (tx) => {
+      const source = await tx.selectFrom('system_exam_versions').select(['centre_slug as centreSlug', 'source_exam_id as sourceExamId'])
+        .where('id', '=', id).executeTakeFirst();
+      if (!source) return null;
+      await this.lockSource(tx, source.centreSlug, source.sourceExamId);
       const row = await tx.selectFrom('system_exam_versions').select(COLUMNS)
         .where('id', '=', id).forUpdate().executeTakeFirst();
       if (!row || row.status !== 'approved') return null;
@@ -116,9 +125,20 @@ export class SystemExamsRepository {
 
   async review(id: string, reviewerId: string, decision: 'approved' | 'rejected', reason?: string): Promise<SystemExamVersionRow | null> {
     return this.db().transaction().execute(async (tx) => {
+      const source = await tx.selectFrom('system_exam_versions').select(['centre_slug as centreSlug', 'source_exam_id as sourceExamId'])
+        .where('id', '=', id).executeTakeFirst();
+      if (!source) return null;
+      await this.lockSource(tx, source.centreSlug, source.sourceExamId);
       const current = await tx.selectFrom('system_exam_versions').select(COLUMNS)
         .where('id', '=', id).forUpdate().executeTakeFirst();
       if (!current || current.status !== 'pending') return current ?? null;
+      if (decision === 'approved') {
+        const withdrawn = await tx.selectFrom('system_exam_versions').select('id')
+          .where('centre_slug', '=', current.centreSlug)
+          .where('source_exam_id', '=', current.sourceExamId)
+          .where('status', '=', 'withdrawn').executeTakeFirst();
+        if (withdrawn) throw new Error('system_exam.source_withdrawn');
+      }
       const updated = await tx.updateTable('system_exam_versions').set({
         status: decision, reviewed_by: reviewerId, reviewed_at: new Date(),
         rejection_reason: decision === 'rejected' ? reason ?? null : null,

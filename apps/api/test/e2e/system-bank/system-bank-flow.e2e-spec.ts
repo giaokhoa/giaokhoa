@@ -472,6 +472,30 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(importersAfter.rowCount).toBe(1);
   });
 
+  it('nhập câu lỗi lúc ghi dấu vết trung tâm phải rollback câu và không xác nhận importer', async () => {
+    const created = await publish('Câu kiểm chứng xác nhận nhập hoàn tất');
+    const questionId = created.question.id as string;
+    const before = (await pg.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
+    await pg.query('ALTER TABLE system_question_imports ADD CONSTRAINT reject_import_receipt_test CHECK (false) NOT VALID');
+    try {
+      const failed = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token))
+        .send({ sourceQuestionId: questionId });
+      expect(failed.status).toBeGreaterThanOrEqual(400);
+      expect((await pg.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count).toBe(before);
+      expect((await pg.query('SELECT question_id FROM system_question_imports WHERE source_question_id = $1',
+        [questionId])).rowCount).toBe(0);
+      expect((await bankPg.query('SELECT id FROM system_question_importers WHERE source_question_id = $1',
+        [questionId])).rowCount).toBe(0);
+    } finally {
+      await pg.query('ALTER TABLE system_question_imports DROP CONSTRAINT reject_import_receipt_test');
+    }
+    const completed = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token))
+      .send({ sourceQuestionId: questionId });
+    expect(completed.status, JSON.stringify(completed.body)).toBe(201);
+    expect((await bankPg.query('SELECT id FROM system_question_importers WHERE source_question_id = $1',
+      [questionId])).rowCount).toBe(1);
+  });
+
   it('issue #13: giáo viên soạn riêng; quản trị gửi, biên tập duyệt/từ chối; B nhập sau khi A xoá nguồn và media', async () => {
     const tenantAResponse = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({
       name: uniqueName('Trung tâm gửi G13'), slug: uniqueName('g13-a').toLowerCase(), kind: 'school',

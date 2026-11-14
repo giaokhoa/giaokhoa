@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '#config/i18n';
-import { acknowledgeSystemQuestionEvent, fetchSystemQuestionEvents } from '../api/questions';
+import { acknowledgeSystemQuestionEvent, fetchSystemQuestionEvents } from '#lib/system-resource-events';
 import { SystemSourceNotices } from './system-source-notices';
 
-vi.mock('../api/questions', () => ({
+vi.mock('#lib/system-resource-events', () => ({
   fetchSystemQuestionEvents: vi.fn(async () => []),
   acknowledgeSystemQuestionEvent: vi.fn(async () => ({})),
 }));

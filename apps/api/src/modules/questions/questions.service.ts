@@ -487,6 +487,59 @@ export class QuestionsService {
     return this.assembleView(created.q, created.entry, created.version);
   }
 
+  async createQuestionCopies<T>(
+    actorId: string,
+    categoryId: string,
+    items: Array<{
+      qtype: string;
+      stimulusContent?: RichTextInput | null;
+      content: QuestionContentInput;
+      outcomes?: Array<{ outcomeId: string; cognitiveLevel: string }>;
+    }>,
+    finish: (tx: QuestionsTx, copies: Array<{ questionId: string; versionId: string }>) => Promise<T>,
+  ): Promise<T> {
+    const category = await this.getCategory(categoryId);
+    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.categoryNotFound(categoryId));
+    await this.requireCap(actorId, 'question:add', category.contextId);
+    const prepared = items.map((item) => {
+      assertSupportedQtype(item.qtype);
+      return { ...item, normalised: normaliseQuestionContent(item.qtype, item.content) };
+    });
+    for (const outcomeId of new Set(prepared.flatMap((item) => (item.outcomes ?? []).map((link) => link.outcomeId)))) {
+      if (!await this.repo.getOutcomeChain(outcomeId)) {
+        throw new NotFoundException({ code: 'curriculum.outcome_not_found' });
+      }
+    }
+    return this.repo.transaction(async (tx) => {
+      const copies: Array<{ questionId: string; versionId: string }> = [];
+      for (const item of prepared) {
+        const stimulus = item.stimulusContent
+          ? await this.repo.insertStimulus({
+            categoryId, createdBy: actorId, content: toRichTextDocument(item.stimulusContent) as never,
+          }, tx)
+          : null;
+        const created = await this.insertQuestionGraph(
+          tx, actorId, category, { qtype: item.qtype, ...item.content }, item.normalised, stimulus?.id ?? null,
+        );
+        for (const link of item.outcomes ?? []) {
+          await this.repo.insertQuestionOutcomeLink({
+            questionId: created.q.id, learningOutcomeId: link.outcomeId, cognitiveLevel: link.cognitiveLevel,
+          }, tx);
+        }
+        if (stimulus) {
+          await this.outbox.enqueueKysely(tx, {
+            aggregate: 'stimulus', type: 'stimulus_created', payload: { stimulusId: stimulus.id, categoryId },
+          });
+        }
+        await this.outbox.enqueueKysely(tx, {
+          aggregate: 'question', type: 'question_created', payload: { questionId: created.q.id, version: 1 },
+        });
+        copies.push({ questionId: created.q.id, versionId: created.version.id });
+      }
+      return finish(tx, copies);
+    });
+  }
+
   async createStimulusWithQuestions(
     actorId: string,
     input: {
