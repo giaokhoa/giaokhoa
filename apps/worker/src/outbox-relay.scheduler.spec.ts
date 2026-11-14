@@ -413,6 +413,7 @@ describe('Relay outbox duy nhất — fan-out một sự kiện nhiều consumer
 
 describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => {
   const DEDICATED_SPACE: SpaceRegistryEntry = {
+    kind: 'center',
     id: 'id-dang-ky-a',
     slug: 'trung-tam-a',
     status: 'active',
@@ -481,6 +482,14 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
     bRow.publishedAt = null;
     await relay.publishPendingForCentres();
     expect(jobs.size).toBe(2);
+  });
+
+  it('registry platform dedicated và public không thuộc lượt outbox trung tâm', async () => {
+    const platform = { ...DEDICATED_SPACE, slug: 'trang-chinh', kind: 'platform' };
+    const publicSpace = { ...DEDICATED_SPACE, slug: 'cong-cong', kind: 'public' };
+    const spaceDb = makeFakeSpaceDb([platform, publicSpace], new Map());
+    const { relay } = makeRelay([], ROUTES, { spaceDb });
+    expect(await relay.publishPendingForCentres()).toEqual({ published: 0, failedSlugs: [] });
   });
 
   it('trung tâm đã đóng (closed) và trung tâm ở kho chung không thuộc lượt quét theo trung tâm', async () => {

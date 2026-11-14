@@ -74,3 +74,16 @@ Báo cáo GitHub Actions thực tế ngày 14/11/2026: CI run `43568422387`, dep
 Lượt sửa sau đối chiếu: loại bỏ import unused; mật khẩu bootstrap CI dùng chuỗi ngẫu nhiên có chữ hoa/chữ thường/số/ký tự đặc biệt; gói chương trình không coi hostname platform là trung tâm; sửa HTTP `support-centres` trả 403 `space_routing.shared_not_supported` thay vì 500 khi gặp registry shared; kiểm thử âm tính không cho tạo trường/cấp grant legacy, và kiểm thử payment sai tenant sử dụng dữ liệu giả cố ý trong DB test. Lint và typecheck API đạt; e2e mục tiêu ban đầu 30/31, sau vá support riêng 9/9 đạt; chưa có bằng chứng CI head mới.
 
 **Vẫn chặn AC25–AC27:** 9 suite setup legacy (quiz-shared, space-membership, system-shared-exams, socket-space-auth, space-pre-migration-gates, system-materials, tenant-isolation, messaging-group-creation, users-my-access), cùng các ca về system-bank, payments-refund và payments-coupons-slots cần được chuyển thành fixture cấp **database và role riêng** và chạy lại đầy đủ. Không loại bỏ test/ngắt CI để né các lỗi này. `verify-stack` cần xác nhận lại bằng log trên commit mới và bộ đo tải worker AC26 vẫn thiếu.
+
+## Đối chiếu review độc lập lần 3 — head `adbb0bc`, ngày 14/11/2026
+
+Đã đối chiếu [comment review #6873708515](https://github.com/giaokhoa/giaokhoa/pull/62#issuecomment-6873708515) và log CI run `43569888739`. Đúng: `verify-stack` PASS nhưng CI tổng vẫn đỏ; worker integration có 33 assertion lỗi, integration API có PostgreSQL `57P01` từ lần đóng DB bằng `WITH (FORCE)`, còn nhiều HTTP E2E legacy tạo school/shared.
+
+Phần đã sửa trong lượt này:
+
+- Worker chỉ sweep **registry kind=center, active, dedicated**; không quét `platform` hoặc `public`, kiểm soát thay identity, retry khi A lỗi không bỏ B. `OutboxRelayScheduler` quét center còn `publishPending` platform duy trì riêng. Unit bổ sung platform/public và legacy shared, kiểm tra không chạy callback sai scope.
+- Fixture worker integration khởi tạo **control plane database độc lập**, đăng ký trung tâm `worker-fixture` hoặc đúng slug của test dưới `storage_mode=dedicated`, kết nối bằng role worker thường; không bỏ `sweepDedicatedSpaces` về code cũ. Mock class reconcile được sửa đúng contract. Test worker shared cũ đổi thành ca **từ chối** với mã `space_routing.shared_not_supported` và không ghi dữ liệu; trường hợp không chuẩn bị fail-closed.
+- Worker thanh toán dùng slug registry dedicated của riêng suite thay vì fallback platform cho trường test; kiểm tra payment shared vẫn pending, không tự ghi danh; bài test giao dịch cross-space vẫn kiểm tra thanh toán ở kho đúng. Fixture digest có thể tắt scheduler tự chạy để kiểm tra chính xác một nhịp thủ công, tránh cạnh tranh lịch chạy.
+- Tên database và role ở test integration system bank của API có hậu tố ngẫu nhiên theo process; bỏ `DROP DATABASE ... WITH (FORCE)` trước và sau mỗi ca, yêu cầu đóng pool thật trước khi drop (lỗi connection tồn đọng phải hiện ra, không ép cắt kết nối). Test system bank mục tiêu **10/10 đạt**.
+
+**Chưa tuyên bố CI xanh hoặc AC25–AC27 hoàn tất.** HTTP E2E vẫn còn nhiều fixture tạo trường shared và AC liên miền/backup/restore/tải thực chưa đủ. Trạng thái trên commit cuối phải lấy từ CI GitHub Actions mới. Không merge/đóng issue nếu chưa đạt review độc lập.

@@ -103,7 +103,7 @@ export class OutboxRelayScheduler {
       );
       return { published: 0, failedSlugs: [], registryError: message };
     }
-    const dedicated = spaces.filter((space) => space.storageMode === 'dedicated' && space.status !== 'closed');
+    const dedicated = spaces.filter((space) => space.kind === 'center' && space.storageMode === 'dedicated' && space.status === 'active');
     let published = 0;
     const failedSlugs: string[] = [];
     await mapWithConcurrencyLimit(dedicated, this.sweepConcurrency, async (space) => {

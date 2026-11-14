@@ -5,9 +5,11 @@ import { SpaceDatabaseService } from './space-database.service';
 
 describe('SpaceDatabaseService.sweepDedicatedSpaces', () => {
   const registry = [
-    { id: 'space-a', slug: 'a', storageMode: 'dedicated', status: 'active' },
-    { id: 'space-b', slug: 'b', storageMode: 'dedicated', status: 'active' },
-    { id: 'space-closed', slug: 'closed', storageMode: 'dedicated', status: 'closed' },
+    { id: 'space-platform', slug: 'trang-chinh', kind: 'platform', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-a', slug: 'a', kind: 'center', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-b', slug: 'b', kind: 'center', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-public', slug: 'public', kind: 'public', storageMode: 'dedicated', status: 'active' },
+    { id: 'space-closed', slug: 'closed', kind: 'center', storageMode: 'dedicated', status: 'closed' },
   ];
   const config = { get: (key: string) => key === 'SPACE_SWEEP_CONCURRENCY' ? 2 : undefined } as ConfigService;
   const spaceDb = new SpaceDatabaseService(config);
@@ -87,10 +89,18 @@ describe('SpaceDatabaseService.sweepDedicatedSpaces', () => {
   it('sổ có kho chung legacy thì từ chối trước khi chạy bất kỳ job nào', async () => {
     list.mockResolvedValue([
       ...registry,
-      { id: 'space-shared', slug: 'c', storageMode: 'shared', status: 'active' },
+      { id: 'space-shared', slug: 'c', kind: 'center', storageMode: 'shared', status: 'active' },
     ] as never);
     await expect(spaceDb.sweepDedicatedSpaces(task, merge)).rejects.toMatchObject({
       code: 'space_routing.shared_not_supported',
+    });
+    expect(handled).toEqual([]);
+  });
+
+  it('chỉ có platform và public: không chạy nhầm job trung tâm', async () => {
+    list.mockResolvedValue(registry.filter((space) => space.kind !== 'center') as never);
+    await expect(spaceDb.sweepDedicatedSpaces(task, merge)).rejects.toMatchObject({
+      code: 'space_routing.no_active_spaces',
     });
     expect(handled).toEqual([]);
   });

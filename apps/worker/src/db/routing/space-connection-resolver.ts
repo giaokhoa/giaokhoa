@@ -2,6 +2,7 @@ import { onSpaceRegistryChanged } from './space-routing-events';
 
 
 export interface SpaceRegistryEntry {
+  kind: string;
   id: string;
   slug: string;
   status: string;

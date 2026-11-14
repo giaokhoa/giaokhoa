@@ -117,7 +117,7 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
   beforeAll(async () => {
     pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
-    harness = await bootWorkerModuleAsOrdinaryRole();
+    harness = await bootWorkerModuleAsOrdinaryRole({ centreSlug: `trung-tam-w539-${tag}` });
     tenantId = uid();
     tenantCtxId = uid();
     systemCtxId = uid();

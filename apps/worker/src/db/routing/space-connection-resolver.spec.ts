@@ -7,6 +7,7 @@ import {
 
 
 const DEDICATED_ENTRY: SpaceRegistryEntry = {
+  kind: 'center',
   id: 'id-dang-ky-a',
   slug: 'trung-tam-a',
   status: 'active',
@@ -18,6 +19,7 @@ const DEDICATED_ENTRY: SpaceRegistryEntry = {
 };
 
 const SHARED_ENTRY: SpaceRegistryEntry = {
+  kind: 'center',
   id: 'id-dang-ky-trang-chinh',
   slug: 'trang-chinh',
   status: 'active',

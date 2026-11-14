@@ -95,7 +95,7 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     return (cls.rows[0] as { id: string }).id;
   }
   beforeAll(async () => {
-    harness = await bootWorkerModuleAsOrdinaryRole();
+    harness = await bootWorkerModuleAsOrdinaryRole({ disableGuardianScheduler: true });
     context = harness.context;
     db = harness.adminDb;
     await sql`insert into tenants (slug, name, kind, status) values ('worker-fixture', 'Worker fixture tenant', 'school', 'active') on conflict (slug) do nothing`.execute(db);

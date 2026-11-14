@@ -119,9 +119,10 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
     }
   });
 
-  it('getKyselyForSpace trả đúng instance theo chế độ kho và nhớ lần chuẩn bị', async () => {
-    const shared = await service.getKyselyForSpace(SHARED_SLUG);
-    expect(shared).toBe(sharedKysely);
+  it('getKyselyForSpace từ chối shared và nhớ handle riêng theo từng trung tâm', async () => {
+    await expect(service.getKyselyForSpace(SHARED_SLUG)).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
+    });
     const a = await service.getKyselyForSpace(CENTRE_A_SLUG);
     expect(a).not.toBe(sharedKysely);
     expect(await service.getKyselyForSpace(CENTRE_A_SLUG)).toBe(a);
@@ -155,15 +156,13 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
     expect(await rowsIn(centreAUrl, TENANT_SHARED_ID)).toBe(0);
   });
 
-  it('slug chưa chuẩn bị thì routedKysely rơi về kho chung chứ không ném', async () => {
+  it('slug chưa chuẩn bị bị từ chối, không tự về kho platform', async () => {
     await tenantAls.run({ spaceSlug: 'slug-chua-chuan-bi-w639' }, async () => {
-      const rows = await service.routedKysely
-        .selectFrom('tenants')
-        .selectAll()
-        .where('id', '=', TENANT_SHARED_ID)
-        .execute();
-      expect(rows).toHaveLength(1);
+      expect(() => service.routedKysely.selectFrom('tenants')).toThrowError(
+        expect.objectContaining({ code: 'space_routing.not_prepared' }),
+      );
     });
+    expect(await rowsIn(sharedUrl, TENANT_SHARED_ID)).toBe(1);
   });
 
   it('transaction qua facade commit và rollback đúng trên kho hiệu lực', async () => {

@@ -397,7 +397,7 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     expect(await outboxCount(centrePg, 'user_enrolled', buyer)).toBe(1);
   });
 
-  it('enrol_fee của trung tâm kho chung: hành vi hiện tại giữ nguyên — succeeded và ghi danh ở kho chung', async () => {
+  it('enrol_fee của trung tâm shared legacy không được kích hoạt hay ghi danh ở kho platform', async () => {
     const buyer = await insertUser(sharedPg);
     const { instanceId } = await makeFeeCourse(sharedPg, sharedFrame, sharedTenantId);
     const { paymentId, code } = await makePayment({
@@ -408,10 +408,10 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
 
     await sweepOnce();
 
-    expect(await paymentStatus(paymentId)).toBe('succeeded');
-    expect(await eventStatus(eventId)).toBe('matched');
-    expect(await enrolmentStatus(sharedPg, instanceId, buyer)).toBe(0);
-    expect(await outboxCount(sharedPg, 'user_enrolled', buyer)).toBe(1);
+    expect(await paymentStatus(paymentId)).toBe('pending');
+    expect(await eventStatus(eventId)).not.toBe('matched');
+    expect(await enrolmentStatus(sharedPg, instanceId, buyer)).toBeUndefined();
+    expect(await outboxCount(sharedPg, 'user_enrolled', buyer)).toBe(0);
   });
 
   it('class_fee của trung tâm kho riêng: thành viên cohort, membership và cả hai outbox ở kho riêng, kho chung sạch', async () => {
@@ -443,7 +443,7 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     ).toBe(0);
   });
 
-  it('một nhịp gồm payment của cả hai trung tâm: mỗi payment kích hoạt ở đúng kho của trung tâm mình', async () => {
+  it('một nhịp hỗn hợp: dedicated được kích hoạt, shared vẫn pending và không ghi chéo', async () => {
     const centreBuyer = await insertUser(centrePg);
     const centreCourse = await makeFeeCourse(centrePg, centreFrame, centreTenantId);
     const centrePayment = await makePayment({
@@ -463,9 +463,9 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     await sweepOnce();
 
     expect(await paymentStatus(centrePayment.paymentId)).toBe('succeeded');
-    expect(await paymentStatus(sharedPayment.paymentId)).toBe('succeeded');
+    expect(await paymentStatus(sharedPayment.paymentId)).toBe('pending');
     expect(await enrolmentStatus(centrePg, centreCourse.instanceId, centreBuyer)).toBe(0);
-    expect(await enrolmentStatus(sharedPg, sharedCourse.instanceId, sharedBuyer)).toBe(0);
+    expect(await enrolmentStatus(sharedPg, sharedCourse.instanceId, sharedBuyer)).toBeUndefined();
     expect(
       await countRows(sharedPg, 'SELECT count(*)::int AS c FROM user_enrolments WHERE enrol_id = $1 AND user_id = $2', [centreCourse.instanceId, centreBuyer]),
     ).toBe(0);

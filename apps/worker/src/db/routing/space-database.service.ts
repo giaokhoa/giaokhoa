@@ -68,6 +68,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
           .select([
             'id',
             'slug',
+            'kind',
             'status',
             'database_name as databaseName',
             'storage_mode as storageMode',
@@ -186,6 +187,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       .select([
         'id',
         'slug',
+        'kind',
         'status',
         'database_name as databaseName',
         'storage_mode as storageMode',
@@ -205,7 +207,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     if (registered.some((space) => space.storageMode !== 'dedicated')) {
       throw new SpaceRoutingError('space_routing.shared_not_supported', 'Periodic sweep cannot run against a shared database');
     }
-    const dedicated = registered.filter((space) => space.status === 'active');
+    const dedicated = registered.filter((space) => space.kind === 'center' && space.status === 'active');
     if (dedicated.length === 0) {
       throw new SpaceRoutingError('space_routing.no_active_spaces', 'Periodic sweep requires an active dedicated space');
     }
@@ -262,6 +264,9 @@ export class SpaceDatabaseService implements OnModuleDestroy {
           );
         }
         return preparedEntry.db;
+      }
+      if (scope?.spaceId || scope?.spaceHandle) {
+        throw new SpaceRoutingError('space_routing.prepared_revoked', `Space ${slug} was revoked or its pool closed`);
       }
       throw new SpaceRoutingError(
         'space_routing.not_prepared',
