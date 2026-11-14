@@ -132,3 +132,12 @@ Nguồn lỗi đã xác định từ artifact Vitest `blob-report-e2e-{1,2,3,4}`
 - `paper-grading/paper-grading-flow`: một lượt bộ nhận dạng phiếu tổng hợp không nhận ra lô (`batchId=null`) ở ảnh SBD cố ý làm sai checksum, nhưng toàn bộ suite chạy lại **17/17 PASS**, giữ nguyên kiểm tra không tự gán nhầm học viên.
 
 Chưa có quyền nói full E2E đã PASS trên một lượt duy nhất: chỉ GitHub Actions chạy với database sạch, PostgreSQL client đúng phiên bản và bốn shard đồng bộ trên SHA mới mới đủ làm bằng chứng kết luận CI. Các lỗi local đã phân tích và chạy lại riêng, không skip test. Chưa chốt toàn AC01–AC27 hoặc tự merge PR Draft.
+
+
+### CI head `ff85e46` — test suite seed legacy chỉ xanh trên local bẩn
+
+Đã tải **4 artifact blob** của GitHub Actions run `43582307623`, gộp báo cáo Vitest đầy đủ: 147/148 suite PASS, **1023/1040 test PASS, 17 test SKIPPED do suite `platform/space-membership-flow` lỗi `beforeAll`** tại dòng `.find(slug === 'truong-mac-dinh')!.id`. Shard 1/4, 3/4, 4/4 và `test-api`, `verify-workspace`, `verify-stack` đều PASS. Shard 2/4 FAIL vì CI có database centre mới không có seed `truong-mac-dinh`; local `giaokhoa_test_api` cũ còn bản ghi đó nên lỗi bị che. Không phải lỗi 17 assertion nghiệp vụ.
+
+Fixture `space-membership-flow` hiện tự gieo dữ liệu lịch sử legacy với slug riêng cho mỗi lượt chạy (không dùng slug dữ liệu seed mặc định), cấp đúng quyền manager/membership cho actor quản trị bằng helper `grantTenantManagerFixture`; giữ không gian A/B database/role riêng và kiểm token legacy không vào hostname trường. Đã tạo **PostgreSQL 18 database hoàn toàn mới**, chạy migration 8 bước thành công và chạy lại `space-membership-flow` **17/17 PASS**. Không sửa API `centre.provision_required`; sẽ xác minh cả shard 2 từ database sạch và CI ở SHA sau khi push.
+
+**Bằng chứng hoàn tất lượt kiểm chứng shard 2 local trên database sạch:** tạo `giaokhoa_test_api_ci62sh2` từ rỗng, chạy 8 migrations giống CI; lệnh `vitest run --project e2e --shard=2/4 --reporter=default` chạy trên Postgres 18 có client trong PATH đạt **37/37 suite, 279/279 test PASS**. API lint/typecheck PASS; không nới assertions, không bỏ test. Chờ kết quả bốn shard GitHub trên SHA sau sửa.

@@ -19,6 +19,7 @@ import {
   STRONG_PASSWORD,
   createTestApp,
   createUserViaApi,
+  grantTenantManagerFixture,
   http,
   login,
   uniqueName,
@@ -43,7 +44,7 @@ const MAIN_SLUG = 'trang-chinh';
 const HOST_A = `${CENTRE_A_SLUG}.test.local`;
 const HOST_B = `${CENTRE_B_SLUG}.test.local`;
 const HOST_MAIN = `${MAIN_SLUG}.test.local`;
-const SHARED_SLUG = 'truong-mac-dinh';
+const SHARED_SLUG = `legacy-584-${RUN_SUFFIX}`;
 const HOST_SHARED = `${SHARED_SLUG}.test.local`;
 const DUAL_NEW_PASSWORD = 'NewStrong123!';
 
@@ -272,7 +273,10 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       'list tenants',
     )) as Array<{ id: string; slug: string }>;
     mainTenantId = tenantsList.find((tenant) => tenant.slug === MAIN_SLUG)!.id;
-    sharedTenantId = tenantsList.find((tenant) => tenant.slug === SHARED_SLUG)!.id;
+    sharedTenantId = await seedLegacyCentreInShared({
+      slug: SHARED_SLUG, name: 'Trường legacy kiểm cổng (spec 584)',
+    });
+    await grantTenantManagerFixture(app, adminToken, sharedTenantId);
     await copyRow(process.env.DATABASE_URL!, clusterUrl(MAIN_DATABASE, MAIN_ROLE, MAIN_PASSWORD), 'tenants', 'id', mainTenantId);
 
     const spaceDb = app.get(SpaceDatabaseService, { strict: false });
