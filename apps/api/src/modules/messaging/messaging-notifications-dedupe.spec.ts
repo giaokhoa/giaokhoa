@@ -99,7 +99,7 @@ describe('MessagingNotificationsService.notify — dedupeKey khi popup tắt ch�
     expect(jobs[0]!.dedupeKey).toBe('platform-dispatch-grade_updated-user-1-email-notif-9');
   });
 
-  it('job dispatch được xoá khi fail hết lượt để lần phát lại không kẹt vào job fail cũ, và job xong vẫn giữ lại làm cửa sổ dedupe chống gửi trùng', async () => {
+  it('job dispatch được xếp với tuỳ chọn removeOnFail và không có removeOnComplete để lần phát lại không kẹt vào job fail cũ', async () => {
     const { service, options } = buildService();
     await service.notify('user-1', 'grade_updated', input);
     expect(options).toHaveLength(1);

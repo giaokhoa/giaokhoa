@@ -221,7 +221,7 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
     });
   });
 
-  it('đẩy job relay mang removeOnFail true để job fail không chặn lần relay lại cùng outboxId, và không mang removeOnComplete để job hoàn thành vẫn giữ dedupe', async () => {
+  it('đẩy job relay mang tuỳ chọn removeOnFail true và không mang removeOnComplete', async () => {
     const row = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-1' });
     const { relay, queues } = makeRelay([row], ROUTES, { tenantSlugs: { 'tenant-1': 'trung-tam-a' } });
     const queue = queues.get('outbox-auth-mail')!;

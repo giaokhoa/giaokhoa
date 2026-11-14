@@ -17,7 +17,7 @@ describe('BadgesService.enqueueEvaluation — enqueue đánh giá huy hiệu dù
       .enqueueEvaluation(userId, trigger);
   }
 
-  it('đánh giá 2 lần cho cùng người dùng và trigger: enqueue 2 lần với cùng một jobId ổn định, không chứa UUID, và job được xoá khi xong để lần sau enqueue được', async () => {
+  it('đánh giá 2 lần cho cùng người dùng và trigger: enqueue 2 lần với cùng một jobId ổn định, không chứa UUID, và job được xoá khi xong lẫn khi fail hết lượt để lần sau enqueue được', async () => {
     const { badges, awardQueue } = buildService();
     await enqueue(badges, 'user-1', 'course-completion');
     await enqueue(badges, 'user-1', 'course-completion');

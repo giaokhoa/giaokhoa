@@ -105,7 +105,7 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     });
   });
 
-  it('job email fail hết 3 lượt bị xoá khỏi failed set để lần notify lại cùng eventId không chạm job fail cũ: tuỳ chọn xếp job mang removeOnFail true và không mang removeOnComplete để job hoàn thành vẫn giữ cửa sổ dedupe', async () => {
+  it('xếp job email mang tuỳ chọn attempts 3 và removeOnFail true, không mang removeOnComplete, để lần notify lại cùng eventId không chạm job fail cũ', async () => {
     const { delivery, queue } = buildNotify({ user: ACTIVE_USER });
     await delivery.notify('user-guardian', 'guardian_digest', DIGEST_INPUT);
     const [, , jobOptions] = queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>, Record<string, unknown>];
