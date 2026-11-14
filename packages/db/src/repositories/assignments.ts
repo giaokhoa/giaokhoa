@@ -906,7 +906,13 @@ export class AssignmentsRepository {
       .updateTable('assign_annotations')
       .set({
         ...annotationUpdateSet(patch),
-        ...pickDefined(patch, [['points', 'points', (value) => (value === null ? null : jsonbValue(value))]]),
+        ...pickDefined(patch, [
+          [
+            'points',
+            'points',
+            (value) => (value === null ? null : jsonbValue(value)),
+          ],
+        ]),
         updated_at: new Date(),
       })
       .where('id', '=', id)

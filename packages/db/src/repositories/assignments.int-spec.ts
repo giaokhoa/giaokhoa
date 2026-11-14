@@ -240,6 +240,50 @@ describe('AssignmentsRepository — gói chấm, dấu chấm và bảng chấm'
     });
   });
 
+  it('dấu chấm: patch points sang mảng mới ghi đúng mảng mới', async () => {
+    await runInTestTenantContext(tenantId, async () => {
+      const assignment = await repo.insertAssignment({
+        course: courseId,
+        cmId: null,
+        name: 'Bài tập dấu chấm mới',
+        intro: '',
+        dueDate: null,
+        maxFiles: 10,
+        acceptedFileTypes: null,
+        grade: 10,
+        resultMode: 'score_feedback',
+      });
+      const submission = await repo.insertSubmission({
+        assignmentId: assignment.id,
+        userId: studentId,
+        status: 'submitted',
+        attemptNumber: 1,
+      });
+      const oldPoints = [{ x: 0.1, y: 0.2 }];
+      const annotation = await repo.insertAnnotation({
+        submissionId: submission.id,
+        fileId,
+        page: 1,
+        x: 0.1,
+        y: 0.2,
+        kind: 'draw',
+        color: '#ff0000',
+        text: null,
+        points: oldPoints,
+        authorId: teacherId,
+      });
+      expect(annotation.points).toEqual(oldPoints);
+
+      const newPoints = [
+        { x: 0.5, y: 0.6 },
+        { x: 0.7, y: 0.8 },
+      ];
+      await repo.updateAnnotation(annotation.id, { points: newPoints });
+      const afterPointsPatch = await repo.getAnnotation(annotation.id);
+      expect(afterPointsPatch?.points).toEqual(newPoints);
+    });
+  });
+
   it('bảng chấm: tiêu chí/mức theo thứ tự hiển thị, đánh giá ghi/đè theo cặp (gói chấm, tiêu chí), xoá bảng chấm cascade cây con', async () => {
     await runInTestTenantContext(tenantId, async () => {
       const assignment = await repo.insertAssignment({
