@@ -255,7 +255,7 @@ describe('GradeCalculator — sổ điểm chuẩn (tổng hợp điểm MoodleD
     expect(r.finalGrade).toBe(0);
   });
 
-  it('simpleweightedmean: mục điểm có khoảng điểm âm đóng góp trọng số 0 và chuẩn hoá 0 nên kết quả chỉ theo mục điểm còn lại (0×0 + 0,5×100)/100 = 50/100', () => {
+  it('simpleweightedmean: mục điểm có khoảng điểm âm đóng góp trọng số 0 và chuẩn hoá 0 nên kết quả chỉ theo mục điểm còn lại (0×0 + 0.5×100)/100 = 50/100', () => {
     resetIds();
     const r = calculateCategory({
       aggregation: 'simpleweightedmean', gradeMin: 0, gradeMax: 100,

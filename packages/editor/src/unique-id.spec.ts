@@ -82,6 +82,7 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       const list = (json.content ?? []).find((node) => node.type === CHOICE_LIST_NODE_TYPE);
       const choices = list?.content ?? [];
       const ids = choices.map((choice) => choice.attrs?.id);
+      expect(choices).toHaveLength(MULTIPLE_CHOICE_COUNT);
       expect(ids[0]).toBe('kept-choice');
       expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
       expect(new Set(ids).size).toBe(MULTIPLE_CHOICE_COUNT);
