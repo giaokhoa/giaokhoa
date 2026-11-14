@@ -4,7 +4,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
 import Redis from 'ioredis';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { redisConnectionFromUrl } from './config/env';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
@@ -289,7 +289,8 @@ export class NotificationDeliveryService implements OnModuleDestroy {
         channels['email'] = 'skipped-preference';
       } else {
         const external = this.resolveExternalContent(providerName, emailLaw, input);
-        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${notificationId ?? randomUUID()}`;
+        const emailContentHash = createHash('sha256').update(JSON.stringify([external.subject, external.body])).digest('hex');
+        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${notificationId ?? emailContentHash}`;
         await this.dispatchQueue.add('dispatch', {
           userId, provider: providerName, channel: 'email', tenantId,
           emailFrequency: frequency, subject: external.subject, body: external.body,

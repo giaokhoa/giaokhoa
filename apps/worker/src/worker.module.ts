@@ -2,7 +2,6 @@ import { BullModule, getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { createCentreKysely } from '@giaokhoa/db';
 import { I18nWorkerModule } from './i18n/i18n.config';
@@ -88,6 +87,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         connection: redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
+        prefix: 'giaokhoa',
         defaultJobOptions: {
           attempts: 3,
           backoff: { type: 'exponential', delay: 1000 },
@@ -116,7 +116,6 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     BullModule.registerQueue({ name: 'privacy' }),
     BullModule.registerQueue({ name: 'payment-reconciliation' }),
     ...outboxRouteQueueNames.map((name) => BullModule.registerQueue({ name })),
-    EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
   ],
   providers: [

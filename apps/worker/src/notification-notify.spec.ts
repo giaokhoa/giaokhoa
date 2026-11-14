@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { NotificationDeliveryService } from './notification-delivery.service';
 
@@ -128,17 +129,24 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     expect(insertedOutbox).toHaveLength(0);
   });
 
-  it('popup tắt theo tuỳ chọn v2: vẫn xếp job email với notificationId null và dedupeKey mang uuid ở vị trí notificationId', async () => {
-    const { delivery, queue, insertedOutbox } = buildNotify({
+  it('popup tắt theo tuỳ chọn v2: vẫn xếp job email với notificationId null và dedupeKey ổn định từ hash nội dung email', async () => {
+    const first = buildNotify({
       user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
     });
-    const result = await delivery.notify('user-guardian', 'guardian_digest', DIGEST_INPUT);
-    expect(result.notificationId).toBeNull();
-    expect(result.channels).toEqual({ popup: 'skipped-preference', email: 'queued' });
-    const [, jobData] = queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
-    expect(jobData.notificationId).toBeNull();
-    expect(String(jobData.dedupeKey)).toMatch(/^tenant-1-dispatch-guardian_digest-user-guardian-email-[0-9a-f-]{36}$/);
-    expect(sqlPayloadOf(insertedOutbox[0]?.payload)).toMatchObject({ notificationId: null });
+    const firstResult = await first.delivery.notify('user-guardian', 'guardian_digest', DIGEST_INPUT);
+    expect(firstResult.notificationId).toBeNull();
+    expect(firstResult.channels).toEqual({ popup: 'skipped-preference', email: 'queued' });
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(firstJobData.notificationId).toBeNull();
+    const contentHash = createHash('sha256').update(JSON.stringify([DIGEST_INPUT.externalSubject, DIGEST_INPUT.externalBody])).digest('hex');
+    expect(firstJobData.dedupeKey).toBe(`tenant-1-dispatch-guardian_digest-user-guardian-email-${contentHash}`);
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'guardian_digest', DIGEST_INPUT);
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).toBe(firstJobData.dedupeKey);
+    expect(sqlPayloadOf(first.insertedOutbox[0]?.payload)).toMatchObject({ notificationId: null });
   });
 
   it('thiếu cặp nội dung ngoài tối thiểu hoá ở môi trường test: ném lỗi messaging.external_minimization_required như phía API', async () => {
