@@ -41,10 +41,6 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify tsconfig files contain no comments
-        run: |
-          node scripts/verify-tsconfig-no-comments.mjs --self-test
-          node scripts/verify-tsconfig-no-comments.mjs
       - name: Cache Turbo tasks
         uses: actions/cache@v6
         with:

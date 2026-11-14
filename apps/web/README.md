@@ -62,4 +62,4 @@ Giáo viên chọn rõ một phiên bản, khoá có quyền quản hoạt độ
 
 ## Đề chung nhiều trung tâm (issue #15)
 
-Trang **Đề của tôi** cho quản trị trung tâm gửi đề sẵn sàng lên hệ thống. Trang **Đề thi hệ thống** hiển thị hàng chờ duyệt theo quyền và cho giáo viên chọn phiên bản đã duyệt, khoá học, mục, nhóm và lịch để giao trực tiếp. Các đợt giao và bài làm của từng trung tâm tách biệt. Xem [hướng dẫn đề chung](../../docs/system-shared-exam-assignments.md).
+Trang **Đề của tôi** cho quản trị trung tâm gửi đề sẵn sàng lên hệ thống. Trang **Đề thi hệ thống** hiển thị hàng chờ duyệt theo quyền và cho giáo viên chọn phiên bản đã duyệt, khoá học, mục, nhóm và lịch để giao trực tiếp. Các đợt giao và bài làm của từng trung tâm tách biệt.

@@ -9,19 +9,18 @@ Code và cấu hình thực thi là nguồn sự thật duy nhất về hành vi
 1. `README.md` ở thư mục gốc — cấu trúc repo, cách chạy, quy ước chung và định nghĩa kiểm chứng.
 2. `README.md` của package — quyết định nghiệp vụ còn hiệu lực của package đó.
 3. `AGENTS.md` của package — luật làm việc riêng của package đó.
-4. Tài liệu còn giữ trong thư mục `docs/` của repo — gồm các quyết định kiến trúc đã được ghi thành văn bản trong repo.
-5. Issue đặc tả của việc đang làm — bối cảnh, phạm vi, quyết định liên quan (viết trọn vẹn trong issue) và tiêu chí nghiệm thu.
+4. Issue đặc tả của việc đang làm — bối cảnh, phạm vi, quyết định liên quan (viết trọn vẹn trong issue) và tiêu chí nghiệm thu.
 
 ## Cổng bắt buộc trước khi đụng code
 
 1. **Ponytail mức `full` cho mọi Agent:** trước khi viết, sửa, tái cấu trúc hoặc review code, **mỗi Agent** phải đọc `.agents/skills/ponytail/SKILL.md` và áp dụng đầy đủ mức **`full`** trong lượt làm việc của chính mình. Dùng cơ chế kích hoạt skill của môi trường nếu có; nếu không, đọc và thực thi trực tiếp nội dung skill, **không giả định có lệnh `/ponytail`**. Agent reviewer cũng phải tự áp dụng, không kế thừa lời xác nhận của Agent code. Không tự spawn Agent để thực hiện bước này. Nếu không truy cập được skill, dừng trước khi đụng code và bàn giao trở ngại, không tự nhận đã áp dụng.
-2. **Docs và pattern là điều kiện tiên quyết:** trước khi code, Agent bắt buộc đọc `AGENTS.md`, `README.md` áp dụng cho phạm vi công việc; kiểm tra cách triển khai đang được sử dụng trong repo; và đối chiếu tài liệu chính thức đúng phiên bản của framework, thư viện liên quan. Phải tuân thủ pattern đã được xác minh, không tự nghĩ ra cách triển khai khác.
-3. **Chưa xác minh thì chưa code:** nếu thiếu tài liệu cần thiết, pattern mâu thuẫn hoặc không xác định được phiên bản/hợp đồng thực tế, phải làm rõ hoặc bàn giao trở ngại **trước khi viết code liên quan**, không bịa nguồn và không bỏ qua cổng này vì tiến độ. Trong PR/bàn giao phải ghi tài liệu và pattern đã đối chiếu, phần áp dụng, ngoại lệ được chấp thuận và điều chưa kiểm chứng; reviewer phải kiểm tra bằng chứng này. Yêu cầu này không buộc mọi Agent có cùng CLI, công cụ truy cập hay quyền GitHub.
+2. **Kiểm tra đúng phạm vi:** đọc `AGENTS.md` gốc và của package sẽ sửa; đối chiếu code, test và cấu hình thực tế. Tham khảo `README.md` liên quan khi cần thông tin về cách chạy hoặc hợp đồng của package. Chỉ tra tài liệu chính thức của thư viện khi có điểm kỹ thuật chưa rõ; không bắt buộc đọc tài liệu để làm những thay đổi đơn giản.
+3. **Không suy đoán:** nếu thiếu thông tin ảnh hưởng đến tính đúng đắn, tìm bằng chứng trong code/test hoặc tài liệu chính thức có liên quan; nếu vẫn không xác minh được thì nêu rõ giới hạn. Không tự dựng yêu cầu, hợp đồng API hay kết quả kiểm chứng.
 
 ## Quy tắc làm việc chung
 
-- **Không được bỏ qua docs và pattern:** cổng bắt buộc ở mục trên áp dụng cho mọi thay đổi có liên quan package/framework bên ngoài (ví dụ Vitest, NestJS, Kysely, ESLint), kể cả chỉnh cấu hình, test, nâng version hoặc tích hợp API. Phải ưu tiên cơ chế được hỗ trợ chính thức, tuân thủ convention của repo và nêu căn cứ trong PR. Không tự phỏng đoán hành vi thư viện hoặc áp đặt pattern quen thuộc từ hệ thống khác.
-- **Không sinh script hạ tầng nếu framework đã hỗ trợ:** trước khi tạo file `.js`/`.mjs`/`.sh`/`.sql` phục vụ bootstrap, build, proxy, CI hoặc devcontainer, phải đối chiếu tài liệu chính thức của công cụ hiện tại (pnpm, Docker Compose/PostgreSQL, Dev Containers, Nest CLI, React Router, Kysely, Vitest). Ưu tiên cấu hình khai báo và CLI có sẵn. Chỉ viết code điều phối riêng khi có hành vi thật sự chưa được hỗ trợ và có kiểm chứng tương đương; ghi rõ trách nhiệm và thời điểm chạy của nó. Không coi việc chuyển đoạn shell sang script mới là dọn sạch code.
+- **Ưu tiên pattern sẵn có:** tái sử dụng cơ chế và convention đang hoạt động trong repo; khi thay đổi cách dùng framework hoặc thư viện, kiểm tra API của đúng phiên bản trước khi áp dụng.
+- **Tránh script thừa:** ưu tiên lệnh và cấu hình có sẵn của pnpm, Docker, NestJS, React Router, Kysely, Vitest. Không tạo script kiểm tra quy ước đơn giản hoặc wrapper chỉ để gọi lại lệnh có sẵn; script mới phải giải quyết một nhu cầu thực tế chưa có cách đơn giản hơn.
 - **Thay đổi tối thiểu theo đúng task:** mọi thay đổi phải là tối thiểu cần thiết cho task: không mở rộng phạm vi, không refactor tiện tay, không đụng code không liên quan. Phát hiện ngoài phạm vi thì ghi lại và báo cáo, không đưa vào thay đổi.
 
 ## Chuẩn ngôn ngữ
@@ -38,11 +37,11 @@ Code và cấu hình thực thi là nguồn sự thật duy nhất về hành vi
 
 ## Quy trình tạo Issue và PR
 
-Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nhánh, đặt tên branch, tạo issue, tạo PR, chuẩn tiêu đề và commit, đóng issue, review và merge, vòng đời label. Khi repo được tạo lại từ đầu, toàn bộ quy trình được dựng lại theo đúng chương này.
+Quy trình áp dụng cho công việc có issue/PR. Khi người dùng yêu cầu trực tiếp thao tác dọn dẹp trong checkout hiện tại, phải giữ nguyên các thay đổi đang có và không tự commit hoặc push.
 
 ### Worktree bắt buộc khi xử lý Issue
 
-1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/` (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác. Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code trong worktree gốc đang checkout `main`; chỉ được dùng worktree gốc để quản lý Git worktree.
+1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/` (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác. Với công việc theo issue/PR, không sửa code hoặc tạo commit trong worktree gốc đang checkout `main`; ngoại lệ là thao tác dọn dẹp trực tiếp tại checkout hiện tại khi người dùng yêu cầu.
 2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy `git status --short` và `git worktree list` trước khi tạo worktree. Tạo từ `main` đã đồng bộ với `origin/main` bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> main`. Quy tắc tên nhánh vẫn theo mục "Đặt tên branch" ở dưới. **Ngay sau mỗi lần tạo worktree, bắt buộc sao chép cả hai file `.env` local từ worktree gốc sang worktree mới** trước khi chạy install, build, migrate, test hoặc dev. Chạy từ thư mục gốc repo (thay `<worktree>` bằng tên thư mục vừa tạo):
 
    ```bash
@@ -68,7 +67,7 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 1. **Issue là bản đặc tả tự chứa.** Mọi issue phải chứa đủ: bối cảnh và vấn đề, mục tiêu, phạm vi (làm / không làm), chi tiết việc cần làm, quyết định liên quan và mục `## Nghiệm thu` gồm các tiêu chí kiểm chứng được. Người đọc chỉ có repo này phải hiểu, thi công và kiểm chứng được toàn bộ việc chỉ từ nội dung issue. Tương tự, mọi PR phải sao chép từng tiêu chí trong mục Nghiệm thu của issue liên kết, ghi cách đáp ứng kèm bằng chứng cụ thể, và ghi rõ kiểm chứng đã chạy (lệnh, kết quả, trạng thái CI lấy từ log thật).
 2. **Quyết định viết trọn vẹn tại nơi sử dụng.** Khi một issue hoặc PR dựa trên một quyết định đã có, nội dung đầy đủ của quyết định đó phải được viết lại ngay trong văn bản đang dùng nó, trình bày dưới dạng yêu cầu/sự kiện kỹ thuật.
 3. **Cấm trích dẫn quyết định mơ hồ.** Không viết các câu dạng "theo quyết định đã chốt", "như đã thống nhất", "theo chỉ đạo trước đó" hoặc trích kèm mốc thời gian của một cuộc trao đổi/sổ ghi nằm ngoài repo thay cho nội dung quyết định.
-4. **Cấm dẫn file ngoài repo làm căn cứ.** Không viện dẫn sổ quyết định, hồ sơ nghiên cứu, ghi chú hay bất kỳ tệp nào nằm ngoài repo này — kể cả khi tệp đó tồn tại trên máy của người viết — làm căn cứ cho đặc tả, phạm vi hay tiêu chí nghiệm thu. Tài liệu trong repo (README, AGENTS.md, tài liệu trong `docs/`) được dẫn theo đường dẫn trong repo như bình thường.
+4. **Căn cứ phải kiểm chứng được.** Issue và PR chỉ dẫn đường dẫn còn tồn tại trong repo hoặc nguồn chính thức có thể truy cập. Không viện dẫn tệp đã xóa hay ghi chú riêng bên ngoài repo làm căn cứ thay cho yêu cầu và tiêu chí nghiệm thu.
 5. **Ngôn ngữ và văn phong.** Code và cấu hình tuân theo mục "Chuẩn ngôn ngữ" của tài liệu này: code bằng tiếng Anh, không viết comment trong code; tài liệu, issue, PR, commit và trao đổi trên GitHub bằng tiếng Việt. Mọi văn bản thuộc codebase dùng văn phong kỹ thuật trung tính. Tuyệt đối không dùng danh xưng hay cách xưng hô nội bộ trong văn bản của codebase, và không ghi quyết định thuộc về cá nhân nào — quyết định luôn được trình bày là yêu cầu kỹ thuật.
 6. **Mẫu là cơ chế thực thi chuẩn.** Issue mở qua một mẫu trong `.github/ISSUE_TEMPLATE/`; PR mở theo `.github/pull_request_template.md`. Issue trống (không theo mẫu) bị tắt có chủ đích trong `.github/ISSUE_TEMPLATE/config.yml` để mọi issue đều đi qua một mẫu có đủ các mục bắt buộc.
 
@@ -83,7 +82,7 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 1. Dùng Issue template của repo (mẫu tính năng/nghiệp vụ hoặc mẫu báo lỗi trong `.github/ISSUE_TEMPLATE/`); issue trống bị tắt, không mở issue ngoài mẫu.
 2. Thân issue tự chứa đầy đủ: bối cảnh và vấn đề; mục tiêu; phạm vi (làm / không làm); chi tiết việc cần làm kèm task list các việc con ngay trong issue; quyết định liên quan viết lại trọn vẹn; mục `## Nghiệm thu` dạng checklist kiểm chứng được; phụ thuộc và thứ tự.
 3. Một issue là một đơn vị việc mạch lạc. Việc quá lớn cho một PR thì tách thành nhiều issue (mỗi issue một PR), không tách thành nhiều PR cho một issue. Khi tách, các issue con (child issue) phải được gắn vào issue cha bằng tính năng sub-issues native của GitHub ngay khi tạo — cấm chỉ nhắc tới nhau bằng chữ trong thân issue. Việc con nằm gọn trong một issue thì theo dõi bằng task list trong thân issue và thân PR, không tách thành issue riêng.
-4. **Nhãn khi tạo issue.** Gắn nhãn loại và trạng thái triage ban đầu theo `docs/agents/triage-labels.md`. Tiến độ thi công và review được theo dõi trong issue và PR.
+4. **Nhãn khi tạo issue.** Dùng nhãn loại và trạng thái hiện có trên GitHub; không giả định có file quy định nhãn riêng. Theo dõi tiến độ và review ngay trong issue và PR.
 5. **Một issue = một feat.** Việc phát sinh thuộc cùng feat thì ghi vào đúng issue của feat đó (mở lại nếu đã đóng), không xé issue/PR mới.
 
 ### Chuẩn tiêu đề
@@ -135,17 +134,3 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 1. Issue được triển khai chỉ đóng bằng cơ chế tự đóng qua dòng `Closes #<số issue>` trong thân PR khi PR merge. Cấm đóng tay issue đang triển khai trước khi PR của nó merge. Ngoại lệ: issue có kết luận triage `wontfix` được đóng kèm lý do sau khi người duy trì xác nhận kết luận, không cần PR triển khai.
 2. Sau khi merge, phải kiểm chứng issue đã thật sự đóng. Nếu PR đã merge mà issue chưa đóng (sai từ khoá đóng hoặc sai nhánh đích), đóng issue kèm comment dẫn tới commit merge.
 3. Issue cha chỉ đóng khi child issue cuối cùng về đích: PR cuối cùng ghi `Closes` cả child issue của nó lẫn issue cha.
-
-## Agent skills
-
-### Theo dõi issue
-
-Khi đọc, tạo hoặc cập nhật issue trên GitHub, đọc `docs/agents/issue-tracker.md`.
-
-### Nhãn triage
-
-Khi phân loại issue, dùng nhãn triage mặc định theo `docs/agents/triage-labels.md`.
-
-### Tài liệu miền nghiệp vụ
-
-Trước khi khảo sát mã nguồn, đọc `docs/agents/domain.md`: một `CONTEXT.md` và `docs/adr/` ở gốc repo (single-context).
