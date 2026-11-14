@@ -1,0 +1,52 @@
+model
+  schema 1.1
+
+type user
+
+type organization
+  relations
+    define member: [user]
+
+type namespace
+  relations
+    define owner: [user]
+    define organization: [organization]
+    define eligible: owner or member from organization
+
+type project
+  relations
+    define namespace: [namespace]
+    define viewer: [user]
+    define contributor: [user]
+    define reviewer: [user]
+    define manager: [user]
+    define can_view: (viewer or contributor or reviewer or manager) and eligible from namespace
+    define can_create_question: (contributor or manager) and eligible from namespace
+    define can_create_exam: (contributor or manager) and eligible from namespace
+    define can_create_matrix: (contributor or manager) and eligible from namespace
+    define can_approve: (reviewer or manager) and eligible from namespace
+    define can_share_external: manager and eligible from namespace
+
+type question
+  relations
+    define project: [project]
+    define author: [user]
+    define can_view: can_view from project
+    define can_edit: author and can_view from project
+    define can_approve: can_approve from project
+
+type exam
+  relations
+    define project: [project]
+    define author: [user]
+    define can_view: can_view from project
+    define can_edit: author and can_view from project
+    define can_approve: can_approve from project
+
+type matrix
+  relations
+    define project: [project]
+    define author: [user]
+    define can_view: can_view from project
+    define can_edit: author and can_view from project
+    define can_approve: can_approve from project

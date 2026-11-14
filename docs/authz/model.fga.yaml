@@ -1,0 +1,112 @@
+name: "Giao khoa namespace authorization baseline 0.1.0"
+model_file: ./model.fga
+
+tuples:
+  - user: user:an
+    relation: member
+    object: organization:center_a
+  - user: user:chi
+    relation: member
+    object: organization:center_b
+  - user: user:an
+    relation: owner
+    object: namespace:personal_an
+  - user: organization:center_a
+    relation: organization
+    object: namespace:center_a
+  - user: organization:center_b
+    relation: organization
+    object: namespace:center_b
+  - user: namespace:center_a
+    relation: namespace
+    object: project:math_a
+  - user: namespace:center_b
+    relation: namespace
+    object: project:math_b
+  - user: namespace:personal_an
+    relation: namespace
+    object: project:personal_an
+  - user: user:an
+    relation: contributor
+    object: project:math_a
+  - user: user:an
+    relation: contributor
+    object: project:math_b
+  - user: user:chi
+    relation: contributor
+    object: project:math_b
+  - user: user:an
+    relation: viewer
+    object: project:personal_an
+  - user: project:math_a
+    relation: project
+    object: exam:exam_a
+  - user: user:an
+    relation: author
+    object: exam:exam_a
+
+tests:
+  - name: "Người dùng thường chỉ tạo học liệu tại trung tâm được cấp quyền"
+    check:
+      - user: user:an
+        object: project:math_a
+        assertions:
+          can_view: true
+          can_create_question: true
+          can_create_exam: true
+          can_create_matrix: true
+          can_approve: false
+          can_share_external: false
+      - user: user:an
+        object: project:personal_an
+        assertions:
+          can_view: true
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+      - user: user:an
+        object: project:math_b
+        assertions:
+          can_view: false
+          can_create_question: false
+          can_create_exam: false
+          can_create_matrix: false
+      - user: user:chi
+        object: project:math_b
+        assertions:
+          can_view: true
+          can_create_exam: true
+          can_approve: false
+      - user: user:ngoai
+        object: project:math_a
+        assertions:
+          can_view: false
+          can_create_exam: false
+  - name: "Quyền với đề phụ thuộc project và người tạo"
+    check:
+      - user: user:an
+        object: exam:exam_a
+        assertions:
+          can_view: true
+          can_edit: true
+          can_approve: false
+      - user: user:chi
+        object: exam:exam_a
+        assertions:
+          can_view: false
+          can_edit: false
+          can_approve: false
+  - name: "Thu hồi membership chặn grant cũ ở project"
+    tuples:
+      - user: user:an
+        relation: contributor
+        object: project:orphan_project
+      - user: namespace:center_b
+        relation: namespace
+        object: project:orphan_project
+    check:
+      - user: user:an
+        object: project:orphan_project
+        assertions:
+          can_view: false
+          can_create_exam: false
