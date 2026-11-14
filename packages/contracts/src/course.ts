@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { namedEntityInputFields } from './common.js';
 import { uuidIdSchema } from './ids.js';
 import { courseSectionFrameSchema } from './curriculum.js';
 import { courseSectionBookFrameSchema } from './books.js';
@@ -106,21 +107,23 @@ export const courseContentSchema = z.object({
 });
 export type CourseContent = z.infer<typeof courseContentSchema>;
 
-export const courseGroupSchema = z.object({
-  id: uuidIdSchema,
-  courseId: uuidIdSchema,
+const namedEntityFields = {
   name: z.string(),
   idNumber: z.string(),
   description: z.string(),
+};
+
+export const courseGroupSchema = z.object({
+  id: uuidIdSchema,
+  courseId: uuidIdSchema,
+  ...namedEntityFields,
   enrolmentKey: z.string().nullable().optional(),
 });
 export type CourseGroup = z.infer<typeof courseGroupSchema>;
 
 export const cohortSchema = z.object({
   id: uuidIdSchema,
-  name: z.string(),
-  idNumber: z.string(),
-  description: z.string(),
+  ...namedEntityFields,
   contextId: uuidIdSchema,
   visible: z.boolean(),
 });
@@ -129,9 +132,7 @@ export type Cohort = z.infer<typeof cohortSchema>;
 export const courseGroupingSchema = z.object({
   id: uuidIdSchema,
   courseId: uuidIdSchema,
-  name: z.string(),
-  idNumber: z.string(),
-  description: z.string(),
+  ...namedEntityFields,
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
@@ -179,9 +180,7 @@ export const availabilityOps = ['&', '|', '!&', '!|'] as const;
 
 
 export const createCourseCategorySchema = z.strictObject({
-  name: z.string().min(1),
-  idNumber: z.string().optional(),
-  description: z.string().optional(),
+  ...namedEntityInputFields,
   parent: uuidIdSchema.optional(),
   visible: z.boolean().optional(),
 });
@@ -189,6 +188,13 @@ export type CreateCourseCategory = z.infer<typeof createCourseCategorySchema>;
 
 export const updateCourseCategorySchema = createCourseCategorySchema.partial();
 export type UpdateCourseCategory = z.infer<typeof updateCourseCategorySchema>;
+
+const courseGroupSubjectFields = {
+  groupMode: z.number().int().optional(),
+  groupModeForce: z.boolean().optional(),
+  subjectId: uuidIdSchema.nullable().optional(),
+  grade: z.number().int().min(1).max(12).nullable().optional(),
+};
 
 export const createCourseSchema = z.strictObject({
   fullName: z.string().min(1),
@@ -200,10 +206,7 @@ export const createCourseSchema = z.strictObject({
   visible: z.boolean().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  groupMode: z.number().int().optional(),
-  groupModeForce: z.boolean().optional(),
-  subjectId: uuidIdSchema.nullable().optional(),
-  grade: z.number().int().min(1).max(12).nullable().optional(),
+  ...courseGroupSubjectFields,
   classId: uuidIdSchema.nullable().optional(),
   formatOptions: z.record(z.string(), z.string()).optional(),
   customFields: z.record(z.string(), z.string()).optional(),
@@ -220,10 +223,7 @@ export const updateCourseSchema = z.strictObject({
   visible: z.boolean().optional(),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
-  groupMode: z.number().int().optional(),
-  groupModeForce: z.boolean().optional(),
-  subjectId: uuidIdSchema.nullable().optional(),
-  grade: z.number().int().min(1).max(12).nullable().optional(),
+  ...courseGroupSubjectFields,
   isTemplate: z.boolean().optional(),
   formatOptions: z.record(z.string(), z.string()).optional(),
   customFields: z.record(z.string(), z.string()).optional(),
@@ -242,10 +242,7 @@ export type CreateCourseSection = z.infer<typeof createCourseSectionSchema>;
 export const updateCourseSectionSchema = createCourseSectionSchema.partial();
 export type UpdateCourseSection = z.infer<typeof updateCourseSectionSchema>;
 
-export const createCourseModuleSchema = z.strictObject({
-  sectionId: uuidIdSchema,
-  component: z.string().min(1),
-  instanceId: uuidIdSchema.optional(),
+const courseModuleSettingsFields = {
   name: z.string().optional(),
   visible: z.boolean().optional(),
   groupMode: z.number().int().optional(),
@@ -254,20 +251,20 @@ export const createCourseModuleSchema = z.strictObject({
   completionView: z.boolean().optional(),
   completionUseGrade: z.boolean().optional(),
   completionManual: z.boolean().optional(),
+};
+
+export const createCourseModuleSchema = z.strictObject({
+  sectionId: uuidIdSchema,
+  component: z.string().min(1),
+  instanceId: uuidIdSchema.optional(),
+  ...courseModuleSettingsFields,
   completionExpected: z.string().optional(),
   openAt: z.string().nullable().optional(),
 });
 export type CreateCourseModule = z.infer<typeof createCourseModuleSchema>;
 
 export const updateCourseModuleSchema = z.strictObject({
-  name: z.string().optional(),
-  visible: z.boolean().optional(),
-  groupMode: z.number().int().optional(),
-  availability: z.unknown().optional(),
-  completion: z.number().int().optional(),
-  completionView: z.boolean().optional(),
-  completionUseGrade: z.boolean().optional(),
-  completionManual: z.boolean().optional(),
+  ...courseModuleSettingsFields,
   completionExpected: z.string().nullable().optional(),
   openAt: z.string().nullable().optional(),
   sectionId: uuidIdSchema.optional(),
@@ -309,9 +306,7 @@ export const copyCourseContentSchema = z.strictObject({
 export type CopyCourseContent = z.infer<typeof copyCourseContentSchema>;
 
 export const createGroupSchema = z.strictObject({
-  name: z.string().min(1),
-  idNumber: z.string().optional(),
-  description: z.string().optional(),
+  ...namedEntityInputFields,
   enrolmentKey: z.string().min(1).optional(),
 });
 export type CreateGroup = z.infer<typeof createGroupSchema>;
@@ -330,9 +325,7 @@ export const groupMemberSchema = z.strictObject({
 export type GroupMember = z.infer<typeof groupMemberSchema>;
 
 export const createGroupingSchema = z.strictObject({
-  name: z.string().min(1),
-  idNumber: z.string().optional(),
-  description: z.string().optional(),
+  ...namedEntityInputFields,
 });
 export type CreateGrouping = z.infer<typeof createGroupingSchema>;
 
@@ -342,9 +335,7 @@ export const groupingGroupSchema = z.strictObject({
 export type GroupingGroup = z.infer<typeof groupingGroupSchema>;
 
 export const createCohortSchema = z.strictObject({
-  name: z.string().min(1),
-  idNumber: z.string().optional(),
-  description: z.string().optional(),
+  ...namedEntityInputFields,
   categoryId: uuidIdSchema.optional(),
   visible: z.boolean().optional(),
 });

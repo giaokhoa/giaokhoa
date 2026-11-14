@@ -5,11 +5,15 @@ export const TENANT_KINDS = ['school', 'center', 'platform'] as const;
 export const TENANT_STATUSES = ['active', 'suspended', 'archived'] as const;
 export const TENANT_MEMBER_STATUSES = ['active', 'suspended', 'ended'] as const;
 
-export const tenantSchema = z.object({
+const tenantIdentityFields = {
   id: uuidIdSchema,
   slug: z.string(),
   name: z.string(),
   kind: z.enum(TENANT_KINDS),
+};
+
+export const tenantSchema = z.object({
+  ...tenantIdentityFields,
   status: z.enum(TENANT_STATUSES),
   plan: z.string().nullable(),
   createdAt: z.string(),
@@ -53,10 +57,7 @@ export const updateTenantMemberSchema = z.strictObject({
 export type UpdateTenantMember = z.infer<typeof updateTenantMemberSchema>;
 
 export const myTenantSchema = z.object({
-  id: uuidIdSchema,
-  slug: z.string(),
-  name: z.string(),
-  kind: z.enum(TENANT_KINDS),
+  ...tenantIdentityFields,
   active: z.boolean(),
 });
 export type MyTenant = z.infer<typeof myTenantSchema>;

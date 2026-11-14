@@ -1,18 +1,15 @@
 import { z } from 'zod';
+import { courseSectionItemOutcomeSchema, datasetImportCountFields, datasetImportSchema, datasetStatusFields } from './common.js';
 import { uuidIdSchema } from './ids.js';
 
 export const BOOK_KINDS = ['textbook', 'reference', 'workbook', 'other'] as const;
 export type BookKind = (typeof BOOK_KINDS)[number];
 
-export const importBookDatasetSchema = z.strictObject({
-  datasetKey: z.string().min(1),
-});
+export const importBookDatasetSchema = datasetImportSchema;
 export type ImportBookDataset = z.infer<typeof importBookDatasetSchema>;
 
 export const bookDatasetStatusSchema = z.object({
-  datasetKey: z.string(),
-  subjectName: z.string(),
-  slug: z.string(),
+  ...datasetStatusFields,
   bookTitle: z.string(),
   grade: z.number().int(),
   totalRecords: z.number().int(),
@@ -27,11 +24,7 @@ export type BookDatasetStatus = z.infer<typeof bookDatasetStatusSchema>;
 export const bookImportResultSchema = z.object({
   datasetKey: z.string(),
   bookId: uuidIdSchema,
-  subjectId: uuidIdSchema,
-  totalRecords: z.number().int(),
-  created: z.number().int(),
-  updated: z.number().int(),
-  skipped: z.number().int(),
+  ...datasetImportCountFields,
   mappingsWritten: z.number().int(),
 });
 export type BookImportResult = z.infer<typeof bookImportResultSchema>;
@@ -95,10 +88,7 @@ export const applyBookFrameSchema = z.strictObject({
 });
 export type ApplyBookFrame = z.infer<typeof applyBookFrameSchema>;
 
-export const courseSectionBookItemOutcomeSchema = z.object({
-  outcomeId: uuidIdSchema.nullable(),
-  content: z.string(),
-});
+export const courseSectionBookItemOutcomeSchema = courseSectionItemOutcomeSchema;
 export type CourseSectionBookItemOutcome = z.infer<typeof courseSectionBookItemOutcomeSchema>;
 
 export const courseSectionBookItemSchema = z.object({

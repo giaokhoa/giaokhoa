@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reasonInputSchema, trimmedReasonInputSchema } from './common.js';
 import { uuidIdSchema } from './ids.js';
 import {
   getTrueFalseStatements,
@@ -112,11 +113,14 @@ export const questionAnswerViewSchema = z.object({
 });
 export type QuestionAnswerView = z.infer<typeof questionAnswerViewSchema>;
 
+export const statementValueSchema = z.strictObject({ statementId: z.string().min(1), value: z.boolean() });
+export type StatementValue = z.infer<typeof statementValueSchema>;
+
 export const questionSolutionSchema = z.union([
   z.strictObject({ correctAnswerId: uuidIdSchema }),
   z.strictObject({
     statements: z
-      .array(z.strictObject({ statementId: z.string().min(1), value: z.boolean() }))
+      .array(statementValueSchema)
       .min(1),
   }),
   z.strictObject({ acceptedAnswers: z.array(z.string().min(1)).min(1) }),
@@ -139,7 +143,7 @@ export const questionSolutionInputSchema = z.union([
   z.strictObject({ answer: richTextInputSchema }),
   z.strictObject({
     answers: z
-      .array(z.strictObject({ statementId: z.string().min(1), value: z.boolean() }))
+      .array(statementValueSchema)
       .min(1),
   }),
 ]);
@@ -236,41 +240,45 @@ export const markCourseSelfCompletionSchema = z.strictObject({
 });
 export type MarkCourseSelfCompletion = z.infer<typeof markCourseSelfCompletionSchema>;
 
-export const markCourseCriteriaCompletionSchema = z.strictObject({
+export const markUserCompletionSchema = z.strictObject({
   userId: uuidIdSchema,
   complete: z.boolean(),
 });
+export type MarkUserCompletion = z.infer<typeof markUserCompletionSchema>;
+
+export const markCourseCriteriaCompletionSchema = markUserCompletionSchema;
 export type MarkCourseCriteriaCompletion = z.infer<typeof markCourseCriteriaCompletionSchema>;
 
-export const markManualCompletionSchema = z.strictObject({
-  userId: uuidIdSchema,
-  complete: z.boolean(),
-});
+export const markManualCompletionSchema = markUserCompletionSchema;
 export type MarkManualCompletion = z.infer<typeof markManualCompletionSchema>;
+
+const gradeItemBoundsFields = {
+  gradeMax: z.number().optional(),
+  gradeMin: z.number().optional(),
+  gradePass: z.number().optional(),
+};
+
+const gradeItemModifierFields = {
+  multiplicator: z.number().optional(),
+  plusFactor: z.number().optional(),
+  hidden: z.boolean().optional(),
+};
 
 export const createGradeItemSchema = z.strictObject({
   itemName: z.string().min(1),
   itemType: z.string().optional(),
   cmId: uuidIdSchema.optional(),
-  gradeMax: z.number().optional(),
-  gradeMin: z.number().optional(),
-  gradePass: z.number().optional(),
+  ...gradeItemBoundsFields,
   idNumber: z.string().min(1).optional(),
-  multiplicator: z.number().optional(),
-  plusFactor: z.number().optional(),
-  hidden: z.boolean().optional(),
+  ...gradeItemModifierFields,
 });
 export type CreateGradeItem = z.infer<typeof createGradeItemSchema>;
 
 export const updateGradeItemSchema = z.strictObject({
   itemName: z.string().optional(),
-  gradeMax: z.number().optional(),
-  gradeMin: z.number().optional(),
-  gradePass: z.number().optional(),
+  ...gradeItemBoundsFields,
   idNumber: z.string().min(1).nullable().optional(),
-  multiplicator: z.number().optional(),
-  plusFactor: z.number().optional(),
-  hidden: z.boolean().optional(),
+  ...gradeItemModifierFields,
   locked: z.boolean().optional(),
 });
 export type UpdateGradeItem = z.infer<typeof updateGradeItemSchema>;
@@ -567,6 +575,12 @@ export const quizSlotViewSchema = z.object({
 });
 export type QuizSlotView = z.infer<typeof quizSlotViewSchema>;
 
+const quizTimeWindowFields = {
+  timeOpen: z.string().nullable(),
+  timeClose: z.string().nullable(),
+  timeLimitSeconds: z.number().int().nullable(),
+};
+
 export const quizViewSchema = z.object({
   id: uuidIdSchema,
   courseId: uuidIdSchema,
@@ -574,9 +588,7 @@ export const quizViewSchema = z.object({
   targetGroupId: uuidIdSchema.nullable(),
   name: z.string(),
   intro: z.string(),
-  timeOpen: z.string().nullable(),
-  timeClose: z.string().nullable(),
-  timeLimitSeconds: z.number().int().nullable(),
+  ...quizTimeWindowFields,
   attemptsAllowed: z.number().int(),
   gradeMethod: z.enum(QUIZ_GRADE_METHODS),
   grade: z.number(),
@@ -688,34 +700,31 @@ export const examPinOverrideViewSchema = z.object({
   groupName: z.string().nullable(),
   userId: uuidIdSchema.nullable(),
   userName: z.string().nullable(),
-  timeOpen: z.string().nullable(),
-  timeClose: z.string().nullable(),
-  timeLimitSeconds: z.number().int().nullable(),
+  ...quizTimeWindowFields,
   attempts: z.number().int().nullable(),
   hasPassword: z.boolean(),
   reason: z.string().nullable(),
 });
 export type ExamPinOverrideView = z.infer<typeof examPinOverrideViewSchema>;
 
-export const createExamPinOverrideSchema = z.strictObject({
-  groupId: uuidIdSchema.optional(),
-  userId: uuidIdSchema.optional(),
+const examPinOverrideFields = {
   timeOpen: z.string().nullable().optional(),
   timeClose: z.string().nullable().optional(),
   timeLimitSeconds: z.number().int().positive().nullable().optional(),
   attempts: z.number().int().min(0).nullable().optional(),
   password: z.string().min(1).nullable().optional(),
   reason: z.string().min(1).nullable().optional(),
+};
+
+export const createExamPinOverrideSchema = z.strictObject({
+  groupId: uuidIdSchema.optional(),
+  userId: uuidIdSchema.optional(),
+  ...examPinOverrideFields,
 });
 export type CreateExamPinOverride = z.infer<typeof createExamPinOverrideSchema>;
 
 export const updateExamPinOverrideSchema = z.strictObject({
-  timeOpen: z.string().nullable().optional(),
-  timeClose: z.string().nullable().optional(),
-  timeLimitSeconds: z.number().int().positive().nullable().optional(),
-  attempts: z.number().int().min(0).nullable().optional(),
-  password: z.string().min(1).nullable().optional(),
-  reason: z.string().min(1).nullable().optional(),
+  ...examPinOverrideFields,
 });
 export type UpdateExamPinOverride = z.infer<typeof updateExamPinOverrideSchema>;
 
@@ -802,10 +811,7 @@ export const examMatrixViewSchema = z.object({
 });
 export type ExamMatrixView = z.infer<typeof examMatrixViewSchema>;
 
-export const createExamMatrixSchema = z.strictObject({
-  name: z.string().min(1),
-  subjectId: uuidIdSchema,
-  curriculumId: uuidIdSchema,
+const examMatrixSettingsFields = {
   targetFormPercents: z.record(z.string(), z.number().min(0).max(100)).nullable().optional(),
   targetLevelPercents: z.record(z.string(), z.number().min(0).max(100)).nullable().optional(),
   levelSet: z.enum(['three', 'four']).optional(),
@@ -815,23 +821,28 @@ export const createExamMatrixSchema = z.strictObject({
   bankId: uuidIdSchema.nullable().optional(),
   status: z.enum(['draft', 'ready', 'hidden']).optional(),
   isTemplate: z.boolean().optional(),
+};
+
+export const createExamMatrixSchema = z.strictObject({
+  name: z.string().min(1),
+  subjectId: uuidIdSchema,
+  curriculumId: uuidIdSchema,
+  ...examMatrixSettingsFields,
   derivedFromMatrixId: uuidIdSchema.nullable().optional(),
 });
 export type CreateExamMatrix = z.infer<typeof createExamMatrixSchema>;
 
 export const updateExamMatrixSchema = z.strictObject({
   name: z.string().min(1).optional(),
-  targetFormPercents: z.record(z.string(), z.number().min(0).max(100)).nullable().optional(),
-  targetLevelPercents: z.record(z.string(), z.number().min(0).max(100)).nullable().optional(),
-  levelSet: z.enum(['three', 'four']).optional(),
-  scopeNote: z.string().nullable().optional(),
-  scopeNodeIds: z.array(uuidIdSchema).nullable().optional(),
-  totalScore: z.number().positive().optional(),
-  bankId: uuidIdSchema.nullable().optional(),
-  status: z.enum(['draft', 'ready', 'hidden']).optional(),
-  isTemplate: z.boolean().optional(),
+  ...examMatrixSettingsFields,
 });
 export type UpdateExamMatrix = z.infer<typeof updateExamMatrixSchema>;
+
+const examMatrixCellOptionalFields = {
+  minutes: z.number().int().positive().nullable().optional(),
+  tfScale: tfScaleSchema.nullable().optional(),
+  position: z.number().int().positive().optional(),
+};
 
 export const createExamMatrixCellSchema = z.strictObject({
   curriculumNodeId: uuidIdSchema,
@@ -839,18 +850,14 @@ export const createExamMatrixCellSchema = z.strictObject({
   qtype: z.enum(['multichoice', 'truefalse', 'shortanswer', 'essay']),
   questionCount: z.number().int().positive(),
   cellScore: z.number().positive(),
-  minutes: z.number().int().positive().nullable().optional(),
-  tfScale: tfScaleSchema.nullable().optional(),
-  position: z.number().int().positive().optional(),
+  ...examMatrixCellOptionalFields,
 });
 export type CreateExamMatrixCell = z.infer<typeof createExamMatrixCellSchema>;
 
 export const updateExamMatrixCellSchema = z.strictObject({
   questionCount: z.number().int().positive().optional(),
   cellScore: z.number().positive().optional(),
-  minutes: z.number().int().positive().nullable().optional(),
-  tfScale: tfScaleSchema.nullable().optional(),
-  position: z.number().int().positive().optional(),
+  ...examMatrixCellOptionalFields,
 });
 export type UpdateExamMatrixCell = z.infer<typeof updateExamMatrixCellSchema>;
 
@@ -866,12 +873,12 @@ export const createMatrixContributionSchema = z.strictObject({
 });
 export type CreateMatrixContribution = z.infer<typeof createMatrixContributionSchema>;
 
-export const approveMatrixContributionSchema = z.strictObject({});
+const emptyBodySchema = z.strictObject({});
+
+export const approveMatrixContributionSchema = emptyBodySchema;
 export type ApproveMatrixContribution = z.infer<typeof approveMatrixContributionSchema>;
 
-export const rejectMatrixContributionSchema = z.strictObject({
-  reason: z.string().min(1),
-});
+export const rejectMatrixContributionSchema = reasonInputSchema;
 export type RejectMatrixContribution = z.infer<typeof rejectMatrixContributionSchema>;
 
 export const examMatrixContributionViewSchema = z.object({
@@ -893,11 +900,15 @@ export const examMatrixContributionViewSchema = z.object({
 });
 export type ExamMatrixContributionView = z.infer<typeof examMatrixContributionViewSchema>;
 
-export const matrixCellAvailabilitySchema = z.object({
-  cellId: uuidIdSchema,
+const cellAvailabilityCountFields = {
   required: z.number().int(),
   available: z.number().int(),
   deficit: z.number().int(),
+};
+
+export const matrixCellAvailabilitySchema = z.object({
+  cellId: uuidIdSchema,
+  ...cellAvailabilityCountFields,
 });
 export type MatrixCellAvailability = z.infer<typeof matrixCellAvailabilitySchema>;
 
@@ -913,22 +924,22 @@ export const matrixImportIssueSchema = z.object({
 });
 export type MatrixImportIssue = z.infer<typeof matrixImportIssueSchema>;
 
-export const matrixImportPreviewCellSchema = z.object({
+const matrixCellKeyFields = {
   curriculumNodeId: uuidIdSchema,
   cognitiveLevel: z.enum(COGNITIVE_LEVELS),
   qtype: z.enum(MATRIX_QTYPES),
+};
+
+export const matrixImportPreviewCellSchema = z.object({
+  ...matrixCellKeyFields,
   questionCount: z.number().int(),
   cellScore: z.number(),
 });
 export type MatrixImportPreviewCell = z.infer<typeof matrixImportPreviewCellSchema>;
 
 export const matrixImportCellAvailabilitySchema = z.object({
-  curriculumNodeId: uuidIdSchema,
-  cognitiveLevel: z.enum(COGNITIVE_LEVELS),
-  qtype: z.enum(MATRIX_QTYPES),
-  required: z.number().int(),
-  available: z.number().int(),
-  deficit: z.number().int(),
+  ...matrixCellKeyFields,
+  ...cellAvailabilityCountFields,
 });
 export type MatrixImportCellAvailability = z.infer<typeof matrixImportCellAvailabilitySchema>;
 
@@ -1039,10 +1050,14 @@ export const assignSubmissionFileViewSchema = z.object({
 });
 export type AssignSubmissionFileView = z.infer<typeof assignSubmissionFileViewSchema>;
 
-export const assignGradeViewSchema = z.object({
+const assignGradeResultFields = {
   grade: z.number().nullable(),
   level: z.enum(ASSIGN_GRADE_LEVELS).nullable(),
   feedback: z.string().nullable(),
+};
+
+export const assignGradeViewSchema = z.object({
+  ...assignGradeResultFields,
   feedbackProgress: z.string().nullable(),
   feedbackStrengths: z.string().nullable(),
   feedbackWeaknesses: z.string().nullable(),
@@ -1054,6 +1069,12 @@ export const assignGradeViewSchema = z.object({
 });
 export type AssignGradeView = z.infer<typeof assignGradeViewSchema>;
 
+export const pointSchema = z.object({ x: z.number(), y: z.number() });
+export type Point = z.infer<typeof pointSchema>;
+
+export const normalizedPointSchema = z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) });
+export type NormalizedPoint = z.infer<typeof normalizedPointSchema>;
+
 export const assignAnnotationViewSchema = z.object({
   id: uuidIdSchema,
   submissionId: uuidIdSchema,
@@ -1064,7 +1085,7 @@ export const assignAnnotationViewSchema = z.object({
   kind: z.enum(ASSIGN_ANNOTATION_KINDS),
   color: z.string().nullable(),
   text: z.string().nullable(),
-  points: z.array(z.object({ x: z.number(), y: z.number() })).nullable(),
+  points: z.array(pointSchema).nullable(),
   authorId: uuidIdSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -1126,8 +1147,7 @@ export const assignFeedbackMessageViewSchema = z.object({
 });
 export type AssignFeedbackMessageView = z.infer<typeof assignFeedbackMessageViewSchema>;
 
-export const assignOwnSubmissionViewSchema = z.object({
-  submissionId: uuidIdSchema.nullable(),
+const assignSubmissionCoreFields = {
   status: z.enum(ASSIGN_SUBMISSION_STATUSES),
   attemptNumber: z.number().int(),
   submittedAt: z.string().nullable(),
@@ -1136,6 +1156,11 @@ export const assignOwnSubmissionViewSchema = z.object({
   grade: assignGradeViewSchema.nullable(),
   annotations: z.array(assignAnnotationViewSchema),
   rubricEvaluations: z.array(assignRubricEvaluationViewSchema),
+};
+
+export const assignOwnSubmissionViewSchema = z.object({
+  submissionId: uuidIdSchema.nullable(),
+  ...assignSubmissionCoreFields,
   feedbackMessages: z.array(assignFeedbackMessageViewSchema),
 });
 export type AssignOwnSubmissionView = z.infer<typeof assignOwnSubmissionViewSchema>;
@@ -1159,48 +1184,38 @@ export const assignSubmissionSummarySchema = z.object({
   submittedAt: z.string().nullable(),
   late: z.boolean(),
   fileCount: z.number().int(),
-  grade: z.number().nullable(),
-  level: z.enum(ASSIGN_GRADE_LEVELS).nullable(),
-  feedback: z.string().nullable(),
+  ...assignGradeResultFields,
   gradeStatus: z.enum(['none', 'draft', 'released']),
 });
 export type AssignSubmissionSummary = z.infer<typeof assignSubmissionSummarySchema>;
 
 export const assignSubmissionDetailSchema = z.object({
   userId: uuidIdSchema,
-  status: z.enum(ASSIGN_SUBMISSION_STATUSES),
-  attemptNumber: z.number().int(),
-  submittedAt: z.string().nullable(),
-  late: z.boolean(),
-  files: z.array(assignSubmissionFileViewSchema),
-  grade: assignGradeViewSchema.nullable(),
-  annotations: z.array(assignAnnotationViewSchema),
-  rubricEvaluations: z.array(assignRubricEvaluationViewSchema),
+  ...assignSubmissionCoreFields,
   revisions: z.array(assignGradeRevisionViewSchema),
   feedbackMessages: z.array(assignFeedbackMessageViewSchema),
 });
 export type AssignSubmissionDetail = z.infer<typeof assignSubmissionDetailSchema>;
 
-export const createAssignmentSchema = z.strictObject({
-  sectionId: uuidIdSchema,
-  name: z.string().min(1),
+const assignmentSettingsFields = {
   intro: z.string().optional(),
   dueDate: z.string().nullable().optional(),
   maxFiles: z.number().int().min(1).max(50).optional(),
   acceptedFileTypes: z.string().nullable().optional(),
   grade: z.number().positive().optional(),
   resultMode: z.enum(ASSIGN_RESULT_MODES).optional(),
+};
+
+export const createAssignmentSchema = z.strictObject({
+  sectionId: uuidIdSchema,
+  name: z.string().min(1),
+  ...assignmentSettingsFields,
 });
 export type CreateAssignment = z.infer<typeof createAssignmentSchema>;
 
 export const updateAssignmentSchema = z.strictObject({
   name: z.string().min(1).optional(),
-  intro: z.string().optional(),
-  dueDate: z.string().nullable().optional(),
-  maxFiles: z.number().int().min(1).max(50).optional(),
-  acceptedFileTypes: z.string().nullable().optional(),
-  grade: z.number().positive().optional(),
-  resultMode: z.enum(ASSIGN_RESULT_MODES).optional(),
+  ...assignmentSettingsFields,
 });
 export type UpdateAssignment = z.infer<typeof updateAssignmentSchema>;
 
@@ -1234,15 +1249,19 @@ export const releaseAssignmentResultSchema = z.object({
 });
 export type ReleaseAssignmentResult = z.infer<typeof releaseAssignmentResultSchema>;
 
+const assignAnnotationContentFields = {
+  color: z.string().nullable().optional(),
+  text: z.string().nullable().optional(),
+  points: z.array(normalizedPointSchema).max(2000).nullable().optional(),
+};
+
 export const createAssignAnnotationSchema = z.strictObject({
   fileId: uuidIdSchema,
   page: z.number().int().min(1).optional(),
   x: z.number().min(0).max(100),
   y: z.number().min(0).max(100),
   kind: z.enum(ASSIGN_ANNOTATION_KINDS),
-  color: z.string().nullable().optional(),
-  text: z.string().nullable().optional(),
-  points: z.array(z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })).max(2000).nullable().optional(),
+  ...assignAnnotationContentFields,
 });
 export type CreateAssignAnnotation = z.infer<typeof createAssignAnnotationSchema>;
 
@@ -1250,9 +1269,7 @@ export const updateAssignAnnotationSchema = z.strictObject({
   page: z.number().int().min(1).optional(),
   x: z.number().min(0).max(100).optional(),
   y: z.number().min(0).max(100).optional(),
-  color: z.string().nullable().optional(),
-  text: z.string().nullable().optional(),
-  points: z.array(z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })).max(2000).nullable().optional(),
+  ...assignAnnotationContentFields,
 });
 export type UpdateAssignAnnotation = z.infer<typeof updateAssignAnnotationSchema>;
 
@@ -1321,9 +1338,7 @@ export const copyQuestionsBatchSchema = z.strictObject({
 });
 export type CopyQuestionsBatch = z.infer<typeof copyQuestionsBatchSchema>;
 
-export const withdrawQuestionSchema = z.strictObject({
-  reason: z.string().min(1),
-});
+export const withdrawQuestionSchema = reasonInputSchema;
 export type WithdrawQuestion = z.infer<typeof withdrawQuestionSchema>;
 
 export const QUIZ_SLOT_VERSION_MODES = ['pinned', 'follow_latest'] as const;
@@ -1341,9 +1356,7 @@ export const approveContributionSchema = z.strictObject({
 });
 export type ApproveContribution = z.infer<typeof approveContributionSchema>;
 
-export const rejectContributionSchema = z.strictObject({
-  reason: z.string().min(1),
-});
+export const rejectContributionSchema = reasonInputSchema;
 export type RejectContribution = z.infer<typeof rejectContributionSchema>;
 
 export const setGradePostingPolicySchema = z.strictObject({
@@ -1379,8 +1392,7 @@ export const examSlotInputSchema = z.strictObject({
 }).refine((slot) => slot.sourceDomain !== 'bank-system' || slot.sourceVersionNumber !== undefined, { path: ['sourceVersionNumber'], message: 'System question version is required' });
 export type ExamSlotInput = z.infer<typeof examSlotInputSchema>;
 
-export const createExamSchema = z.strictObject({
-  name: z.string().min(1),
+const examPaperFields = {
   subjectId: uuidIdSchema.nullable().optional(),
   grade: z.number().int().min(1).max(12).nullable().optional(),
   examKind: z.enum(EXAM_PAPER_EXAM_KINDS).nullable().optional(),
@@ -1388,19 +1400,18 @@ export const createExamSchema = z.strictObject({
   durationMinutes: z.number().int().positive().nullable().optional(),
   tfScale: z.array(z.number()).length(5).nullable().optional(),
   matrixId: uuidIdSchema.nullable().optional(),
+};
+
+export const createExamSchema = z.strictObject({
+  name: z.string().min(1),
+  ...examPaperFields,
   slots: z.array(examSlotInputSchema).max(500).optional(),
 });
 export type CreateExam = z.infer<typeof createExamSchema>;
 
 export const updateExamSchema = z.strictObject({
   name: z.string().min(1).optional(),
-  subjectId: uuidIdSchema.nullable().optional(),
-  grade: z.number().int().min(1).max(12).nullable().optional(),
-  examKind: z.enum(EXAM_PAPER_EXAM_KINDS).nullable().optional(),
-  totalScore: z.number().positive().optional(),
-  durationMinutes: z.number().int().positive().nullable().optional(),
-  tfScale: z.array(z.number()).length(5).nullable().optional(),
-  matrixId: uuidIdSchema.nullable().optional(),
+  ...examPaperFields,
 });
 export type UpdateExam = z.infer<typeof updateExamSchema>;
 
@@ -1429,23 +1440,28 @@ export const createExamContributionSchema = z.strictObject({
 });
 export type CreateExamContribution = z.infer<typeof createExamContributionSchema>;
 
-export const withdrawExamSchema = z.strictObject({
-  reason: z.string().trim().min(1),
-});
+export const withdrawExamSchema = trimmedReasonInputSchema;
 export type WithdrawExam = z.infer<typeof withdrawExamSchema>;
 
-export const withdrawExamMatrixSchema = z.strictObject({
-  reason: z.string().trim().min(1),
-});
+export const withdrawExamMatrixSchema = trimmedReasonInputSchema;
 export type WithdrawExamMatrix = z.infer<typeof withdrawExamMatrixSchema>;
 
-export const approveExamContributionSchema = z.strictObject({});
+export const approveExamContributionSchema = emptyBodySchema;
 export type ApproveExamContribution = z.infer<typeof approveExamContributionSchema>;
 
-export const rejectExamContributionSchema = z.strictObject({
-  reason: z.string().min(1),
-});
+export const rejectExamContributionSchema = reasonInputSchema;
 export type RejectExamContribution = z.infer<typeof rejectExamContributionSchema>;
+
+const examPinSettingsFields = {
+  name: z.string().min(1).optional(),
+  intro: z.string().optional(),
+  timeOpen: z.string().nullable().optional(),
+  timeClose: z.string().nullable().optional(),
+  timeLimitSeconds: z.number().int().positive().nullable().optional(),
+  attemptsAllowed: z.number().int().min(0).optional(),
+  gradeMethod: z.enum(QUIZ_GRADE_METHODS).optional(),
+  shuffleAnswers: z.boolean().optional(),
+};
 
 export const createExamPinSchema = z.strictObject({
   requestId: uuidIdSchema.optional(),
@@ -1454,14 +1470,7 @@ export const createExamPinSchema = z.strictObject({
   examVersionId: uuidIdSchema.optional(),
   sharedExamVersionId: uuidIdSchema.optional(),
   newExam: createExamSchema.optional(),
-  name: z.string().min(1).optional(),
-  intro: z.string().optional(),
-  timeOpen: z.string().nullable().optional(),
-  timeClose: z.string().nullable().optional(),
-  timeLimitSeconds: z.number().int().positive().nullable().optional(),
-  attemptsAllowed: z.number().int().min(0).optional(),
-  gradeMethod: z.enum(QUIZ_GRADE_METHODS).optional(),
-  shuffleAnswers: z.boolean().optional(),
+  ...examPinSettingsFields,
   variantCount: z.number().int().min(1).max(50).optional(),
   versionMode: z.enum(['pinned', 'float_latest_ready']).optional(),
   ...pinAccessRuleFields,
@@ -1469,14 +1478,7 @@ export const createExamPinSchema = z.strictObject({
 export type CreateExamPin = z.infer<typeof createExamPinSchema>;
 
 export const updateExamPinSchema = z.strictObject({
-  name: z.string().min(1).optional(),
-  intro: z.string().optional(),
-  timeOpen: z.string().nullable().optional(),
-  timeClose: z.string().nullable().optional(),
-  timeLimitSeconds: z.number().int().positive().nullable().optional(),
-  attemptsAllowed: z.number().int().min(0).optional(),
-  gradeMethod: z.enum(QUIZ_GRADE_METHODS).optional(),
-  shuffleAnswers: z.boolean().optional(),
+  ...examPinSettingsFields,
   examVersionId: uuidIdSchema.optional(),
   variantCount: z.number().int().min(1).max(50).optional(),
   versionMode: z.enum(['pinned', 'float_latest_ready']).optional(),
@@ -1521,15 +1523,19 @@ export const regradePinQuestionSchema = z.strictObject({
 });
 export type RegradePinQuestion = z.infer<typeof regradePinQuestionSchema>;
 
+const pinRegradeFractionFields = {
+  oldFraction: z.number().nullable(),
+  newFraction: z.number().nullable(),
+  oldSumGrades: z.number().nullable(),
+  newSumGrades: z.number().nullable(),
+};
+
 export const pinRegradeChangeSchema = z.object({
   examAttemptId: uuidIdSchema,
   userId: uuidIdSchema,
   attemptNumber: z.number().int(),
   questionAttemptId: uuidIdSchema,
-  oldFraction: z.number().nullable(),
-  newFraction: z.number().nullable(),
-  oldSumGrades: z.number().nullable(),
-  newSumGrades: z.number().nullable(),
+  ...pinRegradeFractionFields,
   changed: z.boolean(),
 });
 export type PinRegradeChange = z.infer<typeof pinRegradeChangeSchema>;
@@ -1548,10 +1554,7 @@ export const pinRegradeLogItemSchema = z.object({
   examAttemptId: uuidIdSchema,
   userId: uuidIdSchema,
   attemptNumber: z.number().int(),
-  oldFraction: z.number().nullable(),
-  newFraction: z.number().nullable(),
-  oldSumGrades: z.number().nullable(),
-  newSumGrades: z.number().nullable(),
+  ...pinRegradeFractionFields,
 });
 export type PinRegradeLogItem = z.infer<typeof pinRegradeLogItemSchema>;
 
@@ -1585,12 +1588,10 @@ export const createExamDossierSchema = z.strictObject({
 });
 export type CreateExamDossier = z.infer<typeof createExamDossierSchema>;
 
-export const approveExamDossierSchema = z.strictObject({});
+export const approveExamDossierSchema = emptyBodySchema;
 export type ApproveExamDossier = z.infer<typeof approveExamDossierSchema>;
 
-export const rejectExamDossierSchema = z.strictObject({
-  reason: z.string().trim().min(1),
-});
+export const rejectExamDossierSchema = trimmedReasonInputSchema;
 export type RejectExamDossier = z.infer<typeof rejectExamDossierSchema>;
 
 export const examDossierReviewViewSchema = z.object({
@@ -1694,7 +1695,7 @@ export type PaperQuality = z.infer<typeof paperQualitySchema>;
 
 export const paperRowGeometrySchema = z.object({
   slot: z.number().int().positive(),
-  centers: z.array(z.object({ x: z.number(), y: z.number() })),
+  centers: z.array(pointSchema),
 });
 export type PaperRowGeometry = z.infer<typeof paperRowGeometrySchema>;
 

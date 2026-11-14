@@ -27,15 +27,19 @@ export const mcpQuestionOptionsInputSchema = z.strictObject({
 });
 export type McpQuestionOptionsInput = z.infer<typeof mcpQuestionOptionsInputSchema>;
 
-export const mcpCreateQuestionInputSchema = z.strictObject({
-  bankId: uuidIdSchema,
-  categoryId: uuidIdSchema,
+const mcpQuestionContentFields = {
   qtype: z.enum(['multichoice', 'truefalse', 'shortanswer', 'essay']),
   questionText: z.string().min(1).max(20000),
   generalFeedback: z.string().max(5000).optional(),
   guidance: z.string().max(5000).optional(),
   defaultMark: z.number().gt(0).max(100).optional(),
   penalty: z.number().min(0).max(1).optional(),
+};
+
+export const mcpCreateQuestionInputSchema = z.strictObject({
+  bankId: uuidIdSchema,
+  categoryId: uuidIdSchema,
+  ...mcpQuestionContentFields,
   stimulusId: uuidIdSchema.optional(),
   answers: z.array(mcpAnswerInputSchema).max(10).optional(),
   options: mcpQuestionOptionsInputSchema.optional(),
@@ -43,8 +47,7 @@ export const mcpCreateQuestionInputSchema = z.strictObject({
 });
 export type McpCreateQuestionInput = z.infer<typeof mcpCreateQuestionInputSchema>;
 
-export const mcpCreateQuestionOutputSchema = z.object({
-  status: z.enum(['created', 'duplicate_exact']),
+const mcpQuestionOutcomeFields = {
   questionId: uuidIdSchema.nullable(),
   existingQuestionId: uuidIdSchema.nullable(),
   entryId: uuidIdSchema.nullable(),
@@ -53,6 +56,11 @@ export const mcpCreateQuestionOutputSchema = z.object({
   duplicate: z.enum(['none', 'near', 'exact']),
   nearDuplicateOf: uuidIdSchema.nullable(),
   reviewUrl: z.string().nullable(),
+};
+
+export const mcpCreateQuestionOutputSchema = z.object({
+  status: z.enum(['created', 'duplicate_exact']),
+  ...mcpQuestionOutcomeFields,
 });
 export type McpCreateQuestionOutput = z.infer<typeof mcpCreateQuestionOutputSchema>;
 
@@ -123,33 +131,31 @@ export const mcpSubmitContributionInputSchema = z.strictObject({
 });
 export type McpSubmitContributionInput = z.infer<typeof mcpSubmitContributionInputSchema>;
 
+const mcpContributionResultFields = {
+  status: z.enum(['pending', 'failed']),
+  contributionId: uuidIdSchema.nullable(),
+  code: z.string().nullable(),
+  message: z.string().nullable(),
+};
+
 export const mcpSubmitContributionOutputSchema = z.object({
   targetBankId: uuidIdSchema,
   results: z.array(
     z.object({
       questionId: uuidIdSchema,
-      status: z.enum(['pending', 'failed']),
-      contributionId: uuidIdSchema.nullable(),
-      code: z.string().nullable(),
-      message: z.string().nullable(),
+      ...mcpContributionResultFields,
     }),
   ),
   examResults: z.array(
     z.object({
       examId: uuidIdSchema,
-      status: z.enum(['pending', 'failed']),
-      contributionId: uuidIdSchema.nullable(),
-      code: z.string().nullable(),
-      message: z.string().nullable(),
+      ...mcpContributionResultFields,
     }),
   ).default([]),
   matrixResults: z.array(
     z.object({
       matrixId: uuidIdSchema,
-      status: z.enum(['pending', 'failed']),
-      contributionId: uuidIdSchema.nullable(),
-      code: z.string().nullable(),
-      message: z.string().nullable(),
+      ...mcpContributionResultFields,
     }),
   ).default([]),
   created: z.number().int(),
@@ -160,12 +166,7 @@ export type McpSubmitContributionOutput = z.infer<typeof mcpSubmitContributionOu
 
 export const mcpBatchQuestionItemSchema = z.strictObject({
   clientItemId: z.string().min(1).max(64),
-  qtype: z.enum(['multichoice', 'truefalse', 'shortanswer', 'essay']),
-  questionText: z.string().min(1).max(20000),
-  generalFeedback: z.string().max(5000).optional(),
-  guidance: z.string().max(5000).optional(),
-  defaultMark: z.number().gt(0).max(100).optional(),
-  penalty: z.number().min(0).max(1).optional(),
+  ...mcpQuestionContentFields,
   stimulusId: uuidIdSchema.optional(),
   stimulusRef: z.string().min(1).max(64).optional(),
   answers: z.array(mcpAnswerInputSchema).max(10).optional(),
@@ -193,14 +194,7 @@ export type McpCreateQuestionsBatchInput = z.infer<typeof mcpCreateQuestionsBatc
 export const mcpBatchItemResultSchema = z.object({
   clientItemId: z.string(),
   status: z.enum(['created', 'duplicate_exact', 'failed']),
-  questionId: uuidIdSchema.nullable(),
-  existingQuestionId: uuidIdSchema.nullable(),
-  entryId: uuidIdSchema.nullable(),
-  version: z.number().int().nullable(),
-  questionStatus: z.string().nullable(),
-  duplicate: z.enum(['none', 'near', 'exact']),
-  nearDuplicateOf: uuidIdSchema.nullable(),
-  reviewUrl: z.string().nullable(),
+  ...mcpQuestionOutcomeFields,
   code: z.string().nullable(),
   message: z.string().nullable(),
   fieldPath: z.string().nullable(),
@@ -226,12 +220,7 @@ export const mcpCreateQuestionsBatchOutputSchema = z.object({
 export type McpCreateQuestionsBatchOutput = z.infer<typeof mcpCreateQuestionsBatchOutputSchema>;
 
 export const mcpStimulusQuestionItemSchema = z.strictObject({
-  qtype: z.enum(['multichoice', 'truefalse', 'shortanswer', 'essay']),
-  questionText: z.string().min(1).max(20000),
-  generalFeedback: z.string().max(5000).optional(),
-  guidance: z.string().max(5000).optional(),
-  defaultMark: z.number().gt(0).max(100).optional(),
-  penalty: z.number().min(0).max(1).optional(),
+  ...mcpQuestionContentFields,
   answers: z.array(mcpAnswerInputSchema).max(10).optional(),
   options: mcpQuestionOptionsInputSchema.optional(),
 });

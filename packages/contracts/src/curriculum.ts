@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { courseSectionItemOutcomeSchema, datasetImportCountFields, datasetImportSchema, datasetStatusFields } from './common.js';
 import { uuidIdSchema } from './ids.js';
 
 
@@ -35,46 +36,48 @@ export const updateCurriculumSchema = z.strictObject({
 });
 export type UpdateCurriculum = z.infer<typeof updateCurriculumSchema>;
 
-export const createCurriculumNodeSchema = z.strictObject({
-  curriculumId: uuidIdSchema,
-  parentId: uuidIdSchema.nullable().optional(),
-  title: z.string().min(1),
+const curriculumNodeDetailFields = {
   kind: curriculumNodeKindSchema.optional(),
   position: positionSchema.optional(),
   durationPeriods: durationPeriodsSchema.optional(),
   durationPercent: durationPercentSchema.optional(),
+};
+
+export const createCurriculumNodeSchema = z.strictObject({
+  curriculumId: uuidIdSchema,
+  parentId: uuidIdSchema.nullable().optional(),
+  title: z.string().min(1),
+  ...curriculumNodeDetailFields,
 });
 export type CreateCurriculumNode = z.infer<typeof createCurriculumNodeSchema>;
 
 export const updateCurriculumNodeSchema = z.strictObject({
   parentId: uuidIdSchema.nullable().optional(),
   title: z.string().min(1).optional(),
-  kind: curriculumNodeKindSchema.optional(),
-  position: positionSchema.optional(),
-  durationPeriods: durationPeriodsSchema.optional(),
-  durationPercent: durationPercentSchema.optional(),
+  ...curriculumNodeDetailFields,
 });
 export type UpdateCurriculumNode = z.infer<typeof updateCurriculumNodeSchema>;
 
 export const outcomeSourceKindSchema = z.enum(['program', 'derived']);
 export type OutcomeSourceKind = z.infer<typeof outcomeSourceKindSchema>;
 
-export const createLearningOutcomeSchema = z.strictObject({
-  nodeId: uuidIdSchema,
-  content: z.string().min(1),
+const learningOutcomeSourceFields = {
   position: positionSchema.optional(),
   sourceKind: outcomeSourceKindSchema.optional(),
   sourceRef: z.string().min(1).nullable().optional(),
   derivedFromId: uuidIdSchema.nullable().optional(),
+};
+
+export const createLearningOutcomeSchema = z.strictObject({
+  nodeId: uuidIdSchema,
+  content: z.string().min(1),
+  ...learningOutcomeSourceFields,
 });
 export type CreateLearningOutcome = z.infer<typeof createLearningOutcomeSchema>;
 
 export const updateLearningOutcomeSchema = z.strictObject({
   content: z.string().min(1).optional(),
-  position: positionSchema.optional(),
-  sourceKind: outcomeSourceKindSchema.optional(),
-  sourceRef: z.string().min(1).nullable().optional(),
-  derivedFromId: uuidIdSchema.nullable().optional(),
+  ...learningOutcomeSourceFields,
 });
 export type UpdateLearningOutcome = z.infer<typeof updateLearningOutcomeSchema>;
 
@@ -97,15 +100,11 @@ export const updateQuestionOutcomeLinkSchema = z.strictObject({
 });
 export type UpdateQuestionOutcomeLink = z.infer<typeof updateQuestionOutcomeLinkSchema>;
 
-export const importProgramDatasetSchema = z.strictObject({
-  datasetKey: z.string().min(1),
-});
+export const importProgramDatasetSchema = datasetImportSchema;
 export type ImportProgramDataset = z.infer<typeof importProgramDatasetSchema>;
 
 export const programDatasetStatusSchema = z.object({
-  datasetKey: z.string(),
-  subjectName: z.string(),
-  slug: z.string(),
+  ...datasetStatusFields,
   grades: z.array(z.number().int()),
   totalRecords: z.number().int(),
   importedRecords: z.number().int(),
@@ -132,11 +131,7 @@ export type ProgramImportChange = z.infer<typeof programImportChangeSchema>;
 
 export const programImportResultSchema = z.object({
   datasetKey: z.string(),
-  subjectId: uuidIdSchema,
-  totalRecords: z.number().int(),
-  created: z.number().int(),
-  updated: z.number().int(),
-  skipped: z.number().int(),
+  ...datasetImportCountFields,
   outcomesWritten: z.number().int(),
   orphanedNodes: z.number().int(),
   retiredOutcomes: z.number().int(),
@@ -153,10 +148,7 @@ export const programImportResultSchema = z.object({
 });
 export type ProgramImportResult = z.infer<typeof programImportResultSchema>;
 
-export const courseSectionFrameOutcomeSchema = z.object({
-  outcomeId: uuidIdSchema.nullable(),
-  content: z.string(),
-});
+export const courseSectionFrameOutcomeSchema = courseSectionItemOutcomeSchema;
 export type CourseSectionFrameOutcome = z.infer<typeof courseSectionFrameOutcomeSchema>;
 
 export const courseSectionFrameSchema = z.object({

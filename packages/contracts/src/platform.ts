@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { limitedReasonInputSchema } from './common.js';
 import { uuidIdSchema } from './ids.js';
 
 
@@ -338,9 +339,7 @@ export const createRefundSchema = z.strictObject({
 });
 export type CreateRefund = z.infer<typeof createRefundSchema>;
 
-export const rejectRefundSchema = z.strictObject({
-  reason: z.string().trim().min(1).max(500),
-});
+export const rejectRefundSchema = limitedReasonInputSchema;
 export type RejectRefund = z.infer<typeof rejectRefundSchema>;
 
 export const settleRefundSchema = z.strictObject({
@@ -429,14 +428,18 @@ export type CouponDiscountType = z.infer<typeof couponDiscountTypeSchema>;
 export const couponAppliesToSchema = z.enum(['tenant_plan', 'teacher_plan', 'all']);
 export type CouponAppliesTo = z.infer<typeof couponAppliesToSchema>;
 
+const couponValidityFields = {
+  startsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  maxRedemptions: z.number().int().min(1).nullable().optional(),
+};
+
 export const createCouponSchema = z.strictObject({
   code: z.string().trim().min(1).max(64),
   discountType: couponDiscountTypeSchema,
   discountValue: z.number().int().min(1).max(99_999_999),
   appliesTo: couponAppliesToSchema.default('all'),
-  startsAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  maxRedemptions: z.number().int().min(1).nullable().optional(),
+  ...couponValidityFields,
   isActive: z.boolean().default(true),
 }).superRefine((input, ctx) => {
   if (input.discountType === 'percent' && input.discountValue > 99) {
@@ -460,9 +463,7 @@ export const updateCouponSchema = z.strictObject({
   discountType: couponDiscountTypeSchema.optional(),
   discountValue: z.number().int().min(1).max(99_999_999).optional(),
   appliesTo: couponAppliesToSchema.optional(),
-  startsAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  maxRedemptions: z.number().int().min(1).nullable().optional(),
+  ...couponValidityFields,
   isActive: z.boolean().optional(),
 });
 export type UpdateCoupon = z.infer<typeof updateCouponSchema>;

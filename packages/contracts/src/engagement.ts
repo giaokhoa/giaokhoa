@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { limitedReasonInputSchema } from './common.js';
 import { uuidIdSchema } from './ids.js';
 
 
@@ -12,10 +13,14 @@ export const messageQuoteSchema = z.object({
 });
 export type MessageQuote = z.infer<typeof messageQuoteSchema>;
 
-export const messageSchema = z.object({
+const messageIdentityFields = {
   id: uuidIdSchema,
   conversationId: uuidIdSchema,
   userIdFrom: uuidIdSchema,
+};
+
+export const messageSchema = z.object({
+  ...messageIdentityFields,
   subject: z.string(),
   fullMessage: z.string(),
   createdAt: z.string(),
@@ -97,12 +102,15 @@ export type GiaoKhoaNotification = z.infer<typeof notificationSchema>;
 export const emailFrequencySchema = z.enum(['immediate', 'daily', 'off']);
 export type EmailFrequency = z.infer<typeof emailFrequencySchema>;
 
+export const localizedTextSchema = z.object({ vi: z.string(), en: z.string() });
+export type LocalizedText = z.infer<typeof localizedTextSchema>;
+
 export const notificationPreferenceSchema = z.object({
   provider: z.string(),
   component: z.string(),
   group: z.enum(['learning', 'people', 'system']),
-  label: z.object({ vi: z.string(), en: z.string() }),
-  description: z.object({ vi: z.string(), en: z.string() }),
+  label: localizedTextSchema,
+  description: localizedTextSchema,
   teacherOnly: z.boolean(),
   mandatoryInApp: z.boolean(),
   popupEnabled: z.boolean(),
@@ -164,10 +172,14 @@ export const notificationItemPageSchema = z.object({
 export type NotificationItemPage = z.infer<typeof notificationItemPageSchema>;
 
 
-export const listNotificationGroupsQuerySchema = z.strictObject({
+const notificationListQueryFields = {
   group: notificationGroupNameSchema.optional(),
   unreadOnly: z.boolean().optional(),
   cursor: z.string().min(1).optional(),
+};
+
+export const listNotificationGroupsQuerySchema = z.strictObject({
+  ...notificationListQueryFields,
   limit: z.number().int().min(1).max(50).optional(),
 });
 export type ListNotificationGroupsQuery = z.infer<typeof listNotificationGroupsQuerySchema>;
@@ -179,9 +191,7 @@ export const listNotificationItemsQuerySchema = z.strictObject({
   eventType: z.string().min(1).optional(),
   contextUrl: z.string().optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  group: notificationGroupNameSchema.optional(),
-  unreadOnly: z.boolean().optional(),
-  cursor: z.string().min(1).optional(),
+  ...notificationListQueryFields,
   limit: z.number().int().min(1).max(100).optional(),
 });
 export type ListNotificationItemsQuery = z.infer<typeof listNotificationItemsQuerySchema>;
@@ -327,9 +337,7 @@ export const searchMessagesQuerySchema = z.strictObject({
 export type SearchMessagesQuery = z.infer<typeof searchMessagesQuerySchema>;
 
 export const messageSearchResultSchema = z.object({
-  id: uuidIdSchema,
-  conversationId: uuidIdSchema,
-  userIdFrom: uuidIdSchema,
+  ...messageIdentityFields,
   seq: z.number().int(),
   excerpt: z.string(),
   createdAt: z.string(),
@@ -373,9 +381,7 @@ export const updateReportStatusSchema = z.strictObject({
 });
 export type UpdateReportStatus = z.infer<typeof updateReportStatusSchema>;
 
-export const hardDeleteMessageSchema = z.strictObject({
-  reason: z.string().trim().min(1).max(500),
-});
+export const hardDeleteMessageSchema = limitedReasonInputSchema;
 export type HardDeleteMessage = z.infer<typeof hardDeleteMessageSchema>;
 
 export const bulkRemoveMessagesSchema = z.strictObject({
@@ -384,17 +390,19 @@ export const bulkRemoveMessagesSchema = z.strictObject({
 });
 export type BulkRemoveMessages = z.infer<typeof bulkRemoveMessagesSchema>;
 
-export const personSummarySchema = z.strictObject({
+const personIdentityFields = {
   userId: uuidIdSchema,
   displayName: z.string(),
   username: z.string(),
+};
+
+export const personSummarySchema = z.strictObject({
+  ...personIdentityFields,
 });
 export type PersonSummary = z.infer<typeof personSummarySchema>;
 
 export const personProfileSchema = z.strictObject({
-  userId: uuidIdSchema,
-  displayName: z.string(),
-  username: z.string(),
+  ...personIdentityFields,
   email: z.string(),
 });
 export type PersonProfile = z.infer<typeof personProfileSchema>;
@@ -635,19 +643,21 @@ export const competencyScaleSchema = z.strictObject({
 });
 export type CompetencyScale = z.infer<typeof competencyScaleSchema>;
 
-export const createCompetencyFrameworkSchema = z.strictObject({
+const shortNamedEntityInputFields = {
   shortName: z.string().min(1),
   idNumber: z.string().optional(),
   description: z.string().optional(),
+};
+
+export const createCompetencyFrameworkSchema = z.strictObject({
+  ...shortNamedEntityInputFields,
   scale: competencyScaleSchema,
   visible: z.boolean().optional(),
 });
 export type CreateCompetencyFramework = z.infer<typeof createCompetencyFrameworkSchema>;
 
 export const createCompetencySchema = z.strictObject({
-  shortName: z.string().min(1),
-  idNumber: z.string().optional(),
-  description: z.string().optional(),
+  ...shortNamedEntityInputFields,
   parentId: uuidIdSchema.optional(),
 });
 export type CreateCompetency = z.infer<typeof createCompetencySchema>;
@@ -683,11 +693,15 @@ export const createLearningPlanSchema = z.strictObject({
 });
 export type CreateLearningPlan = z.infer<typeof createLearningPlanSchema>;
 
-export const addCompetencyEvidenceSchema = z.strictObject({
+const userCompetencyTargetFields = {
   userId: uuidIdSchema,
   competencyId: uuidIdSchema,
   planId: uuidIdSchema.optional(),
   courseId: uuidIdSchema.optional(),
+};
+
+export const addCompetencyEvidenceSchema = z.strictObject({
+  ...userCompetencyTargetFields,
   description: z.string().min(1),
   url: z.string().optional(),
   grade: z.number().int().optional(),
@@ -697,10 +711,7 @@ export const addCompetencyEvidenceSchema = z.strictObject({
 export type AddCompetencyEvidence = z.infer<typeof addCompetencyEvidenceSchema>;
 
 export const gradeUserCompetencySchema = z.strictObject({
-  userId: uuidIdSchema,
-  competencyId: uuidIdSchema,
-  planId: uuidIdSchema.optional(),
-  courseId: uuidIdSchema.optional(),
+  ...userCompetencyTargetFields,
   grade: z.number().int(),
   note: z.string().optional(),
 });
@@ -753,11 +764,15 @@ export const frameworkExportRuleSchema = z.strictObject({
 });
 export type FrameworkExportRule = z.infer<typeof frameworkExportRuleSchema>;
 
-export const frameworkExportCompetencySchema = z.strictObject({
-  key: z.string().min(1),
+const shortNamedEntityViewFields = {
   shortName: z.string().min(1),
   idNumber: z.string(),
   description: z.string(),
+};
+
+export const frameworkExportCompetencySchema = z.strictObject({
+  key: z.string().min(1),
+  ...shortNamedEntityViewFields,
   parentKey: z.string().min(1).nullable(),
   sortOrder: z.number().int(),
   rule: frameworkExportRuleSchema.nullable(),
@@ -768,9 +783,7 @@ export const frameworkExportSchema = z.strictObject({
   format: z.literal('giaokhoa-competency-framework'),
   version: z.literal(1),
   framework: z.strictObject({
-    shortName: z.string().min(1),
-    idNumber: z.string(),
-    description: z.string(),
+    ...shortNamedEntityViewFields,
     visible: z.boolean(),
     taxonomies: z.string(),
     scale: competencyScaleSchema,
@@ -779,20 +792,21 @@ export const frameworkExportSchema = z.strictObject({
 });
 export type FrameworkExport = z.infer<typeof frameworkExportSchema>;
 
-export const setItemTagsSchema = z.strictObject({
+const taggedItemFields = {
   component: z.string(),
   itemType: z.string(),
   itemId: uuidIdSchema,
   contextId: uuidIdSchema,
+};
+
+export const setItemTagsSchema = z.strictObject({
+  ...taggedItemFields,
   tags: z.array(z.string()),
 });
 export type SetItemTags = z.infer<typeof setItemTagsSchema>;
 
 export const addItemTagSchema = z.strictObject({
-  component: z.string(),
-  itemType: z.string(),
-  itemId: uuidIdSchema,
-  contextId: uuidIdSchema,
+  ...taggedItemFields,
   tag: z.string().min(1),
 });
 export type AddItemTag = z.infer<typeof addItemTagSchema>;

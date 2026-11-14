@@ -59,13 +59,17 @@ export const updateClassSchema = z.strictObject({
 });
 export type UpdateClass = z.infer<typeof updateClassSchema>;
 
-export const classRosterMemberSchema = z.object({
-  userId: uuidIdSchema,
-  timeAdded: z.string(),
+const memberIdentityFields = {
   firstName: z.string(),
   lastName: z.string(),
   username: z.string(),
   email: z.string(),
+};
+
+export const classRosterMemberSchema = z.object({
+  userId: uuidIdSchema,
+  timeAdded: z.string(),
+  ...memberIdentityFields,
 });
 export type ClassRosterMember = z.infer<typeof classRosterMemberSchema>;
 
@@ -124,10 +128,7 @@ export type ClassStaffRole = z.infer<typeof classStaffRoleSchema>;
 
 export const classStaffMemberSchema = z.object({
   userId: uuidIdSchema,
-  firstName: z.string(),
-  lastName: z.string(),
-  username: z.string(),
-  email: z.string(),
+  ...memberIdentityFields,
   isOwner: z.boolean(),
   roles: z.array(classStaffRoleSchema),
 });
@@ -174,10 +175,7 @@ export const classJoinRequestSchema = z.object({
   id: uuidIdSchema,
   classId: uuidIdSchema,
   userId: uuidIdSchema,
-  firstName: z.string(),
-  lastName: z.string(),
-  username: z.string(),
-  email: z.string(),
+  ...memberIdentityFields,
   status: z.enum(['pending', 'approved', 'rejected']),
   createdAt: z.string(),
   decidedAt: z.string().nullable(),
@@ -186,10 +184,7 @@ export type ClassJoinRequest = z.infer<typeof classJoinRequestSchema>;
 
 export const classSuspendedMemberSchema = z.object({
   userId: uuidIdSchema,
-  firstName: z.string(),
-  lastName: z.string(),
-  username: z.string(),
-  email: z.string(),
+  ...memberIdentityFields,
 });
 export type ClassSuspendedMember = z.infer<typeof classSuspendedMemberSchema>;
 

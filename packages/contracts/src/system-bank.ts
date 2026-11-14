@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { COGNITIVE_LEVELS } from './assessment.js';
+import { limitedReasonInputSchema } from './common.js';
 import { uuidIdSchema } from './ids.js';
 
 export const SYSTEM_BANK_QUESTION_TYPES = ['multichoice', 'truefalse', 'shortanswer', 'essay'] as const;
@@ -59,9 +60,7 @@ export const submitSystemBankQuestionSchema = z.strictObject({
 });
 export type SubmitSystemBankQuestion = z.infer<typeof submitSystemBankQuestionSchema>;
 
-export const rejectSystemBankSubmissionSchema = z.strictObject({
-  reason: z.string().trim().min(1).max(500),
-});
+export const rejectSystemBankSubmissionSchema = limitedReasonInputSchema;
 export type RejectSystemBankSubmission = z.infer<typeof rejectSystemBankSubmissionSchema>;
 
 export const createSystemBankQuestionSchema = z.strictObject({
@@ -81,9 +80,7 @@ export const withdrawSystemBankQuestionSchema = z.strictObject({
 });
 export type WithdrawSystemBankQuestion = z.infer<typeof withdrawSystemBankQuestionSchema>;
 
-export const withdrawSystemResourceSchema = z.strictObject({
-  reason: z.string().trim().min(1).max(500),
-});
+export const withdrawSystemResourceSchema = limitedReasonInputSchema;
 export type WithdrawSystemResource = z.infer<typeof withdrawSystemResourceSchema>;
 
 export const discoverSystemBankQuestionsSchema = z.strictObject({
@@ -133,7 +130,7 @@ export const systemExamPackageSchema = z.strictObject({
 export type SystemExamPackage = z.infer<typeof systemExamPackageSchema>;
 export const submitSystemExamSchema = z.strictObject({ examId: uuidIdSchema });
 export type SubmitSystemExam = z.infer<typeof submitSystemExamSchema>;
-export const rejectSystemExamSchema = z.strictObject({ reason: z.string().trim().min(1).max(500) });
+export const rejectSystemExamSchema = limitedReasonInputSchema;
 export type RejectSystemExam = z.infer<typeof rejectSystemExamSchema>;
 
 export const createSystemOutcomePackageSchema = z.strictObject({

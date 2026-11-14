@@ -9,12 +9,15 @@ export const tokenPairSchema = z.object({
 });
 export type TokenPair = z.infer<typeof tokenPairSchema>;
 
+export const loginUserSchema = z.object({
+  id: uuidIdSchema,
+  username: z.string().min(1),
+  forcePasswordChange: z.boolean(),
+});
+export type LoginUser = z.infer<typeof loginUserSchema>;
+
 export const loginResponseSchema = tokenPairSchema.extend({
-  user: z.object({
-    id: uuidIdSchema,
-    username: z.string().min(1),
-    forcePasswordChange: z.boolean(),
-  }),
+  user: loginUserSchema,
 });
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 
@@ -26,11 +29,15 @@ export const customFieldValueSchema = z.object({
 });
 export type CustomFieldValue = z.infer<typeof customFieldValueSchema>;
 
-export const userProfileSchema = z.object({
+const userIdentityFields = {
   id: uuidIdSchema,
   username: z.string(),
   firstName: z.string(),
   lastName: z.string(),
+};
+
+export const userProfileSchema = z.object({
+  ...userIdentityFields,
   email: z.string().optional(),
   suspended: z.boolean(),
   deleted: z.boolean(),
@@ -42,11 +49,15 @@ export const userProfileSchema = z.object({
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
 
-export const userListResponseSchema = z.object({
-  users: z.array(userProfileSchema),
+const paginationFields = {
   total: z.number().int().min(0),
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1),
+};
+
+export const userListResponseSchema = z.object({
+  users: z.array(userProfileSchema),
+  ...paginationFields,
 });
 export type UserListResponse = z.infer<typeof userListResponseSchema>;
 
@@ -123,12 +134,15 @@ export const roleListItemSchema = roleSchema.extend({
 });
 export type RoleListItem = z.infer<typeof roleListItemSchema>;
 
+export const capabilityOverrideSchema = z.strictObject({
+  capability: z.string().min(1),
+  permission: z.number().int(),
+});
+export type CapabilityOverride = z.infer<typeof capabilityOverrideSchema>;
+
 export const replaceRoleCapabilitiesSchema = z.strictObject({
   contextId: uuidIdSchema,
-  overrides: z.array(z.strictObject({
-    capability: z.string().min(1),
-    permission: z.number().int(),
-  })),
+  overrides: z.array(capabilityOverrideSchema),
 });
 export type ReplaceRoleCapabilities = z.infer<typeof replaceRoleCapabilitiesSchema>;
 
@@ -141,10 +155,7 @@ export const capabilityMatrixRoleSchema = z.object({
   id: uuidIdSchema,
   name: z.string(),
   userCount: z.number().int().min(0),
-  overrides: z.array(z.strictObject({
-    capability: z.string().min(1),
-    permission: z.number().int(),
-  })),
+  overrides: z.array(capabilityOverrideSchema),
 });
 export type CapabilityMatrixRole = z.infer<typeof capabilityMatrixRoleSchema>;
 
@@ -180,9 +191,7 @@ export type AssignmentListItem = z.infer<typeof assignmentListItemSchema>;
 
 export const assignmentListResponseSchema = z.object({
   assignments: z.array(assignmentListItemSchema),
-  total: z.number().int().min(0),
-  page: z.number().int().min(1),
-  pageSize: z.number().int().min(1),
+  ...paginationFields,
 });
 export type AssignmentListResponse = z.infer<typeof assignmentListResponseSchema>;
 
@@ -242,10 +251,7 @@ export const userAssignmentEntrySchema = z.object({
 export type UserAssignmentEntry = z.infer<typeof userAssignmentEntrySchema>;
 
 export const userWithAssignmentsListItemSchema = z.object({
-  id: uuidIdSchema,
-  username: z.string(),
-  firstName: z.string(),
-  lastName: z.string(),
+  ...userIdentityFields,
   email: z.string(),
   suspended: z.boolean(),
   deleted: z.boolean(),
@@ -256,9 +262,7 @@ export type UserWithAssignmentsListItem = z.infer<typeof userWithAssignmentsList
 
 export const userWithAssignmentsListResponseSchema = z.object({
   users: z.array(userWithAssignmentsListItemSchema),
-  total: z.number().int().min(0),
-  page: z.number().int().min(1),
-  pageSize: z.number().int().min(1),
+  ...paginationFields,
 });
 export type UserWithAssignmentsListResponse = z.infer<typeof userWithAssignmentsListResponseSchema>;
 
@@ -361,11 +365,7 @@ export const oauthLinksResponseSchema = z.object({
 export type OAuthLinksResponse = z.infer<typeof oauthLinksResponseSchema>;
 
 export const sessionLoginResponseSchema = z.object({
-  user: z.object({
-    id: uuidIdSchema,
-    username: z.string().min(1),
-    forcePasswordChange: z.boolean(),
-  }),
+  user: loginUserSchema,
   sessionId: uuidIdSchema,
 });
 export type SessionLoginResponse = z.infer<typeof sessionLoginResponseSchema>;
@@ -398,22 +398,24 @@ export const mfaChallengeResponseSchema = z.object({
 });
 export type MfaChallengeResponse = z.infer<typeof mfaChallengeResponseSchema>;
 
+const contextReferenceFields = {
+  contextId: uuidIdSchema,
+  contextLevel: z.number().int(),
+  contextPath: z.string(),
+};
+
 export const myRoleAssignmentSchema = z.object({
   id: uuidIdSchema,
   roleId: uuidIdSchema,
   roleShortname: z.string(),
   roleName: z.string(),
-  contextId: uuidIdSchema,
-  contextLevel: z.number().int(),
-  contextPath: z.string(),
+  ...contextReferenceFields,
   instanceId: uuidIdSchema.nullable(),
 });
 export type MyRoleAssignment = z.infer<typeof myRoleAssignmentSchema>;
 
 export const myContextCapabilitiesSchema = z.object({
-  contextId: uuidIdSchema,
-  contextLevel: z.number().int(),
-  contextPath: z.string(),
+  ...contextReferenceFields,
   capabilities: z.array(z.string()),
 });
 export type MyContextCapabilities = z.infer<typeof myContextCapabilitiesSchema>;

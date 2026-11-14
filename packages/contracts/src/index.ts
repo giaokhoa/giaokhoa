@@ -1,4 +1,5 @@
 export * from './ids.js';
+export * from './common.js';
 export * from './rich-text.js';
 export * from './problem-details.js';
 export * from './health.js';
