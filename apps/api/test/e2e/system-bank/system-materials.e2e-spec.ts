@@ -3,11 +3,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Client } from 'pg';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
+import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
 import { FileSigningService } from '../../../src/modules/files/file-signing.service';
 import { SystemMaterialReferencesRepository } from '@giaokhoa/db/repositories/system-material-references';
@@ -56,6 +59,7 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
   let materialId: string;
   let resourceId: string;
   let cmId: string;
+  const dedicatedFileSpaces: SpaceProvisionResult[] = [];
   const bytes = Buffer.from('%PDF-1.4\nHoc lieu doc lap G16');
 
   beforeAll(async () => {
@@ -74,13 +78,16 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     await pg.connect();
     await bank.connect();
     await controlPlane.connect();
-    const createTenant = async () => {
-      const response = await identity.http(app).post('/api/v1/tenants').set(bearer(admin)).send({ name: identity.uniqueName('Trung tâm học liệu'), slug: identity.uniqueName('g16').toLowerCase(), kind: 'school' });
-      expect(response.status, JSON.stringify(response.body)).toBe(201);
-      return response.body.id as string;
-    };
+    const createTenant = () => seedLegacyCentreInShared({
+      name: identity.uniqueName('Trung tâm học liệu'), slug: identity.uniqueName('g16').toLowerCase(),
+    });
     tenantA = await createTenant();
     tenantB = await createTenant();
+    await tenantAls.run({ platform: true }, async () => {
+      const contexts = app.get(ContextsService);
+      await contexts.ensureTenantContext(tenantA);
+      await contexts.ensureTenantContext(tenantB);
+    });
     const owners = await pg.query<{ id: string; slug: string }>('select id, slug from tenants where id = any($1::uuid[])', [[tenantA, tenantB]]);
     const slugA = owners.rows.find((row) => row.id === tenantA)!.slug;
     const slugB = owners.rows.find((row) => row.id === tenantB)!.slug;
@@ -137,6 +144,14 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
   afterAll(async () => {
     await app?.close();
     if (app) await app.get<import('pg').Pool>('SHARED_CENTRE_KYSELY').end();
+    for (const space of dedicatedFileSpaces) {
+      delete process.env[space.secretEnvVar];
+      await dropTestDatabase(adminUrl, space.databaseName);
+      const cluster = new Client({ connectionString: adminUrl });
+      await cluster.connect();
+      try { await cluster.query(`DROP ROLE "${space.connectionRole}"`); }
+      finally { await cluster.end(); }
+    }
     await pg?.end();
     await bank?.end();
     await controlPlane?.end();
@@ -214,27 +229,54 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect(preserved.body).toEqual(bytes);
   });
 
-  it('file học liệu mới tại host A tải được bằng URL ký không phiên, không dùng lại trên host B hoặc host gốc', async () => {
-    const created = await identity.http(app).post('/api/v1/contentbank').set(bearer(teacherA)).set('Host', hostA).send({
+  it('file học liệu ở kho dedicated A ký và tải đúng host; B và platform không mượn được URL hay token', async () => {
+    const databasePassword = 'TestG16DedicatedFilesDb!';
+    const makeFileSpace = async (label: string) => {
+      const slug = `files16-${label}-${randomUUID().slice(0, 8)}`;
+      const space = await runSpaceProvision({
+        slug, name: `Trung tâm file G16 ${label}`, adminUsername: `filesadmin${label}`,
+        adminEmail: `${slug}@example.com`, databasePassword,
+        actorId: randomUUID(),
+        migrationsDir: join(__dirname, '../../../../../packages/db/migrations/centre'),
+        env: { ...process.env }, log: () => undefined,
+      });
+      dedicatedFileSpaces.push(space);
+      const url = new URL(adminUrl);
+      url.pathname = `/${space.databaseName}`;
+      url.username = space.connectionRole;
+      url.password = databasePassword;
+      process.env[space.secretEnvVar] = url.toString();
+      const activated = await identity.http(app).post('/api/v1/centres/activate-invite')
+        .send({ slug, token: space.inviteToken, password: identity.STRONG_PASSWORD });
+      expect(activated.status, JSON.stringify(activated.body)).toBe(201);
+      const host = `${slug}.test.local`;
+      const logged = await identity.http(app).post('/api/v1/auth/token').set('Host', host)
+        .send({ username: `filesadmin${label}`, password: identity.STRONG_PASSWORD });
+      expect(logged.status, JSON.stringify(logged.body)).toBe(201);
+      return { space, host, token: logged.body.accessToken as string };
+    };
+    const first = await makeFileSpace('a');
+    const second = await makeFileSpace('b');
+    const created = await identity.http(app).post('/api/v1/contentbank').set(bearer(first.token)).set('Host', first.host).send({
       name: 'Học liệu thuộc host A', originalAuthor: 'Tác giả A', sourceKind: 'self', license: 'CC BY',
     });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const data = Buffer.from('%PDF-1.4\\nHost A');
     const uploaded = await identity.http(app).post(`/api/v1/contentbank/${created.body.id}/file`)
-      .set(bearer(teacherA)).set('Host', hostA)
+      .set(bearer(first.token)).set('Host', first.host)
       .send({ fileName: 'host-a.pdf', mimeType: 'application/pdf', contentBase64: data.toString('base64') });
     expect(uploaded.status, JSON.stringify(uploaded.body)).toBe(201);
     const fileId = uploaded.body.fileId as string;
     const signed = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`)
-      .set(bearer(teacherA)).set('Host', hostA);
+      .set(bearer(first.token)).set('Host', first.host);
     expect(signed.status, JSON.stringify(signed.body)).toBe(201);
-    const downloaded = await identity.http(app).get(signed.body.url).set('Host', hostA);
+    const downloaded = await identity.http(app).get(signed.body.url).set('Host', first.host);
     expect(downloaded.status, JSON.stringify(downloaded.body)).toBe(200);
     expect(downloaded.body).toEqual(data);
-    expect((await identity.http(app).get(signed.body.url).set('Host', hostB)).status).toBe(404);
+    expect((await identity.http(app).get(signed.body.url).set('Host', second.host)).status).toBe(404);
     expect((await identity.http(app).get(signed.body.url)).status).toBe(404);
-    expect((await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(managerB))).status).toBe(404);
-    expect((await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(managerB))).status).toBe(404);
+    expect((await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(second.token)).set('Host', second.host)).status).toBe(404);
+    expect((await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(second.token)).set('Host', second.host)).status).toBe(404);
   });
 
   it('học liệu cá nhân và file legacy neo context USER được chủ trung tâm A đọc, B không vượt tenant', async () => {
@@ -292,13 +334,11 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect(otherUpload.status).toBe(201);
     expect((await identity.http(app).get(validUrl.replace(fileId, otherUpload.body.fileId))).status).toBe(401);
     expect((await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(managerB))).status).toBe(404);
-    const signedAtA = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`)
+    const signedAtLegacyHost = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`)
       .set(bearer(teacherA)).set('Host', hostA);
-    expect(signedAtA.status, JSON.stringify(signedAtA.body)).toBe(201);
-    expect((await identity.http(app).get(signedAtA.body.url).set('Host', hostA)).body).toEqual(data);
-    expect((await identity.http(app).get(signedAtA.body.url).set('Host', hostB)).status).toBe(401);
-    expect((await identity.http(app).get(signedAtA.body.url)).status).toBe(401);
-    expect((await identity.http(app).get(validUrl).set('Host', hostA)).status).toBe(401);
+    expect(signedAtLegacyHost.status).toBe(401);
+    expect((await identity.http(app).get(validUrl).set('Host', hostA)).status).toBe(403);
+    expect((await identity.http(app).get(validUrl).set('Host', hostB)).status).toBe(403);
     expect((await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(managerB))).status).toBe(404);
     expect((await identity.http(app).get(`/api/v1/files/${fileId}`).set(bearer(managerB))).status).toBe(404);
   });

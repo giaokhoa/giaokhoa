@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
+import { randomInt } from 'node:crypto';
 import {
   ADMIN, assignRole, createRoleViaApi, createTestApp, createUserViaApi,
   http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName, grantTenantManagerFixture,
@@ -8,11 +9,13 @@ import {
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 import { TenantConfigService } from '../../../src/modules/tenants/tenant-config.service';
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
-const SEPAY_KEY = 'sk-test-sepay-slice3-3e7a';
-const SEPAY_XID = 'xid-test-slice3-001';
-const BANK_ACCOUNT = '113366667777';
+const runBankSuffix = randomInt(100000, 1000000).toString();
+const SEPAY_KEY = `sk-test-sepay-slice3-${runBankSuffix}`;
+const SEPAY_XID = `xid-test-slice3-${runBankSuffix}`;
+const BANK_ACCOUNT = `113366${runBankSuffix}`;
 const CENTER_KEY = 'sk-test-sepay-center-5678';
 const CENTER_XID = `xid-ctr-${Date.now()}`;
 const CENTER_BANK = '113366660001';
@@ -362,10 +365,7 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
 
   it('8. hàng đợi theo chủ tiền: trung tâm chỉ thấy khoản chờ của mình, tự xử lý và tự hoàn học phí; hai phía không chạm tiền của nhau', async () => {
     const slug = `ctr-${uniqueName('c').toLowerCase()}`;
-    const tenantRes = await http(app).post('/api/v1/tenants').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'Trung tâm (spec lát 3)', slug, kind: 'school' });
-    expect(tenantRes.status).toBeLessThan(300);
-    const tenantId = (tenantRes.body as { id: string }).id;
+    const tenantId = await seedLegacyCentreInShared({ slug, name: 'Trung tâm (spec lát 3)' });
     await grantTenantManagerFixture(app, admin, tenantId);
 
     const centerMgr = await createUserViaApi(app, admin);

@@ -30,6 +30,7 @@ import {
   createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId,
 } from '../../support/course-enrolment-helpers';
 import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -93,12 +94,13 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
     bank = new Client({ connectionString: bankUrl }); await bank.connect();
 
-    const first = await http(app).post('/api/v1/tenants').set(bearer(admin))
-      .send({ name: uniqueName('Trung tâm A'), slug: uniqueName('exam-a'), kind: 'school' });
-    const second = await http(app).post('/api/v1/tenants').set(bearer(admin))
-      .send({ name: uniqueName('Trung tâm B'), slug: uniqueName('exam-b'), kind: 'school' });
-    expect(first.status).toBe(201); expect(second.status).toBe(201);
-    tenantA = first.body.id; tenantB = second.body.id;
+    tenantA = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm A'), slug: uniqueName('exam-a') });
+    tenantB = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm B'), slug: uniqueName('exam-b') });
+    await tenantAls.run({ platform: true }, async () => {
+      const contexts = app.get(ContextsService);
+      await contexts.ensureTenantContext(tenantA);
+      await contexts.ensureTenantContext(tenantB);
+    });
     const [a, b, sa, sb] = await Promise.all(Array.from({ length: 4 }, () => createUserViaApi(app, admin)));
     for (const user of [a, sa]) await seedTenantMembershipFixture(app, tenantA, user.id);
     for (const user of [b, sb]) await seedTenantMembershipFixture(app, tenantB, user.id);

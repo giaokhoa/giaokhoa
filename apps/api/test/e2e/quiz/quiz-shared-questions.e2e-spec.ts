@@ -17,6 +17,7 @@ import { adminToken, assignRole, createUserViaApi, http, login, roleIdByShortnam
   seedTenantMembershipFixture, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { SystemBankConnection } from '../../../src/modules/system-bank/system-bank.connection';
@@ -93,10 +94,13 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     admin = await adminToken(app);
     centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
     bank = new Client({ connectionString: bankUrl }); await bank.connect();
-    const a = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({ name: uniqueName('Trung tâm A'), slug: uniqueName('shared-a'), kind: 'school' });
-    expect(a.status).toBe(201); tenantA = a.body.id;
-    const b = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({ name: uniqueName('Trung tâm B'), slug: uniqueName('shared-b'), kind: 'school' });
-    expect(b.status).toBe(201); tenantB = b.body.id;
+    tenantA = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm A'), slug: uniqueName('shared-a') });
+    tenantB = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm B'), slug: uniqueName('shared-b') });
+    await tenantAls.run({ platform: true }, async () => {
+      const contexts = app.get(ContextsService);
+      await contexts.ensureTenantContext(tenantA);
+      await contexts.ensureTenantContext(tenantB);
+    });
     const [m, t, s, o, f] = await Promise.all(Array.from({ length: 5 }, () => createUserViaApi(app, admin)));
     studentId = s.id;
     const systemId = await systemContextId(app, admin);

@@ -28,6 +28,7 @@ import { FilesService } from '../../../src/modules/files/files.service';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
 const BANK_DATABASE = 'giaokhoa_test_bank_585';
 const BANK_ROLE = 'giaokhoa_bank_test_585';
@@ -592,16 +593,13 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
   });
 
   it('issue #13: giáo viên soạn riêng; quản trị gửi, biên tập duyệt/từ chối; B nhập sau khi A xoá nguồn và media', async () => {
-    const tenantAResponse = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({
-      name: uniqueName('Trung tâm gửi G13'), slug: uniqueName('g13-a').toLowerCase(), kind: 'school',
+    const tenantA = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm gửi G13'), slug: uniqueName('g13-a').toLowerCase() });
+    const tenantB = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm nhận G13'), slug: uniqueName('g13-b').toLowerCase() });
+    await tenantAls.run({ platform: true }, async () => {
+      const contexts = app.get(ContextsService);
+      await contexts.ensureTenantContext(tenantA);
+      await contexts.ensureTenantContext(tenantB);
     });
-    expect(tenantAResponse.status, JSON.stringify(tenantAResponse.body)).toBe(201);
-    const tenantBResponse = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({
-      name: uniqueName('Trung tâm nhận G13'), slug: uniqueName('g13-b').toLowerCase(), kind: 'school',
-    });
-    expect(tenantBResponse.status, JSON.stringify(tenantBResponse.body)).toBe(201);
-    const tenantA = tenantAResponse.body.id as string;
-    const tenantB = tenantBResponse.body.id as string;
     const [managerA, teacherA, teacherB, editor, studentB] = await Promise.all(
       Array.from({ length: 5 }, () => createUserViaApi(app, admin)),
     );
