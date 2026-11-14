@@ -66,6 +66,7 @@ function buildService() {
     listVersions: vi.fn(async () => []),
     listCategories: vi.fn(async () => []),
     listQuestionsInCategory: vi.fn(async () => []),
+    listStimuliInCategory: vi.fn(async () => []),
     insertCategory: vi.fn(async (input: Record<string, unknown>) => categoryRow('cat-new', input)),
     insertStimulus: vi.fn(async (input: Record<string, unknown>) => ({ id: 'stim-1', ...input })),
     updateStimulus: vi.fn(async () => undefined),
@@ -229,11 +230,12 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
   });
 
   it('người xem có quyền dùng ngân hàng thì getQuestionForViewer trả về câu hỏi', async () => {
-    const { service, repo } = buildService();
+    const { service, repo, evaluator } = buildService();
     readableQuestion(repo);
     const view = await service.getQuestionForViewer(ACTOR, 'q-1');
     expect(view.question.id).toBe('q-1');
     expect(view.latestVersion.id).toBe('v-1');
+    expect(evaluator.hasCapability).toHaveBeenCalledWith(ACTOR, 'question:useall', CTX);
   });
 
   it('người xem không có quyền dùng ngân hàng của context thì listCategoriesForViewer báo category_not_found theo contextId', async () => {
@@ -327,6 +329,41 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     expect(outbox.enqueueStandalone).toHaveBeenCalledWith(expect.objectContaining({ type: 'stimulus_created' }));
   });
 
+  it('tạo stimulus kèm câu hỏi thiếu capability question:add thì lỗi capability thắng và không mở transaction', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    evaluator.requireCapability.mockRejectedValue(new ForbiddenException({ message: 'Capability denied', code: 'access.capability_denied' }));
+    const error = await capture(service.createStimulusWithQuestions(ACTOR, {
+      categoryId: 'cat-1',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nội dung' }] }] },
+      questions: [multichoiceInput('cat-1') as never],
+    }));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:add', CTX);
+    expect(repo.transaction).not.toHaveBeenCalled();
+    expect(repo.insertStimulus).not.toHaveBeenCalled();
+    expect(repo.insertQuestion).not.toHaveBeenCalled();
+  });
+
+  it('tạo stimulus kèm câu hỏi multichoice hợp lệ thì kiểm tra capability question:add rồi ghi stimulus và đồ thị câu hỏi', async () => {
+    const { service, repo, evaluator, outbox } = buildService();
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    const result = await service.createStimulusWithQuestions(ACTOR, {
+      categoryId: 'cat-1',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nội dung' }] }] },
+      questions: [multichoiceInput('cat-1') as never],
+    });
+    expect(result.stimulus.id).toBe('stim-1');
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].question.id).toBe('q-1');
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:add', CTX);
+    expect(repo.transaction).toHaveBeenCalled();
+    expect(repo.insertStimulus).toHaveBeenCalled();
+    expect(repo.insertQuestion).toHaveBeenCalled();
+    expect(outbox.enqueueStandalone).toHaveBeenCalledWith(expect.objectContaining({ type: 'stimulus_created' }));
+    expect(outbox.enqueueStandalone).toHaveBeenCalledWith(expect.objectContaining({ type: 'question_created' }));
+  });
+
   it('sửa stimulus trong danh mục cá nhân của người khác thì báo stimulus.not_found chứ không phải category_not_found', async () => {
     const { service, repo, evaluator } = buildService();
     repo.getStimulus.mockResolvedValue({ id: 'stim-1', categoryId: 'cat-1', createdBy: OTHER, content: {} } as never);
@@ -403,7 +440,7 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     expect(outbox.enqueueStandalone).toHaveBeenCalledWith(expect.objectContaining({ type: 'question_created' }));
   });
 
-  it('tạo bản sao câu hỏi khi learning outcome không tồn tại thì báo curriculum.outcome_not_found', async () => {
+  it('tạo bản sao câu hỏi khi learning outcome không tồn tại thì kiểm tra capability question:add rồi báo curriculum.outcome_not_found và không mở transaction', async () => {
     const { service, repo, evaluator } = buildService();
     repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
     const error = await capture(service.createQuestionCopies(ACTOR, 'cat-1', [{
@@ -420,6 +457,20 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     }] as never, async () => 'done'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Learning outcome o-9 not found', code: 'curriculum.outcome_not_found' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:add', CTX);
+    expect(repo.transaction).not.toHaveBeenCalled();
+    expect(repo.insertQuestion).not.toHaveBeenCalled();
+  });
+
+  it('tạo bản sao câu hỏi thiếu capability question:add thì lỗi capability thắng và không mở transaction', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    evaluator.requireCapability.mockRejectedValue(new ForbiddenException({ message: 'Capability denied', code: 'access.capability_denied' }));
+    const error = await capture(service.createQuestionCopies(ACTOR, 'cat-1', [{
+      qtype: 'multichoice',
+      content: multichoiceInput('cat-1'),
+    }] as never, async () => 'done'));
+    expect(error).toBeInstanceOf(ForbiddenException);
     expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:add', CTX);
     expect(repo.transaction).not.toHaveBeenCalled();
     expect(repo.insertQuestion).not.toHaveBeenCalled();
@@ -480,6 +531,40 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     const error = await capture(service.detachOutcome(ACTOR, 'q-1', 'o-1'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Question is not linked to this learning outcome', code: 'question.outcome_link_not_found' });
+  });
+
+  it('sửa liên kết learning outcome thiếu capability question:editall thì lỗi capability thắng kiểm tra liên kết', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    evaluator.requireCapability.mockRejectedValue(new ForbiddenException({ message: 'Capability denied', code: 'access.capability_denied' }));
+    const error = await capture(service.updateOutcomeLink(ACTOR, 'q-1', 'o-1', 'apply'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:editall', CTX);
+    expect(repo.getQuestionOutcomeLink).not.toHaveBeenCalled();
+    expect(repo.updateQuestionOutcomeLink).not.toHaveBeenCalled();
+  });
+
+  it('sửa liên kết learning outcome chưa gắn thì báo question.outcome_link_not_found', async () => {
+    const { service, repo } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    repo.getQuestionOutcomeLink.mockResolvedValue(undefined);
+    const error = await capture(service.updateOutcomeLink(ACTOR, 'q-1', 'o-1', 'apply'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question is not linked to this learning outcome', code: 'question.outcome_link_not_found' });
+    expect(repo.updateQuestionOutcomeLink).not.toHaveBeenCalled();
+  });
+
+  it('sửa liên kết learning outcome đã gắn thì cập nhật mức nhận thức và trả về liên kết chương trình', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    repo.getQuestionOutcomeLink.mockResolvedValue({ questionId: 'q-1', learningOutcomeId: 'o-1', cognitiveLevel: 'remember' } as never);
+    const links = await service.updateOutcomeLink(ACTOR, 'q-1', 'o-1', 'apply');
+    expect(links).toEqual({ questionId: 'q-1', subjectIds: [], outcomes: [] });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:editall', CTX);
+    expect(repo.updateQuestionOutcomeLink).toHaveBeenCalledWith('q-1', 'o-1', 'apply');
   });
 
   it('kiểm tra quyền tạo usage khi câu hỏi không tồn tại thì báo question.not_found', async () => {
@@ -550,6 +635,19 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     expect(evaluator.isSiteAdmin).not.toHaveBeenCalled();
   });
 
+  it('người xem ngân hàng cá nhân của người khác mà không phải quản trị viên thì getQuestionForViewer báo question.not_found dù có capability question:useall', async () => {
+    const { service, repo, evaluator } = buildService();
+    readableQuestion(repo);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1', { scope: 'personal', ownerId: OTHER }) as never);
+    evaluator.isSiteAdmin.mockResolvedValue(false);
+    evaluator.hasCapability.mockResolvedValue(true);
+    const error = await capture(service.getQuestionForViewer(ACTOR, 'q-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+    expect(evaluator.isSiteAdmin).toHaveBeenCalledWith(ACTOR);
+    expect(evaluator.hasCapability).not.toHaveBeenCalled();
+  });
+
   it('gắn môn học cho câu hỏi trong danh mục cá nhân của người khác thì báo question.not_found', async () => {
     const { service, repo, evaluator } = buildService();
     repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
@@ -611,10 +709,11 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
   });
 
   it('danh mục không tồn tại thì listQuestionsForViewer báo question.category_not_found', async () => {
-    const { service } = buildService();
+    const { service, repo } = buildService();
     const error = await capture(service.listQuestionsForViewer(ACTOR, 'cat-9'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Question category cat-9 not found', code: 'question.category_not_found' });
+    expect(repo.listQuestionsInCategory).not.toHaveBeenCalled();
   });
 
   it('người xem không có quyền dùng ngân hàng thì listQuestionsForViewer báo question.category_not_found', async () => {
@@ -629,10 +728,11 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
   });
 
   it('danh mục không tồn tại thì listStimuliForViewer báo question.category_not_found', async () => {
-    const { service } = buildService();
+    const { service, repo } = buildService();
     const error = await capture(service.listStimuliForViewer(ACTOR, 'cat-9'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Question category cat-9 not found', code: 'question.category_not_found' });
+    expect(repo.listStimuliInCategory).not.toHaveBeenCalled();
   });
 
   it('người xem không có quyền dùng ngân hàng thì listStimuliForViewer báo question.category_not_found', async () => {
@@ -643,6 +743,7 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     const error = await capture(service.listStimuliForViewer(ACTOR, 'cat-1'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Question category cat-1 not found', code: 'question.category_not_found' });
+    expect(repo.listStimuliInCategory).not.toHaveBeenCalled();
   });
 
   it('câu hỏi tồn tại nhưng danh mục không tồn tại thì listVersionsForViewer báo question.not_found', async () => {
@@ -682,5 +783,15 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
     expect(repo.listQuestionSubjectLinks).not.toHaveBeenCalled();
+  });
+
+  it('câu hỏi tồn tại nhưng danh mục không tồn tại thì getCurriculumLinksForViewer báo question.not_found', async () => {
+    const { service, repo } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    const error = await capture(service.getCurriculumLinksForViewer(ACTOR, 'q-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+    expect(repo.listQuestionSubjectLinks).not.toHaveBeenCalled();
+    expect(repo.listQuestionOutcomeLinks).not.toHaveBeenCalled();
   });
 });
