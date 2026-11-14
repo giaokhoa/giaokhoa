@@ -131,7 +131,7 @@ export class NotificationEventsCatchupService implements OnModuleInit, OnModuleD
             spaceId: null,
             occurredAt: row.occurredAt.toISOString(),
           };
-          await this.queue.add(row.type, data, { jobId: outboxRelayJobId(null, row.id) });
+          await this.queue.add(row.type, data, { jobId: outboxRelayJobId(null, row.id), removeOnFail: true });
           enqueued += 1;
           onProgress(enqueued);
         }

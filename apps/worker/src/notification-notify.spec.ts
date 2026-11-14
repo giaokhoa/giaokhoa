@@ -95,7 +95,7 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
       notificationId: 'notif-notify-1',
       dedupeKey: 'tenant-1-dispatch-guardian_digest-user-guardian-email-notif-notify-1',
     });
-    expect(jobOptions).toEqual({ jobId: 'tenant-1-dispatch-guardian_digest-user-guardian-email-notif-notify-1', attempts: 3 });
+    expect(jobOptions).toEqual({ jobId: 'tenant-1-dispatch-guardian_digest-user-guardian-email-notif-notify-1', attempts: 3, removeOnFail: true });
     expect(insertedOutbox).toHaveLength(1);
     expect(insertedOutbox[0]).toMatchObject({
       aggregate: 'messaging', type: 'notification_created', tenant_id: 'tenant-1',
@@ -103,6 +103,18 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     expect(sqlPayloadOf(insertedOutbox[0]?.payload)).toEqual({
       userId: 'user-guardian', provider: 'guardian_digest', notificationId: 'notif-notify-1', tenantId: 'tenant-1',
     });
+  });
+
+  it('job email fail hết 3 lượt bị xoá khỏi failed set để lần notify lại cùng eventId không chạm job fail cũ: tuỳ chọn xếp job mang removeOnFail true và không mang removeOnComplete để job hoàn thành vẫn giữ cửa sổ dedupe', async () => {
+    const { delivery, queue } = buildNotify({ user: ACTIVE_USER });
+    await delivery.notify('user-guardian', 'guardian_digest', DIGEST_INPUT);
+    const [, , jobOptions] = queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>, Record<string, unknown>];
+    expect(jobOptions).toEqual({
+      jobId: 'tenant-1-dispatch-guardian_digest-user-guardian-email-notif-notify-1',
+      attempts: 3,
+      removeOnFail: true,
+    });
+    expect(jobOptions).not.toHaveProperty('removeOnComplete');
   });
 
   it('tần suất email v2 bằng off: không xếp job, ghi dispatch log skipped-preference cho kênh email, popup vẫn giao và sự kiện vẫn ghi', async () => {

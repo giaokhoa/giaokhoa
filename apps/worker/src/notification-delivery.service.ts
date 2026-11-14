@@ -296,7 +296,7 @@ export class NotificationDeliveryService implements OnModuleDestroy {
           userId, provider: providerName, channel: 'email', tenantId,
           emailFrequency: frequency, subject: external.subject, body: external.body,
           notificationId, dedupeKey,
-        }, { jobId: dedupeKey, attempts: 3 });
+        }, { jobId: dedupeKey, attempts: 3, removeOnFail: true });
         channels['email'] = 'queued';
       }
     }

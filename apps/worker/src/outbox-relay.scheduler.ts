@@ -212,6 +212,7 @@ export class OutboxRelayScheduler {
       }
       await queue.add(row.type, data, {
         jobId: outboxRelayJobId(spaceId, row.id),
+        removeOnFail: true,
       });
     }
   }

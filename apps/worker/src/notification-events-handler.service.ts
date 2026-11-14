@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import { sql } from '@giaokhoa/db';
 import { NotificationDeliveryService } from './notification-delivery.service';
@@ -25,8 +25,15 @@ function displayNameOf(user: { firstName: string; lastName: string; username: st
   return `${user.firstName} ${user.lastName}`.trim() || user.username;
 }
 
+function eventTimeKey(value: string): string {
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? value.replaceAll(':', '-') : String(time);
+}
+
 @Injectable()
 export class NotificationEventsHandlerService {
+  private readonly logger = new Logger(NotificationEventsHandlerService.name);
+
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly delivery: NotificationDeliveryService,
@@ -55,7 +62,11 @@ export class NotificationEventsHandlerService {
     const item = await this.getGradeItemNotifyInfo(itemId);
     if (!item || item.hidden || NON_NOTIFIED_ITEM_TYPES.has(item.itemType)) return;
     const grade = await this.getGradeRevision(itemId, userId);
-    if (!grade || grade.hidden) return;
+    if (!grade) {
+      this.logger.warn(`Grade row missing for item ${itemId} user ${userId}`);
+      return;
+    }
+    if (grade.hidden) return;
     const courseName = (await this.getCourseFullName(item.courseId)) ?? '';
     const itemName = item.itemName || courseName;
     await this.delivery.notify(userId, 'grade_updated', {
@@ -97,7 +108,7 @@ export class NotificationEventsHandlerService {
       contextUrl: `/courses/${courseId}`,
       courseId,
       tenantId: await this.resolveCourseTenantId(payload, courseId, userId),
-      eventId: `enrol-expiry-${typeof payload.enrolmentId === 'string' ? payload.enrolmentId : 'unknown'}-${timeEnd}`,
+      eventId: `enrol-expiry-${typeof payload.enrolmentId === 'string' ? payload.enrolmentId : 'unknown'}-${eventTimeKey(timeEnd)}`,
     });
   }
 
@@ -123,7 +134,7 @@ export class NotificationEventsHandlerService {
         : `/courses/${courseId}/exams/${pinId}`,
       courseId,
       tenantId: await this.resolveCourseTenantId(payload, courseId, userId),
-      eventId: `activity-due-${isAssign ? assignmentId : pinId}-${timeClose}`,
+      eventId: `activity-due-${isAssign ? assignmentId : pinId}-${eventTimeKey(timeClose)}`,
     });
   }
 
@@ -360,7 +371,7 @@ export class NotificationEventsHandlerService {
       .where('course', '=', courseId)
       .executeTakeFirst();
     const completedAt = row?.timeCompleted ?? null;
-    return completedAt ? `course-completed-${courseId}-${completedAt.toISOString()}` : undefined;
+    return completedAt ? `course-completed-${courseId}-${completedAt.getTime()}` : undefined;
   }
 
   private async getCourseFullName(courseId: string): Promise<string | undefined> {

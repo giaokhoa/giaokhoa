@@ -41,16 +41,18 @@ function makeRow(partial: Partial<FakeRow>): FakeRow {
 
 class FakeQueue {
   readonly jobs = new Map<string, { name: string; data: OutboxEventJobData }>();
+  readonly addOptions: Array<Record<string, unknown>> = [];
   readonly stampedAtDispatch: boolean[] = [];
   failNextAdd = false;
 
   constructor(private readonly rows: FakeRow[]) {}
 
-  async add(name: string, data: OutboxEventJobData, opts?: { jobId?: string }) {
+  async add(name: string, data: OutboxEventJobData, opts?: { jobId?: string; removeOnFail?: boolean }) {
     if (this.failNextAdd) {
       this.failNextAdd = false;
       throw new Error('redis unavailable');
     }
+    this.addOptions.push({ ...(opts ?? {}) });
     const row = this.rows.find((r) => r.id === data.outboxId);
     this.stampedAtDispatch.push(row ? row.publishedAt !== null : true);
     const jobId = opts?.jobId ?? data.outboxId;
@@ -217,6 +219,16 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
       spaceId: null,
       occurredAt: '2026-10-29T00:00:00.000Z',
     });
+  });
+
+  it('đẩy job relay mang removeOnFail true để job fail không chặn lần relay lại cùng outboxId, và không mang removeOnComplete để job hoàn thành vẫn giữ dedupe', async () => {
+    const row = makeRow({ aggregate: 'auth', type: 'auth_mail_requested', tenantId: 'tenant-1' });
+    const { relay, queues } = makeRelay([row], ROUTES, { tenantSlugs: { 'tenant-1': 'trung-tam-a' } });
+    const queue = queues.get('outbox-auth-mail')!;
+
+    await relay.publishPending();
+
+    expect(queue.addOptions).toEqual([{ jobId: `shared-${row.id}`, removeOnFail: true }]);
   });
 
   it('không đóng dấu khi đẩy job thất bại và phát lại thành công ở lượt relay sau', async () => {
