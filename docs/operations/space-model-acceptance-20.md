@@ -99,3 +99,15 @@ Bằng chứng mục tiêu: worker unit routing/sweep/outbox **31/31**, integrat
 Bổ sung ổn định fixture worker: `guardian-digest-delivery`, `guardian-digest` và `notification-events-catchup` trước đây dựng UUID qua `Date.now() % 991/997`, có thể trùng qua lần chạy DB test khác; nay UUID gắn phần ngẫu nhiên riêng cho mỗi run nhưng ổn định trong run. Ba suite này chạy lại **16/16 PASS**. Lượt full worker integration **trước sửa fixture** đạt 178/179 với lỗi unique active guardian link; **sau sửa fixture chạy lại toàn bộ 34 file / 179 test PASS**. Toàn bộ worker unit **21 file / 140 test PASS**; lint/typecheck/build worker PASS. Đây là bằng chứng local, chưa thay cho CI head cuối.
 
 **Còn thiếu:** HTTP E2E legacy chưa di trú sang provision database/role riêng; thử nghiệm đồng thời/queue thực qua toàn bộ AC, số đo RSS/pool AC26 và các ca chốt AC01–AC27. Không đánh dấu hoàn tất khi CI trên commit cuối chưa đạt.
+
+## CI E2E trên head `a53c682` — phân nhóm chặn và sửa local chưa push
+
+Đã tải và gộp bốn blob test từ GitHub Actions run `43577129239`: **12 file fail / 136 file pass**, **8 test fail / 954 pass / 78 skipped**. Những nhóm `verify-workspace`, `test-api`, `verify-stack` PASS; fail nằm ở HTTP E2E và hậu quả `merge-e2e-reports` / `verify`. Không xem unit worker xanh là kết luận toàn PR.
+
+Đã sửa local, chạy lại **5 file / 42 E2E PASS** cùng một lượt:
+
+- `messaging-group-creation-gate`: thay luồng tạo `school` qua API bằng `runSpaceProvision` cấp control-plane + role/database dedicated, kích hoạt lời mời rồi đăng nhập ở hostname trung tâm. Các kiểm tra quyền nhóm và chống xuyên kho giữ nguyên.
+- `space-pre-migration-gates-587`, `space-membership-flow`, `messaging-socket-space-auth`: các suite tiền di trú đã có database/role dedicated riêng, nhưng còn dùng HTTP API để dựng **dữ liệu legacy trước di trú**. Fixture test hiện gieo dữ liệu lịch sử trực tiếp bằng SQL, sau đó sao sang kho riêng và kiểm các cổng thật; không mở lại API tạo shared. Kho legacy chỉ hợp lệ ở host gốc; thử dùng token legacy trên subdomain phải nhận 401.
+- `users-my-access-equivalence`: fixture dữ liệu legacy cho oracle năng lực được gieo trực tiếp; tạo context đúng qua `ContextsService`, giữ nguyên phép đối chiếu năng lực.
+
+Cả nhóm API lint, typecheck, `git diff --check` PASS local. Các thay đổi này **chưa push**, vì còn 7 file E2E lỗi trên CI cũ: `quiz/quiz-shared-questions`, `exams/system-shared-exams`, `system-bank/system-bank-flow`, `system-bank/system-materials`, `payments/payments-refund-lifecycle`, `payments/payments-coupons-slots`, `platform/tenant-isolation`. Những suite này cần tái cấu trúc các luồng shared thành dedicated cho đúng hành vi nghiệp vụ; không chỉ sửa mã trạng thái để qua test. CI chỉ được coi xanh sau khi tất cả E2E/verify PASS trên cùng SHA đã push, và AC01–AC27 vẫn cần kiểm chứng riêng.

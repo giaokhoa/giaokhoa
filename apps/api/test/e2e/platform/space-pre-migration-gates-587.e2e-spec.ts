@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
 const BETTER_AUTH_SECRET = 'test-better-auth-secret-at-least-32-chars';
 process.env.BETTER_AUTH_ENABLED = 'true';
@@ -266,15 +267,7 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     app = await createMountedTestApp();
     adminToken = (await helpers.login(app, 'admin', 'Admin123!')).accessToken;
 
-    const createdA = (await must(
-      await helpers.http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm A (spec 587)',
-        slug: CENTRE_A_SLUG,
-        kind: 'school',
-      }),
-      'create tenant A',
-    )) as { id: string };
-    tenantAId = createdA.id;
+    tenantAId = await seedLegacyCentreInShared({ slug: CENTRE_A_SLUG, name: 'Trung tâm A (spec 587)' });
     await copyRow(
       process.env.DATABASE_URL!,
       clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD),

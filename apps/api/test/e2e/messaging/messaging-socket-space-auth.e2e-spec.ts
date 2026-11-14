@@ -9,6 +9,7 @@ import { Client, Pool } from 'pg';
 import { io, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 
 const BETTER_AUTH_SECRET = 'test-better-auth-secret-at-least-32-chars';
 process.env.BETTER_AUTH_ENABLED = 'true';
@@ -336,15 +337,7 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
 
     const adminToken = (await helpers.login(app, 'admin', 'Admin123!')).accessToken;
 
-    const created = (await must(
-      await helpers.http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
-        name: 'Trung tâm socket (spec 587)',
-        slug: CENTRE_SLUG,
-        kind: 'school',
-      }),
-      'create tenant',
-    )) as { id: string };
-    tenantId = created.id;
+    tenantId = await seedLegacyCentreInShared({ slug: CENTRE_SLUG, name: 'Trung tâm socket (spec 587)' });
     const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
     await copyRowById(process.env.DATABASE_URL!, centreUrl, 'tenants', tenantId);
 
