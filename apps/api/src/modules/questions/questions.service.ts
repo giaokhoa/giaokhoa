@@ -453,7 +453,7 @@ export class QuestionsService {
     });
     for (const outcomeId of new Set(prepared.flatMap((item) => (item.outcomes ?? []).map((link) => link.outcomeId)))) {
       if (!await this.repo.getOutcomeChain(outcomeId)) {
-        throw new NotFoundException({ code: 'curriculum.outcome_not_found' });
+        throw new NotFoundException({ message: `Learning outcome ${outcomeId} not found`, code: 'curriculum.outcome_not_found' });
       }
     }
     return this.repo.transaction(async (tx) => {

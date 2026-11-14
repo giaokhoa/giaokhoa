@@ -419,7 +419,7 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
       outcomes: [{ outcomeId: 'o-9', cognitiveLevel: 'remember' }],
     }] as never, async () => 'done'));
     expect(error).toBeInstanceOf(NotFoundException);
-    expect(problem(error)).toEqual({ code: 'curriculum.outcome_not_found' });
+    expect(problem(error)).toEqual({ message: 'Learning outcome o-9 not found', code: 'curriculum.outcome_not_found' });
     expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:add', CTX);
     expect(repo.transaction).not.toHaveBeenCalled();
     expect(repo.insertQuestion).not.toHaveBeenCalled();
