@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 
-export function notFound(message: string, code: string): NotFoundException {
+export function buildNotFound(message: string, code: string): NotFoundException {
   return new NotFoundException({ message, code });
 }
 
