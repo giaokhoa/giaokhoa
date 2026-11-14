@@ -89,16 +89,31 @@ export function createMessagingDistributionService(deps: {
     }
   }
 
-  async function suppressIfBlockedDirectPair(conversationId: string, memberIds: string[]): Promise<boolean> {
-    const conversation = await store.getConversation(conversationId).catch(() => undefined);
-    if (conversation?.type !== 1 || memberIds.length !== 2) return false;
+  async function isBlockedDirectPair(conversationType: number | undefined, memberIds: string[]): Promise<boolean> {
+    if (conversationType !== 1 || memberIds.length !== 2) return false;
     const first = memberIds[0];
     const second = memberIds[1];
     if (first === undefined || second === undefined) return true;
     const blocked = await blockedCounterpartIdsFailClosed(first);
-    if (blocked === null) return true;
-    if (!blocked.includes(second)) return false;
-    return true;
+    return blocked === null || blocked.includes(second);
+  }
+
+  async function suppressIfBlockedDirectPair(conversationId: string, memberIds: string[]): Promise<boolean> {
+    const conversation = await store.getConversation(conversationId).catch(() => undefined);
+    return isBlockedDirectPair(conversation?.type, memberIds);
+  }
+
+  async function emitConversationUpdated(
+    tenantId: string | null,
+    conversationId: string,
+    memberIds: string[],
+    message: RealtimeConversationUpdatedPayload['message'],
+  ): Promise<void> {
+    await Promise.all(memberIds.map(async (memberId) => {
+      const unreadCount = await store.countUnreadForConversation(conversationId, memberId).catch(() => 0);
+      const payload: RealtimeConversationUpdatedPayload = { conversationId, message, unreadCount };
+      await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
+    }));
   }
 
   async function emitConversationInvalidate(tenantId: string | null, conversationId: string, memberIds: string[]): Promise<void> {
@@ -108,41 +123,19 @@ export function createMessagingDistributionService(deps: {
 
   async function distributeNewMessage(messageRow: MessageRow, memberIds: string[]): Promise<void> {
     const conversation = await store.getConversation(messageRow.conversationId).catch(() => undefined);
-    if (conversation?.type === 1 && memberIds.length === 2) {
-      const first = memberIds[0];
-      const second = memberIds[1];
-      if (first === undefined || second === undefined) return;
-      const blocked = await blockedCounterpartIdsFailClosed(first);
-      if (blocked === null || blocked.includes(second)) {
-        return;
-      }
-    }
+    if (await isBlockedDirectPair(conversation?.type, memberIds)) return;
     const tenantId = conversation?.tenantId ?? null;
     const [withQuote] = await store.attachQuotes([messageRow], { privileged: false });
     const wire = toWireMessage(messageRow, withQuote?.replyTo ?? null);
     const newPayload: RealtimeNewMessagePayload = { conversationId: messageRow.conversationId, message: wire };
     await evictNonMemberSockets(tenantId, messageRow.conversationId, memberIds);
     await emitter.emitToRoom(conversationRoom(tenantId, messageRow.conversationId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.newMessage, newPayload);
-    await Promise.all(memberIds.map(async (memberId) => {
-      const unreadCount = await store.countUnreadForConversation(messageRow.conversationId, memberId).catch(() => 0);
-      const payload: RealtimeConversationUpdatedPayload = {
-        conversationId: messageRow.conversationId, message: wire, unreadCount,
-      };
-      await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
-    }));
+    await emitConversationUpdated(tenantId, messageRow.conversationId, memberIds, wire);
   }
 
   async function distributeMessageDeleted(messageRow: MessageRow, memberIds: string[]): Promise<void> {
     const conversation = await store.getConversation(messageRow.conversationId).catch(() => undefined);
-    if (conversation?.type === 1 && memberIds.length === 2) {
-      const first = memberIds[0];
-      const second = memberIds[1];
-      if (first === undefined || second === undefined) return;
-      const blocked = await blockedCounterpartIdsFailClosed(first);
-      if (blocked === null || blocked.includes(second)) {
-        return;
-      }
-    }
+    if (await isBlockedDirectPair(conversation?.type, memberIds)) return;
     const tenantId = conversation?.tenantId ?? null;
     await evictNonMemberSockets(tenantId, messageRow.conversationId, memberIds);
     const deletedPayload: RealtimeMessageDeletedPayload = {
@@ -155,13 +148,7 @@ export function createMessagingDistributionService(deps: {
     const [lastVisible] = await store.listMessages(messageRow.conversationId, { limit: 1 }).catch(() => []);
     if (!lastVisible) return;
     const wire = toWireMessage(lastVisible);
-    await Promise.all(memberIds.map(async (memberId) => {
-      const unreadCount = await store.countUnreadForConversation(messageRow.conversationId, memberId).catch(() => 0);
-      const payload: RealtimeConversationUpdatedPayload = {
-        conversationId: messageRow.conversationId, message: wire, unreadCount,
-      };
-      await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
-    }));
+    await emitConversationUpdated(tenantId, messageRow.conversationId, memberIds, wire);
   }
 
   async function distributeMessageRecalled(messageRow: MessageRow, memberIds: string[]): Promise<void> {
@@ -178,13 +165,7 @@ export function createMessagingDistributionService(deps: {
     const [lastVisible] = await store.listMessages(messageRow.conversationId, { limit: 1 }).catch(() => []);
     if (lastVisible) {
       const wire = toWireMessage(blankRecalledContent(lastVisible));
-      await Promise.all(memberIds.map(async (memberId) => {
-        const unreadCount = await store.countUnreadForConversation(messageRow.conversationId, memberId).catch(() => 0);
-        const payload: RealtimeConversationUpdatedPayload = {
-          conversationId: messageRow.conversationId, message: wire, unreadCount,
-        };
-        await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
-      }));
+      await emitConversationUpdated(tenantId, messageRow.conversationId, memberIds, wire);
     }
     await emitConversationInvalidate(tenantId, messageRow.conversationId, memberIds);
   }
@@ -206,13 +187,7 @@ export function createMessagingDistributionService(deps: {
     const [lastVisible] = await store.listMessages(snapshot.conversationId, { limit: 1 }).catch(() => []);
     if (lastVisible) {
       const wire = toWireMessage(blankRecalledContent(lastVisible));
-      await Promise.all(memberIds.map(async (memberId) => {
-        const unreadCount = await store.countUnreadForConversation(snapshot.conversationId, memberId).catch(() => 0);
-        const payload: RealtimeConversationUpdatedPayload = {
-          conversationId: snapshot.conversationId, message: wire, unreadCount,
-        };
-        await emitter.emitToRoom(userRoom(tenantId, memberId, currentSpaceId()), MESSAGING_SOCKET_EVENTS.conversationUpdated, payload);
-      }));
+      await emitConversationUpdated(tenantId, snapshot.conversationId, memberIds, wire);
     }
     await emitConversationInvalidate(tenantId, snapshot.conversationId, memberIds);
   }

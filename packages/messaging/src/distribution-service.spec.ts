@@ -118,4 +118,54 @@ describe('Tầng phân phối realtime — cổng chặn 1–1 fail-closed khi p
     expect(emits.some((e) => e.room === conversationRoom(TENANT_ID, CONVERSATION_ID))).toBe(false);
     expect(emits.some((e) => e.room === userRoom(TENANT_ID, USER_B))).toBe(false);
   });
+
+  it('khi xoá tin thì vẫn cập nhật tin cuối và số chưa đọc cho từng thành viên', async () => {
+    const { service, store, emits } = build({ blockedLookup: async () => [] });
+    (store.listMessages as ReturnType<typeof vi.fn>).mockResolvedValue([messageRow]);
+    (store.countUnreadForConversation as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_conversationId: string, memberId: string) => memberId === USER_A ? 2 : 5,
+    );
+
+    await service.distributeMessageDeleted({ ...messageRow, deletedAt: new Date('2026-10-28T00:01:00.000Z'), deletedBy: USER_A }, [USER_A, USER_B]);
+
+    const updates = emits.filter((e) => e.event === MESSAGING_SOCKET_EVENTS.conversationUpdated);
+    expect(updates.map((e) => [e.room, e.payload])).toEqual([
+      [userRoom(TENANT_ID, USER_A), expect.objectContaining({ unreadCount: 2, message: expect.objectContaining({ id: messageRow.id }) })],
+      [userRoom(TENANT_ID, USER_B), expect.objectContaining({ unreadCount: 5, message: expect.objectContaining({ id: messageRow.id }) })],
+    ]);
+  });
+
+  it('khi thu hồi tin thì cập nhật nội dung rỗng và vô hiệu hội thoại cho từng thành viên', async () => {
+    const { service, store, emits } = build({ blockedLookup: async () => [] });
+    const recalled = { ...messageRow, recalledAt: new Date('2026-10-28T00:01:00.000Z'), recalledBy: USER_A } as MessageRow;
+    (store.listMessages as ReturnType<typeof vi.fn>).mockResolvedValue([recalled]);
+
+    await service.distributeMessageRecalled(recalled, [USER_A, USER_B]);
+
+    const updates = emits.filter((e) => e.event === MESSAGING_SOCKET_EVENTS.conversationUpdated);
+    expect(updates).toHaveLength(2);
+    expect(updates.map((e) => e.payload)).toEqual([
+      expect.objectContaining({ message: expect.objectContaining({ fullMessage: '' }) }),
+      expect.objectContaining({ message: expect.objectContaining({ fullMessage: '' }) }),
+    ]);
+    expect(emits.filter((e) => e.event === MESSAGING_SOCKET_EVENTS.conversationInvalidate)).toHaveLength(2);
+  });
+
+  it('khi xoá cứng tin thì vẫn gửi cập nhật hội thoại và vô hiệu hội thoại', async () => {
+    const { service, store, emits } = build({ blockedLookup: async () => [] });
+    (store.listMessages as ReturnType<typeof vi.fn>).mockResolvedValue([messageRow]);
+
+    await service.distributeMessageRemoved({ conversationId: CONVERSATION_ID, messageId: messageRow.id, seq: 1, removedBy: USER_A }, [USER_A, USER_B]);
+
+    expect(emits.filter((e) => e.event === MESSAGING_SOCKET_EVENTS.conversationUpdated)).toHaveLength(2);
+    expect(emits.filter((e) => e.event === MESSAGING_SOCKET_EVENTS.conversationInvalidate)).toHaveLength(2);
+  });
+
+  it('khi xoá tin mà tra danh sách chặn bị lỗi thì không phát bất kỳ sự kiện nào', async () => {
+    const { service, emits } = build({ blockedLookup: async () => { throw new Error('database connection lost'); } });
+
+    await service.distributeMessageDeleted({ ...messageRow, deletedAt: new Date('2026-10-28T00:01:00.000Z') }, [USER_A, USER_B]);
+
+    expect(emits).toEqual([]);
+  });
 });

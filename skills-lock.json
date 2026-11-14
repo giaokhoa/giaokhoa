@@ -19,6 +19,13 @@
       "skillPath": "skills/ponytail-review/SKILL.md",
       "computedHash": "fe7b781db99ce79d931cdc798b3fbccd84b82538de4a3fc5f6d9d466946d1458"
     },
+    "refactor": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/refactor/SKILL.md",
+      "computedHash": "135501448a53aa6515fe0e1b72496947e5a24eb9493c3df4c929692fc4753da0",
+      "installMode": "copy"
+    },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
