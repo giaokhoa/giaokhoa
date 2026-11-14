@@ -19,7 +19,7 @@ Mọi nội dung issue, PR và comment viết bằng tiếng Việt theo `AGENTS
 - Agent triển khai push head mới và mở/cập nhật PR: `gh pr create` hoặc `gh pr edit`; kiểm tra SHA bằng `gh pr view <số> --json headRefOid`.
 - Agent review độc lập đọc diff và CI của head mới nhất, sau mỗi lượt **phải đăng ngay** kết luận và bằng chứng trên PR qua `gh pr review <số> --comment --body-file <tệp>` hoặc `gh pr comment <số> --body-file <tệp>`. Comment ghi rõ SHA và `CHANGES_REQUESTED`/`APPROVED`; một comment không phải là GitHub approval chính thức.
 - Agent triển khai sửa trên nhánh cũ, push, giải trình tại PR rồi chuyển lại cho Agent review; không merge khi còn finding chặn, reviewer chưa xác nhận head mới nhất hoặc chưa đạt cổng CI.
-- Sau khi merge, xác minh `gh pr view <số> --json state,mergedAt` và issue; chỉ dọn worktree/branch của PR đã merge khi đã xác minh không còn dữ liệu cần giữ. Ghi tình trạng cleanup vào PR.
+- Sau khi merge, xác minh `gh pr view <số> --json state,mergedAt` và issue; kiểm tra cả file bị Git ignore (đặc biệt `.env`, `data/files/*`) và bảo toàn mọi dữ liệu có giá trị trước khi dọn worktree/branch của PR đã merge. Ghi tình trạng cleanup vào PR.
 
 ## Phạm vi triage
 

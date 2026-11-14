@@ -43,6 +43,6 @@ Ghi từng lệnh, kết quả thực tế và trạng thái CI của head hiệ
 ## Hậu merge
 
 - [ ] Xác minh PR đã merge và issue được đóng.
-- [ ] Dọn worktree sạch; xóa branch local sau khi kiểm chứng squash merge không còn dữ liệu cần giữ.
+- [ ] Kiểm kê cả file bị Git ignore; sao lưu/đối chiếu `.env` và dữ liệu local có giá trị trước khi dọn worktree; xóa branch local sau khi kiểm chứng squash merge.
 - [ ] Xóa remote branch nếu GitHub chưa tự xóa; xác nhận `git worktree list` và `git branch -vv`.
 - [ ] Ghi comment lên PR về kết quả cleanup hoặc lý do phải giữ lại.
