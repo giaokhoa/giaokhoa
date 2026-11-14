@@ -57,6 +57,7 @@ function renderModeration(active: ConversationView | null = ACTIVE) {
 describe('useMessageModeration — cổng thu hồi và guard kiểm duyệt', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('tin của đối tác thì không thu hồi được dù còn trong cửa sổ', () => {
@@ -69,7 +70,9 @@ describe('useMessageModeration — cổng thu hồi và guard kiểm duyệt', (
     const { result } = renderModeration();
 
     expect(
-      result.current.canRecall(message({ createdAt: new Date(Date.now() - 16 * 60 * 1000).toISOString() })),
+      result.current.canRecall(
+        message({ createdAt: new Date(Date.now() - (15 * 60 + 30) * 1000).toISOString() }),
+      ),
     ).toBe(false);
   });
 
@@ -79,7 +82,35 @@ describe('useMessageModeration — cổng thu hồi và guard kiểm duyệt', (
     expect(result.current.canRecall(message())).toBe(true);
   });
 
-  it('cửa sổ thu hồi 15 phút phải giữ đồng bộ với giá trị mặc định của site config messagingrecallwindowminutes, server mới là nguồn sự thật', () => {
+  it('tin của mình đúng 15 phút tuổi thì web không cho thu hồi vì cửa sổ web dùng dấu nhỏ hơn, server mới là nguồn sự thật', () => {
+    const { result } = renderModeration();
+
+    expect(
+      result.current.canRecall(
+        message({ createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString() }),
+      ),
+    ).toBe(false);
+  });
+
+  it('tin của mình đang gửi thì không thu hồi được dù còn trong cửa sổ', () => {
+    const { result } = renderModeration();
+
+    expect(result.current.canRecall(message({ localStatus: 'sending' }))).toBe(false);
+  });
+
+  it('tin của mình đã thu hồi thì không thu hồi được nữa dù còn trong cửa sổ', () => {
+    const { result } = renderModeration();
+
+    expect(result.current.canRecall(message({ recalledAt: '2026-01-01T00:02:00.000Z' }))).toBe(false);
+  });
+
+  it('tin của mình đã xoá thì không thu hồi được dù còn trong cửa sổ', () => {
+    const { result } = renderModeration();
+
+    expect(result.current.canRecall(message({ deletedAt: '2026-01-01T00:02:00.000Z' }))).toBe(false);
+  });
+
+  it('hằng cửa sổ thu hồi của web là 15 phút', () => {
     expect(RECALL_WINDOW_MINUTES).toBe(15);
   });
 
@@ -93,19 +124,55 @@ describe('useMessageModeration — cổng thu hồi và guard kiểm duyệt', (
     expect(queryMocks.recallMutate).not.toHaveBeenCalled();
   });
 
-  it('tin của mình trong cửa sổ thì gọi thu hồi gọi API và cập nhật tin đã thu hồi', async () => {
+  it('tin của mình trong cửa sổ thì gọi API thu hồi và cập nhật tin đã thu hồi', async () => {
     const { result, patchMessages } = renderModeration();
+    const target = message();
 
     await act(async () => {
-      await result.current.recallMessage(message());
+      await result.current.recallMessage(target);
     });
 
     expect(queryMocks.recallMutate).toHaveBeenCalledTimes(1);
     expect(queryMocks.recallMutate).toHaveBeenCalledWith(OWN_MESSAGE_ID);
     expect(patchMessages).toHaveBeenCalledTimes(1);
+    expect(patchMessages).toHaveBeenCalledWith(CONV_ID, expect.any(Function));
+    const updater = patchMessages.mock.calls[0]![1] as (messages: MessageView[]) => MessageView[];
+    expect(updater([target])).toEqual([
+      { ...target, fullMessage: '', recalledAt: '2026-01-01T00:02:00.000Z', recalledBy: ME_ID },
+    ]);
+  });
+
+  it('gọi xoá tin của đối tác thì không gọi API xoá tin', async () => {
+    const { result } = renderModeration();
+
+    await act(async () => {
+      await result.current.deleteMessage(message({ id: PEER_MESSAGE_ID, userIdFrom: OTHER_ID }));
+    });
+
+    expect(queryMocks.deleteMutate).not.toHaveBeenCalled();
+  });
+
+  it('gọi xoá tin của mình thì gọi API xoá tin và cập nhật tin đã xoá', async () => {
+    const { result, patchMessages } = renderModeration();
+    const target = message();
+
+    await act(async () => {
+      await result.current.deleteMessage(target);
+    });
+
+    expect(queryMocks.deleteMutate).toHaveBeenCalledTimes(1);
+    expect(queryMocks.deleteMutate).toHaveBeenCalledWith(OWN_MESSAGE_ID);
+    expect(patchMessages).toHaveBeenCalledTimes(1);
+    expect(patchMessages).toHaveBeenCalledWith(CONV_ID, expect.any(Function));
+    const updater = patchMessages.mock.calls[0]![1] as (messages: MessageView[]) => MessageView[];
+    expect(updater([target])).toEqual([
+      { ...target, deletedAt: '2026-01-01T00:02:00.000Z', deletedBy: ME_ID },
+    ]);
   });
 
   it('người không kiểm duyệt gọi xoá cứng thì không gọi API xoá cứng', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal('prompt', vi.fn(() => 'lý do kiểm duyệt'));
     const { result } = renderModeration();
 
     await act(async () => {
@@ -116,6 +183,8 @@ describe('useMessageModeration — cổng thu hồi và guard kiểm duyệt', (
   });
 
   it('người không kiểm duyệt gọi gỡ hàng loạt đã chọn thì không gọi API gỡ hàng loạt', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal('prompt', vi.fn(() => 'lý do kiểm duyệt'));
     const { result } = renderModeration();
     act(() => {
       result.current.setSelectedForBulk(new Set([PEER_MESSAGE_ID]));

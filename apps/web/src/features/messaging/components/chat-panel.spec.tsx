@@ -194,6 +194,30 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
     expect(props.onStartReply).toHaveBeenCalledWith(PEER_MESSAGE);
   });
 
+  it('chạm lại cùng một bong bóng sau 351ms thì không trả lời', () => {
+    const { props } = renderPanel();
+    const bubble = screen.getByTestId(`message-bubble-${PEER_MESSAGE_ID}`);
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+
+    fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+    now += 351;
+    fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+    nowSpy.mockRestore();
+
+    expect(props.onStartReply).not.toHaveBeenCalled();
+  });
+
+  it('chạm lại cùng một bong bóng lệch 90px thì không trả lời', () => {
+    const { props } = renderPanel();
+    const bubble = screen.getByTestId(`message-bubble-${PEER_MESSAGE_ID}`);
+
+    fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+    fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 100, clientY: 20 }] });
+
+    expect(props.onStartReply).not.toHaveBeenCalled();
+  });
+
   it('hiện chip trả lời khi có replyTarget và bấm huỷ thì gọi onCancelReply', async () => {
     const { props } = renderPanel({ replyTarget: PEER_MESSAGE });
 

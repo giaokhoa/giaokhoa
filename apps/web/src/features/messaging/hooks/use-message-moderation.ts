@@ -22,6 +22,7 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
   const bulkRemoveMutation = useBulkRemoveMessages();
 
   async function deleteMessage(message: MessageView) {
+    if (message.userIdFrom !== myId) return;
     setActionMessage(null);
     try {
       const deleted = await deleteMessageMutation.mutateAsync(message.id);
