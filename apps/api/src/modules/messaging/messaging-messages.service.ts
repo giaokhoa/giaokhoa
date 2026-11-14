@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { badRequest, notFound } from '../../common/http-errors';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -127,27 +127,24 @@ export class MessagingMessagesService {
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertConversationMember(actorId, conversation);
     if (!conversation.enabled && !(await this.conversations.canManageConversation(actorId, conversation))) {
-      throw new ForbiddenException({
-        message: 'Chat is disabled for this conversation',
-        code: 'messaging.conversation_disabled',
-      });
+      forbidden('Chat is disabled for this conversation', 'messaging.conversation_disabled');
     }
     const members = await this.repo.listMembers(conversationId);
     for (const memberId of members) {
       if (memberId === actorId) continue;
       const recipient = await this.users.getByIdOrUndefined(memberId);
       if (!recipient || recipient.suspended || recipient.deleted) {
-        throw new ForbiddenException({ message: `User ${memberId} cannot receive messages (suspended)`, code: 'messaging.recipient_suspended' });
+        forbidden(`User ${memberId} cannot receive messages (suspended)`, 'messaging.recipient_suspended');
       }
       if (await this.repo.isBlocked(memberId, actorId)) {
-        throw new ForbiddenException({ message: `User ${memberId} has blocked you`, code: 'messaging.contact_blocked' });
+        forbidden(`User ${memberId} has blocked you`, 'messaging.contact_blocked');
       }
     }
     if (conversation.type === 1) {
       const other = members.find((id) => id !== actorId);
       if (other) {
         if (await this.repo.isBlocked(actorId, other)) {
-          throw new ForbiddenException({ message: 'You have blocked this user', code: 'messaging.contact_blocked' });
+          forbidden('You have blocked this user', 'messaging.contact_blocked');
         }
         await this.contacts.assertCanContact(actorId, other);
       }
@@ -197,10 +194,7 @@ export class MessagingMessagesService {
   }
 
   async updateMessage(): Promise<never> {
-    throw new ForbiddenException({
-      message: 'A sent message cannot be modified: ownership passed to core_message when it was sent',
-      code: 'messaging.message_immutable',
-    });
+    forbidden('A sent message cannot be modified: ownership passed to core_message when it was sent', 'messaging.message_immutable');
   }
 
 
@@ -222,11 +216,11 @@ export class MessagingMessagesService {
   }
 
   private async assertCanHardDelete(actorId: string, conversation: ConversationRow): Promise<void> {
-    const forbidden = () => new ForbiddenException({
+    const forbiddenError = () => new ForbiddenException({
       message: 'Only a moderator with the moderation:manage capability in this conversation scope can permanently remove messages',
       code: 'messaging.message_moderation_forbidden',
     });
-    if (!(await this.conversations.canModerateConversation(actorId, conversation))) throw forbidden();
+    if (!(await this.conversations.canModerateConversation(actorId, conversation))) throw forbiddenError();
     const courseId = await this.conversations.resolveConversationCourseId(conversation);
     if (!courseId) {
       const classId = await this.conversations.resolveConversationClassId(conversation);
@@ -235,17 +229,17 @@ export class MessagingMessagesService {
         const allowedClass = classCtx
           ? await this.evaluator.hasCapability(actorId, 'moderation:manage', classCtx.id)
           : await this.evaluator.isSiteAdmin(actorId);
-        if (!allowedClass) throw forbidden();
+        if (!allowedClass) throw forbiddenError();
         return;
       }
-      if (!(await this.evaluator.isSiteAdmin(actorId))) throw forbidden();
+      if (!(await this.evaluator.isSiteAdmin(actorId))) throw forbiddenError();
       return;
     }
     const courseCtx = await this.contexts.getByLevelInstance(50, courseId);
     const allowed = courseCtx
       ? await this.evaluator.hasCapability(actorId, 'moderation:manage', courseCtx.id)
       : await this.evaluator.isSiteAdmin(actorId);
-    if (!allowed) throw forbidden();
+    if (!allowed) throw forbiddenError();
   }
 
   async deleteMessage(actorId: string, messageId: string): Promise<MessageRow> {
@@ -256,10 +250,7 @@ export class MessagingMessagesService {
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertDirectConversationVisible(actorId, conversation);
     if (existing.userIdFrom !== actorId) {
-      throw new ForbiddenException({
-        message: 'Only the author can delete this message for themselves; permanent removal belongs to moderators',
-        code: 'messaging.message_delete_forbidden',
-      });
+      forbidden('Only the author can delete this message for themselves; permanent removal belongs to moderators', 'messaging.message_delete_forbidden');
     }
     if (existing.deletedAt) return existing;
     if (!(await this.repo.isDeletedForUser(messageId, actorId))) {
@@ -284,10 +275,7 @@ export class MessagingMessagesService {
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertDirectConversationVisible(actorId, conversation);
     if (existing.userIdFrom !== actorId) {
-      throw new ForbiddenException({
-        message: 'Only the author can recall this message',
-        code: 'messaging.message_recall_forbidden',
-      });
+      forbidden('Only the author can recall this message', 'messaging.message_recall_forbidden');
     }
     if (existing.recalledAt) return existing;
     if (existing.deletedAt) {
@@ -295,10 +283,7 @@ export class MessagingMessagesService {
     }
     const windowMinutes = await this.recallWindowMinutes();
     if (!isWithinRecallWindow(existing.createdAt, new Date(), windowMinutes)) {
-      throw new ForbiddenException({
-        message: `The recall window of ${windowMinutes} minutes has expired for this message`,
-        code: 'messaging.recall_window_expired',
-      });
+      forbidden(`The recall window of ${windowMinutes} minutes has expired for this message`, 'messaging.recall_window_expired');
     }
     await this.repo.insertModeratorAction({
       messageId, conversationId: conversation.id, actorId, authorId: existing.userIdFrom,
@@ -436,10 +421,7 @@ export class MessagingMessagesService {
     const conversation = await this.repo.getConversation(report.conversationId);
     if (!conversation) notFound(`Conversation ${report.conversationId} not found`, 'messaging.conversation_not_found');
     if (!(await this.conversations.canModerateConversation(actorId, conversation))) {
-      throw new ForbiddenException({
-        message: 'Only an administrator or the teacher in charge of this conversation\'s course can review a reported conversation',
-        code: 'messaging.report_review_forbidden',
-      });
+      forbidden('Only an administrator or the teacher in charge of this conversation\'s course can review a reported conversation', 'messaging.report_review_forbidden');
     }
     const courseId = await this.conversations.resolveConversationCourseId(conversation);
     await this.outbox.enqueueStandalone({
@@ -463,10 +445,7 @@ export class MessagingMessagesService {
     const conversation = await this.repo.getConversation(report.conversationId);
     if (!conversation) notFound(`Conversation ${report.conversationId} not found`, 'messaging.conversation_not_found');
     if (!(await this.conversations.canModerateConversation(actorId, conversation))) {
-      throw new ForbiddenException({
-        message: 'Only an administrator or the teacher in charge of this conversation\'s course can handle its reports',
-        code: 'messaging.report_review_forbidden',
-      });
+      forbidden('Only an administrator or the teacher in charge of this conversation\'s course can handle its reports', 'messaging.report_review_forbidden');
     }
     const updated = await this.repo.updateReportStatus(reportId, status, actorId);
     return updated!;
@@ -478,7 +457,7 @@ export class MessagingMessagesService {
       await this.conversations.assertConversationMember(userId, conversation);
       await this.conversations.assertDirectConversationVisible(userId, conversation);
     } else if (!(await this.repo.isMember(conversationId, userId))) {
-      throw new ForbiddenException({ message: 'You are not a member of this conversation', code: 'messaging.not_member' });
+      forbidden('You are not a member of this conversation', 'messaging.not_member');
     }
     const before = (await this.repo.getMemberLastReadSeq(conversationId, userId)) ?? 0;
     const result = await this.repo.markConversationRead(conversationId, userId);

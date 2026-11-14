@@ -1,9 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
 
-export function buildNotFound(message: string, code: string): NotFoundException {
-  return new NotFoundException({ message, code });
-}
-
 export function categoryNotFound(id: string): NotFoundException {
   return new NotFoundException({ message: `Question category ${id} not found`, code: 'question.category_not_found' });
 }
