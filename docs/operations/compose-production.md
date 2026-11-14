@@ -1,5 +1,7 @@
 # Kiểm tra cấu hình production khi triển khai Compose
 
+Ngân sách pool trên cấu hình mặc định và số đo tại môi trường dev được đối chiếu trong [báo cáo tài nguyên khi nghiệm thu #20](space-resource-budget.md); cần đo lại với tải thực trước khi quyết định số replica hoặc ngưỡng vận hành.
+
 Tài liệu vận hành cho PR audit #48. Đây là các cổng phải kiểm tra trên
 máy thực, **không** được coi là đạt chỉ vì CI tạo stack tạm thời thành công.
 
