@@ -84,7 +84,7 @@ export function ChatMessageItem({
   onHardDeleteMessage, onViewProfile, onBlockContact, onUnblockContact,
 }: ChatMessageItemProps) {
   const { t, i18n } = useTranslation('app');
-  const lastBubbleTapRef = useRef<{ messageId: string; at: number; x: number; y: number } | null>(null);
+  const lastBubbleTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   const mine = message.userIdFrom === myId;
   const seenByOthers = mine && !message.localStatus && message.seq > 0 && message.seq <= seenThroughSeq;
   const hasOwnStatusNote = Boolean(message.deletedAt || message.recalledAt || message.localStatus);
@@ -151,14 +151,14 @@ export function ChatMessageItem({
         const now = Date.now();
         const last = lastBubbleTapRef.current;
         if (
-          last && last.messageId === message.id && now - last.at <= 350
+          last && now - last.at <= 350
           && Math.hypot(touch.clientX - last.x, touch.clientY - last.y) <= 24
         ) {
           lastBubbleTapRef.current = null;
           onStartReply(message);
           return;
         }
-        lastBubbleTapRef.current = { messageId: message.id, at: now, x: touch.clientX, y: touch.clientY };
+        lastBubbleTapRef.current = { at: now, x: touch.clientX, y: touch.clientY };
       } : undefined}
       onKeyDown={showReplyAction ? (e) => {
         if (e.target !== e.currentTarget) return;
