@@ -1,5 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import { FilesService } from '../../../src/modules/files/files.service';
@@ -42,6 +44,7 @@ describe('Files: bất biến lưu trữ theo nội dung (integration)', () => {
     const b = await upload(uploaderToken, 'b.txt', content);
     expect(a.contentHash).toBe(b.contentHash);
     const service = app.get(FilesService);
+    expect(service.physicalKey(a.contentHash)).toContain(join(tmpdir(), 'giaokhoa-api-vitest-'));
     expect(await service.refcount(a.contentHash)).toBe(2);
     expect(existsSync(service.physicalKey(a.contentHash))).toBe(true);
     expect(service.physicalKey(a.contentHash)).toContain(`/${a.contentHash.slice(0, 2)}/${a.contentHash.slice(2, 4)}/`);
