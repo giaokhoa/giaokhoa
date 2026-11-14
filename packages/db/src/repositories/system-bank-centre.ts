@@ -176,6 +176,18 @@ export class SystemBankCentreRepository {
       .execute();
   }
 
+  async listImportsForTenant(tenantId: string, sourceQuestionId?: string): Promise<SystemQuestionImportRow[]> {
+    let query = this.db.selectFrom('system_question_imports')
+      .select(SYSTEM_QUESTION_IMPORT_COLUMNS)
+      .where('question_id', 'in', (eb) => eb.selectFrom('question_bank_entries')
+        .innerJoin('question_categories', 'question_categories.id', 'question_bank_entries.question_category_id')
+        .innerJoin('question_banks', 'question_banks.id', 'question_categories.bank_id')
+        .select('question_bank_entries.question_id')
+        .where('question_banks.tenant_id', '=', tenantId));
+    if (sourceQuestionId) query = query.where('source_question_id', '=', sourceQuestionId);
+    return query.orderBy('imported_at', 'desc').execute();
+  }
+
   async listImportsBySource(sourceQuestionId: string): Promise<SystemQuestionImportRow[]> {
     return this.db.selectFrom('system_question_imports')
       .select(SYSTEM_QUESTION_IMPORT_COLUMNS)

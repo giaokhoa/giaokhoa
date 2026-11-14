@@ -186,6 +186,13 @@ export class FilesService {
     return { deleted: true, contentHash: row.contentHash, refcount };
   }
 
+  async discardUncommittedQuestionFile(id: string): Promise<void> {
+    const row = await this.repo.getById(id);
+    if (!row || row.component !== 'question') return;
+    await this.repo.deleteById(id);
+    await this.cleanupOrphan(row.contentHash, row.storageDomain);
+  }
+
   async cleanupExamSnapshotFiles(itemId: string): Promise<void> {
     for (const file of await this.repo.listExamSnapshotFiles(itemId)) {
       await this.deleteFile(file.id);

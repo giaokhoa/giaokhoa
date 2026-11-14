@@ -115,7 +115,7 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       );
     }
     bankPool = new Pool({ connectionString: clusterUrl(BANK_DATABASE, BANK_ROLE, BANK_PASSWORD) });
-    centrePool = new Pool({ connectionString: clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD) });
+    centrePool = new Pool({ connectionString: clusterUrl(CENTRE_DATABASE) });
     bankDb = createSystemBankKysely(bankPool);
     centreDb = createCentreKysely(centrePool);
     bankConnection = new SystemBankConnection({
@@ -255,21 +255,46 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
   it('sự kiện chưa ghi nhận: trung tâm thấy sự kiện rút của câu mình đã nhập mà không cần biết trước id, ghi nhận xong thì hết ở trung tâm mình, trung tâm khác vẫn thấy', async () => {
     const created = await service.publishQuestion(ADMIN_ID, { qtype: 'multichoice', package: multichoicePackage('Câu rút để giao thông báo') });
     const questionId = created.question.id;
+    const tenants = [
+      { id: '01958500-0000-7000-8000-0000000000a1', slug: 'trung-tam-a', owner: ADMIN_ID },
+      { id: '01958500-0000-7000-8000-0000000000b1', slug: 'trung-tam-b', owner: '01958500-0000-7000-8000-0000000000b2' },
+    ];
+    for (const tenant of tenants) {
+      await centreDb.insertInto('tenants').values({ id: tenant.id, slug: tenant.slug, name: tenant.slug, kind: 'school' }).execute();
+      const bank = await centreDb.insertInto('question_banks').values({
+        tenant_id: tenant.id, name: tenant.slug, bank_kind: 'question', scope: 'personal',
+        owner_id: tenant.owner, context_id: SYSTEM_ID, created_by: tenant.owner,
+      }).returning('id').executeTakeFirstOrThrow();
+      const category = await centreDb.insertInto('question_categories').values({
+        bank_id: bank.id, context_id: SYSTEM_ID, name: 'Câu đã nhập',
+      }).returning('id').executeTakeFirstOrThrow();
+      const local = await centreDb.insertInto('question').values({
+        category: category.id, qtype: 'multichoice', created_by: tenant.owner,
+      }).returning('id').executeTakeFirstOrThrow();
+      await centreDb.insertInto('question_bank_entries').values({
+        question_category_id: category.id, question_id: local.id,
+      }).execute();
+      await centreDb.insertInto('system_question_imports').values({
+        question_id: local.id, source_question_id: questionId, source_version_id: created.version.id,
+        source_version_number: 1, package_checksum: created.version.checksum,
+        imported_version_number: 1, imported_by: tenant.owner, kind: 'pristine',
+      }).execute();
+    }
     await bankDb.insertInto('system_question_importers').values([
       { source_question_id: questionId, centre_slug: 'trung-tam-a', imported_by: ADMIN_ID },
       { source_question_id: questionId, centre_slug: 'trung-tam-b', imported_by: ADMIN_ID },
     ]).execute();
     await service.withdrawQuestion(ADMIN_ID, questionId, { reason: 'Nội dung lỗi thời' });
-    const pendingA = await tenantAls.run({ spaceSlug: 'trung-tam-a' }, () => service.listPendingEvents(ADMIN_ID));
+    const pendingA = await tenantAls.run({ tenantId: '01958500-0000-7000-8000-0000000000a1', spaceSlug: 'trung-tam-a' }, () => service.listPendingEvents(ADMIN_ID));
     const mine = pendingA.filter((event) => event.sourceQuestionId === questionId);
     expect(mine).toHaveLength(1);
     expect(mine[0]!.type).toBe('question_withdrawn');
-    await tenantAls.run({ spaceSlug: 'trung-tam-a' }, () => service.acknowledgeEvent(ADMIN_ID, mine[0]!.id));
-    const pendingAfterAck = await tenantAls.run({ spaceSlug: 'trung-tam-a' }, () => service.listPendingEvents(ADMIN_ID));
+    await tenantAls.run({ tenantId: '01958500-0000-7000-8000-0000000000a1', spaceSlug: 'trung-tam-a' }, () => service.acknowledgeEvent(ADMIN_ID, mine[0]!.id));
+    const pendingAfterAck = await tenantAls.run({ tenantId: '01958500-0000-7000-8000-0000000000a1', spaceSlug: 'trung-tam-a' }, () => service.listPendingEvents(ADMIN_ID));
     expect(pendingAfterAck.find((event) => event.sourceQuestionId === questionId)).toBeUndefined();
-    const pendingB = await tenantAls.run({ spaceSlug: 'trung-tam-b' }, () => service.listPendingEvents(ADMIN_ID));
+    const pendingB = await tenantAls.run({ tenantId: '01958500-0000-7000-8000-0000000000b1', spaceSlug: 'trung-tam-b' }, () => service.listPendingEvents(ADMIN_ID));
     expect(pendingB.find((event) => event.sourceQuestionId === questionId)).toBeDefined();
-    const pendingC = await tenantAls.run({ spaceSlug: 'trung-tam-c' }, () => service.listPendingEvents(ADMIN_ID));
+    const pendingC = await tenantAls.run({ tenantId: '01958500-0000-7000-8000-0000000000c1', spaceSlug: 'trung-tam-c' }, () => service.listPendingEvents(ADMIN_ID));
     expect(pendingC.find((event) => event.sourceQuestionId === questionId)).toBeUndefined();
   });
 

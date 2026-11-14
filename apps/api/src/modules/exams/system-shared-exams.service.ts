@@ -262,58 +262,64 @@ export class SystemSharedExamsService {
     const questionBank = await this.banks.ensurePersonalBank(actorId, 'question', { forCopy: true });
     const category = await this.banks.defaultCategoryOfBank(questionBank);
     await this.evaluator.requireCapability(actorId, 'question:add', category.contextId);
-    const prepared: Array<{
-      position: number; section: string; maxMark: number; qtype: string;
-      stimulusContent: RichTextInput | null;
-      content: QuestionContentInput;
-    }> = [];
-    for (const slot of pkg.slots) {
-      const local = await this.media.materialize(slot.package, category.contextId, actorId);
-      const options = local.options ? { ...local.options } : undefined;
-      if (options) {
-        for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
-          if (options[key] === null) delete options[key];
+    const uploadedFileIds: string[] = [];
+    try {
+      const prepared: Array<{
+        position: number; section: string; maxMark: number; qtype: string;
+        stimulusContent: RichTextInput | null;
+        content: QuestionContentInput;
+      }> = [];
+      for (const slot of pkg.slots) {
+        const local = await this.media.materialize(slot.package, category.contextId, actorId, false, false, undefined, uploadedFileIds);
+        const options = local.options ? { ...local.options } : undefined;
+        if (options) {
+          for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
+            if (options[key] === null) delete options[key];
+          }
         }
+        prepared.push({
+          position: slot.position, section: slot.section, maxMark: slot.maxMark,
+          qtype: slot.qtype, stimulusContent: local.stimulusContent as RichTextInput | null,
+          content: {
+            questionText: local.questionText as RichTextInput,
+            generalFeedback: (local.generalFeedback ?? undefined) as RichTextInput | undefined,
+            guidance: (local.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
+            answers: local.answers.map((answer) => ({
+              text: answer.answer as RichTextInput, correct: answer.isCorrect,
+              feedback: (answer.feedback ?? undefined) as RichTextInput | undefined,
+            })),
+            options: options as QuestionContentInput['options'],
+            solution: local.answerKey?.solution
+              ? local.answerKey.solution as QuestionContentInput['solution'] : undefined,
+          },
+        });
       }
-      prepared.push({
-        position: slot.position, section: slot.section, maxMark: slot.maxMark,
-        qtype: slot.qtype, stimulusContent: local.stimulusContent as RichTextInput | null,
-        content: {
-          questionText: local.questionText as RichTextInput,
-          generalFeedback: (local.generalFeedback ?? undefined) as RichTextInput | undefined,
-          guidance: (local.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
-          answers: local.answers.map((answer) => ({
-            text: answer.answer as RichTextInput, correct: answer.isCorrect,
-            feedback: (answer.feedback ?? undefined) as RichTextInput | undefined,
-          })),
-          options: options as QuestionContentInput['options'],
-          solution: local.answerKey?.solution
-            ? local.answerKey.solution as QuestionContentInput['solution'] : undefined,
+      return await this.questions.createQuestionCopies(
+        actorId, category.id,
+        prepared.map(({ qtype, stimulusContent, content }) => ({ qtype, stimulusContent, content })),
+        async (tx, copies) => {
+          const paper = await this.examsRepo.insertPaper({
+            tenantId, bankId: examBank.id, kind: 'snapshot', status: 'draft',
+            createdBy: actorId, systemExamForkVersionId: id, latestVersion: 1,
+            derivedFromVersionNumber: row.sourceVersionNumber,
+          }, tx);
+          const version = await this.examsRepo.insertVersion({
+            examId: paper.id, version: 1, name: pkg.name, grade: pkg.grade, examKind: pkg.examKind,
+            totalScore: pkg.totalScore, durationMinutes: pkg.durationMinutes, tfScale: pkg.tfScale,
+            createdBy: actorId,
+          }, tx);
+          await this.examsRepo.insertSlots(copies.map((copy, index) => ({
+            examVersionId: version.id, position: prepared[index]!.position, section: prepared[index]!.section,
+            questionId: copy.questionId, pinnedVersionId: copy.versionId,
+            pinnedVersionNumber: 1, maxMark: prepared[index]!.maxMark, sourceDomain: 'centre',
+          })), tx);
+          return { paperId: paper.id, versionId: version.id, sourceExamVersionId: id, questionIds: copies.map((copy) => copy.questionId) };
         },
-      });
+      );
+    } catch (error) {
+      await this.media.discardMaterializedFiles(uploadedFileIds);
+      throw error;
     }
-    return this.questions.createQuestionCopies(
-      actorId, category.id,
-      prepared.map(({ qtype, stimulusContent, content }) => ({ qtype, stimulusContent, content })),
-      async (tx, copies) => {
-        const paper = await this.examsRepo.insertPaper({
-          tenantId, bankId: examBank.id, kind: 'snapshot', status: 'draft',
-          createdBy: actorId, systemExamForkVersionId: id, latestVersion: 1,
-          derivedFromVersionNumber: row.sourceVersionNumber,
-        }, tx);
-        const version = await this.examsRepo.insertVersion({
-          examId: paper.id, version: 1, name: pkg.name, grade: pkg.grade, examKind: pkg.examKind,
-          totalScore: pkg.totalScore, durationMinutes: pkg.durationMinutes, tfScale: pkg.tfScale,
-          createdBy: actorId,
-        }, tx);
-        await this.examsRepo.insertSlots(copies.map((copy, index) => ({
-          examVersionId: version.id, position: prepared[index]!.position, section: prepared[index]!.section,
-          questionId: copy.questionId, pinnedVersionId: copy.versionId,
-          pinnedVersionNumber: 1, maxMark: prepared[index]!.maxMark, sourceDomain: 'centre',
-        })), tx);
-        return { paperId: paper.id, versionId: version.id, sourceExamVersionId: id, questionIds: copies.map((copy) => copy.questionId) };
-      },
-    );
   }
 
   async withdraw(actorId: string, id: string, reason: string) {

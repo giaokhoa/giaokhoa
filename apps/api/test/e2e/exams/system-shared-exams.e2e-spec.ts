@@ -739,18 +739,41 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     }
   }, 180_000);
 
-  it('fork đề gồm hai slot thất bại ở slot thứ hai không lưu câu rời, stimulus, đề hay outbox', async () => {
+  it('fork đề có ảnh lỗi ở slot thứ hai dọn metadata, object và rollback câu/đề/outbox', async () => {
     const forkApp = await testApp();
     try {
     const original = (await bank.query('SELECT * FROM system_exam_versions WHERE id = $1', [publishedId])).rows[0];
     const versionId = (await bank.query<{ id: string }>('SELECT uuidv7() AS id')).rows[0]!.id;
     const source = original.package as { source: Record<string, unknown>; slots: Array<Record<string, unknown>>; totalScore: number };
+    const bytes = Buffer.concat([
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+      Buffer.from(randomUUID()),
+    ]);
+    const hash = sha256Hex(bytes);
+    const storage = forkApp.get<ObjectStorage>(OBJECT_STORAGE);
+    await storage.put(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash), bytes);
+    const originalSlot = source.slots[0]!;
+    const originalQuestion = originalSlot.package as {
+      questionText: { type: string; content: unknown[] };
+      media?: Array<{ contentHash: string; fileName: string; mimeType: string }>;
+    };
+    const imageQuestion = {
+      ...originalQuestion,
+      questionText: { ...originalQuestion.questionText, content: [
+        ...originalQuestion.questionText.content,
+        { type: 'image', attrs: { src: `bank-media://${hash}`, alt: 'Ảnh của bản fork' } },
+      ] },
+      media: [
+        ...(originalQuestion.media ?? []),
+        { contentHash: hash, fileName: 'fork-rollback.png', mimeType: 'image/png' },
+      ],
+    };
     const pkg = {
       ...source,
       source: { ...source.source, versionId, versionNumber: 22 },
       slots: [
-        { ...source.slots[0], position: 1 },
-        { ...source.slots[0], position: 2 },
+        { ...originalSlot, position: 1, package: imageQuestion, checksum: checksumPackage(imageQuestion) },
+        { ...originalSlot, position: 2 },
       ],
       totalScore: source.totalScore * 2,
     };
@@ -774,6 +797,9 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       expect((await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count).toBe(beforeQuestions);
       expect((await centre.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count).toBe(beforePapers);
       expect((await centre.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count).toBe(beforeOutbox);
+      expect((await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(0);
+      expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(false);
+      expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash))).toBe(true);
     } finally {
       await centre.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_second_fork_slot');
     }
@@ -781,6 +807,24 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       .set(bearer(managerB)).send({});
     expect(succeeded.status, JSON.stringify(succeeded.body)).toBe(201);
     expect(succeeded.body.questionIds).toHaveLength(2);
+    expect((await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(1);
+    expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(true);
+    const beforeReusedFile = (await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rows[0]!.id;
+    const beforeReusedQuestions = (await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
+    await centre.query('ALTER TABLE exam_slots ADD CONSTRAINT reject_shared_media_fork CHECK (position <> 2) NOT VALID');
+    try {
+      const failedAgain = await http(forkApp).post(`/api/v1/system-bank/exams/${sharedId}/fork`)
+        .set(bearer(managerB)).send({});
+      expect(failedAgain.status).toBe(500);
+      const remaining = await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash]);
+      expect(remaining.rowCount).toBe(1);
+      expect(remaining.rows[0]!.id).toBe(beforeReusedFile);
+      expect((await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count)
+        .toBe(beforeReusedQuestions);
+      expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(true);
+    } finally {
+      await centre.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_shared_media_fork');
+    }
     } finally {
       await forkApp.close();
       await forkApp.get<Pool>('SHARED_CENTRE_KYSELY').end();

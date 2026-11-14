@@ -25,7 +25,7 @@ import { programmePackageChecksum } from '../../../src/modules/system-bank/progr
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { FilesService } from '../../../src/modules/files/files.service';
-import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
+import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 
@@ -494,6 +494,101 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(completed.status, JSON.stringify(completed.body)).toBe(201);
     expect((await bankPg.query('SELECT id FROM system_question_importers WHERE source_question_id = $1',
       [questionId])).rowCount).toBe(1);
+  });
+
+  it('nhập câu có ảnh rồi lỗi ghi receipt: xóa metadata và object mới nhưng nhập lại thành công', async () => {
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const bytes = Buffer.concat([
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+      Buffer.from(randomUUID()),
+    ]);
+    const hash = sha256Hex(bytes);
+    await storage.put(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash), bytes);
+    const base = multichoicePackage('Câu nhập media rollback');
+    const pkg = {
+      ...base,
+      questionText: { ...base.questionText, content: [
+        ...base.questionText.content,
+        { type: 'image', attrs: { src: `bank-media://${hash}`, alt: 'Ảnh kiểm tra rollback' } },
+      ] },
+      media: [{ contentHash: hash, fileName: 'rollback.png', mimeType: 'image/png' }],
+    };
+    const published = await http(app).post('/api/v1/system-bank/questions').set(bearer(admin))
+      .send({ qtype: 'multichoice', package: pkg });
+    expect(published.status, JSON.stringify(published.body)).toBe(201);
+    const sourceQuestionId = published.body.question.id as string;
+    expect((await pg.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(0);
+    await pg.query('ALTER TABLE system_question_imports ADD CONSTRAINT reject_media_import_receipt_test CHECK (false) NOT VALID');
+    try {
+      const failed = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token))
+        .send({ sourceQuestionId });
+      expect(failed.status).toBeGreaterThanOrEqual(400);
+      expect((await pg.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(0);
+      expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(false);
+      expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash))).toBe(true);
+      expect((await pg.query('SELECT question_id FROM system_question_imports WHERE source_question_id = $1',
+        [sourceQuestionId])).rowCount).toBe(0);
+    } finally {
+      await pg.query('ALTER TABLE system_question_imports DROP CONSTRAINT reject_media_import_receipt_test');
+    }
+    const recovered = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token))
+      .send({ sourceQuestionId });
+    expect(recovered.status, JSON.stringify(recovered.body)).toBe(201);
+    expect((await pg.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(1);
+    expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(true);
+  });
+
+  it('xác nhận ngân hàng lỗi sau commit trung tâm: retry không nhân bản, thông báo và đọc nguồn đã rút vẫn đúng', async () => {
+    const created = await publish('Câu kiểm chứng xác nhận sau commit');
+    const sourceQuestionId = created.question.id as string;
+    const request = { sourceQuestionId, sourceVersionNumber: 1 };
+    await bankPg.query('ALTER TABLE system_question_importers ADD CONSTRAINT reject_importer_confirmation_test CHECK (false) NOT VALID');
+    let localQuestionId: string;
+    try {
+      const first = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send(request);
+      expect(first.status, JSON.stringify(first.body)).toBe(201);
+      localQuestionId = first.body.question.question.id;
+      expect((await bankPg.query('SELECT id FROM system_question_importers WHERE source_question_id = $1',
+        [sourceQuestionId])).rowCount).toBe(0);
+      const retry = await http(app).post('/api/v1/system-bank/import').set(bearer(teacher.token)).send(request);
+      expect(retry.status, JSON.stringify(retry.body)).toBe(201);
+      expect(retry.body.question.question.id).toBe(localQuestionId);
+      expect((await pg.query('SELECT question_id FROM system_question_imports WHERE source_question_id = $1',
+        [sourceQuestionId])).rowCount).toBe(1);
+      const version = await http(app).post(`/api/v1/system-bank/questions/${sourceQuestionId}/versions`)
+        .set(bearer(admin)).send({ package: multichoicePackage('Nguồn có bản mới') });
+      expect(version.status).toBe(201);
+      const pending = await http(app).get('/api/v1/system-bank/events/pending').set(bearer(teacher.token));
+      expect(pending.status, JSON.stringify(pending.body)).toBe(200);
+      expect(pending.body).toEqual(expect.arrayContaining([expect.objectContaining({
+        sourceQuestionId, type: 'question_version_published', payload: expect.objectContaining({ versionNumber: 2 }),
+      })]));
+      const withdrawn = await http(app).post(`/api/v1/system-bank/questions/${sourceQuestionId}/withdraw`)
+        .set(bearer(admin)).send({ reason: 'Thử phục hồi xác nhận' });
+      expect(withdrawn.status).toBe(201);
+      const read = await http(app).get(`/api/v1/system-bank/questions/${sourceQuestionId}/versions/1`)
+        .set(bearer(teacher.token));
+      expect(read.status, JSON.stringify(read.body)).toBe(200);
+      expect((await http(app).get('/api/v1/system-bank/events/pending').set(bearer(teacher.token))).body)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ sourceQuestionId, type: 'question_withdrawn' })]));
+    } finally {
+      await bankPg.query('ALTER TABLE system_question_importers DROP CONSTRAINT reject_importer_confirmation_test');
+    }
+    const afterRecovery = await http(app).get('/api/v1/system-bank/events/pending').set(bearer(teacher.token));
+    expect(afterRecovery.status).toBe(200);
+    expect((await bankPg.query('SELECT id FROM system_question_importers WHERE source_question_id = $1',
+      [sourceQuestionId])).rowCount).toBe(1);
+    expect((await pg.query('SELECT question_id FROM system_question_imports WHERE source_question_id = $1',
+      [sourceQuestionId])).rows[0]?.question_id).toBe(localQuestionId!);
+    await pg.query('DELETE FROM system_question_imports WHERE question_id = $1', [localQuestionId!]);
+    const historicalRead = await http(app).get(`/api/v1/system-bank/questions/${sourceQuestionId}/versions/1`)
+      .set(bearer(teacher.token));
+    expect(historicalRead.status).toBe(404);
+    expect(historicalRead.body.code).toBe('system_bank.version_not_found');
+    const historicalEvents = await http(app).get('/api/v1/system-bank/events/pending').set(bearer(teacher.token));
+    expect(historicalEvents.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceQuestionId, type: 'question_withdrawn' }),
+    ]));
   });
 
   it('issue #13: giáo viên soạn riêng; quản trị gửi, biên tập duyệt/từ chối; B nhập sau khi A xoá nguồn và media', async () => {
