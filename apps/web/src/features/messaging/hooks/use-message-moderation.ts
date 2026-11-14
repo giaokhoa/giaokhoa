@@ -10,7 +10,7 @@ export interface UseMessageModerationParams {
   setActionMessage: (message: string | null) => void;
 }
 
-const RECALL_WINDOW_MINUTES = 15;
+export const RECALL_WINDOW_MINUTES = 15;
 
 export function useMessageModeration({ active, myId, patchMessages, setActionMessage }: UseMessageModerationParams) {
   const { t } = useTranslation('app');
@@ -47,6 +47,7 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
   }
 
   async function recallMessage(message: MessageView) {
+    if (!canRecall(message)) return;
     setActionMessage(null);
     try {
       const recalled = await recallMessageMutation.mutateAsync(message.id);
@@ -68,6 +69,7 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
   }
 
   async function hardDeleteMessage(message: MessageView) {
+    if (!active?.canModerate) return;
     setActionMessage(null);
     if (!window.confirm(t('hardDeleteConfirm'))) return;
     const reason = window.prompt(t('hardDeleteReasonPrompt'));
@@ -86,6 +88,7 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
   }
 
   async function bulkRemoveSelected() {
+    if (!active?.canModerate) return;
     setActionMessage(null);
     const messageIds = [...selectedForBulk];
     if (messageIds.length === 0) return;

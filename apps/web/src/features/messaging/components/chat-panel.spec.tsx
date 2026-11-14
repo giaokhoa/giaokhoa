@@ -1,3 +1,4 @@
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -94,7 +95,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
   };
   const view = render(
     <QueryClientProvider client={createQueryClient()}>
-      <ChatPanel {...props} />
+      <DraftStatePanel panelProps={props} />
     </QueryClientProvider>,
   );
   return {
@@ -102,11 +103,35 @@ function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
     rerender: (nextOverrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) => {
       view.rerender(
         <QueryClientProvider client={createQueryClient()}>
-          <ChatPanel {...props} {...nextOverrides} />
+          <DraftStatePanel panelProps={{ ...props, ...nextOverrides }} />
         </QueryClientProvider>,
       );
     },
   };
+}
+
+function DraftStatePanel({ panelProps }: { panelProps: Parameters<typeof ChatPanel>[0] }) {
+  const activeId = panelProps.active?.id ?? CONV_ID;
+  const [drafts, setDraftsState] = useState<Record<string, string>>(() =>
+    panelProps.draft ? { [activeId]: panelProps.draft } : {},
+  );
+  const setDrafts: Dispatch<SetStateAction<Record<string, string>>> = (updater) => {
+    panelProps.setDrafts(updater);
+    setDraftsState(updater);
+  };
+  return <ChatPanel {...panelProps} draft={drafts[activeId] ?? ''} setDrafts={setDrafts} />;
+}
+
+function stubPersonProfileFetch() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({ displayName: 'Bạn Học', username: 'otheruser', email: 'other@example.com' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ),
+  );
 }
 
 describe('ChatPanel — khung trò chuyện sau khi tách component con', () => {
@@ -132,6 +157,43 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
     expect(props.onStartReply).toHaveBeenCalledWith(PEER_MESSAGE);
   });
 
+  it('chạm hai lần vào cùng một bong bóng trong 350ms thì trả lời đúng tin đó một lần', () => {
+    const { props } = renderPanel();
+    const bubble = screen.getByTestId(`message-bubble-${PEER_MESSAGE_ID}`);
+
+    fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+    fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+
+    expect(props.onStartReply).toHaveBeenCalledTimes(1);
+    expect(props.onStartReply).toHaveBeenCalledWith(PEER_MESSAGE);
+  });
+
+  it('chạm bong bóng này rồi chạm bong bóng khác trong 350ms thì không trả lời nhầm', () => {
+    const { props } = renderPanel();
+
+    fireEvent.touchEnd(screen.getByTestId(`message-bubble-${PEER_MESSAGE_ID}`), {
+      changedTouches: [{ clientX: 10, clientY: 20 }],
+    });
+    fireEvent.touchEnd(screen.getByTestId(`message-bubble-${OWN_MESSAGE_ID}`), {
+      changedTouches: [{ clientX: 10, clientY: 20 }],
+    });
+
+    expect(props.onStartReply).not.toHaveBeenCalled();
+  });
+
+  it('chạm bong bóng A rồi B rồi lại A trong 350ms thì trả lời đúng tin A một lần', () => {
+    const { props } = renderPanel();
+    const peerBubble = screen.getByTestId(`message-bubble-${PEER_MESSAGE_ID}`);
+    const ownBubble = screen.getByTestId(`message-bubble-${OWN_MESSAGE_ID}`);
+
+    fireEvent.touchEnd(peerBubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+    fireEvent.touchEnd(ownBubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+    fireEvent.touchEnd(peerBubble, { changedTouches: [{ clientX: 10, clientY: 20 }] });
+
+    expect(props.onStartReply).toHaveBeenCalledTimes(1);
+    expect(props.onStartReply).toHaveBeenCalledWith(PEER_MESSAGE);
+  });
+
   it('hiện chip trả lời khi có replyTarget và bấm huỷ thì gọi onCancelReply', async () => {
     const { props } = renderPanel({ replyTarget: PEER_MESSAGE });
 
@@ -141,12 +203,13 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
     expect(props.onCancelReply).toHaveBeenCalledTimes(1);
   });
 
-  it('gõ vào ô soạn thì cập nhật nháp của đúng cuộc trò chuyện và báo đang nhập', () => {
+  it('gõ vào ô soạn thì cập nhật nháp của đúng cuộc trò chuyện và báo đang nhập', async () => {
     const { props } = renderPanel();
 
-    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn'), { target: { value: 'xin chào' } });
+    await userEvent.type(screen.getByLabelText('Nội dung tin nhắn'), 'xin chào');
 
-    expect(props.setDrafts).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Nội dung tin nhắn')).toHaveValue('xin chào');
+    expect(props.setDrafts).toHaveBeenCalled();
     const lastUpdater = vi.mocked(props.setDrafts).mock.calls.at(-1)![0] as (
       prev: Record<string, string>,
     ) => Record<string, string>;
@@ -163,15 +226,7 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
   });
 
   it('bấm avatar ở đầu khung thì mở panel thông tin đối tác', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({ displayName: 'Bạn Học', username: 'otheruser', email: 'other@example.com' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      ),
-    );
+    stubPersonProfileFetch();
     renderPanel();
 
     await userEvent.click(screen.getByRole('button', { name: 'Thông tin cuộc trò chuyện' }));
@@ -247,34 +302,21 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
   });
 
   it('chọn xem hồ sơ trong menu đầu khung thì mở panel thông tin đối tác', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({ displayName: 'Bạn Học', username: 'otheruser', email: 'other@example.com' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      ),
-    );
+    stubPersonProfileFetch();
     renderPanel();
 
     await userEvent.click(screen.getByTestId('header-actions'));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Xem hồ sơ' }));
 
-    expect(await screen.findByTestId('info-aside')).toBeInTheDocument();
+    const aside = await screen.findByTestId('info-aside');
+    expect(aside).toBeInTheDocument();
+    expect(within(aside).getByText('Bạn Học')).toBeInTheDocument();
+    expect(await within(aside).findByText('other@example.com')).toBeInTheDocument();
   });
 
   it('bấm tắt tiếng, ghim và chặn trong panel thông tin thì gọi đúng handler với đúng cuộc trò chuyện và đối tác', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({ displayName: 'Bạn Học', username: 'otheruser', email: 'other@example.com' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      ),
-    );
-    const { props } = renderPanel();
+    stubPersonProfileFetch();
+    const { props, rerender } = renderPanel();
 
     await userEvent.click(screen.getByRole('button', { name: 'Thông tin cuộc trò chuyện' }));
     const aside = await screen.findByTestId('info-aside');
@@ -285,6 +327,14 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
     await userEvent.click(within(aside).getByRole('button', { name: 'Chặn liên lạc' }));
     expect(props.onBlockContact).toHaveBeenCalledTimes(1);
     expect(props.onBlockContact).toHaveBeenCalledWith(OTHER_ID);
+
+    const mutedActive = { ...ACTIVE, muted: true, pinnedAt: '2026-01-01T00:00:00.000Z' };
+    rerender({ active: mutedActive });
+    const reopenedAside = await screen.findByTestId('info-aside');
+    await userEvent.click(within(reopenedAside).getByRole('button', { name: 'Bật tiếng' }));
+    expect(props.onUpdateConversationState).toHaveBeenCalledWith(mutedActive, { muted: false });
+    await userEvent.click(within(reopenedAside).getByRole('button', { name: 'Bỏ ghim' }));
+    expect(props.onUpdateConversationState).toHaveBeenCalledWith(mutedActive, { pinned: false });
   });
 
   it('người có quyền thu hồi thì bấm thu hồi trên tin của mình gọi onRecallMessage với đúng tin đó', async () => {
@@ -316,7 +366,7 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
     expect(props.onDeleteMessage).toHaveBeenCalledWith(OWN_MESSAGE);
   });
 
-  it('tin của đối tác thì không có nút thao tác khác để xoá hay thu hồi', () => {
+  it('tin của đối tác thì không có nút mở menu thao tác', () => {
     renderPanel();
 
     expect(screen.queryByTestId(`message-actions-${PEER_MESSAGE_ID}`)).not.toBeInTheDocument();
@@ -355,8 +405,9 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
     const { props } = renderPanel({ blocked: [OTHER_ID] });
 
     await userEvent.click(screen.getByTestId('header-actions'));
+    const unblockItem = await screen.findByRole('menuitem', { name: /^Bỏ chặn / });
     expect(screen.queryByRole('menuitem', { name: /^Chặn liên lạc / })).not.toBeInTheDocument();
-    await userEvent.click(await screen.findByRole('menuitem', { name: /^Bỏ chặn / }));
+    await userEvent.click(unblockItem);
 
     expect(props.onUnblockContact).toHaveBeenCalledTimes(1);
     expect(props.onUnblockContact).toHaveBeenCalledWith(OTHER_ID);
@@ -367,6 +418,15 @@ describe('ChatPanel — khung trò chuyện sau khi tách component con', () => 
 
     await userEvent.click(screen.getByTestId('header-actions'));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Tắt chat' }));
+
+    expect(props.onToggleChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('người quản lý chọn bật chat trong menu đầu khung khi cuộc trò chuyện đang tắt thì gọi onToggleChat một lần', async () => {
+    const { props } = renderPanel({ active: { ...ACTIVE, canManage: true, enabled: false } });
+
+    await userEvent.click(screen.getByTestId('header-actions'));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Bật chat' }));
 
     expect(props.onToggleChat).toHaveBeenCalledTimes(1);
   });
