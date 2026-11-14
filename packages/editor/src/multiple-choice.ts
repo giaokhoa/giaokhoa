@@ -1,7 +1,7 @@
-import { Extension, mergeAttributes, Node, type JSONContent } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { mergeAttributes, Node, type JSONContent } from '@tiptap/core';
 import type { RichTextDocument } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
+import { createMissingNodeIdExtension } from './missing-node-ids.js';
 
 
 export const CHOICE_LIST_NODE_TYPE = 'choiceList';
@@ -65,36 +65,7 @@ export const Choice = Node.create({
   ],
 });
 
-export const ChoiceUniqueId = Extension.create({
-  name: 'choiceUniqueId',
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('choiceUniqueId'),
-        appendTransaction: (_transactions, _oldState, newState) => {
-          const missing: { pos: number; nodeSize: number }[] = [];
-          newState.doc.descendants((node, pos) => {
-            if (node.type.name === CHOICE_NODE_TYPE && typeof node.attrs.id !== 'string') {
-              missing.push({ pos, nodeSize: node.nodeSize });
-            }
-            return true;
-          });
-          if (missing.length === 0) {
-            return null;
-          }
-          const tr = newState.tr;
-          for (const { pos } of [...missing].reverse()) {
-            const node = tr.doc.nodeAt(pos);
-            if (node && node.type.name === CHOICE_NODE_TYPE) {
-              tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: newChoiceId() });
-            }
-          }
-          return tr;
-        },
-      }),
-    ];
-  },
-});
+export const ChoiceUniqueId = createMissingNodeIdExtension('choiceUniqueId', CHOICE_NODE_TYPE, newChoiceId);
 
 export const multipleChoiceExtensions = [
   ...plainTextExtensions.filter((extension) => extension.name !== 'doc'),

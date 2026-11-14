@@ -55,6 +55,40 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
     }
   });
 
+  it('multipleChoice: giữ nguyên id đã có và chỉ cấp id cho các lựa chọn còn thiếu', () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const editor = new Editor({
+      element,
+      extensions: multipleChoiceExtensions,
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph' },
+          {
+            type: CHOICE_LIST_NODE_TYPE,
+            content: Array.from({ length: MULTIPLE_CHOICE_COUNT }, (_, index) => ({
+              type: CHOICE_NODE_TYPE,
+              attrs: index === 0 ? { id: 'kept-choice' } : {},
+              content: [{ type: 'paragraph' }],
+            })),
+          },
+        ],
+      },
+    });
+    try {
+      editor.commands.setContent(editor.getJSON());
+      const list = (editor.getJSON().content ?? []).find((node) => node.type === CHOICE_LIST_NODE_TYPE);
+      const ids = (list?.content ?? []).map((choice) => choice.attrs?.id);
+      expect(ids[0]).toBe('kept-choice');
+      expect(ids.every((id) => typeof id === 'string')).toBe(true);
+      expect(new Set(ids).size).toBe(MULTIPLE_CHOICE_COUNT);
+    } finally {
+      editor.destroy();
+      element.remove();
+    }
+  });
+
   it('trueFalse: mệnh đề thiếu attrs.id đều nhận id chuỗi riêng biệt, thứ tự nội dung không đổi', () => {
     const element = document.createElement('div');
     document.body.appendChild(element);

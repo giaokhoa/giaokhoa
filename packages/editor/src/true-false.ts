@@ -1,5 +1,4 @@
-import { Extension, mergeAttributes, Node, type JSONContent } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { mergeAttributes, Node, type JSONContent } from '@tiptap/core';
 import {
   TRUE_FALSE_STATEMENT_COUNT,
   getTrueFalseStatements,
@@ -7,6 +6,7 @@ import {
   type RichTextDocument,
 } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
+import { createMissingNodeIdExtension } from './missing-node-ids.js';
 
 
 export { TRUE_FALSE_STATEMENT_COUNT };
@@ -69,36 +69,7 @@ export const Statement = Node.create({
   ],
 });
 
-export const StatementUniqueId = Extension.create({
-  name: 'statementUniqueId',
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('statementUniqueId'),
-        appendTransaction: (_transactions, _oldState, newState) => {
-          const missing: { pos: number }[] = [];
-          newState.doc.descendants((node, pos) => {
-            if (node.type.name === STATEMENT_NODE_TYPE && typeof node.attrs.id !== 'string') {
-              missing.push({ pos });
-            }
-            return true;
-          });
-          if (missing.length === 0) {
-            return null;
-          }
-          const tr = newState.tr;
-          for (const { pos } of [...missing].reverse()) {
-            const node = tr.doc.nodeAt(pos);
-            if (node && node.type.name === STATEMENT_NODE_TYPE) {
-              tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: newStatementId() });
-            }
-          }
-          return tr;
-        },
-      }),
-    ];
-  },
-});
+export const StatementUniqueId = createMissingNodeIdExtension('statementUniqueId', STATEMENT_NODE_TYPE, newStatementId);
 
 export const trueFalseExtensions = [
   ...plainTextExtensions.filter((extension) => extension.name !== 'doc'),
