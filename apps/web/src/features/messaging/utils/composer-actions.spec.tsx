@@ -1,9 +1,7 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { act, useEffect, useState } from "react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useComposerActions } from "./composer-actions";
-
-vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
 type ComposerActions = ReturnType<typeof useComposerActions>;
 
@@ -178,22 +176,11 @@ describe("Thao tác soạn thảo của hai ô tin nhắn và ghi chú", () => {
     });
   });
 
-  it("hủy nhập liên kết thì bản nháp tin nhắn không đổi", () => {
-    const promptForLink = vi.fn(() => null);
-    const { captured, onMessageReplace } = renderDualComposer({ promptForLink });
-    const composer = screen.getByTestId("message-composer") as HTMLTextAreaElement;
-    composer.focus();
-    composer.setSelectionRange(4, 8);
-    act(() => {
-      captured.message.insertLink();
-    });
-    expect(promptForLink).toHaveBeenCalledTimes(1);
-    expect(onMessageReplace).not.toHaveBeenCalled();
-    expect(composer.value).toBe("xin chào");
-  });
-
-  it("nhập liên kết rỗng thì bản nháp tin nhắn không đổi", () => {
-    const promptForLink = vi.fn(() => "");
+  it.each([
+    { label: "hủy nhập liên kết", promptResult: null as string | null },
+    { label: "nhập liên kết rỗng", promptResult: "" as string | null },
+  ])("$label thì bản nháp tin nhắn không đổi", ({ promptResult }) => {
+    const promptForLink = vi.fn(() => promptResult);
     const { captured, onMessageReplace } = renderDualComposer({ promptForLink });
     const composer = screen.getByTestId("message-composer") as HTMLTextAreaElement;
     composer.focus();

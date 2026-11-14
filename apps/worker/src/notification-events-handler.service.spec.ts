@@ -171,6 +171,15 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
           subject: "tiêu đề cũ",
           fullMessage: "nội dung cũ",
         },
+        {
+          id: "notif-2",
+          user_id_to: "student-1",
+          event_type: "assignment_assigned",
+          context_url: "/courses/course-1/assignments/assignment-1",
+          time_read: null,
+          subject: "tiêu đề khác",
+          fullMessage: "nội dung khác",
+        },
       ],
     });
     await service.handle("assignment_created", {
@@ -184,26 +193,78 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
         id: "notif-1",
         subject: "platform.assignmentAssignedSubject",
         full_message: "platform.assignmentAssignedBody",
+        small_message: "platform.assignmentAssignedBody",
       }),
     );
-  });
-
-  it("giao bài tập vẫn gửi khi thông báo cũ khác loại, khác đường dẫn hoặc đã đọc", async () => {
-    const existingRow = (overrides: Record<string, unknown>) => ({
-      id: "notif-1",
+    expect(rows.notifications).toContainEqual({
+      id: "notif-2",
       user_id_to: "student-1",
       event_type: "assignment_assigned",
       context_url: "/courses/course-1/assignments/assignment-1",
       time_read: null,
-      subject: "platform.assignmentAssignedSubject",
-      fullMessage: "platform.assignmentAssignedBody",
-      ...overrides,
+      subject: "tiêu đề khác",
+      fullMessage: "nội dung khác",
     });
-    for (const notifications of [
-      [existingRow({ event_type: "quiz_available" })],
-      [existingRow({ context_url: "/courses/course-1/assignments/assignment-2" })],
-      [existingRow({ time_read: "2026-11-14T00:00:00.000Z" })],
-    ]) {
+  });
+
+  it("giao bài tập cập nhật nội dung khi chỉ tiêu đề đổi mà nội dung giữ nguyên", async () => {
+    const { service, notify, rows } = build(true, {
+      notifications: [
+        {
+          id: "notif-1",
+          user_id_to: "student-1",
+          event_type: "assignment_assigned",
+          context_url: "/courses/course-1/assignments/assignment-1",
+          time_read: null,
+          subject: "tiêu đề cũ",
+          fullMessage: "platform.assignmentAssignedBody",
+        },
+      ],
+    });
+    await service.handle("assignment_created", {
+      assignmentId: "assignment-1",
+      courseId: "course-1",
+      actorId: "teacher-1",
+    });
+    expect(notify).not.toHaveBeenCalled();
+    expect(rows.notifications).toContainEqual(
+      expect.objectContaining({
+        id: "notif-1",
+        subject: "platform.assignmentAssignedSubject",
+        full_message: "platform.assignmentAssignedBody",
+        small_message: "platform.assignmentAssignedBody",
+      }),
+    );
+  });
+
+  const existingRow = (overrides: Record<string, unknown>) => ({
+    id: "notif-1",
+    user_id_to: "student-1",
+    event_type: "assignment_assigned",
+    context_url: "/courses/course-1/assignments/assignment-1",
+    time_read: null,
+    subject: "platform.assignmentAssignedSubject",
+    fullMessage: "platform.assignmentAssignedBody",
+    ...overrides,
+  });
+
+  it.each([
+    { label: "khác loại", notifications: [existingRow({ event_type: "quiz_available" })] },
+    {
+      label: "khác đường dẫn",
+      notifications: [existingRow({ context_url: "/courses/course-1/assignments/assignment-2" })],
+    },
+    {
+      label: "đã đọc",
+      notifications: [existingRow({ time_read: "2026-11-14T00:00:00.000Z" })],
+    },
+    {
+      label: "của người khác",
+      notifications: [existingRow({ user_id_to: "student-2" })],
+    },
+  ])(
+    "giao bài tập vẫn gửi cho đúng học viên khi thông báo cũ $label",
+    async ({ notifications }) => {
       const { service, notify } = build(true, { notifications });
       await service.handle("assignment_created", {
         assignmentId: "assignment-1",
@@ -211,8 +272,17 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
         actorId: "teacher-1",
       });
       expect(notify).toHaveBeenCalledTimes(1);
-    }
-  });
+      expect(notify).toHaveBeenCalledWith(
+        "student-1",
+        "assignment_assigned",
+        expect.objectContaining({
+          contextUrl: "/courses/course-1/assignments/assignment-1",
+          courseId: "course-1",
+          tenantId: "tenant-1",
+        }),
+      );
+    },
+  );
 
   it("giao bài tập do học viên tạo thì học viên khác vẫn được thông báo, học viên tạo bài bị loại", async () => {
     const { service, notify } = build(true, {
