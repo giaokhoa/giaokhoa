@@ -254,10 +254,15 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   private createRoutedHandle<TDatabase extends object>(current: () => TDatabase): TDatabase {
     return new Proxy({} as TDatabase, {
       get: (_target, property) => {
-        if (FRAMEWORK_INTROSPECTION_PROPERTIES.has(property as string)) return undefined;
-        const db = current();
-        const value = Reflect.get(db as object, property, db);
-        return typeof value === 'function' ? value.bind(db) : value;
+        try {
+          const db = current();
+          const value = Reflect.get(db as object, property, db);
+          if (typeof value !== 'function' || property === 'constructor') return value;
+          return value.bind(db);
+        } catch (error) {
+          if (FRAMEWORK_INTROSPECTION_PROPERTIES.has(property as string)) return undefined;
+          throw error;
+        }
       },
       has: (_target, property) => property in current(),
       ownKeys: () => Reflect.ownKeys(current()),
