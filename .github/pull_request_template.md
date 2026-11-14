@@ -17,6 +17,13 @@
 
 - [ ] <tiêu chí 1 của issue> — Đáp ứng: <cách đáp ứng>. Bằng chứng: <bằng chứng>.
 
+## Cổng trước khi code: Ponytail và tài liệu chính thức
+
+- [ ] Agent thực hiện đã đọc `.agents/skills/ponytail/SKILL.md` và áp dụng mức **full** trước khi sửa code (nếu PR chỉ sửa tài liệu, ghi rõ không phát sinh code).
+- [ ] Đã đọc AGENTS/README, code/test và docs/ADR liên quan; đối chiếu pattern repo và docs chính thức đúng phiên bản của thư viện/framework bị tác động.
+- Tài liệu/pattern đã kiểm tra và cách áp dụng: `<đường dẫn/nguồn, phiên bản, hành vi liên quan; ngoại lệ hoặc phần chưa xác minh>`
+- [ ] Reviewer độc lập tự áp dụng Ponytail **full** và xác minh bằng chứng bám docs/pattern trước khi kết luận.
+
 ## Kiểm chứng đã chạy
 
 Ghi từng lệnh, kết quả thực tế và trạng thái CI của head hiện tại; nêu rõ phần chưa chạy và nguyên nhân.
