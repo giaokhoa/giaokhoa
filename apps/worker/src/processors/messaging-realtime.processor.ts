@@ -35,9 +35,6 @@ export class MessagingRealtimeProcessor extends ObservedWorkerHost {
 
   async process(job: Job<OutboxEventJobData>, token?: string): Promise<void> {
     const data = job.data;
-    if (!data || typeof data.outboxId !== 'string' || data.outboxId.length === 0 || typeof data.type !== 'string') {
-      throw new Error('Messaging realtime job is missing its outboxId or event type');
-    }
     validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'messaging-realtime');
     await this.jobRunner.runForJob(data, async () => {
       const markKey = `${MESSAGING_DISTRIBUTED_KEY_PREFIX}${scopedOutboxId(data.outboxId)}`;

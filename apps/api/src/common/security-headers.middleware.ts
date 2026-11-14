@@ -9,7 +9,7 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     const fullPath = (req.originalUrl ?? req.url ?? '').split('?')[0];
-    if (fullPath.startsWith('/api/v1/')) {
+    if (fullPath.startsWith('/api/')) {
       res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     }
     next();

@@ -1,11 +1,18 @@
 import { BullModule } from '@nestjs/bullmq';
-import { BadRequestException, Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import { BadRequestException, Module, type ExecutionContext } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { createCentreKysely } from '@giaokhoa/db';
+import { MulterModule } from '@nestjs/platform-express';
 import { databaseConnectionFromEnv, redisConnectionFromUrl, validateEnv } from './config/env';
-import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { RedisThrottlerModule } from './common/redis-throttler.module';
+import { RedisThrottlerStorage } from './common/redis-throttler.storage';
+import { SharedCentreKyselyBinding, SHARED_CENTRE_KYSELY } from './db/routing/shared-centre-kysely-binding.service';
 import { SpaceRoutingModule } from './db/routing/space-routing.module';
+import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { KyselyModule } from './db/kysely.module';
+import { ControlPlaneConnection } from './db/control-plane-connection.service';
+import { ControlPlaneConnectionModule } from './db/control-plane-connection.module';
+import { SystemBankConnection } from './modules/system-bank/system-bank.connection';
 import { TenantAwarePool } from './db/tenant-pool';
 import { CacheInfraModule } from './infra/cache/cache-infra.module';
 import { EventsModule } from './infra/events/events.module';
@@ -65,17 +72,15 @@ import { BetterAuthSessionGuard } from './common/better-auth-session.guard';
 import { CapabilityGuard } from './common/capability.guard';
 import { JwtAuthGuard } from './common/jwt-auth.guard';
 import { BetterAuthModule } from './modules/auth/better-auth/better-auth.module';
-import { SecurityHeadersMiddleware } from './common/security-headers.middleware';
 
 const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login|support\/login)$/;
 const REGISTRATION_ROUTES = /^\/api\/v\d+\/auth\/public\/register$/;
-
-const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     I18nFoundationModule,
+    MulterModule.register({ limits: { fileSize: 25 * 1024 * 1024 } }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -83,6 +88,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
 
 
         connection: redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
+        prefix: 'giaokhoa',
         defaultJobOptions: {
           attempts: 3,
           backoff: { type: 'exponential', delay: 1000 },
@@ -92,9 +98,10 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
       }),
     }),
     ThrottlerModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
+      imports: [RedisThrottlerModule, ConfigModule],
+      inject: [RedisThrottlerStorage, ConfigService],
+      useFactory: (storage: RedisThrottlerStorage, config: ConfigService) => ({
+        storage,
         throttlers: [
           { name: 'default', ttl: 60_000, limit: config.get<number>('RATE_LIMIT_PER_MINUTE') ?? 3000 },
           {
@@ -163,6 +170,15 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     SupportModule,
     SystemBankModule,
     SpaceRoutingModule,
+    KyselyModule.forRootAsync({
+      imports: [SpaceRoutingModule, ControlPlaneConnectionModule, SystemBankModule],
+      inject: [SpaceDatabaseService, ControlPlaneConnection, SystemBankConnection],
+      useFactory: (spaceDb: SpaceDatabaseService, controlPlane: ControlPlaneConnection, systemBank: SystemBankConnection) => ({
+        centre: spaceDb.routedKysely,
+        controlPlane: controlPlane.kysely,
+        systemBank: systemBank.kysely,
+      }),
+    }),
     PrivacyModule,
     SiteConfigModule,
     TenantsModule,
@@ -172,19 +188,18 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
   providers: [
     {
       provide: SHARED_CENTRE_KYSELY,
-      inject: [ConfigService, SpaceDatabaseService],
-      useFactory: (config: ConfigService, spaceDatabase: SpaceDatabaseService) => {
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
         const connection = databaseConnectionFromEnv(
           config.getOrThrow<string>('DATABASE_URL'),
           config.get<boolean>('DATABASE_SSL') ?? false,
         );
         const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
         const poolMax = config.get<number>('DATABASE_POOL_MAX');
-        const pool = new TenantAwarePool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
-        spaceDatabase.bindSharedKysely(createCentreKysely(pool), pool);
-        return pool;
+        return new TenantAwarePool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
       },
     },
+    SharedCentreKyselyBinding,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: BetterAuthSessionGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
@@ -218,8 +233,4 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

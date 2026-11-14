@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
-import { VersioningType } from '@nestjs/common';
+import { ConsoleLogger, RequestMethod, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -17,15 +17,20 @@ import { mountMcp } from './modules/mcp/mcp.mount';
 import { MessagingRedisIoAdapter } from './modules/messaging/messaging-redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  enableTrustedProxy(app);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: process.env.NODE_ENV === 'production' ? new ConsoleLogger({ json: true }) : undefined,
+  });
+  app.useSecurityHeaders();
   const config = app.get(ConfigService);
-
-
   const corsOrigins = (config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  app.enableCsrfProtection({
+    trustedOrigins: corsOrigins,
+    exclude: [{ path: 'payments/ipn/sepay', method: RequestMethod.POST, version: '1' }],
+  });
+  enableTrustedProxy(app);
   app.enableCors({ origin: corsOrigins, credentials: true });
 
   const betterAuth = app.get(BetterAuthService);

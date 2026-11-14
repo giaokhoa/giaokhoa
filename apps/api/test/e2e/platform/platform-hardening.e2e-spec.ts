@@ -17,14 +17,23 @@ describe('Cứng hoá platform: header bảo mật và giới hạn tốc độ'
     await app.close();
   });
 
-  it('response mang header bảo mật chuẩn, với CSP nghiêm ngặt trên route API có phiên bản', async () => {
+  it('response mang header bảo mật built-in của Nest (mặc định Helmet 8) và không còn X-Powered-By', async () => {
     const res = await http(app).get('/api/v1/health');
     expect(res.status).toBe(200);
+    expect(res.headers['x-powered-by']).toBeUndefined();
     expect(res.headers['x-content-type-options']).toBe('nosniff');
-    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(res.headers['referrer-policy']).toBe('no-referrer');
     expect(res.headers['strict-transport-security']).toContain('max-age=31536000');
-    expect(res.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(res.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'self'");
+    expect(res.headers['cross-origin-opener-policy']).toBe('same-origin');
+    expect(res.headers['cross-origin-resource-policy']).toBe('same-origin');
+    expect(res.headers['origin-agent-cluster']).toBe('?1');
+    expect(res.headers['x-dns-prefetch-control']).toBe('off');
+    expect(res.headers['x-download-options']).toBe('noopen');
+    expect(res.headers['x-permitted-cross-domain-policies']).toBe('none');
+    expect(res.headers['x-xss-protection']).toBe('0');
   });
 
   it('route thông tin đăng nhập bị giới hạn theo IP: lần đăng nhập thứ 4 trong một phút trả 429 Problem Details', async () => {

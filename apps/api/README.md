@@ -97,6 +97,12 @@
 - NestJS 12, prefix `/api/v1`. Schema route chỉ dùng kiểu biểu diễn được trong JSON Schema (ngày giờ = `z.iso.datetime(...)`) — `z.date()` làm app chết lúc boot production qua Swagger (đã có test hồi quy `openapi-document`).
 - Boot local, migrate, seed: xem `package.json` (`db:migrate`, `seed:review`) và README gốc của repo. Tài khoản demo ghi công khai trong README gốc của repo.
 
+## Phục vụ SPA bằng fallback tự viết (không dùng ServeStaticModule)
+
+- Khi `WEB_DIST_DIR` trỏ tới thư mục chứa `index.html`, API tự phục vụ bản build SPA: file tĩnh qua `useStaticAssets`, các `GET` còn lại (trừ `/api`, `/mcp`, `/socket.io`, `/.well-known`) trả `index.html` để router phía client tiếp quản.
+- Giữ cách tự viết thay vì `ServeStaticModule` vì: `WEB_DIST_DIR` là biến môi trường tuỳ chọn, không có ở môi trường dev/test trong khi `ServeStaticModule` cần `rootPath` cố định lúc đăng ký module; cần `Cache-Control` khác nhau theo file (thư mục `assets` immutable một năm, `index.html` no-cache); danh sách loại trừ gồm cả các route raw không qua Nest (`/mcp`, `/socket.io`, `/.well-known`) cùng với `/api`; fallback chỉ áp cho `GET`.
+- Không đổi hướng này nếu chưa kiểm chứng lại cả ba điểm trên cùng với `ServeStaticModule` kèm `exclude`.
+
 ### Giới hạn control plane và quyền người vận hành (issue #9)
 
 Control plane chỉ chứa registry, lịch sử vận hành, metadata cấp phát và
