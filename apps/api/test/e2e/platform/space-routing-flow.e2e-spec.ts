@@ -12,7 +12,6 @@ import {
   STRONG_PASSWORD,
   createTestApp,
   createUserViaApi,
-  grantTenantManagerFixture,
   seedTenantMembershipFixture,
   http,
   login,

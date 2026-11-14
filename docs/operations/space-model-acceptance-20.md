@@ -66,3 +66,11 @@ Các lỗi `ProblemDetailsFilter` ở những ca tiêm lỗi có chủ đích đ
 3. Chạy lại tất cả AC01–AC27 trên cây tích hợp cuối, đo worker dưới tải thật, thu thập bằng chứng `verify` và `verify-stack` từ đúng head. Chỉ đề xuất merge/đóng issue #20 và #6 sau khi vòng review độc lập chấp thuận.
 
 Không coi việc mọi issue phụ thuộc đã đóng là bằng chứng tự động hoàn thành các điều kiện còn thiếu này.
+
+## Đối chiếu CI đỏ trên SHA `bb19a9968b2b3f63c97b1abf367de03688ff43bb`
+
+Báo cáo GitHub Actions thực tế ngày 14/11/2026: CI run `43568422387`, deploy-check run `43568422375` đều thất bại. `test-api` đạt, `verify-workspace` lỗi 2 import không dùng; `verify-stack` API không khởi động vì password CI tạo dạng hex không có chữ hoa nên `UsersService` từ chối seed (`user.password_policy`). Bốn shard e2e thất bại. Báo cáo gộp blob: 950/1040 test đạt, 12 lỗi, 78 bỏ qua; ngoài ra 9 suite lỗi ở setup. Vì phần lớn các fixture này còn gọi `POST /tenants kind=school` vốn đã bị vô hiệu hóa đúng theo yêu cầu AC25, không được bật lại API legacy để giữ test xanh.
+
+Lượt sửa sau đối chiếu: loại bỏ import unused; mật khẩu bootstrap CI dùng chuỗi ngẫu nhiên có chữ hoa/chữ thường/số/ký tự đặc biệt; gói chương trình không coi hostname platform là trung tâm; sửa HTTP `support-centres` trả 403 `space_routing.shared_not_supported` thay vì 500 khi gặp registry shared; kiểm thử âm tính không cho tạo trường/cấp grant legacy, và kiểm thử payment sai tenant sử dụng dữ liệu giả cố ý trong DB test. Lint và typecheck API đạt; e2e mục tiêu ban đầu 30/31, sau vá support riêng 9/9 đạt; chưa có bằng chứng CI head mới.
+
+**Vẫn chặn AC25–AC27:** 9 suite setup legacy (quiz-shared, space-membership, system-shared-exams, socket-space-auth, space-pre-migration-gates, system-materials, tenant-isolation, messaging-group-creation, users-my-access), cùng các ca về system-bank, payments-refund và payments-coupons-slots cần được chuyển thành fixture cấp **database và role riêng** và chạy lại đầy đủ. Không loại bỏ test/ngắt CI để né các lỗi này. `verify-stack` cần xác nhận lại bằng log trên commit mới và bộ đo tải worker AC26 vẫn thiếu.

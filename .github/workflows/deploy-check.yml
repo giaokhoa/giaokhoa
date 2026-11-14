@@ -28,6 +28,9 @@ jobs:
         run: |
           for name in POSTGRES_PASSWORD CONTROL_PLANE_POSTGRES_PASSWORD RUNTIME_POSTGRES_PASSWORD MIGRATOR_POSTGRES_PASSWORD ADMIN_PASSWORD JWT_SECRET BETTER_AUTH_SECRET; do
             secret=$(openssl rand -hex 32)
+            if [ "$name" = ADMIN_PASSWORD ]; then
+              secret="Gk${secret}!"
+            fi
             echo "::add-mask::$secret"
             printf '%s=%s\n' "$name" "$secret" >> "$GITHUB_ENV"
           done

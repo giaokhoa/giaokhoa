@@ -188,12 +188,21 @@ describe('Chốt chặn component cấp quyền: endpoint chung bị cấm + đ�
 
   it('(b2) matching: payment enrol_fee bị sửa tenant sang tenant khác tenant của khoá → needs_review, không ghi danh', async () => {
     const { course, buyer, payment } = await createSepayFeeCourse();
-    const others = await pg.query<{ id: string }>('select id from tenants where id <> $1 limit 1', [payment.tenantId]);
-    expect(others.rows[0]).toBeTruthy();
-    await pg.query('update payments set tenant_id = $1 where id = $2', [others.rows[0]!.id, payment.id]);
-    await postIpn(ipnBody(payment.paymentCode!, FEE_COST));
-    await waitPaymentStatus(payment.id, 'needs_review');
-    expect(await enrolmentActive(course.id, buyer.token)).toBe(false);
+    const forgedTenantId = randomUUID();
+    const forgedSlug = `forged-owner-${forgedTenantId.slice(0, 8)}`;
+    await pg.query(
+      "INSERT INTO tenants (id, slug, name, kind, status) VALUES ($1, $2, 'Tamper-only tenant', 'school', 'active')",
+      [forgedTenantId, forgedSlug],
+    );
+    try {
+      await pg.query('update payments set tenant_id = $1 where id = $2', [forgedTenantId, payment.id]);
+      await postIpn(ipnBody(payment.paymentCode!, FEE_COST));
+      await waitPaymentStatus(payment.id, 'needs_review');
+      expect(await enrolmentActive(course.id, buyer.token)).toBe(false);
+    } finally {
+      await pg.query('update payments set tenant_id = $1 where id = $2', [payment.tenantId, payment.id]);
+      await pg.query('delete from tenants where id = $1', [forgedTenantId]);
+    }
   });
 
   it('(b3) matching: payment class_fee bị sửa số tiền xuống 1 đồng → needs_review, không vào roster của lớp', async () => {

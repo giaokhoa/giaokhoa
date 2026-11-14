@@ -660,33 +660,17 @@ describe('Phân tách quyền vận hành và dữ liệu trung tâm qua HTTP (i
     expect((wrongPassword.body as { code?: string }).code).toBe('auth.invalid_credentials');
   });
 
-  it('nhân sự platform không được cấp tài khoản hoặc xem hồ sơ của trường thuộc kho chung', async () => {
+  it('nhân sự platform không được tạo trường ở kho chung để cấp người dùng và xem hồ sơ', async () => {
     const slug = `truong-td6-${RUN_SUFFIX}`;
-    const tenantRes = await http(app)
+    const before = await countRows(process.env.DATABASE_URL!, 'tenants', 'slug', slug);
+    expect(before).toBe(0);
+    const denied = await http(app)
       .post('/api/v1/tenants')
       .set(auth(adminToken))
       .send({ name: 'Trường TĐ6 (spec 587)', slug, kind: 'school' });
-    expect(tenantRes.status).toBe(201);
-    const sharedTenantId = (tenantRes.body as { id: string }).id;
-
-    const username = uniqueName('giaovienchung');
-    const created = await http(app)
-      .post(`/api/v1/tenants/${sharedTenantId}/users`)
-      .set(auth(adminToken))
-      .send({
-        username,
-        email: `${username}@example.com`,
-        password: STRONG_PASSWORD,
-        firstName: 'GiaoVien',
-        lastName: 'Chung',
-      });
-    expect(created.status).toBe(403);
-    expect(await countRows(process.env.DATABASE_URL!, 'users', 'username', username)).toBe(0);
-
-    const list = await http(app)
-      .get(`/api/v1/tenants/${sharedTenantId}/users`)
-      .set(auth(adminToken));
-    expect(list.status).toBe(403);
+    expect(denied.status).toBe(400);
+    expect((denied.body as { code?: string }).code).toBe('centre.provision_required');
+    expect(await countRows(process.env.DATABASE_URL!, 'tenants', 'slug', slug)).toBe(0);
   });
 
   it('id tenant không tồn tại ở bất kỳ kho nào: gọi tại địa chỉ kho riêng và tại địa chỉ platform đều vẫn 404 tenant.not_found', async () => {
