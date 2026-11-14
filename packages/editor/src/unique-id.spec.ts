@@ -143,10 +143,10 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
           { type: 'paragraph' },
           {
             type: STATEMENT_LIST_NODE_TYPE,
-            content: Array.from({ length: TRUE_FALSE_STATEMENT_COUNT }, (_, index) => ({
+            content: ['a', 'b', 'c', 'd'].map((label, index) => ({
               type: STATEMENT_NODE_TYPE,
               attrs: index === 0 ? { id: 'kept-statement' } : {},
-              content: [{ type: 'paragraph' }],
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: `Mệnh đề ${label}` }] }],
             })),
           },
         ],
@@ -156,10 +156,18 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       editor.commands.setContent(editor.getJSON());
       const json = editor.getJSON() as { content?: JSONContent[] };
       const list = (json.content ?? []).find((node) => node.type === STATEMENT_LIST_NODE_TYPE);
-      const ids = (list?.content ?? []).map((statement) => statement.attrs?.id);
+      const statements = list?.content ?? [];
+      const ids = statements.map((statement) => statement.attrs?.id);
       expect(ids[0]).toBe('kept-statement');
       expect(ids.every((id) => typeof id === 'string')).toBe(true);
+      expect(ids.slice(1).every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
       expect(new Set(ids).size).toBe(TRUE_FALSE_STATEMENT_COUNT);
+      expect(statements.map((statement) => statement?.content?.[0]?.content?.[0]?.text)).toEqual([
+        'Mệnh đề a',
+        'Mệnh đề b',
+        'Mệnh đề c',
+        'Mệnh đề d',
+      ]);
     } finally {
       editor.destroy();
       element.remove();

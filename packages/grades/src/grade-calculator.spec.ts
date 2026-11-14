@@ -245,6 +245,16 @@ describe('GradeCalculator — sổ điểm chuẩn (tổng hợp điểm MoodleD
     expect(weights[extraCredit.itemId]).toBe(0);
   });
 
+  it('mean: hạng mục có khoảng điểm âm (min lớn hơn max) được chuẩn hoá về 0 nên điểm trung bình bằng min của danh mục', () => {
+    resetIds();
+    const r = calculateCategory({
+      aggregation: 'mean', gradeMin: 0, gradeMax: 100,
+      items: [item({ grade: 15, gradeMin: 20, gradeMax: 10 })],
+    });
+    expect(r.fraction).toBe(0);
+    expect(r.finalGrade).toBe(0);
+  });
+
   it('chữ điểm ánh xạ theo ngưỡng phần trăm (ngưỡng cao nhất bằng hoặc dưới phần trăm)', () => {
     const letters = [
       { letter: 'A', lowerBoundary: 90 }, { letter: 'B', lowerBoundary: 80 },
