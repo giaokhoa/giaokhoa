@@ -51,11 +51,13 @@ export class FilesService {
     }
     const contentHash = sha256Hex(input.data);
     const storageDomain = await this.currentStorageDomain();
-    await this.storage.put(storageDomain, contentHash, input.data);
-    return this.repo.insert({
-      contentHash, storageDomain, contextId: input.contextId, component: input.component, fileArea: input.fileArea,
-      itemId: input.itemId ?? null, filePath: input.filePath ?? '/', fileName: input.fileName,
-      userId: input.userId, fileSize: input.data.length, mimeType: input.mimeType,
+    return this.repo.withContentLock(storageDomain, contentHash, async (tx) => {
+      await this.storage.put(storageDomain, contentHash, input.data);
+      return this.repo.insert({
+        contentHash, storageDomain, contextId: input.contextId, component: input.component, fileArea: input.fileArea,
+        itemId: input.itemId ?? null, filePath: input.filePath ?? '/', fileName: input.fileName,
+        userId: input.userId, fileSize: input.data.length, mimeType: input.mimeType,
+      }, tx);
     });
   }
 
@@ -187,10 +189,17 @@ export class FilesService {
   }
 
   async discardUncommittedQuestionFile(id: string): Promise<void> {
-    const row = await this.repo.getById(id);
-    if (!row || row.component !== 'question') return;
-    await this.repo.deleteById(id);
-    await this.cleanupOrphan(row.contentHash, row.storageDomain);
+    const file = await this.repo.getById(id);
+    if (!file || file.component !== 'question') return;
+    await this.repo.withContentLock(file.storageDomain, file.contentHash, async (tx) => {
+      const row = await this.repo.getById(id, tx);
+      if (!row || row.component !== 'question') return;
+      await this.repo.deleteById(id, tx);
+      if (row.storageDomain === LEGACY_FILE_DOMAIN) return;
+      if ((await this.repo.countByHash(row.contentHash, row.storageDomain, tx)) === 0) {
+        await this.storage.delete(row.storageDomain, row.contentHash);
+      }
+    });
   }
 
   async cleanupExamSnapshotFiles(itemId: string): Promise<void> {
@@ -223,9 +232,11 @@ export class FilesService {
   async cleanupOrphan(contentHash: string, storageDomain?: string): Promise<boolean> {
     const domain = storageDomain ?? await this.currentStorageDomain();
     if (domain === LEGACY_FILE_DOMAIN) throw new Error('file.legacy_cleanup_forbidden');
-    if ((await this.repo.countByHash(contentHash, domain)) > 0) return false;
-    await this.storage.delete(domain, contentHash);
-    return true;
+    return this.repo.withContentLock(domain, contentHash, async (tx) => {
+      if ((await this.repo.countByHash(contentHash, domain, tx)) > 0) return false;
+      await this.storage.delete(domain, contentHash);
+      return true;
+    });
   }
 
   async assertCanView(file: FileRow, actor: { id: string; username?: string }): Promise<void> {
