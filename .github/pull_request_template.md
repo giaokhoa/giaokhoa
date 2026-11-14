@@ -24,8 +24,9 @@ Ghi từng lệnh, kết quả thực tế và trạng thái CI của head hiệ
 ## Bàn giao Agent review
 
 - Head SHA đã push: `<SHA>`
+- Đầu mối tích hợp/branch owner và reviewer được giao: `<vai trò>`
 - Phạm vi cần tập trung, rủi ro và giới hạn kiểm chứng: `<nội dung>`
-- Trạng thái: chờ Agent review độc lập đăng comment trực tiếp trên PR.
+- Trạng thái: chờ người điều phối giao Agent review độc lập; không tự khởi chạy reviewer.
 - Sau mỗi lần push bổ sung, Agent triển khai trả lời finding trên PR và yêu cầu review lại head mới; Agent review đăng kết luận mới (**CHANGES_REQUESTED** / **APPROVED**, kèm SHA và bằng chứng) tại PR, không chỉ ghi trong chat.
 
 ## Kỷ luật đã giữ
