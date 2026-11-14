@@ -12,7 +12,14 @@ Issue và đặc tả của repo nằm trong GitHub Issues. Dùng GitHub CLI (`g
 - Issue con phải dùng quan hệ sub-issue native của GitHub; `gh issue create --parent <số-cha>` tạo và liên kết ngay khi mở issue con.
 - Đóng issue theo mục “Đóng issue” trong `AGENTS.md`: issue được triển khai đóng qua PR có `Closes #<số>`; kết luận `wontfix` chỉ đóng sau khi người duy trì xác nhận và có giải thích cụ thể.
 
-Mọi nội dung issue, PR và comment viết bằng tiếng Việt theo `AGENTS.md`. Quy trình nhánh, worktree, PR và cổng review nằm trong `AGENTS.md`; PR dùng mẫu `.github/pull_request_template.md`.
+Mọi nội dung issue, PR và comment viết bằng tiếng Việt theo `AGENTS.md`. Quy trình nhánh, worktree, PR, vòng review độc lập và cleanup nằm trong `AGENTS.md`; PR dùng mẫu `.github/pull_request_template.md`.
+
+## Bàn giao PR và vòng review
+
+- Agent triển khai push head mới và mở/cập nhật PR: `gh pr create` hoặc `gh pr edit`; kiểm tra SHA bằng `gh pr view <số> --json headRefOid`.
+- Agent review độc lập đọc diff và CI của head mới nhất, sau mỗi lượt **phải đăng ngay** kết luận và bằng chứng trên PR qua `gh pr review <số> --comment --body-file <tệp>` hoặc `gh pr comment <số> --body-file <tệp>`. Comment ghi rõ SHA và `CHANGES_REQUESTED`/`APPROVED`; một comment không phải là GitHub approval chính thức.
+- Agent triển khai sửa trên nhánh cũ, push, giải trình tại PR rồi chuyển lại cho Agent review; không merge khi còn finding chặn, reviewer chưa xác nhận head mới nhất hoặc chưa đạt cổng CI.
+- Sau khi merge, xác minh `gh pr view <số> --json state,mergedAt` và issue; chỉ dọn worktree/branch của PR đã merge khi đã xác minh không còn dữ liệu cần giữ. Ghi tình trạng cleanup vào PR.
 
 ## Phạm vi triage
 

@@ -36,8 +36,8 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 
 ### Worktree bắt buộc khi xử lý Issue
 
-1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/` (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác. Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code trong worktree gốc đang checkout `main` hoặc `dev`; chỉ được dùng worktree gốc để quản lý Git worktree.
-2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy `git status --short` và `git worktree list` trước khi tạo worktree. Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main` làm nhánh gốc nếu `dev` chưa được thiết lập. Quy tắc tên nhánh vẫn theo mục "Đặt tên branch" ở dưới. **Ngay sau mỗi lần tạo worktree, bắt buộc sao chép cả hai file `.env` local từ worktree gốc sang worktree mới** trước khi chạy install, build, migrate, test hoặc dev. Chạy từ thư mục gốc repo (thay `<worktree>` bằng tên thư mục vừa tạo):
+1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/` (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác. Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code trong worktree gốc đang checkout `main`; chỉ được dùng worktree gốc để quản lý Git worktree.
+2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy `git status --short` và `git worktree list` trước khi tạo worktree. Tạo từ `main` đã đồng bộ với `origin/main` bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> main`. Quy tắc tên nhánh vẫn theo mục "Đặt tên branch" ở dưới. **Ngay sau mỗi lần tạo worktree, bắt buộc sao chép cả hai file `.env` local từ worktree gốc sang worktree mới** trước khi chạy install, build, migrate, test hoặc dev. Chạy từ thư mục gốc repo (thay `<worktree>` bằng tên thư mục vừa tạo):
 
    ```bash
    cp -n apps/api/.env .worktrees/<worktree>/apps/api/.env
@@ -50,15 +50,12 @@ Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow nh
 4. **Bảo toàn thay đổi.** Khi phát hiện sửa nhầm trong worktree gốc, phải sao lưu, chuyển và đối chiếu đầy đủ thay đổi trước khi dọn bản sai chỗ. Cấm dùng `git reset --hard` hoặc `git clean -fd` để xoá dữ liệu chưa được xác minh đã chuyển an toàn.
 5. **Kiểm chứng và bàn giao.** Chạy lint, typecheck, test trong worktree của Issue. Báo rõ đường dẫn worktree, nhánh, trạng thái Git và giữ worktree gốc sạch (ngoại trừ thay đổi do người dùng chủ động giữ lại).
 
-### Flow nhánh dev và main
+### Flow nhánh hiện hành
 
-Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đợt tái cấu trúc repo; trước thời điểm đó, mọi PR vẫn mở vào `main` như quy trình hiện tại trong tài liệu này.
-
-1. **Hai nhánh dài hạn.** `dev` là nhánh tích hợp và là default branch của repo. `main` là nhánh production.
-2. **Việc thường theo issue.** Mỗi issue mở một branch từ `dev` (đặt tên theo mục "Đặt tên branch" trong tài liệu này), đúng một PR vào `dev` cho mỗi issue theo luật 1 issue = 1 PR, thân PR có `Closes #<issue>`, squash merge vào `dev`. Chuẩn Issue và PR trong tài liệu này (văn bản tự chứa, mẫu issue/PR, task list trong thân PR, mục Nghiệm thu) giữ nguyên, không đổi.
-3. **CI.** PR vào `dev` không chờ CI đầy đủ, và CI đầy đủ không chạy theo từng commit/push trên branch của PR vào `dev`. CI đầy đủ — job `verify` trong `.github/workflows/ci.yml` và job `verify-stack` trong `.github/workflows/deploy-check.yml` — chỉ chạy tại PR phát hành `dev → main` và PR hotfix vào `main`; cả hai job phải success trên head cuối của các PR đó mới được merge.
-4. **Phát hành.** Phát hành bằng PR từ `dev` vào `main`, merge bằng merge commit (không squash), cần 1 approval của chủ dự án. Sau khi merge, gắn tag phát hành dạng `vYYYY.MM.DD.N` trên `main` (`N` là số thứ tự của đợt phát hành trong ngày).
-5. **Hotfix.** Việc khẩn cấp trên production mở branch từ `main`, mở PR vào `main`, squash merge vào `main`. Sau khi hotfix đã vào `main`, bắt buộc mở PR đồng bộ `main → dev` để hai nhánh không lệch nhau.
+1. **Nhánh tích hợp và phát hành:** `main` đang là default branch và nhánh đích của PR. Không giả định `dev` đã tồn tại; chỉ chuyển sang flow hai nhánh khi GitHub và CI thực sự được cấu hình, đồng thời cập nhật tài liệu này.
+2. **Việc theo issue:** mỗi issue dùng một branch từ `main`, một worktree, một PR vào `main`; PR có `Closes #<issue>` và squash merge sau vòng review bắt buộc.
+3. **CI đúng cấu hình:** `.github/workflows/ci.yml` chạy trên mọi `pull_request`; job `verify` tổng hợp kiểm chứng. `.github/workflows/deploy-check.yml` chạy `verify-stack` trên PR vào `main`. Ruleset của `main` hiện yêu cầu `verify-workspace` và `verify-stack`; ngoài các check bắt buộc của GitHub, phải kiểm chứng `verify` thành công trên head cuối trước merge. CI không thay thế review.
+4. **Hotfix:** mở branch từ `main` và PR vào `main`, không được bỏ qua vòng Agent review hoặc cổng CI. Không tạo PR đồng bộ tới nhánh không tồn tại.
 
 ### Văn bản tự chứa
 
@@ -71,10 +68,9 @@ Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đ
 
 ### Đặt tên branch
 
-1. Mỗi issue mở một branch riêng từ nhánh tích hợp (`dev`; trong giai đoạn chuyển tiếp chưa có `dev` thì từ `main`).
+1. Mỗi issue mở một branch riêng từ `main` (nhánh tích hợp hiện hành).
 2. Tên branch theo mẫu `<type>/<số issue>-<slug>`: `type` thuộc nhóm type của Conventional Commits (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`); `slug` là cụm tiếng Anh dạng kebab-case, ngắn, mô tả việc. Ví dụ: `fix/442-tenant-api-prefix`.
 3. Branch hotfix mở từ `main`, đặt tên `hotfix/<số issue>-<slug>`.
-4. Branch đồng bộ sau hotfix (PR `main → dev`) đặt tên cố định `sync/main-to-dev`.
 
 ### Tạo Issue
 
@@ -99,17 +95,26 @@ Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đ
 
 ### Tạo PR
 
-1. Một nhánh từ `dev` cho mỗi issue, mở đúng một PR vào `dev` cho mỗi issue (theo mục "Flow nhánh dev và main" ở trên; trong giai đoạn chuyển tiếp chưa có nhánh `dev` thì nhánh từ `main`, PR vào `main`).
+1. Một nhánh từ `main` và đúng một PR vào `main` cho mỗi issue (theo mục "Flow nhánh hiện hành" ở trên).
 2. Thân PR theo `.github/pull_request_template.md`, gồm: `Closes #<số issue>`; tóm tắt thay đổi; bản đồ thay đổi theo phạm vi; task list toàn bộ việc con của issue (mang từ issue sang) và tích khi xong từng mục; đối chiếu nghiệm thu từng tiêu chí kèm bằng chứng; kết quả kiểm chứng và CI.
 3. Toàn bộ việc con nằm trong PR duy nhất này (nhiều commit là bình thường). Tuyệt đối không mở PR thứ hai cho cùng một issue. Nếu PR có nguy cơ quá lớn tới mức không đánh giá nổi thì dừng và báo điều phối — việc chia là ngoại lệ hiếm, phải được duyệt trước, giữ số PR ở mức tối thiểu và vẫn theo dõi bằng task list trong issue.
 4. Thân PR có đủ các mục "Việc con", "Bản đồ thay đổi theo phạm vi" và "Kỷ luật đã giữ" theo mẫu PR của repo, mở đầu bằng mục "Liên kết issue". Dòng `Closes #<số issue>` ở các điểm trên là bắt buộc — đây là cơ chế đóng issue được triển khai, theo mục "Đóng issue" trong tài liệu này.
 
-### Review và merge
+### Vòng Agent triển khai → Agent review → đồng thuận
 
-1. Khi chủ repo yêu cầu merge PR, người được giao có thể thực hiện trực tiếp sau khi kiểm tra các điều kiện kỹ thuật. **Không bắt buộc phán quyết review, số lớp review, approval hay sự đồng thuận giữa các AI.** Review mã nguồn là bước hỗ trợ theo nhu cầu, không phải cổng chặn merge.
-2. Cổng kỹ thuật trước merge: CI bắt buộc thành công trên head cuối theo phạm vi của loại PR (PR vào `main` phải có job `verify` và `verify-stack` thành công); PR không ở trạng thái draft và mergeable sạch. Phải kiểm tra lại head, CI và mergeable ngay trước lệnh merge.
-3. PR của issue merge kiểu squash; issue tự đóng qua `Closes #<issue>` trong thân PR. PR phát hành `dev → main` merge bằng merge commit theo mục "Flow nhánh dev và main" ở trên.
-4. Ghi kết quả merge và tình trạng issue trên PR hoặc issue. Không tự đóng issue triển khai bằng tay; nhãn triage theo `docs/agents/triage-labels.md`.
+1. **Phân vai độc lập:** Agent triển khai chịu trách nhiệm code, test, commit, push, mở/cập nhật PR và trả lời finding. Agent review là một lượt đánh giá độc lập (agent/phiên khác), phải đọc diff và bằng chứng thật thay vì dùng kết luận của Agent triển khai. Không tự đóng cả hai vai bằng một lời tự xác nhận; nếu không có reviewer độc lập, PR phải chờ.
+2. **Bàn giao sau push:** Agent triển khai chỉ yêu cầu review sau khi đã push lên remote và mở PR theo mẫu. Trong PR ghi head SHA, phạm vi thay đổi, kiểm chứng đã chạy và lỗi/chưa chạy nếu có; không báo xanh khi chưa có log. Mỗi vòng sửa tiếp tục trên **chính PR đó**, không mở PR khác.
+3. **Review phải công khai ngay trên PR:** sau khi hoàn tất mỗi lượt review, Agent review **phải đăng comment lên PR trước khi kết thúc lượt**, bằng `gh pr review <số> --comment --body-file <tệp>` hoặc `gh pr comment <số> --body-file <tệp>`. Comment nêu SHA đã đọc, kết luận **CHANGES_REQUESTED** hoặc **APPROVED**, từng finding có mức độ và vị trí file/dòng (hoặc ghi rõ không có finding), bằng chứng kiểm tra và phần chưa xác minh. Kết quả chỉ ở chat hoặc tài liệu local **không được tính**. Nếu dùng comment thay GitHub review chính thức, phải nói rõ đây là kết luận Agent, không ngụy nhận là approval của GitHub.
+4. **Vòng lặp bắt buộc:** nếu có finding chặn, Agent triển khai xử lý, tự kiểm chứng, push commit mới, phản hồi tại PR với thay đổi và bằng chứng, rồi yêu cầu Agent review đánh giá lại. Reviewer đọc head SHA **mới nhất**, kiểm tra lại cả tác động dây chuyền và đăng comment kết luận mới. Approval/kết luận cũ không còn hiệu lực sau khi head thay đổi. Không giới hạn số vòng; nếu bất đồng chưa giải quyết, ghi rõ trên PR và chờ điều phối, không tự bỏ qua finding.
+5. **Điều kiện đồng thuận:** Agent triển khai xác nhận đã xử lý mọi finding; Agent review đăng comment **APPROVED** cho **đúng head SHA cuối**, không còn finding chặn hoặc luồng thảo luận tồn đọng. Hai vai cùng thống nhất về kết quả và phạm vi; không suy diễn đồng thuận từ im lặng, CI xanh hoặc review ở SHA cũ. Review comment không thể thay thế các approval chính thức nếu ruleset GitHub yêu cầu.
+6. **Cổng merge:** chỉ người/Agent được giao quyền merge mới thực hiện sau đồng thuận, PR không draft, mergeable sạch, job `verify`, `verify-stack` và mọi required status check trên head cuối đều thành công theo log GitHub thật. Kiểm tra lại SHA, trạng thái review và CI **ngay trước lệnh merge**. Issue PR merge bằng squash; issue tự đóng qua `Closes #<issue>`. Không tự merge chỉ vì một check hoặc Agent nói "xong".
+
+### Dọn worktree và branch sau merge
+
+1. Chỉ bắt đầu sau khi xác minh PR ở trạng thái **MERGED** trên GitHub (ví dụ `gh pr view <số> --json state,mergedAt,headRefName,baseRefName`), nhánh đích đã chứa thay đổi và issue đã đóng theo mục dưới. Không xóa worktree của PR còn mở, branch chưa merge hoặc dữ liệu đang làm dở.
+2. Từ worktree gốc, kiểm tra `git -C .worktrees/<worktree> status --porcelain`. Nếu có file thay đổi/chưa theo dõi, **dừng và bảo toàn dữ liệu**, không dùng `reset --hard`, `clean -fd` hay `worktree remove --force`. Khi sạch, chạy `git worktree remove .worktrees/<worktree>`.
+3. Dọn branch local bằng `git branch -d <branch>`. Với squash merge, Git có thể không coi commit nhánh là tổ tiên của `main`: chỉ dùng `git branch -D <branch>` **sau khi xác minh đúng PR đã merge, toàn bộ commit thuộc PR đã được tích hợp và không còn thay đổi/commit cần giữ**. Xóa remote branch bằng `git push origin --delete <branch>` nếu GitHub chưa tự xóa sau merge; không xóa `main` hoặc nhánh của công việc khác.
+4. Đồng bộ `main`, kiểm tra `git worktree list`, `git branch -vv` và tình trạng issue. Ghi kết quả cleanup vào PR/issue; nếu còn nhánh/worktree cần giữ vì có dữ liệu, ghi rõ lý do và bàn giao thay vì tuyên bố đã dọn xong.
 
 ### Đóng issue
 

@@ -20,7 +20,7 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Cấm sao chép component shadcn từ `packages/ui` vào `src/components/` để sửa riêng; cần đổi hành vi thì bọc component ở `apps/web/src/components/` hoặc sửa ở package ui theo quy trình của package đó.
 - Cấm tự chế kiểu collapse/section/accordion riêng cho từng trang — dùng component dùng chung đã thống nhất; giữ nguyên hành vi đã nghiệm thu (trạng thái mở/đóng, neo URL + scroll) khi thay vỏ.
 - Cấm hiển thị nguồn sách trên bề mặt học sinh làm bài, cấm hiển thị điểm chưa công bố cho HS/PH — kể cả khi API lỡ trả thừa trường (lọc ở tầng hiển thị + báo API sửa).
-- Cấm dựng lại bề mặt blog/hỏi-đáp (đã gỡ theo chốt 25/10/2026) và cấm thêm mục điều hướng ngoài cấu trúc sidebar đã chốt trong sổ quyết định.
+- Không tự dựng lại bề mặt blog/hỏi-đáp đã bị loại khỏi ứng dụng hoặc mở rộng sidebar ngoài phạm vi issue.
 - Cấm đổi cấu trúc sidebar ngân hàng khác 3 mục top-level + tab Cá nhân/Hệ thống trong từng màn danh sách đã chốt (sổ mục B, chốt lại 26/10/2026 11:40).
 
 ## Kiểm chứng bắt buộc
@@ -45,7 +45,7 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 
 Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.
 
-## Cấu trúc `features/` và kỷ luật import (issue #500)
+## Cấu trúc `features/` và kỷ luật import
 
 Từ đợt tổ chức lại theo mô hình features/, `apps/web` tổ chức theo feature: mỗi miền nghiệp vụ là một thư mục `src/features/<feature>/` tự chứa các tầng của chính nó — `routes/` (route module, export trực tiếp component/loader/clientLoader/meta/ErrorBoundary; config route riêng ở `features/<feature>/routes.ts` dùng `relative()`/`prefix()` của React Router), `components/`, `api/` (hàm gọi API thuần, không phụ thuộc React), `queries/` (hook React Query + query keys riêng của feature ở `queries/keys.ts` + prefetch/clientLoader), `types/`, `utils/`, `hooks/`. Mô hình `src/lib/*-data.ts` phẳng đã bỏ: tầng dữ liệu của mỗi miền nằm trong feature của nó, tách rõ tầng `api/` khỏi tầng `queries/`.
 
@@ -53,9 +53,9 @@ Từ đợt tổ chức lại theo mô hình features/, `apps/web` tổ chức t
 - Phần thật sự đa-feature mới ở lại tầng dùng chung: `src/lib/` giữ client API (`api.ts`), auth (`auth.tsx`, `auth-client.ts`), phân quyền hiển thị (`permissions.tsx`, `access.ts`), `query-keys.ts` (chỉ các khoá dùng chung/đa-feature), `curriculum.ts` (query môn học dùng cả questions/matrices), `course-content.ts` (query nội dung khoá dùng cả builder/content-bank/exams/questions), `course-cards.ts`, `ssr-data.ts`… — không thêm module dữ liệu theo miền mới vào `src/lib/`.
 - Alias đường dẫn: `#features/*` trỏ `src/features/*`, `#lib/*`, `#components/*`, `#hooks/*`, `#config/*`, `#utils/*`, `#test/*` trỏ các thư mục dùng chung tương ứng (khai ở `package.json` mục `imports` và `tsconfig.json` mục `paths`).
 
-### Ngoại lệ của kỷ luật import ngang — tập cạnh đóng băng
+### Import ngang còn tồn tại trong code
 
-Kỷ luật ở trên có đúng một ngoại lệ: tập cạnh import ngang giữa các feature đã đóng băng trong [comment của issue #500 thuộc repo lịch sử trước khi đổi tên](https://github.com/kvu90/lms/issues/500#issuecomment-6504346634) (27 cặp ở code chạy thật và các cặp chỉ có ở file spec, đúng danh sách trong comment đó — các cạnh này là hệ quả của bảng ánh xạ đã duyệt khi tổ chức lại `features/`). Mọi cạnh import ngang phát sinh **ngoài** tập đóng băng đều là khuyết tật phải sửa; không tự ý thêm cạnh vào tập ngoại lệ — muốn mở rộng phải có phán quyết ghi lại trong issue.
+Import ngang giữa các feature còn tồn tại trong code hiện tại là nợ kỹ thuật, không phải quy tắc cho phép phát sinh thêm. Không dựa vào danh sách từ issue thuộc repo khác làm nguồn sự thật. Khi sửa vùng liên quan, giữ ranh giới phụ thuộc, không tăng cạnh import ngang và ưu tiên tháo gỡ các cạnh hiện có theo phạm vi issue.
 
 Hai chiều import runtime `questions → matrices` và `content-bank → course-builder` đã được loại khỏi baseline hiện hành; không được đưa trở lại bằng cách dựa vào ngoại lệ lịch sử. Khi rà soát ranh giới bằng script tạm, phải xét cả alias `#features/*`, đường relative và import từ tầng dùng chung ngược về feature; script audit tạm không được lưu trong source hoặc thêm thành lệnh CI. Hai thành phần bố cục `src/components/site-header.tsx` và `src/components/app-sidebar.tsx` hiện vẫn import trực tiếp từ feature `notifications`: đó là coupling runtime hiện hữu cần phân xử riêng, không xem đây là quy tắc cho phép shared import feature.
 

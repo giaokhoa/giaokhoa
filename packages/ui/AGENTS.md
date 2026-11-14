@@ -35,7 +35,7 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 
 ## Tính chất vendored
 
-Toàn bộ code trong package này là **code shadcn vendored** (sinh bằng shadcn CLI từ upstream, xem `components.json` và README) — không phải code nghiệp vụ của dự án. Hệ quả đã chốt trong sổ quyết định:
+Toàn bộ code trong package này là **code shadcn vendored** (sinh bằng shadcn CLI từ upstream, xem `components.json` và README) — không phải code nghiệp vụ của dự án. Hệ quả của việc dùng code vendored:
 
 - **Không bổ sung comment vào code vendored:** áp dụng quy tắc không comment của toàn repo, kể cả khi đồng bộ từ upstream.
 - **Hạn chế sửa trực tiếp** code vendored: thay đổi đi qua quy trình shadcn CLI / đồng bộ theo upstream như README và mục "Điều cấm" ở trên đã ghi; ngoại lệ bất khả kháng phải sửa tay thì sửa tối thiểu và ghi vào mục "Ngoại lệ" ở cuối README kèm lý do, trong cùng commit — để lần đồng bộ upstream sau không âm thầm mất dấu chỗ đã sửa.
