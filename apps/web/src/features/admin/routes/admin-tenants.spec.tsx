@@ -116,20 +116,6 @@ function stubFetch(calls: RecordedCall[], options: StubOptions) {
       if (url === '/api/v1/users/me/capabilities') return respond(accessView(options));
       if (url === '/api/v1/courses') return respond([]);
       if (url === '/api/v1/tenants' && method === 'GET') return respond(tenants);
-      if (url === '/api/v1/tenants' && method === 'POST') {
-        const created = {
-          id: '01900000-0000-7000-8000-0000000000a9',
-          slug: body.slug,
-          name: body.name,
-          kind: body.kind,
-          status: 'active',
-          plan: body.plan ?? null,
-          createdAt: '2026-10-01T00:00:00.000Z',
-          updatedAt: '2026-10-01T00:00:00.000Z',
-        };
-        tenants.push(created);
-        return respond(created, 201);
-      }
       if (url === '/api/v1/tenants/current')
         return respond({ ...TENANT_A, status: options.currentTenantStatus ?? TENANT_A.status });
       if (url === `/api/v1/tenants/${TENANT_A_ID}/members` && method === 'GET') return respond(membersA);
@@ -183,7 +169,7 @@ describe('Trang quản trị tenant', () => {
     localStorage.clear();
   });
 
-  it('platform manager: thấy mọi tenant, tạo trường kho chung và gửi đúng payload không cấp trung tâm mới', async () => {
+  it('platform manager: thấy các trung tâm, hướng dẫn cấp kho riêng và không có form shared', async () => {
     const calls: RecordedCall[] = [];
     stubFetch(calls, { systemCaps: ['tenant:manage'] });
     renderPage();
@@ -198,16 +184,10 @@ describe('Trang quản trị tenant', () => {
     expect(screen.queryByText('membera')).not.toBeInTheDocument();
     expect(calls.some((c) => c.url === `/api/v1/tenants/${TENANT_B_ID}/members` && c.method === 'GET')).toBe(true);
 
-    expect(screen.getByText(/Trung tâm giáo dục mới phải được vận hành cấp database/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Tạo trung tâm' })).not.toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText('Tên trung tâm'), 'Trường Gamma');
-    await userEvent.type(screen.getByLabelText('Mã định danh (slug)'), 'truong-gamma');
-    await userEvent.click(screen.getByRole('button', { name: 'Tạo trường học' }));
-    await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/tenants' && c.method === 'POST')).toBe(true));
-    const post = calls.find((c) => c.url === '/api/v1/tenants' && c.method === 'POST');
-    expect(post?.body).toEqual({ name: 'Trường Gamma', slug: 'truong-gamma', kind: 'school' });
-    expect(await screen.findByText('Đã tạo trường học trong kho chung.')).toBeInTheDocument();
-    expect(screen.getByText('Trường Gamma')).toBeInTheDocument();
+    expect(screen.getByText(/Mọi trung tâm và trường học mới đều phải được vận hành cấp database/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tạo trường học' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tên trung tâm')).not.toBeInTheDocument();
+    expect(calls.some((call) => call.url === '/api/v1/tenants' && call.method === 'POST')).toBe(false);
   });
 
   it('platform viewer: xem được danh sách và thành viên nhưng không có điều khiển ghi nào', async () => {

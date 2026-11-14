@@ -1,4 +1,4 @@
-import type { CreateTenant, CreateUser, Tenant, TenantMembership } from '@giaokhoa/contracts';
+import type { CreateUser, Tenant, TenantMembership } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { TenantMemberStatus, TenantUserSummary } from '../types/tenant-admin';
 
@@ -17,10 +17,6 @@ export function fetchTenantMembers(tenantId: string) {
 
 export function fetchTenantUsers(tenantId: string) {
   return apiJson<TenantUserSummary[]>(`/api/v1/tenants/${tenantId}/users`);
-}
-
-export function createTenant(draft: CreateTenant) {
-  return apiJson<Tenant>('/api/v1/tenants', { method: 'POST', body: JSON.stringify(draft) });
 }
 
 export function addTenantMember(input: { tenantId: string; userId: string }) {

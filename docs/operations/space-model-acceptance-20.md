@@ -36,7 +36,7 @@ Các lỗi `ProblemDetailsFilter` ở những ca tiêm lỗi có chủ đích đ
 | AC21      | Chưa chạy ca đóng/xoá A cùng dữ liệu tích hợp                                                                                                     | Cần kiểm giữ nguyên B, công cộng và bank sau cleanup                                           |
 | AC22–AC23 | Support-grants 9/9 đạt: không grant, thu hồi, hết hạn, audit                                                                                      | Chưa chạy mọi bề mặt hồ sơ/điểm và token lỗi                                                   |
 | AC24      | Chưa chạy test UI với thao tác thực                                                                                                               | Cần chạy giao diện tạo/giao đề và fork                                                         |
-| AC25      | **Chưa đạt**: resolver API/worker vẫn có `mode='shared'`, seed vẫn đăng ký trường học mặc định vào database chung, worker sweep vẫn đọc kho chung | Phải loại bỏ consumer và seed legacy, cập nhật test/hợp đồng, cài mới thật                     |
+| AC25      | **Chưa đạt toàn diện**: đã từ chối shared trong resolver, bỏ seed trường mặc định và chặn API/UI tạo school chung; còn luồng/fixture cũ và thiếu cài sạch bốn miền | Phải loại bỏ consumer và seed legacy, cập nhật test/hợp đồng, cài mới thật                     |
 | AC26      | Có số đo PostgreSQL/Redis điểm thời gian, trần pool và concurrency cấu hình ở tài liệu tài nguyên                                                 | Thiếu đo **tải** worker với A/B/public chạy cùng lúc, RSS và đỉnh kết nối                      |
 | AC27      | Build 10/10, lint/typecheck 30/30, 75/75 e2e đã chọn, 22/22 worker unit/integration                                                               | Chưa chạy toàn bộ tầng liên quan, `verify`, `verify-stack`, CI đúng SHA cuối và review độc lập |
 
@@ -48,7 +48,16 @@ Các lỗi `ProblemDetailsFilter` ở những ca tiêm lỗi có chủ đích đ
 - Seed không còn gieo `truong-mac-dinh`; chỉ gieo registry Trang chính dedicated; reject seed trung tâm qua đường bootstrap.
 - Unit hợp đồng 93/93, env 18/18, resolver API 11/11, resolver/sweep worker 9/9 và integration control plane 22/22 đã đạt trên worktree sửa; typecheck API/worker/contracts đạt.
 - Lượt e2e ban đầu trên head sửa có 25/29 qua và 4 ca chưa đạt: một ca do không có `pg_dump` trong PATH và ba ca còn ràng buộc vào hành vi shared legacy (`space-routing-flow`). **Chưa thể coi là regression xanh/CI đạt.** Cần thay ca legacy bằng kiểm tra từ chối shared và chạy lại cùng PostgreSQL client 18.
-- UI tạo trường học trong kho chung, test liên miền và phép đo tải worker vẫn còn cần xử lý; AC25–AC27 **chưa đạt**. Không dùng kết quả trên head cũ để đóng PR.
+- API/UI tạo trường trong shared đã được chặn/gỡ ở lượt sau; các test liên miền khác, cách tách tất cả consumer legacy và phép đo tải worker vẫn cần xử lý; AC25–AC27 **chưa đạt**. Không dùng kết quả trên head cũ để đóng PR.
+
+## Lượt sửa phản hồi review thứ hai của PR #62 (chưa xác minh CI trên SHA mới)
+
+- HTTP `POST /tenants` chặn cả `school` và `center` ở kho platform với `400 centre.provision_required`; UI không còn biểu mẫu tạo trường shared; bản dịch và test web đã cập nhật. Web unit 8/8 và typecheck đạt.
+- `deploy-check` sinh `ADMIN_PASSWORD` ngẫu nhiên cho CI trong `GITHUB_ENV`, không đưa mật khẩu mặc định production trở lại; chưa chạy được Docker Compose tại máy cục bộ vì môi trường không có Docker.
+- HTTP tại hostname legacy shared bị từ chối với mã định tuyến cố định khi đọc identity; request dùng token của platform vào hostname shared bị từ chối 401 từ tầng xác thực. E2E `space-routing-flow` 8/8 đạt.
+- Seed xác minh người quản trị trong **database hiện hành** thay vì tin cache ID cũ sau khi tái tạo database cùng tên; integration bootstrap DB trống qua HTTP 5/5 đạt sau khi build mới API. DB routing integration 9/9, routed Kysely 10/10, program-package integration 4/4 cũng đạt.
+- Sao lưu và khôi phục dữ liệu khu công cộng với PostgreSQL client 18: e2e `public-learning-flow` 14/14 đạt.
+- **Chưa có CI head mới**, chưa hoàn tất chuyển toàn bộ test nghiệp vụ legacy sang quy trình tạo kho riêng, chưa diễn tập đầy đủ AC17–AC21/AC24 hoặc đo tải worker AC26. PR tiếp tục ở dạng Draft và cả #20/#6 vẫn mở.
 
 ## Chốt hạng mục chưa thể nghiệm thu
 

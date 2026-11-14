@@ -30,9 +30,16 @@ export class SeedService implements OnApplicationBootstrap {
     await this.roles.seedDefaults();
     await this.users.ensureGuestUser();
     const zero = await this.tenants.ensurePlatformTenant();
-    const admins = (await this.currentSiteAdmins());
+    const admins = await this.currentSiteAdmins();
     let admin: UserRow | undefined;
-    if (admins.length === 0) {
+    for (const id of admins) {
+      const candidate = await this.users.getByIdOrUndefined(id);
+      if (candidate && !candidate.deleted && !candidate.suspended) {
+        admin = candidate;
+        break;
+      }
+    }
+    if (!admin) {
       const username = this.config.get<string>('ADMIN_USERNAME') ?? 'admin';
       admin = await this.users.getByUsername(username);
       if (!admin) {
@@ -48,8 +55,6 @@ export class SeedService implements OnApplicationBootstrap {
       if (manager) await this.roles.assignRole(admin.id, manager.id, system.id);
       await this.evaluator.setSiteAdmins([admin.id]);
       this.logger.log(`Seeded initial site administrator "${username}" (id ${admin.id})`);
-    } else {
-      admin = await this.users.getByIdOrUndefined(admins[0]!);
     }
     if (admin) {
       await this.tenants.ensureActiveMembership(zero.id, admin.id);

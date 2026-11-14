@@ -60,7 +60,19 @@ export class SpaceContextGuard implements CanActivate {
       return true;
     }
 
-    const target: ResolvedSpaceConnection = await this.spaceDb.resolveTarget(slug);
+    let target: ResolvedSpaceConnection;
+    try {
+      target = await this.spaceDb.resolveTarget(slug);
+    } catch (error) {
+      if (error instanceof SpaceRoutingError && error.code === 'space_routing.shared_not_supported') {
+        throw new ForbiddenException({
+          message: 'Shared centre databases are no longer supported',
+          code: 'space_routing.shared_not_supported',
+        });
+      }
+      throw error;
+    }
+
 
     if (target.status !== 'active') {
       throw new ForbiddenException({
