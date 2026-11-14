@@ -6,6 +6,8 @@ import { redisConnectionFromUrl } from '../config/env';
 
 export const REDIS_THROTTLER_KEY_PREFIX = 'giaokhoa:throttle:';
 
+const REDIS_READY_TIMEOUT_MS = 5_000;
+
 const INCREMENT_SCRIPT = `
 local blockedTtl = redis.call('PTTL', KEYS[2])
 if blockedTtl > 0 then
@@ -38,6 +40,7 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
     blockDuration: number,
     throttlerName: string,
   ): ReturnType<ThrottlerStorage['increment']> {
+    await this.waitUntilReady();
     const result = await this.redis.eval(
       INCREMENT_SCRIPT,
       2,
@@ -56,6 +59,25 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
       isBlocked: isBlocked === 1,
       timeToBlockExpire: Math.max(0, Math.ceil(timeToBlockExpireMs / 1000)),
     };
+  }
+
+  private waitUntilReady(): Promise<void> {
+    if (this.redis.status === 'ready') return Promise.resolve();
+    if (this.redis.status === 'end') {
+      return Promise.reject(new Error('Redis throttler storage is closed'));
+    }
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.redis.off('ready', onReady);
+        reject(new Error('Redis throttler storage did not become ready in time'));
+      }, REDIS_READY_TIMEOUT_MS);
+      timer.unref?.();
+      const onReady = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+      this.redis.once('ready', onReady);
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
