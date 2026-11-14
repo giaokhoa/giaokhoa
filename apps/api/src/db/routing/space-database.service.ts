@@ -141,11 +141,6 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     slug: string,
     target: ResolvedSpaceConnection,
   ): Promise<CentreDb> {
-    if (target.mode === 'shared') {
-      const shared = this.requireSharedKysely();
-      this.preparedKysely.set(slug, { db: shared, databaseName: target.databaseName, spaceId: target.spaceId });
-      return shared;
-    }
     const connectionString = target.connectionString;
     if (!connectionString) {
       throw new SpaceRoutingError(
@@ -167,13 +162,8 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   }
 
   private recordSpaceMode(slug: string, target: ResolvedSpaceConnection): void {
-    if (target.mode === 'shared') {
-      this.dedicatedSlugs.delete(slug);
-      this.dedicatedDatabaseNames.delete(slug);
-    } else {
-      this.dedicatedSlugs.add(slug);
-      this.dedicatedDatabaseNames.set(slug, target.databaseName);
-    }
+    this.dedicatedSlugs.add(slug);
+    this.dedicatedDatabaseNames.set(slug, target.databaseName);
   }
 
   async withSpaceKysely<T>(

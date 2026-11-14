@@ -26,7 +26,7 @@ export class ActivityDueReminderProcessor extends ObservedWorkerHost {
 
   private async processInContext(_job: Job): Promise<ActivityDueReminderResult> {
     void _job;
-    return this.spaceDb.sweepSharedAndDedicated(() =>
+    return this.spaceDb.sweepDedicatedSpaces(() =>
       this.taskLog.run('activity-due-reminders', () => this.sweep(),
         (r) => `reminded ${r.reminded.length} (student, activity) pair(s)`), (a, b) => ({
           checkedAt: a.checkedAt, reminded: [...a.reminded, ...b.reminded],

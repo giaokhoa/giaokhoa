@@ -65,14 +65,11 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     resolver.dispose();
   });
 
-  it('trung tâm ở kho chung phân giải về chế độ shared và không cần giải bí mật', async () => {
+  it('dòng sổ legacy dùng kho chung bị từ chối thay vì trả handle kho chung', async () => {
     const { resolver } = makeResolver({ 'trang-chinh': SHARED_ENTRY });
-    const target = await resolver.resolve('trang-chinh');
-    expect(target.mode).toBe('shared');
-    expect(target.spaceId).toBe('id-dang-ky-trang-chinh');
-    expect(target.databaseName).toBe('giaokhoa_shared');
-    expect(target.connectionRole).toBe('giaokhoa_app');
-    expect(target.connectionString).toBeUndefined();
+    await expect(resolver.resolve('trang-chinh')).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
+    });
     resolver.dispose();
   });
 
@@ -125,7 +122,7 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
   });
 
   it('sự kiện đổi sổ vô hiệu hoá đệm của đúng slug đó ngay trong TTL', async () => {
-    const entries = { 'trung-tam-a': { ...DEDICATED_ENTRY }, 'trang-chinh': { ...SHARED_ENTRY } };
+    const entries = { 'trung-tam-a': { ...DEDICATED_ENTRY }, 'trang-chinh': { ...DEDICATED_ENTRY, id: 'id-platform', slug: 'trang-chinh' } };
     const { resolver, reads } = makeResolver(entries);
     await resolver.resolve('trung-tam-a');
     await resolver.resolve('trang-chinh');

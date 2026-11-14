@@ -122,12 +122,6 @@ export class SpaceDatabaseService implements OnModuleDestroy {
 
   async getKyselyForSpace(slug: string): Promise<CentreDb> {
     const target = await this.resolver.resolve(slug);
-    if (target.mode === 'shared') {
-      const db = this.requireSharedKysely();
-      this.preparedKysely.set(slug, { db, databaseName: target.databaseName, spaceId: target.spaceId });
-      this.dedicatedSlugs.delete(slug);
-      return db;
-    }
     const connectionString = target.connectionString;
     if (!connectionString) {
       throw new SpaceRoutingError(
@@ -186,7 +180,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
 
   async listRegisteredSpaces(): Promise<SpaceRegistryEntry[]> {
     const db = this.registryDb;
-    if (!db) return [];
+    if (!db) throw new SpaceRoutingError('space_routing.not_configured', 'Control plane database is not configured');
     const rows = await db
       .selectFrom('space_registry')
       .select([
@@ -203,19 +197,19 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     return rows;
   }
 
-  async sweepSharedAndDedicated<T>(
+  async sweepDedicatedSpaces<T>(
     sweep: () => Promise<T>,
     merge: (result: T, next: T) => T,
   ): Promise<T> {
-    const failed: string[] = [];
-    let shared: T | undefined;
-    try {
-      shared = await tenantAls.run({ platform: true }, sweep);
-    } catch (error) {
-      failed.push(`shared: ${error instanceof Error ? error.message : String(error)}`);
-    }
     const registered = await this.listRegisteredSpaces();
-    const dedicated = registered.filter((space) => space.storageMode === 'dedicated' && space.status === 'active');
+    if (registered.some((space) => space.storageMode !== 'dedicated')) {
+      throw new SpaceRoutingError('space_routing.shared_not_supported', 'Periodic sweep cannot run against a shared database');
+    }
+    const dedicated = registered.filter((space) => space.status === 'active');
+    if (dedicated.length === 0) {
+      throw new SpaceRoutingError('space_routing.no_active_spaces', 'Periodic sweep requires an active dedicated space');
+    }
+    const failed: string[] = [];
     const results: Array<T | undefined> = Array.from({ length: dedicated.length });
     await mapWithConcurrencyLimit(dedicated.map((space, index) => ({ space, index })), this.sweepConcurrency, async ({ space, index }) => {
       try {
@@ -240,7 +234,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     if (failed.length > 0) {
       throw new Error(`Periodic sweep failed in ${failed.length} storage scope(s): ${failed.join('; ')}`);
     }
-    return results.reduce<T>((all, value) => merge(all, value as T), shared as T);
+    return results.slice(1).reduce<T>((all, value) => merge(all, value as T), results[0] as T);
   }
 
   private requireSharedKysely(): CentreDb {
@@ -269,12 +263,10 @@ export class SpaceDatabaseService implements OnModuleDestroy {
         }
         return preparedEntry.db;
       }
-      if (this.dedicatedSlugs.has(slug) || scope?.spaceId || scope?.spaceHandle) {
-        throw new SpaceRoutingError(
-          'space_routing.prepared_revoked',
-          `Space ${slug} was prepared with a dedicated store but that preparation is no longer active; prepare the space again before routing queries to it`,
-        );
-      }
+      throw new SpaceRoutingError(
+        'space_routing.not_prepared',
+        `Space ${slug} has no prepared dedicated database handle`,
+      );
     }
     return this.requireSharedKysely();
   }

@@ -99,7 +99,7 @@ export class ClassEnrolReconcileProcessor extends ObservedWorkerHost {
   }
 
   private async processInContext(): Promise<ClassEnrolReconcileResult> {
-    return this.spaceDb.sweepSharedAndDedicated(() =>
+    return this.spaceDb.sweepDedicatedSpaces(() =>
       this.taskLog.run('class-enrol-reconcile', () => this.sweep(), (r) =>
         `classes ${r.classesChecked}, enrolled ${r.enrolled}, reactivated ${r.reactivated}, suspended ${r.suspended}, withdrawn ${r.withdrawn}, roles ${r.rolesRestored}, skipped ${r.skippedClassIds.length}`), (a, b) => ({
           checkedAt: a.checkedAt,

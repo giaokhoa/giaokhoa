@@ -31,7 +31,7 @@ export const createSpaceRegistrationSchema = z.strictObject({
   kind: z.enum(SPACE_KINDS),
   status: z.enum(SPACE_STATUSES).optional(),
   databaseName: z.string().min(1).max(120),
-  storageMode: z.enum(SPACE_STORAGE_MODES),
+  storageMode: z.literal('dedicated'),
   connectionRoleRef: z.string().min(1).max(200),
   secretRef: z.string().max(200).optional(),
   schemaVersion: z.string().max(120).optional(),
@@ -42,7 +42,7 @@ export type CreateSpaceRegistration = z.infer<typeof createSpaceRegistrationSche
 export const updateSpaceRegistrationSchema = z.strictObject({
   name: z.string().min(1).max(200).optional(),
   databaseName: z.string().min(1).max(120).optional(),
-  storageMode: z.enum(SPACE_STORAGE_MODES).optional(),
+  storageMode: z.literal('dedicated').optional(),
   connectionRoleRef: z.string().min(1).max(200).optional(),
   secretRef: z.string().max(200).nullable().optional(),
   schemaVersion: z.string().max(120).nullable().optional(),

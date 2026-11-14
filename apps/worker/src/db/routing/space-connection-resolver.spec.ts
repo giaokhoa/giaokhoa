@@ -52,20 +52,20 @@ afterEach(() => {
 });
 
 describe('Bộ phân giải đích kết nối theo trung tâm — bản sao phía worker', () => {
-  it('kết quả phân giải mang theo định danh của dòng đăng ký (spaceId) ở cả hai chế độ kho', async () => {
+  it('kho riêng phân giải được spaceId, dòng shared legacy bị từ chối', async () => {
     const { resolver } = makeResolver({
       'trung-tam-a': { ...DEDICATED_ENTRY },
       'trang-chinh': { ...SHARED_ENTRY },
     });
     await expect(resolver.resolve('trung-tam-a')).resolves.toMatchObject({ spaceId: 'id-dang-ky-a' });
-    await expect(resolver.resolve('trang-chinh')).resolves.toMatchObject({
-      spaceId: 'id-dang-ky-trang-chinh',
+    await expect(resolver.resolve('trang-chinh')).rejects.toMatchObject({
+      code: 'space_routing.shared_not_supported',
     });
     resolver.dispose();
   });
 
   it('sự kiện đổi sổ vô hiệu hoá đệm của đúng slug đó ngay trong TTL', async () => {
-    const entries = { 'trung-tam-a': { ...DEDICATED_ENTRY }, 'trang-chinh': { ...SHARED_ENTRY } };
+    const entries = { 'trung-tam-a': { ...DEDICATED_ENTRY }, 'trang-chinh': { ...DEDICATED_ENTRY, id: 'id-platform', slug: 'trang-chinh' } };
     const { resolver, reads } = makeResolver(entries);
     await resolver.resolve('trung-tam-a');
     await resolver.resolve('trang-chinh');

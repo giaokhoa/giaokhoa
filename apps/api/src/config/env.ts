@@ -120,6 +120,29 @@ export function validateEnv(config: Record<string, unknown>): Env {
   if (!parsed.success) {
     throw new Error(`Invalid environment variables: ${z.prettifyError(parsed.error)}`);
   }
+  if (parsed.data.NODE_ENV === 'production') {
+    if (
+      typeof config.ADMIN_PASSWORD !== 'string' ||
+      config.ADMIN_PASSWORD.length < 12 ||
+      config.ADMIN_PASSWORD === 'Admin123!'
+    ) {
+      throw new Error(
+        'Production requires a non-default ADMIN_PASSWORD of at least 12 characters',
+      );
+    }
+    if (
+      typeof config.PLATFORM_ADMIN_USERNAME === 'string' &&
+      config.PLATFORM_ADMIN_USERNAME.trim() &&
+      config.PLATFORM_ADMIN_USERNAME !== parsed.data.ADMIN_USERNAME &&
+      (typeof config.PLATFORM_ADMIN_PASSWORD !== 'string' ||
+        config.PLATFORM_ADMIN_PASSWORD.length < 12 ||
+        config.PLATFORM_ADMIN_PASSWORD === 'Platform123!')
+    ) {
+      throw new Error(
+        'Production requires a non-default PLATFORM_ADMIN_PASSWORD of at least 12 characters when a separate platform operator is configured',
+      );
+    }
+  }
   if (parsed.data.PUBLIC_LEARNING_ENABLED) {
     for (const key of ['BETTER_AUTH_URL', 'CONTROL_PLANE_DATABASE_URL', 'SPACE_CONG_CONG_DATABASE_URL', 'BETTER_AUTH_SECRET'] as const) {
       if (!parsed.data[key]) throw new Error(`PUBLIC_LEARNING_ENABLED=true requires ${key} (public requests must never fall back to the shared database)`);

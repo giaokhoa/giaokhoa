@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import {
   ControlPlaneRegistryService,
-  SHARED_DATABASE_SCHEMA_VERSION,
+  PLATFORM_DATABASE_SCHEMA_VERSION,
   type ExistingSpaceSeed,
 } from '../../../src/modules/control-plane/control-plane.service';
 import { UsersService } from '../../../src/modules/users/users.service';
@@ -118,52 +118,38 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     });
   });
 
-  it('bootstrap gieo đúng hai không gian hiện hữu vào sổ ở chế độ kho chung', async () => {
+  it('bootstrap chỉ gieo Trang chính vào kho riêng, không tạo trung tâm shared mặc định', async () => {
     const platform = await registry.getBySlug(adminId, 'trang-chinh');
     expect(platform.kind).toBe('platform');
     expect(platform.status).toBe('active');
-    expect(platform.storageMode).toBe('shared');
-    expect(platform.schemaVersion).toBe(SHARED_DATABASE_SCHEMA_VERSION);
+    expect(platform.storageMode).toBe('dedicated');
+    expect(platform.schemaVersion).toBe(PLATFORM_DATABASE_SCHEMA_VERSION);
     expect(platform.secretRef).toBe('env:DATABASE_URL');
-
-    const school = await registry.getBySlug(adminId, 'truong-mac-dinh');
-    expect(school.kind).toBe('center');
-    expect(school.storageMode).toBe('shared');
     const businessDatabase = new URL(process.env.DATABASE_URL!).pathname.replace(/^\//, '');
     expect(platform.databaseName).toBe(businessDatabase);
-    expect(school.databaseName).toBe(businessDatabase);
+    await expect(registry.getBySlug(adminId, 'truong-mac-dinh')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('chạy lại đường gieo không tạo dòng trùng cho hai không gian hiện hữu', async () => {
+  it('gieo lại Trang chính không tạo trùng; không nhận trung tâm qua đường seed', async () => {
     const businessUrl = new URL(process.env.DATABASE_URL!);
-    const seeds: ExistingSpaceSeed[] = [
-      {
-        slug: 'trang-chinh',
-        name: 'Trang chính',
-        kind: 'platform',
-        plan: null,
-        databaseName: businessUrl.pathname.replace(/^\//, ''),
-        connectionRoleRef: decodeURIComponent(businessUrl.username),
-        secretRef: 'env:DATABASE_URL',
-      },
-      {
-        slug: 'truong-mac-dinh',
-        name: 'Trường mặc định',
-        kind: 'center',
-        plan: null,
-        databaseName: businessUrl.pathname.replace(/^\//, ''),
-        connectionRoleRef: decodeURIComponent(businessUrl.username),
-        secretRef: 'env:DATABASE_URL',
-      },
-    ];
+    const seeds: ExistingSpaceSeed[] = [{
+      slug: 'trang-chinh',
+      name: 'Trang chính',
+      kind: 'platform',
+      plan: null,
+      databaseName: businessUrl.pathname.replace(/^\//, ''),
+      connectionRoleRef: decodeURIComponent(businessUrl.username),
+      secretRef: 'env:DATABASE_URL',
+    }];
     await expect(registry.seedExistingSpaces(seeds)).resolves.toBe(0);
+    await expect(registry.seedExistingSpaces([{
+      ...seeds[0]!, slug: 'truong-mac-dinh', kind: 'center',
+    }])).rejects.toThrow('only accepts the dedicated platform store');
     const count = await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
-      const result = await client.query<{ count: string }>(
-        `SELECT count(*) FROM space_registry WHERE slug IN ('trang-chinh', 'truong-mac-dinh')`,
-      );
+      const result = await client.query<{ count: string }>('SELECT count(*) FROM space_registry');
       return Number(result.rows[0]!.count);
     });
-    expect(count).toBe(2);
+    expect(count).toBe(1);
   });
 
   it('tạo dòng đăng ký mới ghi kèm một dòng lịch sử create với người thực hiện và ảnh chụp sau', async () => {
@@ -243,42 +229,31 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     expect(other.databaseName).toBe('giaokhoa_centre_test_611_other');
   });
 
-  it('chỉ đổi storageMode sang dedicated mà giữ nguyên tên database đã có ở dòng kho chung khác cũng bị từ chối 409', async () => {
-    const school = await registry.getBySlug(adminId, 'truong-mac-dinh');
-    expect(school.storageMode).toBe('shared');
-    const rejected = await registry
-      .updateRegistration(adminId, school.id, { storageMode: 'dedicated' })
-      .catch((error: unknown) => error);
-    expect(rejected).toBeInstanceOf(ConflictException);
-    expect((rejected as ConflictException).getResponse()).toMatchObject({ code: 'control_plane.database_name_taken' });
-    const after = await registry.getBySlug(adminId, 'truong-mac-dinh');
-    expect(after.storageMode).toBe('shared');
-    expect(after.databaseName).toBe(school.databaseName);
+  it('không thể dùng đường gieo để tạo trung tâm khác trong database Trang chính', async () => {
+    const platform = await registry.getBySlug(adminId, 'trang-chinh');
+    await expect(registry.seedExistingSpaces([{
+      slug: 'trung-tam-test-legacy', name: 'Trung tâm legacy', kind: 'center', plan: null,
+      databaseName: platform.databaseName, connectionRoleRef: platform.connectionRoleRef,
+      secretRef: 'env:DATABASE_URL',
+    }])).rejects.toThrow('only accepts the dedicated platform store');
+    await expect(registry.getBySlug(adminId, 'trung-tam-test-legacy')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('chỉ đổi storageMode của dòng gieo đầu tiên sang dedicated cũng bị từ chối 409 (ca tự khớp)', async () => {
+  it('cập nhật storageMode cùng giá trị dedicated không tạo xung đột giả với chính bản ghi', async () => {
     const platform = await registry.getBySlug(adminId, 'trang-chinh');
-    expect(platform.storageMode).toBe('shared');
-    const rejected = await registry
-      .updateRegistration(adminId, platform.id, { storageMode: 'dedicated' })
-      .catch((error: unknown) => error);
-    expect(rejected).toBeInstanceOf(ConflictException);
-    expect((rejected as ConflictException).getResponse()).toMatchObject({ code: 'control_plane.database_name_taken' });
-    const unchanged = await registry.getBySlug(adminId, 'trang-chinh');
-    expect(unchanged.storageMode).toBe('shared');
+    expect(platform.storageMode).toBe('dedicated');
+    const unchanged = await registry.updateRegistration(adminId, platform.id, { storageMode: 'dedicated' });
+    expect(unchanged.storageMode).toBe('dedicated');
     expect(unchanged.databaseName).toBe(platform.databaseName);
   });
 
-  it('tra cứu loại trừ theo tên database trả về dòng khác, không trả chính dòng bị loại', async () => {
+  it('tra cứu loại trừ không nhận chính dòng đang sửa và phát hiện tên database của dòng khác', async () => {
     const platform = await registry.getBySlug(adminId, 'trang-chinh');
-    const school = await registry.getBySlug(adminId, 'truong-mac-dinh');
     const repository = app.get(ControlPlaneRepository);
-    const otherFromPlatform = await repository.findOtherSpaceByDatabaseName(platform.databaseName, platform.id);
-    expect(otherFromPlatform?.id).toBe(school.id);
-    const otherFromSchool = await repository.findOtherSpaceByDatabaseName(school.databaseName, school.id);
-    expect(otherFromSchool?.id).toBe(platform.id);
-    const onlyRow = await repository.findOtherSpaceByDatabaseName('giaokhoa_centre_test_580', createdSpaceId);
-    expect(onlyRow).toBeUndefined();
+    expect(await repository.findOtherSpaceByDatabaseName(platform.databaseName, platform.id)).toBeUndefined();
+    const other = await repository.findOtherSpaceByDatabaseName('giaokhoa_centre_test_611_other', createdSpaceId);
+    expect(other?.slug).toBe('trung-tam-test-611-khac');
+    expect(await repository.findOtherSpaceByDatabaseName('giaokhoa_centre_test_580', createdSpaceId)).toBeUndefined();
   });
 
   it('đổi trạng thái vòng đời ghi lịch sử status_change; đổi về chính trạng thái hiện tại không ghi thêm', async () => {

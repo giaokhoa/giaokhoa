@@ -40,6 +40,16 @@ Các lỗi `ProblemDetailsFilter` ở những ca tiêm lỗi có chủ đích đ
 | AC26      | Có số đo PostgreSQL/Redis điểm thời gian, trần pool và concurrency cấu hình ở tài liệu tài nguyên                                                 | Thiếu đo **tải** worker với A/B/public chạy cùng lúc, RSS và đỉnh kết nối                      |
 | AC27      | Build 10/10, lint/typecheck 30/30, 75/75 e2e đã chọn, 22/22 worker unit/integration                                                               | Chưa chạy toàn bộ tầng liên quan, `verify`, `verify-stack`, CI đúng SHA cuối và review độc lập |
 
+## Lượt sửa theo review PR #62 (head mới chưa qua CI)
+
+- Đã chặn mật khẩu demo quản trị production (Compose và validateEnv); kiểm bằng unit.
+- Đã giới hạn Zod tạo/cập nhật registry ở `storageMode=dedicated`, vẫn giữ mô tả dòng legacy khi đọc dữ liệu lịch sử.
+- Resolver API/worker từ chối registry shared; worker không còn route slug chưa chuẩn bị về handle mặc định; sweep các kho dedicated đang active và báo lỗi khi sổ có shared.
+- Seed không còn gieo `truong-mac-dinh`; chỉ gieo registry Trang chính dedicated; reject seed trung tâm qua đường bootstrap.
+- Unit hợp đồng 93/93, env 18/18, resolver API 11/11, resolver/sweep worker 9/9 và integration control plane 22/22 đã đạt trên worktree sửa; typecheck API/worker/contracts đạt.
+- Lượt e2e ban đầu trên head sửa có 25/29 qua và 4 ca chưa đạt: một ca do không có `pg_dump` trong PATH và ba ca còn ràng buộc vào hành vi shared legacy (`space-routing-flow`). **Chưa thể coi là regression xanh/CI đạt.** Cần thay ca legacy bằng kiểm tra từ chối shared và chạy lại cùng PostgreSQL client 18.
+- UI tạo trường học trong kho chung, test liên miền và phép đo tải worker vẫn còn cần xử lý; AC25–AC27 **chưa đạt**. Không dùng kết quả trên head cũ để đóng PR.
+
 ## Chốt hạng mục chưa thể nghiệm thu
 
 1. Thay seed trường học/kho chung bằng bootstrap chuyên biệt: control plane, bank-system, trung tâm A/B và khu công cộng đều phải có database/role/miền file riêng. Đối chiếu cả nghiệp vụ ở `apps/api/src/modules/seed/seed.service.ts`, `apps/api/src/modules/control-plane/control-plane.service.ts`, `apps/api/src/db/routing`, `apps/worker/src/db/routing` và `apps/worker/src/db/routing/space-periodic-sweep.spec.ts`; không bỏ chế độ platform vận hành bằng cách vô tình làm hỏng đăng nhập quản trị.

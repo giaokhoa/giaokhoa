@@ -35,7 +35,7 @@ export class EnrolExpiryProcessor extends ObservedWorkerHost {
 
   private async processInContext(_job: Job): Promise<EnrolExpiryResult> {
     void _job;
-    return this.spaceDb.sweepSharedAndDedicated(() =>
+    return this.spaceDb.sweepDedicatedSpaces(() =>
       this.taskLog.run('enrol-expiry', () => this.sweep(),
         (r) => `suspended ${r.suspendedIds.length} enrolment(s), warned ${r.warnedIds.length}`), (a, b) => ({
           checkedAt: a.checkedAt,
