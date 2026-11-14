@@ -78,7 +78,8 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
     });
     try {
       editor.commands.setContent(editor.getJSON());
-      const list = (editor.getJSON().content ?? []).find((node) => node.type === CHOICE_LIST_NODE_TYPE);
+      const json = editor.getJSON() as { content?: JSONContent[] };
+      const list = (json.content ?? []).find((node) => node.type === CHOICE_LIST_NODE_TYPE);
       const ids = (list?.content ?? []).map((choice) => choice.attrs?.id);
       expect(ids[0]).toBe('kept-choice');
       expect(ids.every((id) => typeof id === 'string')).toBe(true);
