@@ -724,7 +724,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
   }, 180_000);
 
   it('fork đề có ảnh lỗi ở slot thứ hai dọn metadata, object và rollback câu/đề/outbox', async () => {
-    const forkApp = await testApp();
+    const forkApp = await createTestApp();
     try {
     const original = (await bank.query('SELECT * FROM system_exam_versions WHERE id = $1', [publishedId])).rows[0];
     const versionId = (await bank.query<{ id: string }>('SELECT uuidv7() AS id')).rows[0]!.id;
@@ -816,7 +816,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
   });
 
   it('rút đề nguồn: B dùng lại bản đã ghim, tạo bản riêng chỉnh sửa, không nhận phiên bản chưa ghim', async () => {
-    const lifecycleApp = await testApp();
+    const lifecycleApp = await createTestApp();
     try {
     const version2 = await bank.query<{ id: string }>(
       'select id from system_exam_versions where source_exam_id=$1 and source_version_number=2 and status=$2',
