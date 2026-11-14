@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SystemMaterialPackage, SystemMaterialSubmission, SystemMaterialVersion } from '@giaokhoa/contracts';
 import '#config/i18n';
 import { SystemMaterialsPanel } from './system-materials-panel';
-import { materialSources, materialSubmissions, publishedMaterials, reviewMaterial, submitMaterial, attachPublishedMaterial } from '../api/system-materials';
+import {
+  materialSources, materialSubmissions, publishedMaterials,
+  reviewMaterial, submitMaterial, attachPublishedMaterial,
+} from '../api/system-materials';
 
 const state = vi.hoisted(() => ({ role: 'teacher' }));
 vi.mock('#lib/permissions', () => ({
@@ -21,8 +24,19 @@ vi.mock('#lib/course-content', () => ({
   courseContentQueryOptions: (courseId: string) => ({ queryKey: ['course', courseId], queryFn: async () => ({ sections: [{ id: 'section-b', name: 'Bài học' }] }) }),
 }));
 vi.mock('../api/system-materials', () => ({
-  materialSources: vi.fn(async () => []), materialSubmissions: vi.fn(async () => []), publishedMaterials: vi.fn(async () => []),
-  submitMaterial: vi.fn(async () => ({})), reviewMaterial: vi.fn(async () => ({})), attachPublishedMaterial: vi.fn(async () => ({ cmId: 'cm-b', resourceId: 'r-b' })),
+  materialSources: vi.fn(async () => []),
+  materialSubmissions: vi.fn(async () => []),
+  publishedMaterials: vi.fn(async () => []),
+  reviewPublishedMaterials: vi.fn(async () => []),
+  usedSystemMaterials: vi.fn(async () => []),
+  systemMaterialVersion: vi.fn(async () => null),
+  withdrawSystemMaterial: vi.fn(async () => ({ materialId: 'material-a', status: 'withdrawn' })),
+  submitMaterial: vi.fn(async () => ({})),
+  reviewMaterial: vi.fn(async () => ({})),
+  attachPublishedMaterial: vi.fn(async () => ({ cmId: 'cm-b', resourceId: 'r-b' })),
+}));
+vi.mock('#features/questions/components/system-source-notices', () => ({
+  SystemSourceNotices: () => null,
 }));
 const pkg: SystemMaterialPackage = {
   name: 'Học liệu A', resourceType: 'reference', description: 'Bài học đã duyệt', language: 'vi',
@@ -60,7 +74,7 @@ describe('Công bố học liệu và ghim phiên bản qua giao diện', () => 
     expect(screen.getByText('Giấy phép: CC BY 4.0')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Xem tệp hoặc liên kết' })).toHaveAttribute('href', `/api/v1/system-bank/materials/submissions/${row.id}/media`);
     expect(screen.getByRole('button', { name: 'Từ chối' })).toBeDisabled();
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Cần sửa nguồn' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ghi chú duyệt (bắt buộc khi từ chối)' }), { target: { value: 'Cần sửa nguồn' } });
     fireEvent.click(screen.getByRole('button', { name: 'Từ chối' }));
     await waitFor(() => expect(reviewMaterial).toHaveBeenCalledWith(row.id, 'Cần sửa nguồn'));
 
