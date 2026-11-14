@@ -64,6 +64,12 @@ function buildService() {
     questionExists: vi.fn(async () => false),
     resolveReadyVersion: vi.fn(async () => undefined),
     getContribution: vi.fn(async () => undefined),
+    insertContributionReview: vi.fn(async () => undefined),
+    updateContribution: vi.fn(async () => undefined),
+    insertPaper: vi.fn(async (input: Record<string, unknown>) => paperRow('paper-new', input)),
+    bumpCopyCount: vi.fn(async () => undefined),
+    listPapersInBank: vi.fn(async () => []),
+    userTeachesGrade: vi.fn(async () => false),
     deletePaper: vi.fn(async () => undefined),
     updatePaper: vi.fn(async () => undefined),
     insertVersion: vi.fn(async (input: Record<string, unknown>) => versionRow('v-new', input)),
@@ -133,6 +139,10 @@ function problem(error: unknown): { message?: string; code?: string } {
   return (error as { getResponse(): { message?: string; code?: string } }).getResponse();
 }
 
+function capabilityDenied(capability: string): ForbiddenException {
+  return new ForbiddenException({ message: `Missing capability ${capability} in context ${CTX}`, code: 'access.capability_denied' });
+}
+
 describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyên khi gom helper', () => {
   it('đề thi không tồn tại thì getPaperOrThrow báo exam.not_found kèm id', async () => {
     const { service } = buildService();
@@ -196,7 +206,10 @@ describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyê
     evaluator.isSiteAdmin.mockResolvedValue(true);
     const view = await service.getPaper(ACTOR, 'paper-1');
     expect(view.paper.id).toBe('paper-1');
+    expect(view.paper.status).toBe('ready');
     expect(view.version.name).toBe('Đề giữa kỳ');
+    expect(view.version.version).toBe(1);
+    expect(evaluator.requireCapability).not.toHaveBeenCalled();
     expect(outbox.enqueueStandalone).not.toHaveBeenCalled();
   });
 
@@ -220,6 +233,7 @@ describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyê
       message: 'Only the paper author or a bank moderator can modify this paper',
       code: 'exam.edit_not_owner',
     });
+    expect(evaluator.requireCapability).toHaveBeenCalled();
     expect(repo.transaction).not.toHaveBeenCalled();
   });
 
@@ -246,10 +260,11 @@ describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyê
     const { service, repo, banks, evaluator } = buildService();
     repo.getPaper.mockResolvedValue(paperRow('paper-1', { status: 'draft', createdBy: OTHER }) as never);
     banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
-    evaluator.requireCapability.mockRejectedValue(new Error('khong-co-quyen-xem'));
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:moderate'));
     const error = await capture(service.listPins(ACTOR, 'paper-1'));
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toBe('khong-co-quyen-xem');
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:moderate in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:moderate', CTX);
     expect(repo.listPinsOfExam).not.toHaveBeenCalled();
   });
 
@@ -257,7 +272,16 @@ describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyê
     const { service, repo, banks } = buildService();
     repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
     banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
-    await expect(service.listPins(ACTOR, 'paper-1')).resolves.toEqual([]);
+    repo.listPinsOfExam.mockResolvedValue([{
+      id: 'pin-1', courseId: 'course-1', courseName: 'Toán 10', examVersionId: 'v-1', versionNumber: 1,
+      name: 'Đề giữa kỳ', variantCount: 2, variants: [{ code: 'A' }, { code: 'B' }],
+      targetGroupId: null, createdAt: new Date('2026-11-14T00:00:00.000Z'),
+    }] as never);
+    await expect(service.listPins(ACTOR, 'paper-1')).resolves.toEqual([{
+      id: 'pin-1', courseId: 'course-1', courseName: 'Toán 10', examVersionId: 'v-1', versionNumber: 1,
+      name: 'Đề giữa kỳ', variantCount: 2, variantCodes: ['A', 'B'],
+      targetGroupId: null, createdAt: '2026-11-14T00:00:00.000Z',
+    }]);
   });
 
   it('gán câu hỏi không tồn tại vào đề thi thì báo exam.slot_question_not_found chứ không phải question.not_found', async () => {
@@ -331,7 +355,7 @@ describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyê
     const { service, repo, banks, quiz } = buildService();
     repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
     banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
-    quiz.getPinRow.mockResolvedValue(undefined as never);
+    quiz.getPinRow.mockResolvedValue({ id: 'pin-9', examId: 'paper-other', variants: [] } as never);
     const error = await capture(service.printPaperHtml(ACTOR, 'paper-1', 'pin-9', 'A'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Pin pin-9 not found for this exam', code: 'exam.pin_not_found' });
@@ -358,6 +382,220 @@ describe('ExamsService — thứ tự guard và mã lỗi not-found giữ nguyê
     const error = await capture(service.printPaperHtml(ACTOR, 'paper-1', 'pin-1', 'A'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ message: 'Deployed paper version not found', code: 'exam.version_not_found' });
+  });
+
+  it('in đề thi nháp của người khác mà thiếu quyền moderate thì báo lỗi quyền và chưa chạm tới pin', async () => {
+    const { service, repo, banks, evaluator, quiz } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { status: 'draft', createdBy: OTHER }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:moderate'));
+    const error = await capture(service.printPaperHtml(ACTOR, 'paper-1', 'pin-1', 'A'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:moderate in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:moderate', CTX);
+    expect(repo.getVersion).not.toHaveBeenCalled();
+    expect(quiz.getPinRow).not.toHaveBeenCalled();
+  });
+
+  it('in đề thi ready mà thiếu quyền xem thì lỗi quyền lan truyền nguyên vẹn và chưa chạm tới pin', async () => {
+    const { service, repo, banks, evaluator, quiz } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:use'));
+    const error = await capture(service.printPaperHtml(ACTOR, 'paper-1', 'pin-1', 'A'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:use in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:use', CTX);
+    expect(repo.getVersion).not.toHaveBeenCalled();
+    expect(quiz.getPinRow).not.toHaveBeenCalled();
+  });
+
+  it('đề thi định kỳ của khối khác mà không phải tác giả hay moderate thì liệt kê pin bị chặn bằng exam.periodic_view_forbidden', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    repo.getVersionByNumber.mockResolvedValue(versionRow('v-1', { examKind: 'midterm', grade: 10 }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1', { scope: 'school' }) as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    repo.userTeachesGrade.mockResolvedValue(false);
+    const error = await capture(service.listPins(ACTOR, 'paper-1'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({
+      message: 'Periodic exam content in the school bank is restricted to teachers of its grade and bank moderators',
+      code: 'exam.periodic_view_forbidden',
+    });
+    expect(repo.userTeachesGrade).toHaveBeenCalledWith(ACTOR, 10);
+    expect(repo.listPinsOfExam).not.toHaveBeenCalled();
+  });
+
+  it('giáo viên đúng khối được liệt kê pin của đề thi định kỳ', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    repo.getVersionByNumber.mockResolvedValue(versionRow('v-1', { examKind: 'midterm', grade: 10 }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1', { scope: 'school' }) as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    repo.userTeachesGrade.mockResolvedValue(true);
+    await expect(service.listPins(ACTOR, 'paper-1')).resolves.toEqual([]);
+    expect(repo.userTeachesGrade).toHaveBeenCalledWith(ACTOR, 10);
+  });
+
+  it('giáo viên đúng khối xem đề thi định kỳ thì ghi audit một lần với surface detail', async () => {
+    const { service, repo, banks, evaluator, outbox } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    repo.getVersionByNumber.mockResolvedValue(versionRow('v-1', { examKind: 'midterm', grade: 10 }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1', { scope: 'school' }) as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    repo.userTeachesGrade.mockResolvedValue(true);
+    const view = await service.getPaper(ACTOR, 'paper-1');
+    expect(view.paper.id).toBe('paper-1');
+    expect(outbox.enqueueStandalone).toHaveBeenCalledTimes(1);
+    expect(outbox.enqueueStandalone).toHaveBeenCalledWith({
+      aggregate: 'exam_paper', type: 'exam_paper_content_viewed',
+      payload: {
+        examId: 'paper-1', examVersionId: 'v-1', paperVersion: 1, bankId: 'bank-1',
+        examKind: 'midterm', grade: 10, surface: 'detail', actorId: ACTOR,
+      },
+    });
+  });
+
+  it('giáo viên đúng khối in đề thi định kỳ thì ghi audit một lần với surface print', async () => {
+    const { service, repo, banks, evaluator, outbox, quiz } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    repo.getVersionByNumber.mockResolvedValue(versionRow('v-1', { examKind: 'midterm', grade: 10 }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1', { scope: 'school' }) as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    repo.userTeachesGrade.mockResolvedValue(true);
+    quiz.getPinRow.mockResolvedValue({ id: 'pin-1', examId: 'paper-1', examVersionId: 'v-1', variants: [{ code: 'A', seed: 7 }] } as never);
+    repo.getVersion.mockResolvedValue(versionRow('v-1') as never);
+    const html = await service.printPaperHtml(ACTOR, 'paper-1', 'pin-1', 'A');
+    expect(html).toContain('Mã đề A');
+    expect(outbox.enqueueStandalone).toHaveBeenCalledTimes(1);
+    expect(outbox.enqueueStandalone).toHaveBeenCalledWith({
+      aggregate: 'exam_paper', type: 'exam_paper_content_viewed',
+      payload: {
+        examId: 'paper-1', examVersionId: 'v-1', paperVersion: 1, bankId: 'bank-1',
+        examKind: 'midterm', grade: 10, surface: 'print', actorId: ACTOR,
+      },
+    });
+  });
+
+  it('cập nhật đề thi mà thiếu quyền edit thì lỗi lan truyền và không ghi', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:edit'));
+    const error = await capture(service.updatePaper(ACTOR, 'paper-1', {}));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:edit in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:edit', CTX);
+    expect(repo.transaction).not.toHaveBeenCalled();
+  });
+
+  it('ghim đề thi mà thiếu quyền deploy thì lỗi lan truyền và không tạo pin', async () => {
+    const { service, repo, banks, evaluator, quiz } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    repo.getVersion.mockResolvedValue(versionRow('v-1') as never);
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:deploy'));
+    const error = await capture(service.createPin(ACTOR, 'course-1', { sectionId: 'section-1', examId: 'paper-1', examVersionId: 'v-1' }));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:deploy in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:deploy', CTX);
+    expect(quiz.createPinRecord).not.toHaveBeenCalled();
+  });
+
+  it('ghim đề thi chưa ready thì báo exam.pin_requires_ready và không tạo pin', async () => {
+    const { service, repo, banks, quiz } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { status: 'draft' }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    const error = await capture(service.createPin(ACTOR, 'course-1', { sectionId: 'section-1', examId: 'paper-1', examVersionId: 'v-1' }));
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect(problem(error)).toEqual({
+      message: 'Only a ready exam can be pinned (current status: draft)',
+      code: 'exam.pin_requires_ready',
+    });
+    expect(quiz.createPinRecord).not.toHaveBeenCalled();
+  });
+
+  it('duyệt đóng góp mà thiếu quyền moderate thì lỗi lan truyền và không ghi xét duyệt', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    banks.getBank.mockResolvedValue(bankRow('bank-1') as never);
+    repo.getContribution.mockResolvedValue(contributionRow('contrib-1') as never);
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:moderate'));
+    const error = await capture(service.approveContribution(ACTOR, 'bank-1', 'contrib-1', {}));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:moderate in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:moderate', CTX);
+    expect(repo.insertContributionReview).not.toHaveBeenCalled();
+    expect(repo.updateContribution).not.toHaveBeenCalled();
+    expect(repo.getContribution).toHaveBeenCalledTimes(1);
+  });
+
+  it('đóng góp chờ duyệt board mà người duyệt có quyền moderate ở system context thì duyệt board thành công', async () => {
+    const { service, repo, banks, evaluator, outbox } = buildService();
+    banks.getBank.mockResolvedValue(bankRow('bank-1') as never);
+    repo.getContribution.mockResolvedValue(contributionRow('contrib-1', { status: 'pending_board' }) as never);
+    repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
+    repo.getVersionByNumber.mockResolvedValue(versionRow('v-1') as never);
+    const result = await service.approveContribution(ACTOR, 'bank-1', 'contrib-1', {});
+    expect(result).toMatchObject({ id: 'contrib-1' });
+    expect(evaluator.hasCapability).toHaveBeenCalledWith(ACTOR, 'exam:moderate', SYSTEM_CTX);
+    expect(repo.updateContribution).toHaveBeenCalledWith('contrib-1', expect.objectContaining({ status: 'approved' }));
+    expect(outbox.enqueueStandalone).toHaveBeenCalledWith(expect.objectContaining({ type: 'exam_paper_contribution_approved' }));
+  });
+
+  it('gán câu hỏi mà không phải tác giả và không có quyền moderate thì bị chặn và không ghi', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.setSlots(ACTOR, 'paper-1', { slots: [{ questionId: 'q-1' }] }));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({
+      message: 'Only the paper author or a bank moderator can modify this paper',
+      code: 'exam.edit_not_owner',
+    });
+    expect(repo.transaction).not.toHaveBeenCalled();
+    expect(repo.resolveReadyVersion).not.toHaveBeenCalled();
+  });
+
+  it('đổi câu hỏi mà không phải tác giả và không có quyền moderate thì bị chặn và không ghi', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.swapSlot(ACTOR, 'paper-1', { position: 3, questionId: 'q-2' }));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({
+      message: 'Only the paper author or a bank moderator can modify this paper',
+      code: 'exam.edit_not_owner',
+    });
+    expect(repo.transaction).not.toHaveBeenCalled();
+  });
+
+  it('xóa đề thi mà không phải tác giả và không có quyền moderate thì bị chặn và không xóa', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1', { createdBy: OTHER }) as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.deletePaper(ACTOR, 'paper-1'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({
+      message: 'Only the paper author or a bank moderator can modify this paper',
+      code: 'exam.edit_not_owner',
+    });
+    expect(repo.deletePaper).not.toHaveBeenCalled();
+  });
+
+  it('đề thi ready mà thiếu quyền xem thì liệt kê pin bị chặn và chưa chạm tới danh sách pin', async () => {
+    const { service, repo, banks, evaluator } = buildService();
+    repo.getPaper.mockResolvedValue(paperRow('paper-1') as never);
+    banks.getBankOrThrow.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.requireCapability.mockRejectedValue(capabilityDenied('exam:use'));
+    const error = await capture(service.listPins(ACTOR, 'paper-1'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(problem(error)).toEqual({ message: 'Missing capability exam:use in context ctx-1', code: 'access.capability_denied' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'exam:use', CTX);
+    expect(repo.listPinsOfExam).not.toHaveBeenCalled();
   });
 
   it('sao chép đề thi nguồn không tồn tại thì báo exam.not_found trước khi tìm ngân hàng đích', async () => {
