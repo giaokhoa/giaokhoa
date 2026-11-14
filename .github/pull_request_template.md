@@ -20,7 +20,7 @@
 ## Cổng trước khi code: Ponytail và tài liệu chính thức
 
 - [ ] Agent thực hiện đã đọc `.agents/skills/ponytail/SKILL.md` và áp dụng mức **full** trước khi sửa code (nếu PR chỉ sửa tài liệu, ghi rõ không phát sinh code).
-- [ ] Đã đọc AGENTS/README, code/test và docs/ADR liên quan; đối chiếu pattern repo và docs chính thức đúng phiên bản của thư viện/framework bị tác động.
+- [ ] Đã đọc AGENTS.md, README.md áp dụng cho phạm vi công việc; kiểm tra cách triển khai hiện có trong repo và đối chiếu tài liệu chính thức đúng phiên bản của thư viện/framework liên quan.
 - Tài liệu/pattern đã kiểm tra và cách áp dụng: `<đường dẫn/nguồn, phiên bản, hành vi liên quan; ngoại lệ hoặc phần chưa xác minh>`
 - [ ] Reviewer độc lập tự áp dụng Ponytail **full** và xác minh bằng chứng bám docs/pattern trước khi kết luận.
 
