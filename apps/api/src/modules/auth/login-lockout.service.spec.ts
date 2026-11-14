@@ -1,6 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
-import { describe, expect, it } from 'vitest';
-import type { UsersService } from '../users/users.service';
+import { describe, expect, it, vi } from 'vitest';
+import type { UsersRepository } from '@giaokhoa/db/repositories/users';
 import type { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { LoginLockoutService } from './login-lockout.service';
 
@@ -25,11 +25,11 @@ function buildService(opts: {
     },
   } as unknown as AuthRepository;
   const users = {
-    getByUsername: async () => opts.user,
-    getByEmail: async () => opts.user,
-  } as unknown as UsersService;
+    getByUsername: vi.fn(async () => opts.user),
+    getByEmail: vi.fn(async () => opts.user),
+  } as unknown as UsersRepository;
   const config = { get: (key: string) => (opts.config ?? {})[key] } as unknown as ConfigService;
-  return { service: new LoginLockoutService(repo, users, config), recorded };
+  return { service: new LoginLockoutService(repo, users, config), recorded, users };
 }
 
 function failuresAt(...minutesAgo: number[]): AttemptRow[] {
@@ -83,5 +83,14 @@ describe('Khối LoginLockoutService', () => {
     expect(recorded).toEqual([
       { userId: 'user-9', username: 'canonical.name', success: true, ip: '198.51.100.7' },
     ]);
+  });
+
+  it('chuẩn hoá khoảng trắng và hoa thường của định danh trước khi tra cứu kho người dùng', async () => {
+    const user = { id: 'user-9', username: 'canonical.name', deleted: false };
+    const { service, users } = buildService({ user });
+    await service.recordLoginAttempt({ email: '  Person@Example.COM ' }, true, '198.51.100.7');
+    expect(users.getByEmail).toHaveBeenCalledWith('person@example.com');
+    await service.isLoginLocked({ username: '  Canonical.Name ' });
+    expect(users.getByUsername).toHaveBeenCalledWith('canonical.name');
   });
 });

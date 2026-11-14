@@ -28,11 +28,11 @@ const SESSION_COOKIE_PATTERN = new RegExp(`(?:^|;\\s*)(?:__Secure-)?${BETTER_AUT
 
 @Injectable()
 export class MessagingSocketAuth {
-  private readonly jwt: JwtService;
   private readonly publicRootHostname: string | null;
   private readonly allowLocalRoot: boolean;
 
   constructor(
+    private readonly jwt: JwtService,
     @Inject(ConfigService) config: ConfigService,
     private readonly users: UsersService,
     private readonly betterAuth: BetterAuthService,
@@ -40,7 +40,6 @@ export class MessagingSocketAuth {
     private readonly spaceDb: SpaceDatabaseService,
     private readonly tenants: TenantsService,
   ) {
-    this.jwt = new JwtService({ secret: config.getOrThrow<string>('JWT_SECRET') });
     this.publicRootHostname = configuredApiHostname(config.get<string>('BETTER_AUTH_URL'));
     const environment = config.get<string>('NODE_ENV');
     this.allowLocalRoot = environment === 'test' || environment === 'development';

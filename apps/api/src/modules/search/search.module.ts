@@ -4,7 +4,7 @@ import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { AccessModule } from '../access/access.module';
 import { SearchController } from './search.controller';
-import { PostgresSearchEngine, SEARCH_ENGINE, SearchService } from './search.service';
+import { SearchService } from './search.service';
 
 @Module({
   imports: [AccessModule, SpaceRoutingModule],
@@ -15,7 +15,7 @@ import { PostgresSearchEngine, SEARCH_ENGINE, SearchService } from './search.ser
       useFactory: (spaceDatabase: SpaceDatabaseService) => new SearchRepository(spaceDatabase.routedKysely),
       inject: [SpaceDatabaseService],
     },
-    SearchService, PostgresSearchEngine, { provide: SEARCH_ENGINE, useClass: PostgresSearchEngine },
+    SearchService,
   ],
   exports: [SearchService],
 })

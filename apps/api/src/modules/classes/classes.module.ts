@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ClassesRepository } from '@giaokhoa/db/repositories/classes';
-import { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -21,11 +20,6 @@ import { ClassesService } from './classes.service';
     {
       provide: ClassesRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new ClassesRepository(spaceDb.routedKysely),
-      inject: [SpaceDatabaseService],
-    },
-    {
-      provide: GroupsRepository,
-      useFactory: (spaceDb: SpaceDatabaseService) => new GroupsRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
     },
     ClassesService,

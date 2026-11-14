@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { BetterAuthOptions } from 'better-auth';
 import { makeSignature } from 'better-auth/crypto';
 import { createInternalAdapter } from 'better-auth/db';
@@ -24,7 +24,6 @@ export class CredentialBridgeService {
   private readonly db: CentreDb;
 
   constructor(
-    @Inject(forwardRef(() => BetterAuthService))
     private readonly betterAuth: BetterAuthService,
     spaceDb: SpaceDatabaseService,
   ) {
