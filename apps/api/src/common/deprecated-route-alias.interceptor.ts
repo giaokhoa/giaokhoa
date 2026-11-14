@@ -105,31 +105,8 @@ const examPapersAliasTable: DeprecatedRouteAliasEntry[] = buildSuffixAliasTable(
 );
 
 const messagingAliasTable: DeprecatedRouteAliasEntry[] = [
-  {
-    pattern: /^\/api\/v1\/messages\/messages\/bulk-remove$/,
-    alias: 'messages/messages/bulk-remove',
-    canonical: 'messages/bulk-remove',
-  },
-  {
-    pattern: /^\/api\/v1\/messages\/messages\/[^/]+\/recall$/,
-    alias: 'messages/messages/:id/recall',
-    canonical: 'messages/:id/recall',
-  },
-  {
-    pattern: /^\/api\/v1\/messages\/messages\/[^/]+\/hard-delete$/,
-    alias: 'messages/messages/:id/hard-delete',
-    canonical: 'messages/:id/hard-delete',
-  },
-  {
-    pattern: /^\/api\/v1\/messages\/messages\/[^/]+$/,
-    alias: 'messages/messages/:id',
-    canonical: 'messages/:id',
-  },
-  {
-    pattern: /^\/api\/v1\/notifications\/read-all$/,
-    alias: 'notifications/read-all',
-    canonical: 'notifications/mark-read',
-  },
+  ...buildSuffixAliasTable('messages/messages', 'messages', ['bulk-remove', ':id/recall', ':id/hard-delete', ':id'], {}),
+  ...buildSuffixAliasTable('notifications', 'notifications', ['read-all'], { 'read-all': 'mark-read' }),
 ];
 
 @Injectable()
