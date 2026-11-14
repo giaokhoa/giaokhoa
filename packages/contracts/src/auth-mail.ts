@@ -1,3 +1,25 @@
+import { z } from 'zod';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export interface PasswordResetMailPayload {
   kind: 'password_reset';
@@ -13,6 +35,31 @@ export interface EmailOtpMailPayload {
 }
 
 export type AuthMailPayload = PasswordResetMailPayload | EmailOtpMailPayload;
+
+
+
+
+
+
+
+
+export const authMailPayloadSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('password_reset'),
+    to: z.email(),
+    url: z.url(),
+  }),
+  z.strictObject({
+    kind: z.literal('email_otp'),
+    to: z.email(),
+    otp: z.string().regex(/^\d{6}$/),
+    otpType: z.string().min(1),
+  }),
+]);
+
+
+
+
 
 export interface RenderedAuthMail {
   to: string;

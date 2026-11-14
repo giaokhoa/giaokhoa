@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
@@ -18,7 +19,7 @@ export interface NotificationDigestSweepResult {
 }
 
 @Processor('notification-digests')
-export class NotificationDigestProcessor extends WorkerHost {
+export class NotificationDigestProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(NotificationDigestProcessor.name);
 
   constructor(

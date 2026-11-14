@@ -11,6 +11,8 @@ import { createEmailOtpPlugin, type AuthMailPort } from '../../mail/email-otp.pl
 import { createMfaGateHook, type MfaGateDeps } from './mfa-gate';
 import type { LockoutGuardPort } from '../login-lockout.service';
 import { lockoutHooks } from './lockout.hooks';
+import { MCP_OAUTH_SCOPES } from '../../mcp/mcp-scopes';
+export { MCP_OAUTH_SCOPES } from '../../mcp/mcp-scopes';
 
 export const BETTER_AUTH_BASE_PATH = '/api/v1/auth';
 
@@ -44,12 +46,6 @@ function withPostgresArrays<T extends {
   return adapter;
 }
 
-export const MCP_OAUTH_SCOPES = [
-  'giaokhoa.questions.read',
-  'giaokhoa.questions.draft',
-  'giaokhoa.questions.write',
-  'giaokhoa.banks.contribute',
-] as const;
 
 export const MCP_ACCESS_TOKEN_TTL_SECONDS = 3600;
 
@@ -164,6 +160,7 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
       },
       accountLinking: {
         enabled: true,
+
         trustedProviders: [],
         requireLocalEmailVerified: true,
       },
@@ -271,7 +268,27 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
               allowDynamicClientRegistration: true,
               allowUnauthenticatedClientRegistration: true,
               clientRegistrationDefaultApplicationType: 'infer',
-              clientRegistrationAllowedScopes: ['offline_access'],
+
+
+
+              clientRegistrationDefaultScopes: ['giaokhoa.questions.read'],
+
+
+
+
+
+
+
+              clientRegistrationAllowedScopes: [...MCP_OAUTH_SCOPES.filter((scope) => scope !== 'giaokhoa.questions.read'), 'offline_access'],
+
+
+
+
+
+
+
+
+
               schema: {
                 oauthClient: {
                   modelName: 'oauth_client',

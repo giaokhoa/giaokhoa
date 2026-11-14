@@ -134,12 +134,14 @@ export function AuthProvider({ children, initialUser }: { children: ReactNode; i
     [establishSession],
   );
 
+
+
+
   const completeMfaLogin = useCallback(
     async (code: string): Promise<UserProfile> => {
       const trimmed = code.trim();
-      const { error } = /^\d{6}$/.test(trimmed)
-        ? await authClient.twoFactor.verifyTotp({ code: trimmed })
-        : await authClient.twoFactor.verifyBackupCode({ code: trimmed });
+      if (!/^\d{6}$/.test(trimmed)) throw new Error('INVALID_TOTP_CODE');
+      const { error } = await authClient.twoFactor.verifyTotp({ code: trimmed });
       if (error) throw apiErrorFromAuthClient(error);
       return establishSession();
     },

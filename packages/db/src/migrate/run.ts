@@ -1,4 +1,22 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Kysely } from 'kysely';
 import { Pool, type PoolConfig } from 'pg';
@@ -30,8 +48,10 @@ function poolConfigFor(store: MigrationStoreKey): PoolConfig {
   }
   if (process.env.DATABASE_SSL === 'true') {
     const parsed = new URL(url);
-    parsed.searchParams.delete('sslmode');
-    return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: false } };
+    for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) parsed.searchParams.delete(key);
+    const caFile = process.env.DATABASE_TLS_CA_FILE;
+    const ca = caFile ? readFileSync(caFile, 'utf8') : undefined;
+    return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
   }
   return { connectionString: url };
 }

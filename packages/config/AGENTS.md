@@ -36,7 +36,7 @@ Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/
 ## Bản đồ của package
 
 - `tsconfig/base.json` — nền dùng chung cho mọi package (target ES2023, `strict: true` và các kỷ luật kiểu nền).
-- `tsconfig/nest.json` — kế thừa `base.json`, dòng backend (module CommonJS, moduleResolution Node10): `apps/api`, `apps/worker`, `packages/db` dùng qua `extends: "@giaokhoa/config/tsconfig/nest.json"`.
+- `tsconfig/nest.json` — kế thừa `base.json`, dòng backend (`module: NodeNext`, `moduleResolution: NodeNext`; package không đặt `type: module` vẫn biên dịch CommonJS): `apps/api`, `apps/worker`, `packages/db`, `packages/enrol`, `packages/payments` dùng qua `extends: "@giaokhoa/config/tsconfig/nest.json"`. Hai app dùng Bundler cho typecheck gồm test, nhưng Nest build ghi đè về NodeNext.
 - `tsconfig/react.json` — kế thừa `base.json`, dòng frontend (module ESNext, moduleResolution bundler): `apps/web`, `packages/editor`, `packages/ui` dùng qua `extends: "@giaokhoa/config/tsconfig/react.json"`.
 - `packages/contracts` dùng thẳng `base.json`. Hai dòng Nest/React tách nhau theo quyết định tách hai dòng (xem điều cấm ở trên: không gộp hai dòng khi chưa có quyết định thay thế).
 - Luồng tác động: đổi một dòng ở đây → điều kiện biên dịch của **mọi** package tiêu thụ thay đổi → bắt buộc kiểm chứng typecheck ở cả hai dòng như mục "Kiểm chứng bắt buộc" đã ghi.

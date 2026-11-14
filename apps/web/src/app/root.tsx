@@ -1,3 +1,4 @@
+import type { Route } from '../+types/root';
 import { useState, type ReactNode } from 'react';
 import {
   Links,
@@ -14,6 +15,7 @@ import type { UserProfile } from '@giaokhoa/contracts';
 import { userProfileSchema } from '@giaokhoa/contracts';
 import { HydrationBoundary, QueryClientProvider, type DehydratedState } from '@tanstack/react-query';
 import { AuthProvider } from '#lib/auth';
+import { ThemeProvider } from '#lib/theme';
 import { PermissionsProvider } from '#lib/permissions';
 import { createQueryClient, queryClient } from '#lib/query-client';
 import { SidebarDefaultOpenContext } from '#lib/sidebar-default-open';
@@ -27,11 +29,17 @@ function parseSidebarState(cookie: string): boolean {
   return match ? match[1] === 'true' : true;
 }
 
-export async function loader({
-  request,
-}: {
-  request: Request;
-}): Promise<{ initialUser: UserProfile | null; sidebarDefaultOpen: boolean }> {
+
+
+
+
+
+
+
+
+
+
+export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Promise<{ initialUser: UserProfile | null; sidebarDefaultOpen: boolean }> {
   const cookie = request.headers.get('Cookie') ?? '';
   const sidebarDefaultOpen = parseSidebarState(cookie);
   if (!/(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/.test(cookie)) return { initialUser: null, sidebarDefaultOpen };
@@ -86,8 +94,9 @@ export default function App() {
   const [requestQueryClient] = useState(() => (typeof window === 'undefined' ? createQueryClient() : null));
   const dehydratedState = collectDehydratedState(useMatches());
   return (
-    <SidebarDefaultOpenContext.Provider value={sidebarDefaultOpen}>
-      <QueryClientProvider client={requestQueryClient ?? queryClient}>
+    <ThemeProvider>
+      <SidebarDefaultOpenContext.Provider value={sidebarDefaultOpen}>
+        <QueryClientProvider client={requestQueryClient ?? queryClient}>
         <HydrationBoundary state={dehydratedState}>
           <AuthProvider initialUser={initialUser}>
             <PermissionsProvider>
@@ -95,8 +104,9 @@ export default function App() {
             </PermissionsProvider>
           </AuthProvider>
         </HydrationBoundary>
-      </QueryClientProvider>
-    </SidebarDefaultOpenContext.Provider>
+        </QueryClientProvider>
+      </SidebarDefaultOpenContext.Provider>
+    </ThemeProvider>
   );
 }
 

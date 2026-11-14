@@ -42,11 +42,15 @@
     "@giaokhoa/config": "workspace:*",
     "@nestjs/testing": "^12.2.0",
     "@swc/core": "^1.16.18",
-    "@types/node": "^26.6.5",
+    "@types/node": "^24.10.0",
     "@types/pg": "^8.23.1",
     "socket.io-client": "^4.8.4",
     "typescript": "catalog:nest",
     "unplugin-swc": "^2.0.0",
-    "vitest": "catalog:"
-  }
+    "vitest": "catalog:",
+    "vite": "^8.3.5"
+  },
+  "files": [
+    "dist"
+  ]
 }

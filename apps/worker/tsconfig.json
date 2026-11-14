@@ -1,25 +1,16 @@
 {
   "extends": "@giaokhoa/config/tsconfig/nest.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "outDir": "./dist",
-    // Subpath control plane của @giaokhoa/db (issue #581 — khung định
-    // tuyến phía worker đọc sổ đăng ký qua entry point này):
-    // package giữ moduleResolution Node10 nên TS không đọc được
-    // `exports` của package — ánh xạ thẳng tới bản dist đã build,
-    // đúng cách apps/api đã làm cho cùng subpath ở issue #580.
-    // Runtime Node đọc `exports` trong package.json như thường.
     "paths": {
       "@giaokhoa/db/control-plane": [
         "../../packages/db/dist/control-plane.d.ts"
       ],
-      // Wildcard repository Kysely của @giaokhoa/db (chiến dịch chuyển
-      // ORM sang Kysely): khai MỘT dòng duy nhất cho mọi module
-      // repository về sau — cùng lý do Node10 như subpath trên.
       "@giaokhoa/db/repositories/*": [
         "../../packages/db/dist/repositories/*.d.ts"
       ],
-      // Điểm vào test-support của @giaokhoa/db (harness dựng DB test):
-      // chỉ test mới import, cùng cơ chế ánh xạ dist như trên.
       "@giaokhoa/db/test-support": [
         "../../packages/db/dist/test-support/index.d.ts"
       ]

@@ -234,15 +234,30 @@ export class FilesService {
     return this.signing.createDownloadTarget(await this.fileForSigning(file));
   }
   async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
-    const requestScope = tenantAls.getStore();
-    const slug = requestScope?.spaceSlug;
+    const scope = tenantAls.getStore();
+
+
+
+
+
+    if (scope?.spaceSlug && !scope.spaceHandle && this.spaceDb) {
+      return this.spaceDb.withSpaceKysely(scope.spaceSlug, () => this.readSignedContentInSpace(fileId, token));
+    }
+    return this.readSignedContentInSpace(fileId, token);
+  }
+
+  private async readSignedContentInSpace(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
+    const scope = tenantAls.getStore();
+    const slug = scope?.spaceSlug;
+
+
+
+
     const platformScope = {
       platform: true,
-      ...(slug ? {
-        spaceSlug: slug, spaceId: requestScope?.spaceId, spaceHandle: requestScope?.spaceHandle,
-      } : {}),
+      ...(slug ? { spaceSlug: slug, spaceId: scope?.spaceId, spaceHandle: scope?.spaceHandle } : {}),
     };
-    const file = await tenantAls.run(platformScope, async () => this.repo.getById(fileId));
+    const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
     if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
 
     const owner = file.component === 'core_contentbank' && file.itemId

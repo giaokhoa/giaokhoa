@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { TaskLogService } from '../task-log.service';
@@ -45,7 +46,10 @@ function weekStartUtc(now: Date): Date {
 }
 
 @Processor('guardian-digests')
-export class GuardianDigestProcessor extends WorkerHost {
+
+
+
+export class GuardianDigestProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   async process(_job: Job): Promise<GuardianDigestSweepResult> {

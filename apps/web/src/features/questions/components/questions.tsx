@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import type { QuestionView } from '@giaokhoa/contracts';

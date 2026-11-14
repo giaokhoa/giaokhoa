@@ -38,6 +38,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
     },
     MessagingService, NotificationUnreadStreamService,
     MessagingSendThrottleService,
+
     MessagingSocketAuth, MessagingRealtimeService, MessagingGateway,
   ],
   exports: [MessagingService],

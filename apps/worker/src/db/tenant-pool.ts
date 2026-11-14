@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Pool, type PoolClient, type PoolConfig } from 'pg';
 import { tenantAls } from './tenant-als';
 
@@ -11,8 +12,22 @@ interface TenantTagState {
 const TAG_STATE = Symbol('tenantTagState');
 
 export class TenantAwarePool extends Pool {
+  private closingOnce: Promise<void> | null = null;
+
+
+
+
+  override end(): Promise<void> {
+    this.closingOnce ??= super.end();
+    return this.closingOnce;
+  }
+
   constructor(config: PoolConfig) {
     super(config);
+
+
+    const logger = new Logger(TenantAwarePool.name);
+    this.on('error', (error: Error) => logger.error(`Kết nối PostgreSQL nhàn rỗi bị lỗi: ${error.message}`));
   }
 
   private prepareClient(client: PoolClient): PoolClient {

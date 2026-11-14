@@ -1,3 +1,4 @@
+import type { Route } from './+types/login';
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLoaderData, useNavigate, useSearchParams } from 'react-router';
@@ -28,7 +29,10 @@ const OAUTH_BUTTON_KEYS: Record<OAuthIssuer, string> = {
   facebook: 'signInWithFacebook',
 };
 
-export async function loader(): Promise<{ providers: OAuthProvidersResponse | null }> {
+
+
+
+export async function loader(_args?: Route.LoaderArgs): Promise<{ providers: OAuthProvidersResponse | null }> {
   const body = await fetchApiJson('/api/v1/auth/oauth/providers');
   const parsed = oauthProvidersResponseSchema.safeParse(body);
   return { providers: parsed.success ? parsed.data : null };
@@ -48,6 +52,7 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
   const [mfaCode, setMfaCode] = useState('');
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [mfaBusy, setMfaBusy] = useState(false);
@@ -163,9 +168,9 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
                 <Label htmlFor="mfa-code">{t('mfaCode')}</Label>
                 <Input
                   id="mfa-code"
-                  inputMode="text"
+                  inputMode="numeric"
                   autoComplete="one-time-code"
-                  maxLength={32}
+                  maxLength={6}
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value)}
                   required

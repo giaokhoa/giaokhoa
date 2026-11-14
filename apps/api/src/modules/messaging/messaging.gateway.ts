@@ -7,27 +7,64 @@ import {
   MESSAGING_SOCKET_EVENTS,
   type MessagingSyncRequest, type MessagingSyncResult,
 } from '@giaokhoa/contracts';
-import type { Server, Socket } from 'socket.io';
+import type { Namespace, Socket } from 'socket.io';
 import { Public } from '../../common/public.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingError } from '../../db/routing/space-connection-resolver';
 import { tenantAls } from '../tenants/tenant-als';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { blankRecalledContent } from '@giaokhoa/messaging';
-import { MessagingSocketAuth } from './messaging-socket-auth';
+import { MessagingSocketAuth, type MessagingSocketIdentity } from './messaging-socket-auth';
 import { conversationRoom, toWireMessage, userRoom } from '@giaokhoa/messaging';
 import { MessagingRealtimeService } from './messaging-realtime.service';
 
 const SYNC_LIMIT_PER_CONVERSATION = 100;
 const SYNC_MAX_CONVERSATIONS = 50;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @Public()
-@WebSocketGateway({ namespace: '/messaging', cors: { origin: true } })
+@WebSocketGateway({ namespace: '/messaging' })
 export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(MessagingGateway.name);
 
   @WebSocketServer()
-  private readonly server!: Server;
+  private readonly server!: Namespace;
 
   constructor(
     private readonly auth: MessagingSocketAuth,
@@ -70,8 +107,26 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
 
-  afterInit(server: Server): void {
+
+
+
+
+
+  afterInit(server: Namespace): void {
     this.realtime.attachServer(server);
+    server.use((client, next) => {
+      void this.auth.authenticateHandshake(client.handshake).then(
+        (identity) => {
+          if (!identity) return next(new Error('Unauthorized'));
+          client.data.authIdentity = identity;
+          next();
+        },
+        (error: unknown) => {
+          this.logger.warn(`Handshake realtime thất bại: ${error instanceof Error ? error.message : 'unknown'}`);
+          next(new Error('Unauthorized'));
+        },
+      );
+    });
   }
 
   async handleConnection(client: Socket): Promise<void> {
@@ -80,7 +135,12 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       resolveAuth = resolve;
     });
     try {
-      const identity = await this.auth.authenticateHandshake(client.handshake);
+
+
+
+      const preAuthenticated = client.data.authIdentity as MessagingSocketIdentity | undefined;
+      delete client.data.authIdentity;
+      const identity = preAuthenticated ?? await this.auth.authenticateHandshake(client.handshake);
       if (!identity) {
         client.disconnect(true);
         return;

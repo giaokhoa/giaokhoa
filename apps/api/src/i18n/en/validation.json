@@ -5,11 +5,19 @@
   "too_small": {
     "string": "{property} is too short (at least {minimum} characters)",
     "number": "{property} must be at least {minimum}",
-    "array": "{property} must contain at least {minimum} items"
+    "array": "{property} must contain at least {minimum} items",
+    "default": "{property} is below the permitted minimum"
   },
   "too_big": {
     "string": "{property} is too long (at most {maximum} characters)",
-    "number": "{property} must be at most {maximum}"
+    "number": "{property} must be at most {maximum}",
+    "array": "{property} contains too many items (at most {maximum})",
+    "default": "{property} exceeds the permitted limit"
   },
-  "unrecognized_keys": "The payload contains fields that are not allowed: {keys}"
+  "unrecognized_keys": "The payload contains fields that are not allowed: {keys}",
+  "custom": "{property} is invalid",
+  "not_multiple_of": "{property} is not an allowed multiple",
+  "invalid_union": "{property} does not match any allowed variant",
+  "invalid_key": "{property} has an invalid key",
+  "invalid_element": "{property} contains an invalid element"
 }

@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job } from 'bullmq';
 import { I18nService } from '@nestjs/i18n';
 import { sql, type CentreDB } from '@giaokhoa/db';
@@ -9,9 +11,14 @@ import { SpaceDatabaseService } from '../db/routing/space-database.service';
 
 
 @Processor('backup')
-export class BackupProcessor extends WorkerHost {
+
+
+
+export class BackupProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; sections?: number; cms?: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['backup'], job.data, 'backup');
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -99,9 +106,16 @@ export class BackupProcessor extends WorkerHost {
 }
 
 @Processor('restore')
-export class RestoreProcessor extends WorkerHost {
+
+
+
+export class RestoreProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; mapped?: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['restore'], job.data, 'restore');
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -159,7 +173,10 @@ export class RestoreProcessor extends WorkerHost {
 }
 
 @Processor('search-reindex')
-export class SearchReindexProcessor extends WorkerHost {
+
+
+
+export class SearchReindexProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(_job: Job<Record<string, never>>): Promise<{ indexed: number }> {
     return tenantAls.run({ platform: true }, () => this.processInContext(_job));
@@ -234,9 +251,16 @@ export class SearchReindexProcessor extends WorkerHost {
 }
 
 @Processor('analytics-run')
-export class AnalyticsRunProcessor extends WorkerHost {
+
+
+
+export class AnalyticsRunProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ courseId: string }>): Promise<{ predictions: number; insights: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['analytics-run'], job.data, 'analytics-run');
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -318,13 +342,24 @@ export class AnalyticsRunProcessor extends WorkerHost {
 }
 
 @Processor('report-schedule')
-export class ReportScheduleProcessor extends WorkerHost {
+
+
+
+
+
+
+
+export class ReportScheduleProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,
     private readonly spaceDb: SpaceDatabaseService,
   ) { super(); }
   async process(job: Job<{ scheduleId: string }>): Promise<{ rows: number; status: string }> {
+    validateWorkerJobPayload(workerPayloadSchemas['report-schedule'], job.data, 'report-schedule');
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -368,9 +403,16 @@ export class ReportScheduleProcessor extends WorkerHost {
 }
 
 @Processor('privacy')
-export class PrivacyProcessor extends WorkerHost {
+
+
+
+export class PrivacyProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ requestId: string }>): Promise<{ status: string; subsystems: string[] }> {
+    validateWorkerJobPayload(workerPayloadSchemas['privacy'], job.data, 'privacy');
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -448,9 +490,16 @@ export class PrivacyProcessor extends WorkerHost {
 }
 
 @Processor('payment-reconciliation')
-export class PaymentReconciliationProcessor extends WorkerHost {
+
+
+
+export class PaymentReconciliationProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ paymentId?: string; externalTransactionId?: string; status?: string }>): Promise<{ status: string; duplicate?: boolean; succeeded?: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['payment-reconciliation'], job.data, 'payment-reconciliation');
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 

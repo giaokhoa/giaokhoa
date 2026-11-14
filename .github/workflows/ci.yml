@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -40,6 +41,10 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify tsconfig files contain no comments
+        run: |
+          node scripts/verify-tsconfig-no-comments.mjs --self-test
+          node scripts/verify-tsconfig-no-comments.mjs
       - name: Cache Turbo tasks
         uses: actions/cache@v6
         with:
@@ -52,12 +57,16 @@ jobs:
         run: pnpm lint
       - name: Create the worker test database
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_worker'
-      - name: Build @giaokhoa/db for the migration runner
-        run: pnpm exec turbo run build --filter=@giaokhoa/db
-      - name: Migrate the test databases from empty
+      - name: Migrate API database from empty via Turbo dependency build
+        run: pnpm exec turbo run db:migrate --filter=@giaokhoa/api --env-mode=loose
+      - name: Migrate worker database from empty
+        run: DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
+      - name: Migrate system-bank from empty and verify exact counts
         run: |
-          DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_api pnpm --filter @giaokhoa/api db:migrate
-          DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
+          PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_system_bank'
+          export SYSTEM_BANK_DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_system_bank
+          node packages/db/dist/migrate/run.js system-bank
+          node packages/db/dist/migrate/run.js system-bank --verify-only
       - name: Check generated Kysely types are up to date
         run: |
           pnpm --filter @giaokhoa/db run db:types

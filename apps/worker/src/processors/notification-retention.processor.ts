@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { TaskLogService } from '../task-log.service';
 import { tenantAls } from '../db/tenant-als';
@@ -17,7 +18,10 @@ export interface NotificationRetentionResult {
 const DAY_MS = 24 * 3600_000;
 
 @Processor('notification-retention')
-export class NotificationRetentionProcessor extends WorkerHost {
+
+
+
+export class NotificationRetentionProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   async process(_job: Job): Promise<NotificationRetentionResult> {

@@ -8,6 +8,7 @@ import { Separator } from '@giaokhoa/ui/components/separator';
 import { SidebarTrigger } from '@giaokhoa/ui/components/sidebar';
 import { CommandPalette } from '#components/command-palette';
 import { NotificationBell } from '#features/notifications/components/notification-bell';
+import { ThemeToggle } from '#lib/theme';
 import '#config/i18n';
 
 const TITLE_KEYS: { prefix: string; key: string; ns: 'app' | 'dashboard' }[] = [
@@ -98,6 +99,7 @@ export function SiteHeader() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 lg:gap-2">
+          <ThemeToggle />
           <CommandPalette />
           <NotificationBell />
         </div>

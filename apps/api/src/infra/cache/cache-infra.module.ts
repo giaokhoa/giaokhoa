@@ -8,6 +8,13 @@ import { SessionCacheService } from './session-cache.service';
 
 const APP_CACHE_DEFAULT_TTL_MS = 300_000;
 
+
+
+
+
+
+
+
 @Module({
   imports: [
     CacheModule.registerAsync({
@@ -16,7 +23,7 @@ const APP_CACHE_DEFAULT_TTL_MS = 300_000;
       useFactory: (config: ConfigService) => ({
         stores: [
           new Keyv({
-            store: new KeyvRedis(cacheRedisConfigFromUrl(config.getOrThrow<string>('REDIS_URL'))),
+            store: new KeyvRedis(cacheRedisConfigFromUrl(config.get<string>('CACHE_REDIS_URL') ?? config.getOrThrow<string>('REDIS_URL'))),
             namespace: 'giaokhoa:app',
             ttl: APP_CACHE_DEFAULT_TTL_MS,
           }),

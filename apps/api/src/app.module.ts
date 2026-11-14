@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import { BadRequestException, Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { createCentreKysely } from '@giaokhoa/db';
@@ -80,6 +80,8 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
+
+
         connection: redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
         defaultJobOptions: {
           attempts: 3,
@@ -179,7 +181,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
         const poolMax = config.get<number>('DATABASE_POOL_MAX');
         const pool = new TenantAwarePool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
-        spaceDatabase.bindSharedKysely(createCentreKysely(pool));
+        spaceDatabase.bindSharedKysely(createCentreKysely(pool), pool);
         return pool;
       },
     },
@@ -191,7 +193,29 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     { provide: APP_GUARD, useClass: SpaceContextGuard },
     { provide: APP_GUARD, useClass: CapabilityGuard },
     { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
-    { provide: APP_PIPE, useValue: new I18nStandardSchemaValidationPipe() },
+
+
+
+
+
+
+    {
+      provide: APP_PIPE,
+      useValue: new I18nStandardSchemaValidationPipe({
+
+
+        exceptionFactory: (issues) => new BadRequestException({
+          message: issues.map((issue) => ({
+            ...(issue.path?.length
+              ? { field: issue.path.map((part) =>
+                  typeof part === 'object' && part !== null && 'key' in part
+                    ? String(part.key) : String(part)).join('.') }
+              : {}),
+            message: issue.message,
+          })),
+        }),
+      }),
+    },
   ],
 })
 export class AppModule implements NestModule {

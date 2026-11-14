@@ -3,9 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { MESSAGING_SOCKET_EVENTS } from '@giaokhoa/contracts';
 import { conversationRoom, tenantRealtimeSegment, userRoom } from '@giaokhoa/messaging';
 import { tenantAls } from '../tenants/tenant-als';
-import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
-import type { Server } from 'socket.io';
+import type { Namespace } from 'socket.io';
 import { redisTlsFromUrl } from '../../config/env';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 
@@ -15,13 +14,21 @@ const PRESENCE_TTL_SECONDS_DEFAULT = 600;
 const PRESENCE_REFRESH_MS_DEFAULT = 120_000;
 const TYPING_TTL_SECONDS = 4;
 
+
+
+
+
+
+
+
+
+
 @Injectable()
 export class MessagingRealtimeService implements OnModuleDestroy {
   private readonly logger = new Logger(MessagingRealtimeService.name);
   private readonly redisUrl: string;
   private readonly redisOptions: Record<string, unknown>;
-  private server: Server | null = null;
-  private adapterClients: Redis[] = [];
+  private server: Namespace | null = null;
   private stateClient: Redis | null = null;
   private readonly presenceTtlSeconds: number;
   private readonly presenceRefreshMs: number;
@@ -38,18 +45,12 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     this.presenceRefreshMs = config.get<number>('MESSAGING_PRESENCE_REFRESH_MS') ?? PRESENCE_REFRESH_MS_DEFAULT;
   }
 
-  attachServer(server: Server): void {
+
+
+
+
+  attachServer(server: Namespace): void {
     this.server = server;
-    try {
-      const pub = new Redis(this.redisUrl, this.redisOptions);
-      const sub = pub.duplicate();
-      pub.on('error', (error: Error) => this.logger.warn(`Redis adapter (pub) của messaging lỗi: ${error.message}`));
-      sub.on('error', (error: Error) => this.logger.warn(`Redis adapter (sub) của messaging lỗi: ${error.message}`));
-      this.adapterClients = [pub, sub];
-      server.adapter(createAdapter(pub, sub) as never);
-    } catch (error) {
-      this.logger.warn(`Không gắn được Redis adapter cho messaging, dùng adapter in-memory: ${(error as Error).message}`);
-    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -57,10 +58,8 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     this.presenceTimer = null;
     this.localPresence.clear();
     await Promise.allSettled([
-      ...this.adapterClients.map((c) => c.quit()),
       ...(this.stateClient ? [this.stateClient.quit()] : []),
     ]);
-    this.adapterClients = [];
     this.stateClient = null;
     this.server = null;
   }

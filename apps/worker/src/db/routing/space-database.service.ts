@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
@@ -26,13 +26,18 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   private readonly dedicatedSlugs = new Set<string>();
 
   private sharedKysely: CentreDb | null = null;
+
+  private sharedPool: { end(): Promise<void> } | null = null;
+
+
+
   private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string; spaceId: string }>();
   private readonly kyselyPools: SpacePoolManager<CentreDb>;
 
   readonly routedKysely: CentreDb;
 
   constructor(config: ConfigService) {
-    this.poolMax = config.get<number>('SPACE_DB_POOL_MAX') ?? 5;
+    this.poolMax = config.get<number>('SPACE_DB_POOL_MAX') ?? 3;
     this.sweepConcurrency = config.get<number>('SPACE_SWEEP_CONCURRENCY') ?? 3;
     this.ssl = config.get<boolean>('DATABASE_SSL') ?? false;
     const idleTimeoutMs = config.get<number>('SPACE_DB_POOL_IDLE_TIMEOUT_MS') ?? 60_000;
@@ -42,6 +47,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       this.registryPool = new Pool(
         typeof connection === 'string' ? { connectionString: connection } : connection,
       );
+      this.registryPool.on('error', (error: Error) => new Logger(SpaceDatabaseService.name).error(`Kết nối control plane nhàn rỗi bị lỗi: ${error.message}`));
       this.registryDb = createControlPlaneKysely(this.registryPool);
     } else {
       this.registryPool = null;
@@ -77,6 +83,17 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     });
     this.kyselyPools = new SpacePoolManager<CentreDb>({
       idleTimeoutMs,
+      maxPools: config.get<number>('SPACE_DB_MAX_POOLS') ?? 6,
+
+      onPoolCloseError: (databaseName, error) => {
+        for (const [slug, entry] of [...this.preparedKysely]) {
+          if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
+        }
+        new Logger(SpaceDatabaseService.name).error(
+          'Không thể giải phóng pool kho riêng ' + databaseName,
+          error instanceof Error ? error.stack : String(error),
+        );
+      },
       onPoolClosed: (databaseName) => {
         for (const [slug, entry] of [...this.preparedKysely]) {
           if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
@@ -87,8 +104,12 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     this.routedKysely = this.createRoutedHandle(() => this.currentKysely());
   }
 
-  bindSharedKysely(db: CentreDb): void {
+
+
+
+  bindSharedKysely(db: CentreDb, pool?: { end(): Promise<void> }): void {
     this.sharedKysely = db;
+    this.sharedPool = pool ?? null;
   }
 
   async resolveTarget(slug: string): Promise<ResolvedSpaceConnection> {
@@ -114,7 +135,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
         `Resolved dedicated target for space ${slug} has no connection string`,
       );
     }
-    const handle = this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
+    const handle = await this.kyselyPools.getHandleForIdentity(target.databaseName, connectionString, (databaseName) => {
       const connection = databaseConnectionFromEnv(connectionString, this.ssl);
       const pool = new TenantAwarePool(
         typeof connection === 'string'
@@ -277,6 +298,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.resolver.dispose();
     await this.kyselyPools.closeAll();
+    await this.sharedPool?.end();
     await this.registryPool?.end().catch(() => undefined);
   }
 }

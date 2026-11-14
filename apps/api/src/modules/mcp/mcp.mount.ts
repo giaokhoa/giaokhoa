@@ -4,6 +4,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { attachSecurityHeadersToRawRoutes } from '../../common/security-headers.middleware';
 import type { NextFunction, Request, Response } from 'express';
 import { McpBridgeAuth } from './mcp-bridge-auth';
+import { MCP_BRIDGE_SCOPES, MCP_OAUTH_SCOPES } from './mcp-scopes';
 import type { McpActor } from './mcp.context';
 import type { McpOAuthVerifier } from './mcp-oauth-verifier';
 import { McpRateLimiter } from './mcp-rate-limit';
@@ -15,9 +16,9 @@ import { tenantAls } from '../tenants/tenant-als';
 const logger = new Logger('McpMount');
 
 const MAX_BODY_BYTES = 256 * 1024;
-const MCP_SCOPES = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giaokhoa.questions.write', 'giaokhoa.banks.contribute'] as const;
 
-const BRIDGE_SCOPES: readonly string[] = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giaokhoa.banks.contribute'];
+
+const BRIDGE_SCOPES: readonly string[] = MCP_BRIDGE_SCOPES;
 
 const TOOL_REQUIRED_SCOPES: Record<string, string> = {
   list_my_banks: 'giaokhoa.questions.read',
@@ -130,7 +131,7 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
       resource: `${base}/mcp`,
       authorization_servers: [deps.issuer ?? base],
       bearer_methods_supported: ['header'],
-      scopes_supported: [...MCP_SCOPES],
+      scopes_supported: [...MCP_OAUTH_SCOPES],
     };
   };
   server.get('/.well-known/oauth-protected-resource', (req, res) => {

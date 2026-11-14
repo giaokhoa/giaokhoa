@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
@@ -15,7 +17,10 @@ export interface BadgeAwardJobData extends BackgroundJobScope { userId: string; 
 export interface BadgeAwardResult { evaluated: number; issued: string[] }
 
 @Processor('badge-award')
-export class BadgeAwardProcessor extends WorkerHost {
+
+
+
+export class BadgeAwardProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,
@@ -141,6 +146,8 @@ export class BadgeAwardProcessor extends WorkerHost {
   }
 
   async process(job: Job<BadgeAwardJobData>): Promise<BadgeAwardResult> {
+
+    validateWorkerJobPayload(workerPayloadSchemas['badge-award'], job.data, 'badge-award');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

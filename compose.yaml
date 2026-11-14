@@ -4,12 +4,18 @@ x-api-env: &api-env
   DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   CONTROL_PLANE_POOL_MAX: ${CONTROL_PLANE_POOL_MAX:-4}
+  SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-3}
+  SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-6}
   CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
   SYSTEM_BANK_DATABASE_URL:
   SPACE_NHANTIN_DATABASE_URL:
   SPACE_CONG_CONG_DATABASE_URL:
   PUBLIC_LEARNING_ENABLED: ${PUBLIC_LEARNING_ENABLED:-false}
+  DATABASE_SSL: ${DATABASE_SSL:-false}
+  DATABASE_TLS_CA_FILE:
+  REDIS_TLS_CA_FILE:
   REDIS_URL: redis://redis:6379
+  CACHE_REDIS_URL: redis://redis-cache:6379
   JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
   MFA_ENCRYPTION_KEY:
   BETTER_AUTH_ENABLED: ${BETTER_AUTH_ENABLED:-true}
@@ -49,11 +55,21 @@ services:
       retries: 12
 
   redis:
-    image: redis:7
+    image: redis:7.4.12
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "900 1 300 10 60 10000", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:?Phai khai REDIS_MAXMEMORY sau khi tinh RAM Redis queue va host}"]
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$(redis-cli ping)\" = PONG && test \"$(redis-cli --raw CONFIG GET maxmemory | tail -n 1)\" -gt 0"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis-cache:
+    image: redis:7.4.12
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "allkeys-lru", "--maxmemory", "${REDIS_CACHE_MAXMEMORY:-256mb}"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -75,6 +91,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redis-cache:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -99,6 +117,11 @@ services:
       SPACE_NHANTIN_DATABASE_URL:
       SPACE_CONG_CONG_DATABASE_URL:
       DATABASE_POOL_MAX: ${WORKER_DATABASE_POOL_MAX:-10}
+      SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-3}
+      SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-6}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_TLS_CA_FILE:
+      REDIS_TLS_CA_FILE:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
       FILE_STORAGE_DIR: /app/data/files
@@ -111,6 +134,7 @@ services:
       FILE_STORAGE_S3_FORCE_PATH_STYLE: ${FILE_STORAGE_S3_FORCE_PATH_STYLE:-false}
       RESEND_API_KEY:
       MAIL_FROM:
+      RESEND_RATE_LIMIT_PER_SECOND: ${RESEND_RATE_LIMIT_PER_SECOND:-1}
     volumes:
       - api-files:/app/data/files
     depends_on:
@@ -120,6 +144,20 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const Redis=require('ioredis');const
+          {redisConnectionFromUrl}=require('./dist/config/env.js');const
+          r=new Redis({...redisConnectionFromUrl(process.env.REDIS_URL),
+          maxRetriesPerRequest:1,connectTimeout:2000,retryStrategy:()=>null});
+          r.ping().then(v=>{r.disconnect();process.exit(v==='PONG'?0:1)})
+          .catch(()=>{r.disconnect();process.exit(1)})"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   web:
     build:
@@ -142,10 +180,15 @@ services:
       start_period: 20s
 
   gateway:
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.9-alpine
     restart: unless-stopped
+    environment:
+      GIAOKHOA_TRUSTED_PROXY_CIDRS: ${GIAOKHOA_TRUSTED_PROXY_CIDRS:-127.0.0.1/32}
+      GIAOKHOA_API_UPSTREAM: ${GIAOKHOA_API_UPSTREAM:-api:3100}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
     ports:
       - "${WEB_PORT:-8080}:8080"
     depends_on:
@@ -168,6 +211,8 @@ services:
     environment:
       DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Can dat POSTGRES_PASSWORD trong file .env}@postgres:5432/postgres
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_TLS_CA_FILE:
       MIGRATION_DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       RUNTIME_DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
@@ -198,58 +243,11 @@ services:
         condition: service_healthy
     command: ["node", "dist/modules/seed/review-seed.js"]
 
-  kc-db:
-    image: postgres:17
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Can dat KEYCLOAK_DB_PASSWORD trong file .env}
-    volumes:
-      - keycloak-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-    networks:
-      - keycloak-net
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.7.5
-    restart: unless-stopped
-    command: ["start"]
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://kc-db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Can dat KEYCLOAK_DB_PASSWORD trong file .env}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
-      KC_HOSTNAME: https://auth.fuckr.net
-      KC_HTTP_ENABLED: "true"
-      KC_PROXY_HEADERS: xforwarded
-      KC_HEALTH_ENABLED: "true"
-      KC_METRICS_ENABLED: "true"
-    ports:
-      - "127.0.0.1:${KEYCLOAK_HOST_PORT:-8085}:8080"
-    depends_on:
-      kc-db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/9000 || exit 1; printf "GET /health/ready HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n" >&3; IFS= read -r status <&3; case "$$status" in *" 200 "*) exit 0 ;; *) exit 1 ;; esac']
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 60s
-    networks:
-      - keycloak-net
 
 volumes:
   pgdata:
   redisdata:
   api-files:
   fleet-backups:
-  keycloak-db-data:
-
-networks:
-  keycloak-net:
+  caddy-data:
+  caddy-config:

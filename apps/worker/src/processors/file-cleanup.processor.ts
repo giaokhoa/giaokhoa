@@ -1,4 +1,11 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+
+
+
+
+
+
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -25,7 +32,7 @@ export interface FileCleanupResult {
 }
 
 @Processor('file-cleanup')
-export class FileCleanupProcessor extends WorkerHost {
+export class FileCleanupProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(FileCleanupProcessor.name);
   private s3?: S3Client;
 

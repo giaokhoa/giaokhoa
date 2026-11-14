@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { TaskLogService } from '../task-log.service';
@@ -13,7 +14,10 @@ export const ACTIVITY_DUE_REMINDER_WINDOW_HOURS = 24;
 const SUBMITTED_ATTEMPT_STATES = ['needsgrading', 'finished'];
 
 @Processor('activity-due-reminders')
-export class ActivityDueReminderProcessor extends WorkerHost {
+
+
+
+export class ActivityDueReminderProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   async process(_job: Job): Promise<ActivityDueReminderResult> {

@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { NotificationDeliveryService } from '../notification-delivery.service';
@@ -11,7 +13,10 @@ export interface CalendarReminderJobData extends BackgroundJobScope { eventId: s
 export interface CalendarReminderResult { status: 'notified' | 'duplicate' | 'skipped-suspended' | 'skipped-preference' | 'skipped-admin-disabled' | 'event-missing'; notificationId?: string }
 
 @Processor('calendar-reminders')
-export class CalendarReminderProcessor extends WorkerHost {
+
+
+
+export class CalendarReminderProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,
@@ -20,6 +25,8 @@ export class CalendarReminderProcessor extends WorkerHost {
   ) { super(); }
 
   async process(job: Job<CalendarReminderJobData>): Promise<CalendarReminderResult> {
+
+    validateWorkerJobPayload(workerPayloadSchemas['calendar-reminders'], job.data, 'calendar-reminders');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

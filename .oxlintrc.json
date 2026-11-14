@@ -1,0 +1,18 @@
+{
+  "extends": [
+    "./packages/oxlint-config/base.json"
+  ],
+  "ignorePatterns": [
+    "apps/api/**",
+    "apps/worker/**",
+    "packages/db/**",
+    "packages/enrol/**",
+    "packages/payments/**",
+    "packages/eslint-config/**",
+    "packages/config/**"
+  ],
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  }
+}

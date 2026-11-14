@@ -24,4 +24,7 @@ packages/*/src/**/*.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.js.map
 !packages/db/src/types/*.d.ts
-!packages/db/src/migrate/kysely-migration.d.ts
+
+.vitest/
+
+.pnpm-store/

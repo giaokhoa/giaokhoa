@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { DelayedError, type Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { OutboxEventJobData } from '../outbox-event-routes';
@@ -11,7 +13,7 @@ import {
 const PROCESSING_LEASE_RETRY_DELAY_MS = 5_000;
 
 @Processor('notification-events')
-export class NotificationEventsProcessor extends WorkerHost {
+export class NotificationEventsProcessor extends ObservedWorkerHost {
   constructor(
     private readonly handler: NotificationEventsHandlerService,
     private readonly marker: NotificationEventsMarker,
@@ -24,6 +26,7 @@ export class NotificationEventsProcessor extends WorkerHost {
     job: Job<OutboxEventJobData>,
     token?: string,
   ): Promise<{ handled: boolean; duplicate?: boolean }> {
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'notification-events');
     return this.jobRunner.runForJob(job.data, async () => {
       const { outboxId, type, payload } = job.data;
       if (!(NOTIFICATION_EVENT_TYPES as readonly string[]).includes(type)) {

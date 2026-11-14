@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Res } from '@nestjs/common';
+import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import type { HealthStatus } from '@giaokhoa/contracts';
+import type { Response } from 'express';
 import { HealthService } from './health.service';
 import { Public } from '../../common/public.decorator';
 
@@ -12,7 +13,14 @@ export class HealthController {
   @Public()
   @Get()
   @ApiOkResponse({ description: 'Service health (database + redis checks)' })
-  async getHealth(): Promise<HealthStatus> {
-    return this.health.check();
+  @ApiServiceUnavailableResponse({ description: 'Database hoặc Redis không sẵn sàng' })
+
+
+
+  async getHealth(@Res({ passthrough: true }) response: Response): Promise<HealthStatus> {
+    const status = await this.health.check();
+
+    response.status(status.status === 'ok' ? 200 : 503);
+    return status;
   }
 }

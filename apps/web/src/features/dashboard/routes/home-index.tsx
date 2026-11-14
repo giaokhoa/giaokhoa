@@ -1,3 +1,4 @@
+import type { Route } from './+types/home-index';
 import { Suspense, lazy } from 'react';
 import type {
   Course,
@@ -21,7 +22,40 @@ import { hasCourseAssignment, systemCapabilities } from '#lib/permissions';
 import { CourseGradeData } from '#hooks/use-courses-grade-data';
 import { MyBadgeView } from '#features/badges/types/badges';
 
-export async function loader({ request }: { request: Request }): Promise<SsrLoaderData> {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Promise<SsrLoaderData> {
   return buildSsrLoaderData(request, async (queryClient, req) => {
     const range = upcomingDaysRangeIso(30);
     await Promise.all([

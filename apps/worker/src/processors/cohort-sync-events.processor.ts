@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
@@ -15,7 +17,7 @@ function isCohortMemberPayload(payload: unknown): payload is { cohortId: string;
 }
 
 @Processor('cohort-sync-events')
-export class CohortSyncEventsProcessor extends WorkerHost {
+export class CohortSyncEventsProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(CohortSyncEventsProcessor.name);
 
   constructor(
@@ -26,6 +28,7 @@ export class CohortSyncEventsProcessor extends WorkerHost {
   }
 
   async process(job: Job<OutboxEventJobData>): Promise<{ handled: boolean }> {
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'cohort-sync-events');
     return this.jobRunner.runForJob(job.data, async () => {
       const { type, payload } = job.data;
       if (type === 'cohort_member_added' || type === 'cohort_member_removed') {

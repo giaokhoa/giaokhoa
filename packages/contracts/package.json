@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "oxlint .",
+    "lint": "oxlint --type-aware --type-check .",
     "typecheck": "tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:unit": "vitest run"
@@ -26,6 +26,7 @@
     "@giaokhoa/config": "workspace:*",
     "@giaokhoa/oxlint-config": "workspace:*",
     "oxlint": "1.93.0",
-    "oxlint-tsgolint": "7.0.2006"
+    "oxlint-tsgolint": "7.0.2006",
+    "vite": "^8.3.5"
   }
 }

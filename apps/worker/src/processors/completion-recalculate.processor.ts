@@ -1,5 +1,8 @@
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job, Queue } from 'bullmq';
+import { randomUUID } from 'node:crypto';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 import type { BackgroundJobScope } from '../db/routing/background-job-scope';
@@ -10,7 +13,10 @@ export interface CompletionRecalculateResult { courseId: string; users: number; 
 const ENROL_WITHDRAWN = 2;
 
 @Processor('completion-recalculate')
-export class CompletionRecalculateProcessor extends WorkerHost {
+
+
+
+export class CompletionRecalculateProcessor extends ObservedWorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly jobRunner: SpaceJobRunner,
@@ -18,6 +24,8 @@ export class CompletionRecalculateProcessor extends WorkerHost {
   ) { super(); }
 
   async process(job: Job<CompletionRecalculateJobData>): Promise<CompletionRecalculateResult> {
+
+    validateWorkerJobPayload(workerPayloadSchemas['completion-recalculate'], job.data, 'completion-recalculate');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
@@ -186,9 +194,11 @@ export class CompletionRecalculateProcessor extends WorkerHost {
         .execute();
       for (const dependentId of [...new Set(dependents.map((d) => d.course))]) {
         if (dependentId === courseId) continue;
+
+
         await this.recalcQueue.add('recalculate', { courseId: dependentId,
           spaceSlug: job.data.spaceSlug, spaceId: job.data.spaceId, tenantId: job.data.tenantId },
-          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}-${Date.now()}`, attempts: 3 }).catch(() => undefined);
+          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}-${randomUUID()}`, attempts: 3 }).catch(() => undefined);
       }
     }
     return { courseId, users: userIds.size, completedUsers };

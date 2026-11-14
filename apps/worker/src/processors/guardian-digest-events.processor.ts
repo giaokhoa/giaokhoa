@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
@@ -30,7 +32,7 @@ function isOverdueAlertPayload(payload: unknown): payload is GuardianOverdueAler
 }
 
 @Processor('guardian-digest-events')
-export class GuardianDigestEventsProcessor extends WorkerHost {
+export class GuardianDigestEventsProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(GuardianDigestEventsProcessor.name);
 
   constructor(
@@ -41,6 +43,7 @@ export class GuardianDigestEventsProcessor extends WorkerHost {
   }
 
   async process(job: Job<OutboxEventJobData>): Promise<{ handled: boolean }> {
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'guardian-digest-events');
     return this.jobRunner.runForJob(job.data, async () => {
       const { type, payload } = job.data;
       try {

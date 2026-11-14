@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [reactRouter(), tailwindcss()],
   ssr: { external: ["@giaokhoa/contracts"] },
   server: {
+    strictPort: true,
     host: "0.0.0.0",
     port: 5173,
     allowedHosts: [

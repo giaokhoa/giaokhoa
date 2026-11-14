@@ -221,6 +221,10 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
         ...(opts.cookieToken ? { Cookie: signedBetterAuthCookie(opts.cookieToken) } : {}),
       },
       transports: ['websocket'],
+
+
+
+      autoConnect: false,
       reconnection: false,
       timeout: 5000,
     });
@@ -237,6 +241,7 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       const timer = setTimeout(() => reject(new Error('socket connect timeout')), 8000);
       socket.once('connect', () => { clearTimeout(timer); resolve(); });
       socket.once('connect_error', (err) => { clearTimeout(timer); reject(err); });
+      socket.connect();
     });
   }
 
@@ -266,6 +271,7 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       const timer = setTimeout(() => resolve('timeout'), 8000);
       socket.on('disconnect', () => { clearTimeout(timer); resolve('disconnected'); });
       socket.on('connect_error', () => { clearTimeout(timer); resolve('connect_error'); });
+      socket.connect();
     });
     expect(['disconnected', 'connect_error']).toContain(outcome);
     expect(socket.connected).toBe(false);

@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { renderAuthMail } from './auth-mail.js';
+import { authMailPayloadSchema, renderAuthMail } from './auth-mail.js';
+
+describe('Hợp đồng runtime mail xác thực', () => {
+  it('từ chối URL reset bị thiếu và OTP không phải chuỗi 6 chữ số', () => {
+    expect(authMailPayloadSchema.safeParse({
+      kind: 'password_reset', to: 'user@example.com',
+    }).success).toBe(false);
+    expect(authMailPayloadSchema.safeParse({
+      kind: 'email_otp', to: 'user@example.com', otp: 123456, otpType: 'sign-in',
+    }).success).toBe(false);
+  });
+
+  it('chấp nhận payload mail OTP đúng schema nhưng từ chối trường lạ', () => {
+    const mail = { kind: 'email_otp', to: 'user@example.com', otp: '123456', otpType: 'sign-in' };
+    expect(authMailPayloadSchema.safeParse(mail).success).toBe(true);
+    expect(authMailPayloadSchema.safeParse({ ...mail, debugToken: 'unexpected' }).success).toBe(false);
+  });
+});
 
 describe('Khối renderAuthMail', () => {
   it('dựng mail đặt lại mật khẩu mang liên kết dùng một lần và hạn 1 giờ', () => {

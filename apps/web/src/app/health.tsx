@@ -1,3 +1,4 @@
+import type { Route } from './+types/health';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLoaderData } from 'react-router';
@@ -13,7 +14,10 @@ import { fetchApiJson } from '#lib/server-api';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; health: HealthStatus };
 
-export async function loader(): Promise<{ health: HealthStatus | null }> {
+
+
+
+export async function loader(_args?: Route.LoaderArgs): Promise<{ health: HealthStatus | null }> {
   const body = await fetchApiJson('/api/v1/health');
   const parsed = healthStatusSchema.safeParse(body);
   return { health: parsed.success ? parsed.data : null };

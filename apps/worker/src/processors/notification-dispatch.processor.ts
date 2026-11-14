@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { ResendMailService } from '../resend-mail.service';
@@ -25,7 +27,7 @@ export interface NotificationDispatchResult {
 const MANDATORY_PROVIDERS = new Set(['enrol_expiry_warning', 'admin_announcement']);
 
 @Processor('notification-dispatch', { concurrency: 10 })
-export class NotificationDispatchProcessor extends WorkerHost {
+export class NotificationDispatchProcessor extends ObservedWorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly mail: ResendMailService,
@@ -33,6 +35,8 @@ export class NotificationDispatchProcessor extends WorkerHost {
   ) { super(); }
 
   async process(job: Job<NotificationDispatchJobData>): Promise<NotificationDispatchResult> {
+
+    validateWorkerJobPayload(workerPayloadSchemas['notification-dispatch'], job.data, 'notification-dispatch');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

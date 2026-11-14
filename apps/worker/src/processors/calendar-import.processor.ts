@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job } from 'bullmq';
 import { parseIcs } from '../domain/ics';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
@@ -9,10 +11,16 @@ export interface CalendarImportJobData extends BackgroundJobScope { subscription
 export interface CalendarImportResult { eventsimported: number; eventsskipped: number; eventsupdated: 0; eventsdeleted: 0 }
 
 @Processor('calendar-import', { concurrency: 5 })
-export class CalendarImportProcessor extends WorkerHost {
+
+
+
+
+export class CalendarImportProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly jobRunner: SpaceJobRunner) { super(); }
 
   async process(job: Job<CalendarImportJobData>): Promise<CalendarImportResult> {
+
+    validateWorkerJobPayload(workerPayloadSchemas['calendar-import'], job.data, 'calendar-import');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 

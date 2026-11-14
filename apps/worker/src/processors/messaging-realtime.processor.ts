@@ -1,4 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Inject, Logger } from '@nestjs/common';
 import { DelayedError, type Job } from 'bullmq';
 import type Redis from 'ioredis';
@@ -20,7 +22,7 @@ const DISTRIBUTED_MARK_TTL_SECONDS = 7 * 24 * 60 * 60;
 const DISTRIBUTION_RETRY_DELAY_MS = 5_000;
 
 @Processor(MESSAGING_REALTIME_QUEUE)
-export class MessagingRealtimeProcessor extends WorkerHost {
+export class MessagingRealtimeProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(MessagingRealtimeProcessor.name);
 
   constructor(
@@ -36,6 +38,7 @@ export class MessagingRealtimeProcessor extends WorkerHost {
     if (!data || typeof data.outboxId !== 'string' || data.outboxId.length === 0 || typeof data.type !== 'string') {
       throw new Error('Messaging realtime job is missing its outboxId or event type');
     }
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'messaging-realtime');
     await this.jobRunner.runForJob(data, async () => {
       const markKey = `${MESSAGING_DISTRIBUTED_KEY_PREFIX}${scopedOutboxId(data.outboxId)}`;
       try {

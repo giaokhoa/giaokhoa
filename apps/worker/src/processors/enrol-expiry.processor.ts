@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
@@ -22,7 +23,10 @@ const USER_ENROLMENT_COLUMNS = [
 export const ENROL_EXPIRY_WARNING_WINDOW_DAYS = 7;
 
 @Processor('enrol-expiry')
-export class EnrolExpiryProcessor extends WorkerHost {
+
+
+
+export class EnrolExpiryProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   async process(_job: Job): Promise<EnrolExpiryResult> {

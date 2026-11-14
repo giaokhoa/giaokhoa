@@ -8,11 +8,12 @@
   "devDependencies": {
     "@giaokhoa/eslint-config": "workspace:*",
     "@giaokhoa/config": "workspace:*",
-    "@types/node": "^26.6.5",
+    "@types/node": "^24.10.0",
     "typescript": "catalog:nest",
     "@types/pg": "^8.23.1",
     "kysely-codegen": "0.20.0",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vite": "^8.3.5"
   },
   "exports": {
     ".": {
@@ -48,7 +49,9 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:types": "node scripts/generate-types.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:int": "vitest run --project int"
   },
   "types": "./dist/index.d.ts",
   "version": "0.1.0"

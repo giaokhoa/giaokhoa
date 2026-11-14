@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { PoolConfig } from 'pg';
 import { z } from 'zod';
 
@@ -8,7 +9,12 @@ export const envSchema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().positive().max(1000).optional(),
   CONTROL_PLANE_POOL_MAX: z.coerce.number().int().positive().max(1000).optional(),
   SPACE_ROUTING_CACHE_TTL_MS: z.coerce.number().int().positive().default(5_000),
-  SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+  SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(3),
+
+
+  SPACE_DB_MAX_POOLS: z.coerce.number().int().positive().max(100).default(6),
+
+
   PUBLIC_LEARNING_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   SPACE_CONG_CONG_DATABASE_URL: z.string().min(1).optional(),
   SPACE_DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
@@ -16,7 +22,15 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+
+
+  DATABASE_TLS_CA_FILE: z.string().min(1).optional(),
+  REDIS_TLS_CA_FILE: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1),
+
+
+  CACHE_REDIS_URL: z.string().min(1).optional(),
+
   MESSAGING_PRESENCE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
   MESSAGING_PRESENCE_REFRESH_MS: z.coerce.number().int().positive().default(120_000),
   JWT_SECRET: z.string().min(16),
@@ -92,7 +106,11 @@ export const envSchema = z.object({
   SEPAY_IPN_IP_ALLOWLIST: z.string().optional(),
   ADMIN_USERNAME: z.string().min(1).default('admin'),
   ADMIN_PASSWORD: z.string().min(8).default('Admin123!'),
-  ADMIN_EMAIL: z.string().min(3).default('admin@localhost'),
+
+
+
+
+  ADMIN_EMAIL: z.union([z.email(), z.literal('admin@localhost')]).default('admin@localhost'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -100,7 +118,7 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
-    throw new Error(`Invalid environment variables: ${parsed.error.message}`);
+    throw new Error(`Invalid environment variables: ${z.prettifyError(parsed.error)}`);
   }
   if (parsed.data.PUBLIC_LEARNING_ENABLED) {
     for (const key of ['BETTER_AUTH_URL', 'CONTROL_PLANE_DATABASE_URL', 'SPACE_CONG_CONG_DATABASE_URL', 'BETTER_AUTH_SECRET'] as const) {
@@ -113,23 +131,36 @@ export function validateEnv(config: Record<string, unknown>): Env {
   return parsed.data;
 }
 
+
+
+
+
+
+
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
-  return { connectionString: url, ssl: { rejectUnauthorized: false } };
+  const parsed = new URL(url);
+  for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) parsed.searchParams.delete(key);
+  const caFile = process.env.DATABASE_TLS_CA_FILE;
+  const ca = caFile ? readFileSync(caFile, 'utf8') : undefined;
+  return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
 
-export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: boolean } } {
-  return new URL(url).protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {};
+
+export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: true; ca?: string } } {
+  if (new URL(url).protocol !== 'rediss:') return {};
+  const caFile = process.env.REDIS_TLS_CA_FILE;
+  const ca = caFile ? readFileSync(caFile, 'utf8') : undefined;
+  return { tls: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
+
 
 export function cacheRedisConfigFromUrl(url: string): {
   url: string;
-  socket?: { tls: true; rejectUnauthorized: false };
+  socket?: { tls: true; rejectUnauthorized: true; ca?: string };
 } {
-  if (new URL(url).protocol === 'rediss:') {
-    return { url, socket: { tls: true, rejectUnauthorized: false } };
-  }
-  return { url };
+  const tls = redisTlsFromUrl(url).tls;
+  return tls ? { url, socket: { tls: true, ...tls } } : { url };
 }
 
 export function redisConnectionFromUrl(url: string): {
@@ -137,8 +168,9 @@ export function redisConnectionFromUrl(url: string): {
   port: number;
   username?: string;
   password?: string;
-  tls?: { rejectUnauthorized: boolean };
-  maxRetriesPerRequest: null;
+  tls?: { rejectUnauthorized: true; ca?: string };
+  maxRetriesPerRequest: number;
+  enableOfflineQueue: false;
 } {
   const parsed = new URL(url);
   return {
@@ -146,7 +178,12 @@ export function redisConnectionFromUrl(url: string): {
     port: parsed.port ? Number(parsed.port) : 6379,
     username: parsed.username || undefined,
     password: parsed.password || undefined,
-    ...(parsed.protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {}),
-    maxRetriesPerRequest: null,
+
+    ...redisTlsFromUrl(url),
+
+
+
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
   };
 }

@@ -163,7 +163,8 @@ export const notificationItemPageSchema = z.object({
 });
 export type NotificationItemPage = z.infer<typeof notificationItemPageSchema>;
 
-export const listNotificationGroupsQuerySchema = z.object({
+
+export const listNotificationGroupsQuerySchema = z.strictObject({
   group: notificationGroupNameSchema.optional(),
   unreadOnly: z.boolean().optional(),
   cursor: z.string().min(1).optional(),
@@ -171,7 +172,10 @@ export const listNotificationGroupsQuerySchema = z.object({
 });
 export type ListNotificationGroupsQuery = z.infer<typeof listNotificationGroupsQuerySchema>;
 
-export const listNotificationItemsQuerySchema = z.object({
+
+
+
+export const listNotificationItemsQuerySchema = z.strictObject({
   eventType: z.string().min(1).optional(),
   contextUrl: z.string().optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -187,7 +191,8 @@ export const markNotificationsReadSchema = z.strictObject({
 });
 export type MarkNotificationsRead = z.infer<typeof markNotificationsReadSchema>;
 
-export const readNotificationGroupSchema = z.object({
+
+export const readNotificationGroupSchema = z.strictObject({
   eventType: z.string().min(1),
   contextUrl: z.string().nullable().optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

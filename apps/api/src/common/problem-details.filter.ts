@@ -52,9 +52,18 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         const record = body as Record<string, unknown>;
         if (Array.isArray(record.message)) {
           detail = 'Validation failed';
-          errors = record.message.map((message) => ({
-            message: String(message),
-          }));
+          errors = record.message.map((issue) => {
+
+
+            if (issue && typeof issue === 'object') {
+              const item = issue as Record<string, unknown>;
+              return {
+                message: typeof item.message === 'string' ? item.message : String(item.message),
+                ...(typeof item.field === 'string' ? { field: item.field } : {}),
+              };
+            }
+            return { message: String(issue) };
+          });
           code = 'http.validation_failed';
         } else if (typeof record.message === 'string') {
           detail = record.message;

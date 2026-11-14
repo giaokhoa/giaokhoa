@@ -15,6 +15,8 @@ jobs:
     name: verify-stack
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      REDIS_MAXMEMORY: 512mb
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -24,7 +26,7 @@ jobs:
 
       - name: Generate CI environment variables
         run: |
-          for name in POSTGRES_PASSWORD CONTROL_PLANE_POSTGRES_PASSWORD RUNTIME_POSTGRES_PASSWORD MIGRATOR_POSTGRES_PASSWORD JWT_SECRET BETTER_AUTH_SECRET KEYCLOAK_DB_PASSWORD KEYCLOAK_ADMIN_PASSWORD; do
+          for name in POSTGRES_PASSWORD CONTROL_PLANE_POSTGRES_PASSWORD RUNTIME_POSTGRES_PASSWORD MIGRATOR_POSTGRES_PASSWORD JWT_SECRET BETTER_AUTH_SECRET; do
             secret=$(openssl rand -hex 32)
             echo "::add-mask::$secret"
             printf '%s=%s\n' "$name" "$secret" >> "$GITHUB_ENV"
@@ -32,6 +34,14 @@ jobs:
 
       - name: Validate compose configuration
         run: docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null
+
+      - name: Verify Redis queue memory budget must be configured
+        run: |
+          if env -u REDIS_MAXMEMORY docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null 2> "$RUNNER_TEMP/budget-error.txt"; then
+            echo "Compose vẫn chấp nhận chạy Redis queue không có ngân sách RAM" >&2
+            exit 1
+          fi
+          grep -q REDIS_MAXMEMORY "$RUNNER_TEMP/budget-error.txt"
 
       - name: Export the Compose build definition
         run: docker compose -f compose.yaml -f compose.ci.yaml build --print api worker web migrate > "$RUNNER_TEMP/compose-build.json"
@@ -43,6 +53,14 @@ jobs:
           files: ${{ runner.temp }}/compose-build.json
           load: true
 
+      - name: Verify Caddy config with current trusted-proxy policy
+        run: |
+          if [ -z "${GIAOKHOA_TRUSTED_PROXY_CIDRS:-}" ]; then
+            effective=$(docker compose -f compose.yaml -f compose.ci.yaml config --format json | jq -r '.services.gateway.environment.GIAOKHOA_TRUSTED_PROXY_CIDRS')
+            test "$effective" = "127.0.0.1/32"
+          fi
+          docker compose -f compose.yaml -f compose.ci.yaml run --rm --no-deps gateway caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
       - name: Start the stack
         run: docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build
 
@@ -51,6 +69,96 @@ jobs:
           curl --fail --silent --show-error --retry 60 --retry-delay 5 --retry-all-errors --max-time 5 \
             http://127.0.0.1:8080/api/v1/health -o smoke-health.json
           jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
+
+      - name: Verify non-root API and worker share writable file volume
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$GITHUB_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const path = `/app/data/files/.audit-api-${process.argv[2]}`;
+          if (process.getuid() === 0) throw new Error('API đang chạy root');
+          fs.writeFileSync(path, 'api-written', { flag: 'wx', mode: 0o600 });
+          if (fs.readFileSync(path, 'utf8') !== 'api-written') process.exit(1);
+          NODE
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T worker node - "$GITHUB_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const api = `/app/data/files/.audit-api-${process.argv[2]}`;
+          const worker = `/app/data/files/.audit-worker-${process.argv[2]}`;
+          if (process.getuid() === 0) throw new Error('Worker đang chạy root');
+          if (fs.readFileSync(api, 'utf8') !== 'api-written') process.exit(1);
+          fs.writeFileSync(worker, 'worker-written', { flag: 'wx', mode: 0o600 });
+          NODE
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$GITHUB_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const root = '/app/data/files/';
+          const api = root + '.audit-api-' + process.argv[2];
+          const worker = root + '.audit-worker-' + process.argv[2];
+          if (fs.readFileSync(worker, 'utf8') !== 'worker-written') process.exit(1);
+          fs.unlinkSync(worker);
+          fs.unlinkSync(api);
+          NODE
+
+      - name: Verify worker Redis TLS configuration used by healthcheck
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T worker node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = '/tmp/audit-private-redis-ca.pem';
+          const healthConfig = require('./dist/config/env.js');
+          fs.writeFileSync(path, 'audit-ci-ca');
+          const previous = process.env.REDIS_TLS_CA_FILE;
+          try {
+            process.env.REDIS_TLS_CA_FILE = path;
+            assert.deepEqual(healthConfig.redisConnectionFromUrl('rediss://redis.internal:6380').tls, {
+              rejectUnauthorized: true,
+              ca: 'audit-ci-ca',
+            });
+          } finally {
+            if (previous === undefined) delete process.env.REDIS_TLS_CA_FILE;
+            else process.env.REDIS_TLS_CA_FILE = previous;
+            fs.unlinkSync(path);
+          }
+          NODE
+
+      - name: Verify Better Auth and MCP CORS preflight
+        run: |
+          for path in /api/v1/auth/sign-in/username /mcp; do
+            headers=$(curl -fsS -i -X OPTIONS "http://127.0.0.1:8080$path" \
+              -H 'Origin: http://localhost:8080' -H 'Access-Control-Request-Method: POST' | tr -d '\r')
+            printf '%s\n' "$headers" | grep -qi '^access-control-allow-origin: http://localhost:8080$'
+            printf '%s\n' "$headers" | grep -qi '^access-control-allow-credentials: true$'
+            blocked=$(curl -fsS -i -X OPTIONS "http://127.0.0.1:8080$path" \
+              -H 'Origin: https://untrusted.example' -H 'Access-Control-Request-Method: POST' | tr -d '\r')
+            if printf '%s\n' "$blocked" | grep -qi '^access-control-allow-origin: https://untrusted.example$'; then
+              echo "Preflight cho phép origin ngoài danh sách tại $path" >&2
+              exit 1
+            fi
+          done
+
+      - name: Verify Redis policy and retired Keycloak services
+        run: |
+          services=$(docker compose -f compose.yaml -f compose.ci.yaml config --services)
+          if printf '%s\n' "$services" | grep -Eq '^(keycloak|kc-db)$'; then
+            echo "Cấu hình còn service Keycloak đã bị loại bỏ" >&2
+            exit 1
+          fi
+          policy=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
+          budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET maxmemory | tail -n 1)
+          test "$policy" = noeviction
+          printf '%s\n' "$budget" | grep -Eq '^[0-9]+$'
+          test "$budget" -gt 0
+          echo "Redis: maxmemory-policy=$policy, maxmemory=$budget bytes"
+          aof=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendonly | tail -n 1)
+          fsync=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendfsync | tail -n 1)
+          snapshots=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET save | tail -n 1)
+          test "$aof" = yes
+          test "$fsync" = everysec
+          test "$snapshots" = '900 1 300 10 60 10000'
+          echo "Redis persistence: AOF=$aof fsync=$fsync RDB=$snapshots"
+          cache_policy=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
+          cache_budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory | tail -n 1)
+          test "$cache_policy" = allkeys-lru
+          test "$cache_budget" -gt 0
+          echo "Redis cache: maxmemory-policy=$cache_policy, maxmemory=$cache_budget bytes"
 
       - name: Verify SSR, CSP and cache isolation
         run: |
@@ -64,20 +172,80 @@ jobs:
           grep -qi '^cache-control: private, no-cache' smoke-login.headers
           curl -fsS -o /dev/null http://127.0.0.1:8080/
 
-      - name: Verify Keycloak readiness
+      - name: Verify Socket.IO polling affinity across two API replicas
         run: |
-          docker compose -f compose.yaml -f compose.ci.yaml up --wait --wait-timeout 300 keycloak
-          issuer=$(curl -sf http://127.0.0.1:8085/realms/master/.well-known/openid-configuration | jq -er '.issuer')
-          test "$issuer" = "https://auth.fuckr.net/realms/master"
+          trap 'docker rm -f giaokhoa-api-2 >/dev/null 2>&1 || true; docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build --force-recreate gateway || true' EXIT
+          docker compose -f compose.yaml -f compose.ci.yaml run -d --no-deps --name giaokhoa-api-2 api
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec giaokhoa-api-2 node -e "fetch('http://127.0.0.1:3100/api/v1/health',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          export GIAOKHOA_API_UPSTREAM='api:3100 giaokhoa-api-2:3100'
+          docker compose -f compose.yaml -f compose.ci.yaml run --rm --no-deps gateway caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build --force-recreate gateway
+          : > "$RUNNER_TEMP/socket-affinity-cookies.txt"
+          for i in $(seq 1 12); do
+            curl -fsS --retry 10 --retry-delay 1 --retry-all-errors --max-time 10 \
+              -H 'Origin: http://localhost:8080' \
+              -D "$RUNNER_TEMP/socket-affinity-headers.txt" \
+              -o "$RUNNER_TEMP/socket-affinity-body.txt" \
+              "http://127.0.0.1:8080/socket.io/?EIO=4&transport=polling&t=$i"
+            cookie=$(grep -i '^set-cookie: api_affinity=' "$RUNNER_TEMP/socket-affinity-headers.txt" | head -n 1 | cut -d ' ' -f 2 | cut -d ';' -f 1 | tr -d '\r')
+            sid=$(node -e 'const s=require("node:fs").readFileSync(process.argv[1],"utf8");if(!s.startsWith("0"))process.exit(1);console.log(JSON.parse(s.slice(1)).sid)' "$RUNNER_TEMP/socket-affinity-body.txt")
+            test -n "$cookie" && test -n "$sid"
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -X POST \
+              -H 'Origin: http://localhost:8080' \
+              -H "Cookie: $cookie" -H 'Content-Type: text/plain;charset=UTF-8' \
+              --data-binary '40' \
+              "http://127.0.0.1:8080/socket.io/?EIO=4&transport=polling&sid=$sid")
+            test "$status" = 200 || { echo "Engine.IO SID mất affinity: HTTP $status" >&2; exit 1; }
+            printf '%s\n' "$cookie" >> "$RUNNER_TEMP/socket-affinity-cookies.txt"
+          done
+          distinct=$(sort -u "$RUNNER_TEMP/socket-affinity-cookies.txt" | wc -l)
+          test "$distinct" -ge 2 || { echo "Caddy không phân phối tới cả 2 upstream" >&2; exit 1; }
+          echo "12 Engine.IO polling handshakes + POST đạt trên $distinct upstream có cookie affinity."
+          unset GIAOKHOA_API_UPSTREAM
 
-      - name: Restart Keycloak without bootstrap admin password
-        run: env -u KEYCLOAK_ADMIN_PASSWORD docker compose -f compose.yaml -f compose.ci.yaml up -d keycloak
-
-      - name: Verify Keycloak after removing bootstrap password
+      - name: Verify HTTP 503 on real Redis and PostgreSQL outages
         run: |
-          env -u KEYCLOAK_ADMIN_PASSWORD docker compose -f compose.yaml -f compose.ci.yaml up --wait --wait-timeout 300 keycloak
-          issuer=$(curl -sf http://127.0.0.1:8085/realms/master/.well-known/openid-configuration | jq -er '.issuer')
-          test "$issuer" = "https://auth.fuckr.net/realms/master"
+          trap 'docker compose -f compose.yaml -f compose.ci.yaml start redis postgres || true' EXIT
+          assert_down() {
+            docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$1" <<'NODE'
+          const expected = process.argv[2];
+          const response = await fetch('http://127.0.0.1:3100/api/v1/health', {
+            signal: AbortSignal.timeout(15000),
+          });
+          const data = await response.json();
+          console.log(JSON.stringify({
+            status: response.status, overall: data.status, checks: data.checks,
+          }));
+          if (response.status !== 503 || data.status !== 'error' || data.checks?.[expected] !== 'down') {
+            process.exitCode = 1;
+          }
+          NODE
+          }
+          docker compose -f compose.yaml -f compose.ci.yaml stop redis
+          assert_down redis
+          docker compose -f compose.yaml -f compose.ci.yaml start redis
+          docker compose -f compose.yaml -f compose.ci.yaml stop postgres
+          assert_down database
+          docker compose -f compose.yaml -f compose.ci.yaml start postgres
+
+      - name: Diagnose failed stack before cleanup
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml ps -a || true
+          docker compose -f compose.yaml -f compose.ci.yaml logs --no-color --tail 250 api worker migrate redis postgres web gateway || true
+          api_id=$(docker compose -f compose.yaml -f compose.ci.yaml ps -a -q api)
+          if [ -n "$api_id" ]; then
+            docker inspect --format '{{json .State.Health}}' "$api_id" || true
+            docker inspect --format '{{json .State}}' "$api_id" || true
+          fi
 
       - name: Tear down the stack
         if: always()

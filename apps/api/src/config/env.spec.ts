@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   cacheRedisConfigFromUrl,
@@ -15,6 +18,23 @@ describe('Hàm validateEnv (fail-fast)', () => {
       JWT_SECRET: 'a-secret-with-16+chars',
     });
     expect(env.PORT).toBe(3000);
+  });
+
+  it('chấp nhận đúng email bootstrap của Compose và vẫn chặn email tùy ý sai định dạng', () => {
+    const base = {
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
+      REDIS_URL: 'redis://localhost:6379',
+      JWT_SECRET: 'a-secret-with-16+chars',
+    };
+    expect(validateEnv(base).ADMIN_EMAIL).toBe('admin@localhost');
+    expect(validateEnv({ ...base, ADMIN_EMAIL: 'admin@localhost' }).ADMIN_EMAIL)
+      .toBe('admin@localhost');
+    expect(validateEnv({ ...base, ADMIN_EMAIL: 'admin@example.org' }).ADMIN_EMAIL)
+      .toBe('admin@example.org');
+    expect(() => validateEnv({ ...base, ADMIN_EMAIL: 'not-an-email' }))
+      .toThrow(/Invalid environment variables/);
+    expect(() => validateEnv({ ...base, ADMIN_EMAIL: 'somebody@internal' }))
+      .toThrow(/Invalid environment variables/);
   });
 
   it('từ chối khi thiếu DATABASE_URL', () => {
@@ -63,8 +83,46 @@ describe('Hàm databaseConnectionFromEnv', () => {
   it('trả PoolConfig có SSL khi cờ đang bật', () => {
     expect(databaseConnectionFromEnv('postgres://db.example.com/giaokhoa', true)).toEqual({
       connectionString: 'postgres://db.example.com/giaokhoa',
-      ssl: { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: true },
     });
+  });
+});
+
+describe('Xác minh chứng chỉ TLS', () => {
+  it('không để sslmode=no-verify ghi đè xác minh CA của PostgreSQL', () => {
+    const result = databaseConnectionFromEnv(
+      'postgres://db.example.com/giaokhoa?sslmode=no-verify', true,
+    );
+    expect(result).toEqual({
+      connectionString: 'postgres://db.example.com/giaokhoa',
+      ssl: { rejectUnauthorized: true },
+    });
+  });
+
+  it('đọc CA nội bộ từ file khi đặt các biến đường dẫn và từ chối file sai', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'giaokhoa-tls-test-'));
+    const certFile = join(dir, 'ca.pem');
+    writeFileSync(certFile, 'test-ca-data');
+    const oldDb = process.env.DATABASE_TLS_CA_FILE;
+    const oldRedis = process.env.REDIS_TLS_CA_FILE;
+    try {
+      process.env.DATABASE_TLS_CA_FILE = certFile;
+      process.env.REDIS_TLS_CA_FILE = certFile;
+      expect(databaseConnectionFromEnv('postgres://db.example.com/app', true)).toMatchObject({
+        ssl: { rejectUnauthorized: true, ca: 'test-ca-data' },
+      });
+      expect(redisTlsFromUrl('rediss://redis.example.com')).toEqual({
+        tls: { rejectUnauthorized: true, ca: 'test-ca-data' },
+      });
+      process.env.DATABASE_TLS_CA_FILE = join(dir, 'missing.pem');
+      expect(() => databaseConnectionFromEnv('postgres://db.example.com/app', true)).toThrow();
+    } finally {
+      if (oldDb === undefined) delete process.env.DATABASE_TLS_CA_FILE;
+      else process.env.DATABASE_TLS_CA_FILE = oldDb;
+      if (oldRedis === undefined) delete process.env.REDIS_TLS_CA_FILE;
+      else process.env.REDIS_TLS_CA_FILE = oldRedis;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -74,13 +132,15 @@ describe('Hàm redisConnectionFromUrl', () => {
     expect(conn.host).toBe('localhost');
     expect(conn.port).toBe(6379);
     expect(conn.tls).toBeUndefined();
+
+    expect(conn).toMatchObject({ maxRetriesPerRequest: 1, enableOfflineQueue: false });
   });
 
   it('bật TLS cho URL rediss://', () => {
     const conn = redisConnectionFromUrl('rediss://user:pass@redis.example.com:6380');
     expect(conn.host).toBe('redis.example.com');
     expect(conn.port).toBe(6380);
-    expect(conn.tls).toEqual({ rejectUnauthorized: false });
+    expect(conn.tls).toEqual({ rejectUnauthorized: true });
   });
 });
 
@@ -89,9 +149,9 @@ describe('Hàm redisTlsFromUrl', () => {
     expect(redisTlsFromUrl('redis://localhost:6379')).toEqual({});
   });
 
-  it('tắt xác minh chứng chỉ cho URL rediss://', () => {
+  it('xác minh CA chứng chỉ cho URL rediss://', () => {
     expect(redisTlsFromUrl('rediss://redis.example.com:6380')).toEqual({
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: true },
     });
   });
 });
@@ -106,7 +166,7 @@ describe('Hàm cacheRedisConfigFromUrl', () => {
   it('thêm socket TLS không xác minh cho URL rediss://', () => {
     expect(cacheRedisConfigFromUrl('rediss://redis.example.com:6380')).toEqual({
       url: 'rediss://redis.example.com:6380',
-      socket: { tls: true, rejectUnauthorized: false },
+      socket: { tls: true, rejectUnauthorized: true },
     });
   });
 });

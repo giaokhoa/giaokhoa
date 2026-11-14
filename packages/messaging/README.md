@@ -35,6 +35,6 @@ Ba phần trong package:
 
 ## Ranh giới — package này KHÔNG làm gì
 
-- Không giữ kết nối DB/Redis và không phụ thuộc Nest hay Socket.IO: bề mặt đọc nhận handle Kysely của app gọi; việc phát đi qua cổng `RealtimeEmitter` do app cài đặt (worker: Socket.IO server không-listener gắn Redis adapter; test: bản giả lập).
+- Không giữ kết nối DB/Redis và không phụ thuộc Nest hay Socket.IO: bề mặt đọc nhận handle Kysely của app gọi; việc phát đi qua cổng `RealtimeEmitter` do app cài đặt (worker: headless Socket.IO `Server` với `@socket.io/redis-adapter`, không có HTTP listener; test: bản giả lập).
 - Không lo presence/typing và không gắn socket vào room: đó là việc phía kết nối của gateway trong `apps/api`.
 - Không ghi dữ kiện nghiệp vụ: package chỉ đọc DB và phát sự kiện; mọi ghi chép (tin nhắn, outbox, mốc đã đọc) thuộc về `apps/api`.

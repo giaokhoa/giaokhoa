@@ -9,6 +9,7 @@ import Redis from 'ioredis';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { tenantAls } from './db/tenant-als';
 import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } from './messaging-realtime-emitter';
+import { redisTlsFromUrl } from './config/env';
 
 @Injectable()
 export class MessagingRealtimeRuntime implements OnModuleDestroy {
@@ -22,8 +23,10 @@ export class MessagingRealtimeRuntime implements OnModuleDestroy {
   ) {
     const logger = new Logger('MessagingDistribution');
     const redisUrl = config.getOrThrow<string>('REDIS_URL');
-    this.emitterHandle = createMessagingRealtimeEmitter(redisUrl);
-    this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
+
+    const redisOptions = redisTlsFromUrl(redisUrl);
+    this.emitterHandle = createMessagingRealtimeEmitter(redisUrl, redisOptions);
+    this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null, ...redisOptions });
     this.redis.on('error', (error: Error) => {
       logger.warn(`Redis của consumer phân phối messaging lỗi: ${error.message}`);
     });

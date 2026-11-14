@@ -5,6 +5,7 @@ import { Button } from '@giaokhoa/ui/components/button';
 import { useAuth } from '#lib/auth';
 import { useSidebarDefaultOpen } from '#lib/sidebar-default-open';
 import { AppSidebar } from '#components/app-sidebar';
+import { ThemeToggle } from '#lib/theme';
 import { AppShellSkeleton } from '#components/app-shell-skeleton';
 import { NavigationProgressBar, useNavigationPending } from '#components/navigation-progress';
 import { SiteHeader } from '#components/site-header';
@@ -49,6 +50,7 @@ function PublicShell() {
           Giáo khoa
         </Link>
         <span className="ml-auto flex items-center gap-3 text-sm">
+          <ThemeToggle />
           {user ? (
             <>
               <span>{user.username}</span>
