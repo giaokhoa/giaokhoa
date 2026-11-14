@@ -19,6 +19,7 @@ const FILE_ID = '11111111-1111-4111-8111-111111111111';
 function makeService() {
   const rows = new Map<string, FileRow>();
   const repo = {
+    withContentLock: vi.fn(async (_domain: string, _hash: string, fn: (tx: unknown) => Promise<unknown>) => fn({})),
     insert: vi.fn(async (v: Record<string, unknown>) => {
       const row = { id: FILE_ID, createdAt: new Date(), ...v } as unknown as FileRow;
       rows.set(row.id, row);
@@ -69,6 +70,7 @@ describe('Hàm FilesService.uploadQuestionImage', () => {
     expect(row.component).toBe('question');
     expect(row.mimeType).toBe('image/png');
     expect(repo.insert).toHaveBeenCalledOnce();
+    expect(repo.withContentLock).toHaveBeenCalledWith('bank-system', expect.any(String), expect.any(Function));
     expect(questionFileContentSrc(row.id)).toBe(`/api/v1/files/${FILE_ID}/content`);
   });
 
