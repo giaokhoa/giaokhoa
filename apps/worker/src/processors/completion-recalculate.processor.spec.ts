@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { CompletionRecalculateProcessor } from './completion-recalculate.processor';
 
@@ -51,7 +52,7 @@ describe('CompletionRecalculateProcessor — enqueue lại khoá phụ thuộc d
     return { data: { courseId: 'course-1', spaceSlug: null, spaceId: 'space-1', tenantId: null } } as never;
   }
 
-  it('chạy 2 lần cho cùng khoá phụ thuộc: enqueue lại với cùng một jobId ổn định, không chứa UUID, và job được xoá khi xong để lần sau enqueue được', async () => {
+  it('chạy 2 lần cho cùng khoá phụ thuộc: enqueue lại với cùng một jobId ổn định, không chứa UUID, và job được xoá khi xong hoặc khi fail hết lượt thử để lần sau enqueue được', async () => {
     const { processor, recalcQueue } = buildProcessor(async () => ({}));
     await processor.process(recalcJob());
     await processor.process(recalcJob());
@@ -62,13 +63,21 @@ describe('CompletionRecalculateProcessor — enqueue lại khoá phụ thuộc d
     expect(secondOptions.jobId).toBe(firstOptions.jobId);
     expect(firstOptions.jobId).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
     expect(firstOptions.removeOnComplete).toBe(true);
+    expect(firstOptions.removeOnFail).toBe(true);
     const firstData = recalcQueue.add.mock.calls[0]![1] as Record<string, unknown>;
     expect(firstData.courseId).toBe('dep-course');
   });
 
-  it('enqueue lại thất bại (lỗi Redis): processor vẫn trả kết quả thay vì ném lỗi lên caller', async () => {
-    const { processor } = buildProcessor(async () => { throw new Error('Redis lỗi'); });
-    const result = await processor.process(recalcJob());
-    expect(result).toEqual({ courseId: 'course-1', users: 1, completedUsers: ['user-1'] });
+  it('enqueue lại thất bại (lỗi Redis): processor vẫn trả kết quả thay vì ném lỗi lên caller và ghi log lỗi', async () => {
+    const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    try {
+      const { processor } = buildProcessor(async () => { throw new Error('Redis error'); });
+      const result = await processor.process(recalcJob());
+      expect(result).toEqual({ courseId: 'course-1', users: 1, completedUsers: ['user-1'] });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(errorSpy.mock.calls[0]![0]).toContain('dep-course');
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

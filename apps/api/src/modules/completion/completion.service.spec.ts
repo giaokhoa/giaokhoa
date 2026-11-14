@@ -27,7 +27,7 @@ describe('CompletionService.setCriteria — enqueue tính lại dùng jobId ổn
 
   const input = { criteria: [{ criteriaType: 'date', date: '2026-01-01T00:00:00.000Z' }] };
 
-  it('đặt tiêu chí 2 lần cho cùng khoá học: enqueue 2 lần với cùng một jobId ổn định, không chứa UUID, và job được xoá khi xong để lần sau enqueue được', async () => {
+  it('đặt tiêu chí 2 lần cho cùng khoá học: enqueue 2 lần với cùng một jobId ổn định, không chứa UUID, và job được xoá khi xong hoặc khi fail hết lượt thử để lần sau enqueue được', async () => {
     const { service, recalcQueue } = buildService();
     await service.setCriteria('actor-1', 'course-1', input);
     await service.setCriteria('actor-1', 'course-1', input);
@@ -37,6 +37,7 @@ describe('CompletionService.setCriteria — enqueue tính lại dùng jobId ổn
     expect(firstOptions.jobId).toBe('shared-completion-recalc-course-1');
     expect(secondOptions.jobId).toBe(firstOptions.jobId);
     expect(firstOptions.removeOnComplete).toBe(true);
+    expect(firstOptions.removeOnFail).toBe(true);
   });
 
   it('hai khoá học khác nhau: jobId khác nhau theo courseId', async () => {

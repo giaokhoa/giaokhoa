@@ -278,7 +278,7 @@ export class CompletionService implements OnModuleInit {
       }
 
 
-      await this.recalcQueue.add('recalculate', { courseId, ...backgroundJobContext() }, { jobId: backgroundJobId(`completion-recalc-${courseId}`), attempts: 3, removeOnComplete: true });
+      await this.recalcQueue.add('recalculate', { courseId, ...backgroundJobContext() }, { jobId: backgroundJobId(`completion-recalc-${courseId}`), attempts: 3, removeOnComplete: true, removeOnFail: true });
       await this.outbox.enqueueStandalone({ aggregate: 'completion', type: 'completion_criteria_changed', payload: { courseId, reAggregate: true } });
     }
     return { method, criteria: await this.repo.listCriteria(courseId) };

@@ -200,7 +200,7 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
 
         await this.recalcQueue.add('recalculate', { courseId: dependentId,
           spaceSlug: job.data.spaceSlug, spaceId: job.data.spaceId, tenantId: job.data.tenantId },
-          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}`, attempts: 3, removeOnComplete: true }).catch((error: unknown) => {
+          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}`, attempts: 3, removeOnComplete: true, removeOnFail: true }).catch((error: unknown) => {
           this.logger.error(`Failed to enqueue completion recalculation for dependent course ${dependentId}: ${error instanceof Error ? error.message : 'unknown error'}`);
         });
       }
