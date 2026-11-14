@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, MaxFileSizeValidator, Param, ParseFilePipe, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { Public } from '../../common/public.decorator';
-import { FilesService, QUESTION_IMAGE_MAX_BYTES, questionFileContentSrc } from './files.service';
+import { FilesService, QUESTION_IMAGE_MAX_BYTES, questionFileContentSrc, resolveGenericUploadMimeType, sniffMimeType } from './files.service';
 import { questionImageMetaServerSchema, uploadMetaServerSchema, type QuestionImageMetaDto, type UploadMetaDto } from './dto/files.dto';
 
 export const GENERIC_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
@@ -19,19 +19,25 @@ export class FilesController {
 
   @Post()
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: GENERIC_UPLOAD_MAX_BYTES } }))
-  async upload(@UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: GENERIC_UPLOAD_MAX_BYTES })] })) file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: uploadMetaServerSchema }) meta: UploadMetaDto, @CurrentUser() actor: AuthenticatedUser) {
+  async upload(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string } | undefined, @Body({ schema: uploadMetaServerSchema }) meta: UploadMetaDto, @CurrentUser() actor: AuthenticatedUser) {
+    if (!file) {
+      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'file_required' });
+    }
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.upload({
       contextId: meta.contextId, component: meta.component, fileArea: meta.fileArea,
       itemId: meta.itemId, filePath: meta.filePath,
-      fileName: file.originalname, data: file.buffer, mimeType: file.mimetype, userId: actor.id,
+      fileName: file.originalname, data: file.buffer, mimeType: resolveGenericUploadMimeType(file.originalname, file.buffer, file.mimetype), userId: actor.id,
     });
     return { id: row.id, contentHash: row.contentHash, fileSize: row.fileSize, fileName: row.fileName, contextId: row.contextId };
   }
 
   @Post('question-image')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: QUESTION_IMAGE_MAX_BYTES } }))
-  async uploadQuestionImage(@UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: QUESTION_IMAGE_MAX_BYTES })] })) file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
+  async uploadQuestionImage(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string } | undefined, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
+    if (!file) {
+      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'file_required' });
+    }
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.uploadQuestionImage({
       contextId: meta.contextId, fileArea: meta.fileArea, itemId: meta.itemId,
@@ -77,7 +83,13 @@ export class FilesController {
     await this.files.createSignedUrl(id, actor.id, actor.username === 'guest');
     void probe;
     const { file, data } = await this.files.readContent(id);
+    const safeInline = (file.mimeType === 'image/png' || file.mimeType === 'image/jpeg' || file.mimeType === 'image/webp' || file.mimeType === 'image/gif')
+      && sniffMimeType(data) === file.mimeType;
     res.setHeader('Content-Type', file.mimeType ?? 'application/octet-stream');
+    if (!safeInline) {
+      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName.replace(/"/g, '')}"`);
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox; frame-ancestors 'none'");
+    }
     res.send(data);
   }
 }
