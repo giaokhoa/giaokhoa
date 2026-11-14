@@ -34,7 +34,7 @@ Ghi từng lệnh, kết quả thực tế và trạng thái CI của head hiệ
 - Đầu mối tích hợp/branch owner và reviewer được giao: `<vai trò>`
 - Phạm vi cần tập trung, rủi ro và giới hạn kiểm chứng: `<nội dung>`
 - Trạng thái: chờ người điều phối giao Agent review độc lập; không tự khởi chạy reviewer.
-- Sau mỗi lần push bổ sung, Agent triển khai trả lời finding trên PR và yêu cầu review lại head mới; Agent review đăng kết luận mới (**CHANGES_REQUESTED** / **APPROVED**, kèm SHA và bằng chứng) tại PR, không chỉ ghi trong chat.
+- Trước khi sửa theo review, Agent triển khai phải đọc đầy đủ comment và tự thẩm định từng finding (đúng/sai/chưa đủ bằng chứng), ghi căn cứ tại PR. Chỉ sửa finding đã xác minh đúng; phản biện finding sai và yêu cầu làm rõ finding chưa đủ căn cứ, không sửa máy móc. Sau mỗi lần push bổ sung, yêu cầu review lại head mới; Agent review đăng kết luận mới (**CHANGES_REQUESTED** / **APPROVED**, kèm SHA và bằng chứng) tại PR.
 
 ## Kỷ luật đã giữ
 

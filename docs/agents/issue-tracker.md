@@ -15,7 +15,7 @@ Mọi nội dung issue, PR và comment viết bằng tiếng Việt theo `AGENTS
 
 - Agent code commit và push branch được giao ngay sau khi kiểm chứng local; không chờ CI và không tự gọi Agent khác. PR được mở/cập nhật bằng công cụ hiện có của bên được giao quyền; khi thiếu quyền thì bàn giao branch/SHA và báo rõ PR chưa được cập nhật.
 - Reviewer độc lập phải đăng kết luận gắn **head SHA** và finding/bằng chứng trực tiếp tại PR ngay sau khi review bằng giao diện/API/connector/CLI phù hợp. Nếu reviewer không thể đăng, đầu mối có quyền cần đăng thay; trước lúc comment hiện trên PR, review vẫn là **chưa hoàn tất**, không phải approval chính thức.
-- Sau mỗi lần push mới, người tích hợp xác nhận SHA và yêu cầu review lại trên cùng PR; không đồng thời ghi đè branch đang do bên khác sở hữu. Chỉ vai trò merge mới kiểm tra CI và thực hiện merge sau đồng thuận.
+- Trước khi sửa theo review, Agent code/đầu mối tích hợp phải **tự kiểm chứng từng finding** với yêu cầu và hành vi thực tế. Chỉ sửa finding đúng; finding sai phải phản biện kèm bằng chứng trên PR, finding chưa rõ phải yêu cầu làm rõ. Không sửa máy móc chỉ vì reviewer đã yêu cầu. Sau mỗi lần push mới, người tích hợp xác nhận SHA và yêu cầu review lại trên cùng PR; không ghi đè branch của bên khác. Chỉ vai trò merge mới kiểm tra CI và thực hiện merge sau đồng thuận.
 - Sau merge, bên được giao cleanup xác minh trạng thái PR/issue, kiểm kê file bị Git ignore (nhất là `.env`, `data/files/*`), bảo toàn dữ liệu có giá trị rồi mới dọn **tài nguyên thuộc quyền mình**. Ghi kết quả hoặc lý do chưa dọn lên PR qua kênh được cấp quyền.
 
 ## Phạm vi triage
