@@ -107,7 +107,7 @@ export const courseContentSchema = z.object({
 });
 export type CourseContent = z.infer<typeof courseContentSchema>;
 
-const namedEntityFields = {
+const namedEntityViewFields = {
   name: z.string(),
   idNumber: z.string(),
   description: z.string(),
@@ -116,14 +116,14 @@ const namedEntityFields = {
 export const courseGroupSchema = z.object({
   id: uuidIdSchema,
   courseId: uuidIdSchema,
-  ...namedEntityFields,
+  ...namedEntityViewFields,
   enrolmentKey: z.string().nullable().optional(),
 });
 export type CourseGroup = z.infer<typeof courseGroupSchema>;
 
 export const cohortSchema = z.object({
   id: uuidIdSchema,
-  ...namedEntityFields,
+  ...namedEntityViewFields,
   contextId: uuidIdSchema,
   visible: z.boolean(),
 });
@@ -132,7 +132,7 @@ export type Cohort = z.infer<typeof cohortSchema>;
 export const courseGroupingSchema = z.object({
   id: uuidIdSchema,
   courseId: uuidIdSchema,
-  ...namedEntityFields,
+  ...namedEntityViewFields,
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });

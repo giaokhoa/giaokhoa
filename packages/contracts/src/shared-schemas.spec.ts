@@ -335,6 +335,10 @@ describe('Nhóm định danh thành viên lớp', () => {
     const { email: _email, ...withoutEmail } = identity;
     expect(() => classRosterMemberSchema.parse({ ...withoutEmail, timeAdded: '2026-11-14T00:00:00.000Z' })).toThrow();
     expect(() => classStaffMemberSchema.parse({ ...withoutEmail, isOwner: false, roles: [] })).toThrow();
+    expect(() => classJoinRequestSchema.parse({
+      id: userId, classId: userId, ...withoutEmail, status: 'pending' as const,
+      createdAt: '2026-11-14T00:00:00.000Z', decidedAt: null,
+    })).toThrow();
     expect(() => classSuspendedMemberSchema.parse(withoutEmail)).toThrow();
   });
 });
@@ -401,6 +405,19 @@ describe('Nhóm trạng thái bài tập đã nộp', () => {
     expect(assignSubmissionDetailSchema.parse({
       userId, ...core, revisions: [], feedbackMessages: [],
     }).status).toBe('submitted');
+  });
+
+  it('giữ nguyên danh sách tệp đính kèm trong output của cả hai view bài nộp', () => {
+    const files = [{
+      fileId: userId, fileName: 'bai.pdf', fileSize: 1024, mimeType: 'application/pdf',
+      contentHash: 'abc', signedUrl: 'https://example.com/bai.pdf', signedUrlExpiresAt: 1790000000,
+    }];
+    expect(assignOwnSubmissionViewSchema.parse({
+      submissionId: userId, ...core, files, feedbackMessages: [],
+    }).files).toEqual(files);
+    expect(assignSubmissionDetailSchema.parse({
+      userId, ...core, files, revisions: [], feedbackMessages: [],
+    }).files).toEqual(files);
   });
 
   it('từ chối status ngoài tập trạng thái nộp bài ở cả hai view bài nộp', () => {
@@ -788,6 +805,14 @@ describe('Nhóm kết quả tạo câu hỏi MCP cho một câu và cho từng m
     }).status).toBe('failed');
   });
 
+  it('giữ nguyên thứ tự khóa của kết quả tạo câu hỏi MCP cho một câu', () => {
+    const parsed = mcpCreateQuestionOutputSchema.parse({ status: 'created', ...outcome });
+    expect(Object.keys(parsed)).toEqual([
+      'status', 'questionId', 'existingQuestionId', 'entryId', 'version',
+      'questionStatus', 'duplicate', 'nearDuplicateOf', 'reviewUrl',
+    ]);
+  });
+
   it('giữ nguyên thứ tự khóa của kết quả từng mục lô', () => {
     const parsed = mcpBatchItemResultSchema.parse({
       clientItemId: 'c1', status: 'created', ...outcome, code: null, message: null,
@@ -962,6 +987,14 @@ describe('Nhóm định danh tin nhắn trong khung nhìn đầy đủ và trong
       ...identity, seq: 2, createdAt: '2026-11-14T00:00:00.000Z',
     })).toThrow();
   });
+
+  it('từ chối khi thiếu subject ở khung nhìn đầy đủ của tin nhắn', () => {
+    expect(() => messageSchema.parse({
+      ...identity, fullMessage: 'Xin chào', createdAt: '2026-11-14T00:00:00.000Z',
+      seq: 1, clientMessageId: null, deletedAt: null, deletedBy: null, recalledAt: null,
+      recalledBy: null, replyToMessageId: null, replyTo: null,
+    })).toThrow();
+  });
 });
 
 describe('Nhóm thực thể có shortName trong xuất khung năng lực', () => {
@@ -1080,6 +1113,17 @@ describe('Nhóm hiệu lực mã giảm giá khi tạo và cập nhật', () => 
       'maxRedemptions', 'isActive',
     ]);
   });
+
+  it('giữ nguyên thứ tự khóa của mã giảm giá khi cập nhật', () => {
+    const parsed = updateCouponSchema.parse({
+      discountType: 'fixed', discountValue: 5000, appliesTo: 'all',
+      startsAt: null, endsAt: null, maxRedemptions: null, isActive: true,
+    });
+    expect(Object.keys(parsed)).toEqual([
+      'discountType', 'discountValue', 'appliesTo', 'startsAt', 'endsAt',
+      'maxRedemptions', 'isActive',
+    ]);
+  });
 });
 
 describe('Nhóm khóa ô ma trận và số lượng khả dụng của ô', () => {
@@ -1114,6 +1158,12 @@ describe('Nhóm khóa ô ma trận và số lượng khả dụng của ô', () 
       required: 1.5, available: 2, deficit: 1,
     })).toThrow();
   });
+
+  it('từ chối required không nguyên ở schema khả dụng của ô', () => {
+    expect(() => matrixCellAvailabilitySchema.parse({
+      cellId: userId, required: 1.5, available: 2, deficit: 1,
+    })).toThrow();
+  });
 });
 
 describe('Nhóm cửa sổ thời gian làm bài trong khung nhìn quiz và khung nhìn ghi đè mã pin', () => {
@@ -1141,6 +1191,18 @@ describe('Nhóm cửa sổ thời gian làm bài trong khung nhìn quiz và khun
   });
 
   it('từ chối timeLimitSeconds không phải số nguyên ở cả hai khung nhìn', () => {
+    expect(() => quizViewSchema.parse({
+      id: userId, courseId: userId, cmId: null, targetGroupId: null, name: 'Quiz 1',
+      intro: 'Giới thiệu', timeOpen: '2026-11-14T00:00:00.000Z', timeClose: '2026-11-14T02:00:00.000Z',
+      timeLimitSeconds: 'x', attemptsAllowed: 1, gradeMethod: 'highest' as const,
+      grade: 10, shuffleAnswers: true, hasPassword: false, subnet: null,
+      reviewAttempt: 0, reviewCorrectness: 0, reviewMarks: 0, reviewSpecificFeedback: 0,
+      reviewGeneralFeedback: 0, reviewRightAnswer: 0, reviewOverallFeedback: 0,
+      matrixId: null, examId: userId, examVersionId: userId, examVersionNumber: 1,
+      latestExamVersionNumber: 1, hasNewerExamVersion: false, versionMode: 'pinned' as const,
+      tfScale: null, preset: 'regular' as const, lateEntryMinutes: null,
+      monitorEvents: false, slots: [], sumGrades: 10, variants: [],
+    })).toThrow();
     expect(() => examPinOverrideViewSchema.parse({
       id: userId, pinId: userId, groupId: null, groupName: null, userId: null,
       userName: null, timeOpen: null, timeClose: null, timeLimitSeconds: 'x',

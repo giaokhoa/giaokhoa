@@ -359,6 +359,20 @@ export const questionOptionsInputSchema = z.strictObject({
 export type QuestionOptionsInput = z.infer<typeof questionOptionsInputSchema>;
 
 export const QUESTION_SOURCE_KINDS = ['book', 'exam', 'manual', 'import', 'ai'] as const;
+
+const questionFeedbackFields = {
+  generalFeedback: richTextInputSchema.optional(),
+  guidance: richTextInputSchema.optional(),
+  defaultMark: z.number().optional(),
+  penalty: z.number().optional(),
+};
+
+const questionContentFields = {
+  answers: z.array(questionAnswerInputSchema).optional(),
+  options: questionOptionsInputSchema.optional(),
+  solution: questionSolutionInputSchema.optional(),
+};
+
 export const createQuestionSchema = z
   .strictObject({
     categoryId: uuidIdSchema,
@@ -366,14 +380,9 @@ export const createQuestionSchema = z
     sourceKind: z.enum(QUESTION_SOURCE_KINDS).optional(),
     sourceRef: z.string().min(1).optional(),
     questionText: richTextInputSchema,
-    generalFeedback: richTextInputSchema.optional(),
-    guidance: richTextInputSchema.optional(),
-    defaultMark: z.number().optional(),
-    penalty: z.number().optional(),
+    ...questionFeedbackFields,
     stimulusId: uuidIdSchema.optional(),
-    answers: z.array(questionAnswerInputSchema).optional(),
-    options: questionOptionsInputSchema.optional(),
-    solution: questionSolutionInputSchema.optional(),
+    ...questionContentFields,
   })
   .superRefine((input, ctx) => {
     const answers = input.answers ?? [];
@@ -497,14 +506,9 @@ export type CreateQuestion = z.infer<typeof createQuestionSchema>;
 
 export const updateQuestionSchema = z.strictObject({
   questionText: richTextInputSchema.optional(),
-  generalFeedback: richTextInputSchema.optional(),
-  guidance: richTextInputSchema.optional(),
-  defaultMark: z.number().optional(),
-  penalty: z.number().optional(),
+  ...questionFeedbackFields,
   stimulusId: uuidIdSchema.nullable().optional(),
-  answers: z.array(questionAnswerInputSchema).optional(),
-  options: questionOptionsInputSchema.optional(),
-  solution: questionSolutionInputSchema.optional(),
+  ...questionContentFields,
 });
 export type UpdateQuestion = z.infer<typeof updateQuestionSchema>;
 
@@ -765,14 +769,21 @@ export type GradeQuizQuestion = z.infer<typeof gradeQuizQuestionSchema>;
 
 export const COGNITIVE_LEVELS = ['biet', 'hieu', 'van_dung', 'van_dung_cao'] as const;
 
+export const MATRIX_QTYPES = ['multichoice', 'truefalse', 'shortanswer', 'essay'] as const;
+export type MatrixQtype = (typeof MATRIX_QTYPES)[number];
+
+const matrixCellKeyFields = {
+  curriculumNodeId: uuidIdSchema,
+  cognitiveLevel: z.enum(COGNITIVE_LEVELS),
+  qtype: z.enum(MATRIX_QTYPES),
+};
+
 export const MATRIX_PRESET_KINDS = ['cv7991_periodic'] as const;
 
 export const examMatrixCellViewSchema = z.object({
   id: uuidIdSchema,
   matrixId: uuidIdSchema,
-  curriculumNodeId: uuidIdSchema,
-  cognitiveLevel: z.enum(COGNITIVE_LEVELS),
-  qtype: z.enum(['multichoice', 'truefalse', 'shortanswer', 'essay']),
+  ...matrixCellKeyFields,
   questionCount: z.number().int(),
   cellScore: z.number(),
   minutes: z.number().int().nullable(),
@@ -845,9 +856,7 @@ const examMatrixCellOptionalFields = {
 };
 
 export const createExamMatrixCellSchema = z.strictObject({
-  curriculumNodeId: uuidIdSchema,
-  cognitiveLevel: z.enum(COGNITIVE_LEVELS),
-  qtype: z.enum(['multichoice', 'truefalse', 'shortanswer', 'essay']),
+  ...matrixCellKeyFields,
   questionCount: z.number().int().positive(),
   cellScore: z.number().positive(),
   ...examMatrixCellOptionalFields,
@@ -912,9 +921,6 @@ export const matrixCellAvailabilitySchema = z.object({
 });
 export type MatrixCellAvailability = z.infer<typeof matrixCellAvailabilitySchema>;
 
-export const MATRIX_QTYPES = ['multichoice', 'truefalse', 'shortanswer', 'essay'] as const;
-export type MatrixQtype = (typeof MATRIX_QTYPES)[number];
-
 export const matrixImportIssueSchema = z.object({
   sheet: z.string().nullable(),
   row: z.number().int().nullable(),
@@ -923,12 +929,6 @@ export const matrixImportIssueSchema = z.object({
   message: z.string(),
 });
 export type MatrixImportIssue = z.infer<typeof matrixImportIssueSchema>;
-
-const matrixCellKeyFields = {
-  curriculumNodeId: uuidIdSchema,
-  cognitiveLevel: z.enum(COGNITIVE_LEVELS),
-  qtype: z.enum(MATRIX_QTYPES),
-};
 
 export const matrixImportPreviewCellSchema = z.object({
   ...matrixCellKeyFields,
