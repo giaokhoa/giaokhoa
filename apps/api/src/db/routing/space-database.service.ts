@@ -12,6 +12,16 @@ import {
 } from './space-connection-resolver';
 import { SpacePoolManager } from './space-pool-manager';
 
+const FRAMEWORK_INTROSPECTION_PROPERTIES = new Set([
+  'then',
+  'constructor',
+  'onModuleInit',
+  'onModuleDestroy',
+  'onApplicationBootstrap',
+  'beforeApplicationShutdown',
+  'onApplicationShutdown',
+]);
+
 @Injectable()
 export class SpaceDatabaseService implements OnModuleDestroy {
   private readonly resolver: SpaceConnectionResolver;
@@ -244,6 +254,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   private createRoutedHandle<TDatabase extends object>(current: () => TDatabase): TDatabase {
     return new Proxy({} as TDatabase, {
       get: (_target, property) => {
+        if (FRAMEWORK_INTROSPECTION_PROPERTIES.has(property as string)) return undefined;
         const db = current();
         const value = Reflect.get(db as object, property, db);
         return typeof value === 'function' ? value.bind(db) : value;
