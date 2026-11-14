@@ -1,4 +1,4 @@
-import { INestApplication, VersioningType, type Type } from '@nestjs/common';
+import { INestApplication, RequestMethod, VersioningType, type Type } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -56,12 +56,21 @@ export async function createTestApp(options?: { controllers?: Array<Type<unknown
     .map((origin) => origin.trim())
     .filter(Boolean);
   app.enableCors({ origin: corsOrigins, credentials: true });
+  app.enableCsrfProtection({
+    trustedOrigins: corsOrigins,
+    exclude: [
+      { path: 'payments/ipn/sepay', method: RequestMethod.POST, version: '1' },
+      { path: 'payments/webhook', method: RequestMethod.POST, version: '1' },
+      { path: 'webservice/call', method: RequestMethod.POST, version: '1' },
+      { path: 'mcp', method: RequestMethod.POST },
+    ],
+  });
   const betterAuth = app.get(BetterAuthService);
   if (betterAuth.auth) {
     mountBetterAuth(expressApp, betterAuth.requireAuth(), app.get(SpaceDatabaseService, { strict: false }));
   }
   mountMcp(expressApp, app.get(McpDepsService).createMountDeps());
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: [{ path: 'mcp', method: RequestMethod.ALL }] });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new ProblemDetailsFilter());
   const socketAdapter = new MessagingRedisIoAdapter(app, config.getOrThrow<string>('REDIS_URL'), corsOrigins);

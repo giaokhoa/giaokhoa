@@ -291,7 +291,7 @@ export const loginAsSchema = z.strictObject({
 });
 export type LoginAs = z.infer<typeof loginAsSchema>;
 
-export const totpCodeSchema = z.string().regex(/^\d{6}$/);
+export const totpCodeSchema = z.string().trim().regex(/^\d{6}$/);
 
 export const mfaTotpCodeSchema = z.strictObject({
   code: totpCodeSchema,

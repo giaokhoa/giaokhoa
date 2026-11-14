@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildOpenApiDocumentConfig } from '../../../src/openapi-document';
 import { createTestApp } from '../../support/identity-access-helpers';
 
 describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', () => {
@@ -9,10 +10,7 @@ describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', (
 
   beforeAll(async () => {
     app = await createTestApp();
-    document = SwaggerModule.createDocument(
-      app,
-      new DocumentBuilder().setTitle('Giáo khoa API').setDescription('TypeScript Giáo khoa — Moodle core business equivalent (backend)').setVersion('1.0').addBearerAuth().build(),
-    );
+    document = SwaggerModule.createDocument(app, buildOpenApiDocumentConfig());
   });
 
   afterAll(async () => {

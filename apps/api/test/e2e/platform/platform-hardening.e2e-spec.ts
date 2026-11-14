@@ -39,16 +39,21 @@ describe('Cứng hoá platform: header bảo mật và giới hạn tốc độ'
   it('route thông tin đăng nhập bị giới hạn theo IP: lần đăng nhập thứ 4 trong một phút trả 429 Problem Details', async () => {
     const statuses: number[] = [];
     let lastBody: { status?: number; code?: string } = {};
+    let lastHeaders: Record<string, string | string[] | undefined> = {};
     for (let i = 0; i < 4; i += 1) {
       const res = await http(app)
         .post('/api/v1/auth/token')
         .send({ username: uniqueName('ghost'), password: 'WrongPass1!' });
       statuses.push(res.status);
       lastBody = res.body as { status?: number; code?: string };
+      lastHeaders = res.headers as Record<string, string | string[] | undefined>;
     }
     expect(statuses.slice(0, 3)).toEqual([401, 401, 401]);
     expect(statuses[3]).toBe(429);
     expect(lastBody.status).toBe(429);
+    expect(lastHeaders['x-powered-by']).toBeUndefined();
+    expect(lastHeaders['x-content-type-options']).toBe('nosniff');
+    expect(lastHeaders['x-frame-options']).toBe('SAMEORIGIN');
     const health = await http(app).get('/api/v1/health');
     expect(health.status).toBe(200);
   });

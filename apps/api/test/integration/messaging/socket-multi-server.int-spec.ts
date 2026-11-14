@@ -106,7 +106,7 @@ describe('Redis Socket.IO adapter: origin, hai API replica và emitter của wor
     const clientA = await connectTo(replicaA, 'websocket');
     const clientB = await connectTo(replicaB, 'polling');
     const received = (client: Socket) => new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Không nhận được message xuyên API')), 5_000);
+      const timer = setTimeout(() => reject(new Error('Did not receive the cross-API message')), 5_000);
       client.once('worker-event', (value: string) => { clearTimeout(timer); resolve(value); });
     });
     const fromA = received(clientA);
@@ -116,7 +116,7 @@ describe('Redis Socket.IO adapter: origin, hai API replica và emitter của wor
     expect(await fromB).toBe('redis-to-both-replicas');
   });
 
-  it('app Nest gắn adapter Redis qua useWebSocketAdapter: client nối qua gateway nhận broadcast từ replica khác', async () => {
+  it('client qua gateway Nest nhận broadcast Redis từ server socket.io ngoài', async () => {
     const app: INestApplication = await createTestApp();
     try {
       const server = app.getHttpServer();
@@ -140,7 +140,7 @@ describe('Redis Socket.IO adapter: origin, hai API replica và emitter của wor
         });
         expect(socket.connected).toBe(true);
         const broadcast = new Promise<string>((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error('Không nhận được broadcast qua Redis từ replica khác')), 5000);
+          const timer = setTimeout(() => reject(new Error('Did not receive the Redis broadcast from the other replica')), 5000);
           socket.once('nest-wiring-probe', (value: string) => { clearTimeout(timer); resolve(value); });
         });
         replicaB.namespace.emit('nest-wiring-probe', 'qua-redis-tu-replica-khac');

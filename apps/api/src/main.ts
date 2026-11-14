@@ -4,7 +4,7 @@ import { ConsoleLogger, RequestMethod, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { enableTrustedProxy } from './common/client-ip';
@@ -15,6 +15,7 @@ import { BetterAuthService } from './modules/auth/better-auth/better-auth.servic
 import { McpDepsService } from './modules/mcp/mcp-deps.service';
 import { mountMcp } from './modules/mcp/mcp.mount';
 import { MessagingRedisIoAdapter } from './modules/messaging/messaging-redis-io.adapter';
+import { buildOpenApiDocumentConfig } from './openapi-document';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -28,7 +29,12 @@ async function bootstrap(): Promise<void> {
     .filter(Boolean);
   app.enableCsrfProtection({
     trustedOrigins: corsOrigins,
-    exclude: [{ path: 'payments/ipn/sepay', method: RequestMethod.POST, version: '1' }],
+    exclude: [
+      { path: 'payments/ipn/sepay', method: RequestMethod.POST, version: '1' },
+      { path: 'payments/webhook', method: RequestMethod.POST, version: '1' },
+      { path: 'webservice/call', method: RequestMethod.POST, version: '1' },
+      { path: 'mcp', method: RequestMethod.POST },
+    ],
   });
   enableTrustedProxy(app);
   app.enableCors({ origin: corsOrigins, credentials: true });
@@ -38,7 +44,7 @@ async function bootstrap(): Promise<void> {
     mountBetterAuth(app, betterAuth.requireAuth(), app.get(SpaceDatabaseService, { strict: false }));
   }
   mountMcp(app, app.get(McpDepsService).createMountDeps());
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: [{ path: 'mcp', method: RequestMethod.ALL }] });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new ProblemDetailsFilter());
 
@@ -71,12 +77,7 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  const documentConfig = new DocumentBuilder()
-    .setTitle('Giáo khoa API')
-    .setDescription('TypeScript Giáo khoa — Moodle core business equivalent (backend)')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  const documentConfig = buildOpenApiDocumentConfig();
 
   SwaggerModule.setup('api/docs', app, () => SwaggerModule.createDocument(app, documentConfig));
 
