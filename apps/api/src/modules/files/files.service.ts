@@ -215,7 +215,7 @@ export class FilesService {
       await this.cleanupQueue.add(
         'cleanup-orphan',
         { contentHash: row.contentHash, storageDomain: row.storageDomain, ...(spaceSlug ? { spaceSlug } : {}) },
-        { jobId: ['orphan', row.storageDomain, row.contentHash, row.id].join('-'), attempts: 3 },
+        { jobId: ['orphan', row.storageDomain, row.contentHash, row.id].join('-'), attempts: 3, removeOnFail: true },
       );
     }
     return { deleted: true, contentHash: row.contentHash, refcount };

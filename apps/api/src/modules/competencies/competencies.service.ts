@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
+import { v7 as uuidv7 } from 'uuid';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -781,8 +782,9 @@ export class CompetenciesService implements OnModuleInit {
         to = PLAN_STATUS.COMPLETE;
         break;
     }
+    const reviewId = uuidv7();
     await this.repo.updatePlan(planId, { status: to, reviewerId: ['start-review', 'approve', 'unapprove'].includes(action) ? actorId : plan.reviewerId });
-    await this.repo.insertPlanReview({ planId: planId, actorId: actorId, action, statusFrom: from, statusTo: to, note: note ?? '' });
+    await this.repo.insertPlanReview({ id: reviewId, planId: planId, actorId: actorId, action, statusFrom: from, statusTo: to, note: note ?? '' });
     if (action === 'request-review' && plan.reviewerId) {
       await this.messaging.notify(plan.reviewerId, 'competency_review_requested', {
         subject: this.i18n.t('platform.planReviewRequestedSubject', { args: { name: plan.name } }),
@@ -790,7 +792,7 @@ export class CompetenciesService implements OnModuleInit {
         externalSubject: this.i18n.t('platform.planReviewRequestedSubject', { args: { name: plan.name } }),
         externalBody: this.i18n.t('platform.planReviewRequestedExternalBody', { args: { name: plan.name } }),
         contextUrl: `/competencies/plans/${plan.id}`,
-        eventId: `competency-plan-review-${plan.id}`,
+        eventId: `competency-plan-review-${reviewId}`,
       }).catch(() => undefined);
     }
     await this.outbox.enqueueStandalone({

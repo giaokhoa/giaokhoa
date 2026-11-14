@@ -335,7 +335,7 @@ export class MessagingNotificationsService {
           ...(channel === 'email' ? { emailFrequency: resolved.emailFrequency } : {}),
           subject: externalContent.subject, body: externalContent.body,
           notificationId, dedupeKey,
-        }, { jobId: backgroundJobId(dedupeKey), attempts: 3 });
+        }, { jobId: backgroundJobId(dedupeKey), attempts: 3, removeOnFail: true });
         channels[channel] = 'queued';
       } else {
         channels[channel] = 'skipped-preference';

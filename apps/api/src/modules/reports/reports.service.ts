@@ -194,7 +194,7 @@ export class ReportsService {
     }
     await this.messaging.notify(schedule.createdBy, 'report_scheduled', {
       subject: this.i18n.t('platform.reportFinishedSubject'), body: this.i18n.t('platform.reportFinishedBody', { args: { reportId: schedule.reportId, rows: rowCount } }), contextUrl: `/reports/${schedule.reportId}`,
-      eventId: `report-scheduled-${schedule.id}-${ranAt.toISOString()}`,
+      eventId: `report-scheduled-${schedule.id}-${ranAt.getTime()}`,
     }).catch(() => undefined);
     return { scheduleId, rows: rowCount };
   }

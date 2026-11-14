@@ -6,6 +6,7 @@ import { MessagingNotificationsService } from './messaging-notifications.service
 describe('MessagingNotificationsService.notify — dedupeKey khi popup tắt chứa định danh lần phát, không dùng UUID ngẫu nhiên (N35)', () => {
   function buildService(popupOn = false) {
     const jobs: Record<string, unknown>[] = [];
+    const options: Record<string, unknown>[] = [];
     const notificationId = popupOn ? 'notif-9' : 'notif-1';
     const repo = {
       insertNotification: vi.fn(async (v: Record<string, unknown>) => ({ id: notificationId, ...v })),
@@ -20,7 +21,7 @@ describe('MessagingNotificationsService.notify — dedupeKey khi popup tắt ch�
     const evaluator = { isSiteAdmin: vi.fn(async () => true) };
     const outbox = { enqueueStandalone: vi.fn(async () => undefined) };
     const unreadStream = { signalUnreadCountChanged: vi.fn(async () => undefined) };
-    const dispatchQueue = { add: vi.fn(async (_name: string, data: Record<string, unknown>) => { jobs.push(data); }) };
+    const dispatchQueue = { add: vi.fn(async (_name: string, data: Record<string, unknown>, opts?: Record<string, unknown>) => { jobs.push(data); options.push(opts ?? {}); }) };
     const siteConfig = { getValue: vi.fn(async () => undefined) };
     const i18n = { t: vi.fn((key: string) => key) };
     const service = new MessagingNotificationsService(
@@ -28,7 +29,7 @@ describe('MessagingNotificationsService.notify — dedupeKey khi popup tắt ch�
       unreadStream as never, dispatchQueue as never, siteConfig as never,
       {} as never, i18n as never,
     );
-    return { service, jobs };
+    return { service, jobs, options };
   }
 
   const input = {
@@ -96,6 +97,14 @@ describe('MessagingNotificationsService.notify — dedupeKey khi popup tắt ch�
     expect(result.notificationId).toBe('notif-9');
     expect(result.channels).toEqual({ popup: 'delivered', email: 'queued' });
     expect(jobs[0]!.dedupeKey).toBe('platform-dispatch-grade_updated-user-1-email-notif-9');
+  });
+
+  it('job dispatch được xoá khi fail hết lượt để lần phát lại không kẹt vào job fail cũ, và job xong vẫn giữ lại làm cửa sổ dedupe chống gửi trùng', async () => {
+    const { service, options } = buildService();
+    await service.notify('user-1', 'grade_updated', input);
+    expect(options).toHaveLength(1);
+    expect(options[0]!.removeOnFail).toBe(true);
+    expect(options[0]!.removeOnComplete).toBeUndefined();
   });
 });
 

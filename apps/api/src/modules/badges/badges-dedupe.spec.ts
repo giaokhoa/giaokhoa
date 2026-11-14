@@ -27,6 +27,7 @@ describe('BadgesService.enqueueEvaluation — enqueue đánh giá huy hiệu dù
     expect(firstOptions.jobId).toBe('shared-badge-award-user-1-course-completion');
     expect(secondOptions.jobId).toBe(firstOptions.jobId);
     expect(firstOptions.removeOnComplete).toBe(true);
+    expect(firstOptions.removeOnFail).toBe(true);
   });
 
   it('trigger khác nhau: jobId khác nhau theo trigger', async () => {
