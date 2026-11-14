@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { badRequest, conflict, notFound } from '../../common/http-errors';
 import type { BookDatasetStatus, BookImportResult } from '@giaokhoa/contracts';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -99,12 +100,12 @@ export class BookService implements OnModuleInit {
   async importDataset(actorId: string, datasetKey: string): Promise<BookImportResult> {
     const def = bookDatasetByKey(datasetKey);
     if (!def) {
-      throw new NotFoundException({ message: `Book dataset ${datasetKey} is not in the manifest`, code: 'book.dataset_not_found' });
+      notFound(`Book dataset ${datasetKey} is not in the manifest`, 'book.dataset_not_found');
     }
     const sys = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, CURRICULUM_MANAGE, sys.id);
     if (this.running.has(def.key)) {
-      throw new ConflictException({ message: `Import of book dataset ${def.key} is already running`, code: 'book.import_in_progress' });
+      conflict(`Import of book dataset ${def.key} is already running`, 'book.import_in_progress');
     }
     this.running.add(def.key);
     try {
@@ -117,7 +118,7 @@ export class BookService implements OnModuleInit {
   private async runImport(def: BookDatasetDef, systemContextId: string): Promise<BookImportResult> {
     const file = loadBookDataset(def);
     if (file.records.length === 0) {
-      throw new BadRequestException({ message: `Book dataset ${def.key} has no records`, code: 'book.dataset_empty' });
+      badRequest(`Book dataset ${def.key} has no records`, 'book.dataset_empty');
     }
     const nodeIdByProgramRecord = new Map<string, string>();
     const unresolved: string[] = [];
@@ -130,10 +131,7 @@ export class BookService implements OnModuleInit {
       }
     }
     if (unresolved.length > 0) {
-      throw new BadRequestException({
-        message: `Book dataset ${def.key} maps to program records that are not imported yet: ${[...new Set(unresolved)].join(', ')} (import the program dataset '${def.programDatasetKey}' first)`,
-        code: 'book.mapping_unresolved',
-      });
+      badRequest(`Book dataset ${def.key} maps to program records that are not imported yet: ${[...new Set(unresolved)].join(', ')} (import the program dataset '${def.programDatasetKey}' first)`, 'book.mapping_unresolved');
     }
     let subject = await this.curriculumRepo.getSubjectBySlug(def.slug);
     if (!subject) {
@@ -369,7 +367,7 @@ export class BookService implements OnModuleInit {
   private async subjectOr404(id: string): Promise<SubjectRow> {
     const row = await this.curriculumRepo.getSubject(id);
     if (!row) {
-      throw new NotFoundException({ message: `Subject ${id} was not found`, code: 'curriculum.subject_not_found' });
+      notFound(`Subject ${id} was not found`, 'curriculum.subject_not_found');
     }
     return row;
   }
@@ -377,7 +375,7 @@ export class BookService implements OnModuleInit {
   private async bookChainOr404(id: string): Promise<{ book: BookRow; subject: SubjectRow | null }> {
     const book = await this.repo.getBook(id);
     if (!book) {
-      throw new NotFoundException({ message: `Book ${id} was not found`, code: 'book.not_found' });
+      notFound(`Book ${id} was not found`, 'book.not_found');
     }
     const subject = book.subjectId ? await this.subjectOr404(book.subjectId) : null;
     return { book, subject };

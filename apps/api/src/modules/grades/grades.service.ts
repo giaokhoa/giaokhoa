@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { adjustedGrade } from '@giaokhoa/grades';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -52,7 +53,7 @@ export class GradesService implements OnModuleInit {
     if (!idNumber) return;
     const existing = await this.repo.findItemByIdnumber(courseId, idNumber);
     if (existing && existing.id !== selfItemId) {
-      throw new BadRequestException({ message: `idNumber ${idNumber} is already used in this course`, code: 'grades.idnumber_taken' });
+      badRequest(`idNumber ${idNumber} is already used in this course`, 'grades.idnumber_taken');
     }
   }
 
@@ -65,22 +66,22 @@ export class GradesService implements OnModuleInit {
     await this.requireCap(actorId, 'grade:manage', courseId);
     const itemType = input.itemType ?? 'manual';
     if (!['manual', 'mod'].includes(itemType)) {
-      throw new BadRequestException({ message: `grade item type ${itemType} is created by the system`, code: 'grades.bad_itemtype' });
+      badRequest(`grade item type ${itemType} is created by the system`, 'grades.bad_itemtype');
     }
     if (itemType === 'mod' && !input.cmId) {
-      throw new BadRequestException({ message: 'A mod item requires cmId', code: 'grades.cm_required' });
+      badRequest('A mod item requires cmId', 'grades.cm_required');
     }
     let itemModule: string | null = null;
     if (itemType === 'mod') {
       const cm = await this.courses.getCm(input.cmId!);
-      if (cm.course !== courseId) throw new BadRequestException({ message: 'cm belongs to another course', code: 'grades.cm_course_mismatch' });
+      if (cm.course !== courseId) badRequest('cm belongs to another course', 'grades.cm_course_mismatch');
       itemModule = cm.component;
       const existing = await this.repo.findItemForCm(courseId, input.cmId!);
-      if (existing) throw new BadRequestException({ message: 'This activity already has a grade item', code: 'grades.item_exists_for_cm' });
+      if (existing) badRequest('This activity already has a grade item', 'grades.item_exists_for_cm');
     }
     const gradeMin = input.gradeMin ?? 0;
     const gradeMax = input.gradeMax ?? 100;
-    if (gradeMax <= gradeMin) throw new BadRequestException({ message: 'gradeMax must be greater than gradeMin', code: 'grades.bad_range' });
+    if (gradeMax <= gradeMin) badRequest('gradeMax must be greater than gradeMin', 'grades.bad_range');
     await this.assertIdnumberFree(courseId, input.idNumber ?? null);
     const item = await this.repo.insertItem({
       courseId: courseId, itemName: input.itemName, itemType,
@@ -96,7 +97,7 @@ export class GradesService implements OnModuleInit {
 
   async getItem(id: string): Promise<ItemRow> {
     const row = await this.repo.getItem(id);
-    if (!row) throw new NotFoundException({ message: `Grade item ${id} not found`, code: 'grades.item_not_found' });
+    if (!row) notFound(`Grade item ${id} not found`, 'grades.item_not_found');
     return row;
   }
   async listItems(actorId: string, courseId: string): Promise<ItemRow[]> {
@@ -148,10 +149,10 @@ export class GradesService implements OnModuleInit {
   async setGrade(actorId: string, itemId: string, userId: string, input: { rawGrade?: number | null; feedback?: string }, options?: { source?: string; overridden?: boolean }): Promise<GradeRow> {
     const item = await this.getItem(itemId);
     await this.requireCap(actorId, 'grade:edit', item.courseId);
-    if (item.locked) throw new ForbiddenException({ message: 'This grade item is locked', code: 'grades.item_locked' });
+    if (item.locked) forbidden('This grade item is locked', 'grades.item_locked');
     const existing = await this.repo.getGrade(itemId, userId);
-    if (existing?.locked) throw new ForbiddenException({ message: 'This grade is locked', code: 'grades.grade_locked' });
-    if (existing?.overridden && options?.overridden !== true) throw new ForbiddenException({ message: 'This grade is overridden; clear the override before entering a grade', code: 'grades.grade_overridden' });
+    if (existing?.locked) forbidden('This grade is locked', 'grades.grade_locked');
+    if (existing?.overridden && options?.overridden !== true) forbidden('This grade is overridden; clear the override before entering a grade', 'grades.grade_overridden');
     const raw = input.rawGrade ?? null;
     const clampedRaw = raw === null ? null : Math.min(item.gradeMax, Math.max(item.gradeMin, raw));
     const { finalGrade, frozen } = this.leafFinal(item, clampedRaw, existing);
@@ -186,7 +187,7 @@ export class GradesService implements OnModuleInit {
 
   async recordActivityGrade(itemId: string, userId: string, rawGrade: number | null, source = 'mod/quiz'): Promise<GradeRow | undefined> {
     const item = await this.getItem(itemId);
-    if (item.locked) throw new ForbiddenException({ message: 'This grade item is locked', code: 'grades.item_locked' });
+    if (item.locked) forbidden('This grade item is locked', 'grades.item_locked');
     const existing = await this.repo.getGrade(itemId, userId);
     if (existing?.locked || existing?.overridden) return existing;
     const raw = rawGrade === null ? null : Math.min(item.gradeMax, Math.max(item.gradeMin, rawGrade));
@@ -218,7 +219,7 @@ export class GradesService implements OnModuleInit {
     hidden?: boolean; frozen?: boolean; feedback?: string;
   }): Promise<GradeRow> {
     const grade = await this.repo.getGradeById(gradeId);
-    if (!grade) throw new NotFoundException({ message: `Grade ${gradeId} not found`, code: 'grades.grade_not_found' });
+    if (!grade) notFound(`Grade ${gradeId} not found`, 'grades.grade_not_found');
     const item = await this.getItem(grade.itemId);
     await this.requireCap(actorId, 'grade:edit', item.courseId);
     const patch: Partial<GradeRow> = {};
@@ -230,7 +231,7 @@ export class GradesService implements OnModuleInit {
     if (input.frozen !== undefined) patch.frozen = input.frozen;
     if (input.feedback !== undefined) patch.feedback = input.feedback;
     if (input.overridden === true && input.finalGrade === undefined && grade.finalGrade === null) {
-      throw new BadRequestException({ message: 'Overriding requires a finalGrade', code: 'grades.override_needs_grade' });
+      badRequest('Overriding requires a finalGrade', 'grades.override_needs_grade');
     }
     await this.repo.transaction(async (tx) => {
       await this.repo.updateGrade(gradeId, patch, tx);
@@ -438,21 +439,21 @@ export class GradesService implements OnModuleInit {
     const byId = new Map(items.map((i) => [i.id, i]));
     const mappedIds = [...dto.regularItemIds, dto.midtermItemId, dto.finalItemId];
     if (new Set(mappedIds).size !== mappedIds.length) {
-      throw new BadRequestException({ message: 'Each grade item may only be mapped to one vnEdu column type', code: 'grades.vnedu_duplicate_item' });
+      badRequest('Each grade item may only be mapped to one vnEdu column type', 'grades.vnedu_duplicate_item');
     }
     const resolveItem = (itemId: string): ItemRow => {
       const item = byId.get(itemId);
       if (!item) {
-        throw new BadRequestException({ message: `Grade item ${itemId} does not belong to this course`, code: 'grades.vnedu_item_not_in_course' });
+        badRequest(`Grade item ${itemId} does not belong to this course`, 'grades.vnedu_item_not_in_course');
       }
       if (item.itemType !== 'manual' && item.itemType !== 'mod') {
-        throw new BadRequestException({ message: `Grade item '${item.itemName}' is not an activity grade`, code: 'grades.vnedu_item_not_exportable' });
+        badRequest(`Grade item '${item.itemName}' is not an activity grade`, 'grades.vnedu_item_not_exportable');
       }
       if (item.gradeType !== 'value') {
-        throw new BadRequestException({ message: `Grade item '${item.itemName}' is not a numeric (value) grade and cannot be converted to the 10-point scale`, code: 'grades.vnedu_item_not_exportable' });
+        badRequest(`Grade item '${item.itemName}' is not a numeric (value) grade and cannot be converted to the 10-point scale`, 'grades.vnedu_item_not_exportable');
       }
       if (!(item.gradeMax > item.gradeMin)) {
-        throw new BadRequestException({ message: `Grade item '${item.itemName}' has an empty grade range`, code: 'grades.vnedu_item_bad_range' });
+        badRequest(`Grade item '${item.itemName}' has an empty grade range`, 'grades.vnedu_item_bad_range');
       }
       return item;
     };
@@ -464,7 +465,7 @@ export class GradesService implements OnModuleInit {
     for (const item of [...regular, midterm, finalItem]) {
       const state = publicationByItem.get(item.id);
       if (state && !state.published) {
-        throw new BadRequestException({ message: `Grade item '${item.itemName}' is not published yet; only published activity grades can be exported to vnEdu`, code: 'grades.vnedu_item_not_published' });
+        badRequest(`Grade item '${item.itemName}' is not published yet; only published activity grades can be exported to vnEdu`, 'grades.vnedu_item_not_published');
       }
     }
 

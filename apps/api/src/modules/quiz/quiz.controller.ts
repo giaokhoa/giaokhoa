@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
@@ -38,16 +39,16 @@ export class ExamMatricesController {
   @Get('template')
   async template(@Query('subjectId') subjectId: string | undefined, @Query('curriculumId') curriculumId: string | undefined, @Query('levelSet') levelSet: string | undefined, @Query('scopeNodeIds') scopeNodeIds: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     if (!subjectId || !uuidIdSchema.safeParse(subjectId).success || !curriculumId || !uuidIdSchema.safeParse(curriculumId).success) {
-      throw new BadRequestException({ message: 'subjectId and curriculumId query parameters must be uuids', code: 'quiz.matrix_import_query_invalid' });
+      badRequest('subjectId and curriculumId query parameters must be uuids', 'quiz.matrix_import_query_invalid');
     }
     if (levelSet !== undefined && levelSet !== 'three' && levelSet !== 'four') {
-      throw new BadRequestException({ message: 'levelSet must be three or four', code: 'quiz.matrix_import_query_invalid' });
+      badRequest('levelSet must be three or four', 'quiz.matrix_import_query_invalid');
     }
     let scope: string[] | null = null;
     if (scopeNodeIds) {
       scope = scopeNodeIds.split(',').map((x) => x.trim()).filter((x) => x !== '');
       if (scope.some((x) => !uuidIdSchema.safeParse(x).success)) {
-        throw new BadRequestException({ message: 'scopeNodeIds must be a comma-separated list of uuids', code: 'quiz.matrix_import_query_invalid' });
+        badRequest('scopeNodeIds must be a comma-separated list of uuids', 'quiz.matrix_import_query_invalid');
       }
     }
     const { filename, contentType, buffer } = await this.matrixImport.buildTemplate(actor.id, {
@@ -62,7 +63,7 @@ export class ExamMatricesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
   async importPreview(@UploadedFile() file: { buffer: Buffer } | undefined, @CurrentUser() actor: AuthenticatedUser) {
     if (!file) {
-      throw new BadRequestException({ message: 'An .xlsx file is required in the multipart field "file"', code: 'quiz.matrix_import_file_required' });
+      badRequest('An .xlsx file is required in the multipart field "file"', 'quiz.matrix_import_file_required');
     }
     return this.matrixImport.previewImport(actor.id, file.buffer);
   }
@@ -70,7 +71,7 @@ export class ExamMatricesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
   async importCommit(@UploadedFile() file: { buffer: Buffer } | undefined, @CurrentUser() actor: AuthenticatedUser) {
     if (!file) {
-      throw new BadRequestException({ message: 'An .xlsx file is required in the multipart field "file"', code: 'quiz.matrix_import_file_required' });
+      badRequest('An .xlsx file is required in the multipart field "file"', 'quiz.matrix_import_file_required');
     }
     return this.matrixImport.commitImport(actor.id, file.buffer);
   }
@@ -86,7 +87,7 @@ export class ExamMatricesController {
   async getVersion(@Param('id', { schema: uuidIdSchema }) id: string, @Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
     const parsed = Number(version);
     if (!Number.isInteger(parsed) || parsed < 1) {
-      throw new BadRequestException({ message: 'version must be a positive integer', code: 'quiz.matrix_version_invalid' });
+      badRequest('version must be a positive integer', 'quiz.matrix_version_invalid');
     }
     return this.quiz.getMatrixVersion(actor.id, id, parsed);
   }
@@ -134,14 +135,14 @@ export class ExamMatricesController {
   @Get(':id/specification')
   async specification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId') pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
+      badRequest('pinId must be a uuid', 'quiz.spec_quiz_invalid');
     }
     return this.quiz.getMatrixSpecification(actor.id, id, pinId);
   }
   @Get(':id/specification/export')
   async exportSpecification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('format') format: string | undefined, @Query('pinId') pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
+      badRequest('pinId must be a uuid', 'quiz.spec_quiz_invalid');
     }
     const { filename, contentType, buffer } = await this.quiz.exportMatrixSpecification(actor.id, id, format ?? 'xlsx', pinId);
     res.setHeader('Content-Type', contentType);

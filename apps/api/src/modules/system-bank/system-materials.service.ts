@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import { isIP } from 'node:net';
 import { systemMaterialPackageSchema, type SystemMaterialPackage, type SystemMaterialVersion, type UseSystemMaterial } from '@giaokhoa/contracts';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
@@ -32,10 +33,10 @@ export class SystemMaterialsService {
   private async manager(actorId: string): Promise<string> {
     const tenantId = tenantAls.getStore()?.tenantId;
     const context = tenantId ? await this.contexts.getTenantContext(tenantId) : null;
-    if (!tenantId || !context) throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+    if (!tenantId || !context) forbidden('Centre context required', 'system_bank.centre_context_required');
     await this.evaluator.requireCapability(actorId, 'tenant:manage', context.id);
     const slug = tenantAls.getStore()?.spaceSlug ?? await this.centre.resolveTenantSlug(tenantId);
-    if (!slug) throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+    if (!slug) forbidden('Centre context required', 'system_bank.centre_context_required');
     return slug;
   }
 
@@ -45,7 +46,7 @@ export class SystemMaterialsService {
 
   private async teacher(actorId: string): Promise<void> {
     if (!tenantAls.getStore()?.tenantId || !(await this.evaluator.hasCapabilityFromRealAssignmentAnywhere(actorId, 'contentbank:upload'))) {
-      throw new ForbiddenException({ message: 'Material library access denied', code: 'access.capability_denied' });
+      forbidden('Material library access denied', 'access.capability_denied');
     }
   }
 
@@ -105,7 +106,7 @@ export class SystemMaterialsService {
       }
       throw error;
     }
-    if (submission.status === 'rejected') throw new ConflictException({ message: 'Change the source before resubmitting', code: 'system_bank.submission_rejected_requires_new_version' });
+    if (submission.status === 'rejected') conflict('Change the source before resubmitting', 'system_bank.submission_rejected_requires_new_version');
     return submission;
   }
 
@@ -123,7 +124,7 @@ export class SystemMaterialsService {
   async review(actorId: string, id: string, reason?: string) {
     const row = await this.forReview(actorId, id);
     if ((reason && row.status === 'approved') || (!reason && row.status === 'rejected')) {
-      throw new ConflictException({ message: 'Submission already reviewed', code: 'system_bank.submission_reviewed' });
+      conflict('Submission already reviewed', 'system_bank.submission_reviewed');
     }
     if (!reason) {
       const pkg = this.verified(row.package, row.checksum);
@@ -139,7 +140,7 @@ export class SystemMaterialsService {
       throw error;
     }
     if (!reviewed || (reason ? reviewed.status !== 'rejected' : reviewed.status !== 'approved')) {
-      throw new ConflictException({ message: 'Submission already reviewed', code: 'system_bank.submission_reviewed' });
+      conflict('Submission already reviewed', 'system_bank.submission_reviewed');
     }
     return reviewed;
   }
@@ -208,7 +209,7 @@ export class SystemMaterialsService {
     const cm = await this.courses.getCm(resource.cmId);
     if (cm.instanceId !== resource.id || cm.course !== resource.course || cm.component !== 'mod_resource') this.notFound();
     if (!(await this.courses.checkCmAccess(actorId, cm)).available) {
-      throw new ForbiddenException({ message: 'Activity unavailable', code: 'availability.not_available' });
+      forbidden('Activity unavailable', 'availability.not_available');
     }
     const pin = reference ?? await this.references.get(resource.id);
     if (!pin) this.notFound();
@@ -235,7 +236,7 @@ export class SystemMaterialsService {
     return parsed.data;
   }
 
-  private invalid(): never { throw new BadRequestException({ message: 'Invalid material package or media', code: 'system_material.invalid_package' }); }
+  private invalid(): never { badRequest('Invalid material package or media', 'system_material.invalid_package'); }
 
-  private notFound(): never { throw new NotFoundException({ message: 'Material not found', code: 'system_material.not_found' }); }
+  private notFound(): never { notFound('Material not found', 'system_material.not_found'); }
 }

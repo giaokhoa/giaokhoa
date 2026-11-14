@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Query } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { RequireCapability } from '../../common/require-capability.decorator';
@@ -19,7 +20,7 @@ export class SiteConfigController {
   private activeTenantId(): string {
     const tenantId = this.tenantContext.currentTenantId();
     if (!tenantId) {
-      throw new BadRequestException({ message: 'No active tenant in this request', code: 'tenant.context_missing' });
+      badRequest('No active tenant in this request', 'tenant.context_missing');
     }
     return tenantId;
   }

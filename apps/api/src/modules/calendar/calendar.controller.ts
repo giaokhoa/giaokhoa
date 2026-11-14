@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Res, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, UseInterceptors } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -38,7 +39,7 @@ export class CalendarController {
     @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @Query('format') format: string | undefined,
     @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     if (format !== undefined && format !== 'ics') {
-      throw new BadRequestException({ message: `Unsupported calendar export format: ${format}`, code: 'calendar.export_format_unsupported' });
+      badRequest(`Unsupported calendar export format: ${format}`, 'calendar.export_format_unsupported');
     }
     this.sendIcs(res, await this.calendar.exportIcsForUser(actor.id, { from, to, eventType }));
   }

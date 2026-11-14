@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import { sql as kyselySql } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
@@ -91,10 +92,7 @@ export class SystemBankService {
       .hasCapability(actorId, 'question:useall', systemId)
       .catch(() => false);
     if (!canView) {
-      throw new NotFoundException({
-        message: `System question ${questionId} not found`,
-        code: 'system_bank.question_not_found',
-      });
+      notFound(`System question ${questionId} not found`, 'system_bank.question_not_found');
     }
     const question = await this.repo.getQuestion(questionId);
     if (!question || question.status !== 'withdrawn') return;
@@ -103,10 +101,7 @@ export class SystemBankService {
     const centreSlug = await this.resolveCentreSlug();
     const imported = await this.localImports(questionId);
     if (imported.length === 0 && !(await this.repo.listImportedQuestionIds(centreSlug)).includes(questionId)) {
-      throw new NotFoundException({
-        message: `System question ${questionId} not found`,
-        code: 'system_bank.question_not_found',
-      });
+      notFound(`System question ${questionId} not found`, 'system_bank.question_not_found');
     }
     if (imported.length > 0) await this.reconcileImporter(centreSlug, questionId, imported[0]!.importedBy);
   }
@@ -129,7 +124,7 @@ export class SystemBankService {
   private assertPackageForQtype(qtype: string, pkg: SystemBankPackage): void {
     const error = packageValidationError(qtype, pkg);
     if (error) {
-      throw new BadRequestException({ message: error, code: 'system_bank.bad_package' });
+      badRequest(error, 'system_bank.bad_package');
     }
   }
 
@@ -150,13 +145,10 @@ export class SystemBankService {
     await this.assertPlatformManager(actorId);
     const question = await this.repo.getQuestion(questionId);
     if (!question) {
-      throw new NotFoundException({ message: `System question ${questionId} not found`, code: 'system_bank.question_not_found' });
+      notFound(`System question ${questionId} not found`, 'system_bank.question_not_found');
     }
     if (question.status === 'withdrawn') {
-      throw new BadRequestException({
-        message: `System question ${questionId} is withdrawn and cannot receive new versions`,
-        code: 'system_bank.question_withdrawn',
-      });
+      badRequest(`System question ${questionId} is withdrawn and cannot receive new versions`, 'system_bank.question_withdrawn');
     }
     this.assertPackageForQtype(question.qtype, dto.package);
     const checksum = checksumPackage(dto.package);
@@ -174,17 +166,14 @@ export class SystemBankService {
     await this.assertPlatformManager(actorId);
     const question = await this.repo.getQuestion(questionId);
     if (!question) {
-      throw new NotFoundException({ message: `System question ${questionId} not found`, code: 'system_bank.question_not_found' });
+      notFound(`System question ${questionId} not found`, 'system_bank.question_not_found');
     }
     if (question.status === 'withdrawn') {
-      throw new BadRequestException({
-        message: `System question ${questionId} is already withdrawn`,
-        code: 'system_bank.question_withdrawn',
-      });
+      badRequest(`System question ${questionId} is already withdrawn`, 'system_bank.question_withdrawn');
     }
     const result = await this.repo.markWithdrawn(questionId, { reason: dto.reason, by: actorId });
     if (!result) {
-      throw new NotFoundException({ message: `System question ${questionId} not found`, code: 'system_bank.question_not_found' });
+      notFound(`System question ${questionId} not found`, 'system_bank.question_not_found');
     }
     const notifiedCentres = await this.repo.listImporterSlugs(questionId);
     return { ...result, notifiedCentres };
@@ -194,7 +183,7 @@ export class SystemBankService {
     await this.assertPackageViewer(actorId, questionId);
     const question = await this.repo.getQuestion(questionId);
     if (!question) {
-      throw new NotFoundException({ message: `System question ${questionId} not found`, code: 'system_bank.question_not_found' });
+      notFound(`System question ${questionId} not found`, 'system_bank.question_not_found');
     }
     return question;
   }
@@ -216,10 +205,7 @@ export class SystemBankService {
     }
     const row = await this.repo.getVersionByNumber(questionId, version);
     if (!row) {
-      throw new NotFoundException({
-        message: `System question ${questionId} version ${version} not found`,
-        code: 'system_bank.version_not_found',
-      });
+      notFound(`System question ${questionId} version ${version} not found`, 'system_bank.version_not_found');
     }
     return row;
   }
@@ -239,10 +225,7 @@ export class SystemBankService {
       .sort((a, b) => b.version - a.version)[0];
     const row = allowed ? pinned ?? null : await this.repo.getLatestVersion(questionId);
     if (!row) {
-      throw new NotFoundException({
-        message: `System question ${questionId} has no versions`,
-        code: 'system_bank.version_not_found',
-      });
+      notFound(`System question ${questionId} has no versions`, 'system_bank.version_not_found');
     }
     return row;
   }
@@ -250,10 +233,7 @@ export class SystemBankService {
   async discover(query: DiscoverSystemBankQuestionsDto) {
     const store = tenantAls.getStore();
     if (!store?.tenantId && !store?.spaceSlug) {
-      throw new ForbiddenException({
-        message: 'System bank discovery requires a centre context',
-        code: 'system_bank.centre_context_required',
-      });
+      forbidden('System bank discovery requires a centre context', 'system_bank.centre_context_required');
     }
     const entries = await this.repo.listPublishedQuestionsWithVersions({
       qtype: query.qtype,
@@ -287,45 +267,30 @@ export class SystemBankService {
       const slug = await this.centreRepo.resolveTenantSlug(store.tenantId);
       if (slug) return slug;
     }
-    throw new BadRequestException({
-      message: 'System bank import requires a centre context',
-      code: 'system_bank.centre_context_required',
-    });
+    badRequest('System bank import requires a centre context', 'system_bank.centre_context_required');
   }
 
   async importSystemQuestion(actorId: string, dto: ImportSystemBankQuestionDto) {
     const centreSlug = await this.resolveCentreSlug();
     const question = await this.repo.getQuestion(dto.sourceQuestionId);
     if (!question) {
-      throw new NotFoundException({
-        message: `System question ${dto.sourceQuestionId} not found`,
-        code: 'system_bank.question_not_found',
-      });
+      notFound(`System question ${dto.sourceQuestionId} not found`, 'system_bank.question_not_found');
     }
     const version = dto.sourceVersionNumber !== undefined
       ? await this.repo.getVersionByNumber(dto.sourceQuestionId, dto.sourceVersionNumber)
       : await this.repo.getLatestVersion(dto.sourceQuestionId);
     if (!version) {
-      throw new NotFoundException({
-        message: `System question ${dto.sourceQuestionId} version ${dto.sourceVersionNumber ?? 'latest'} not found`,
-        code: 'system_bank.version_not_found',
-      });
+      notFound(`System question ${dto.sourceQuestionId} version ${dto.sourceVersionNumber ?? 'latest'} not found`, 'system_bank.version_not_found');
     }
     if (question.status !== 'published') {
       const previousImports = await this.localImports(dto.sourceQuestionId);
       if (!previousImports.some((entry) => entry.sourceVersionId === version.id)) {
-        throw new BadRequestException({
-          message: `System question ${dto.sourceQuestionId} is withdrawn and cannot be imported`,
-          code: 'system_bank.question_withdrawn',
-        });
+        badRequest(`System question ${dto.sourceQuestionId} is withdrawn and cannot be imported`, 'system_bank.question_withdrawn');
       }
     }
     const pkg = version.package as SystemBankPackage;
     if (!verifyPackageChecksum(pkg, version.checksum)) {
-      throw new BadRequestException({
-        message: `System question ${dto.sourceQuestionId} version ${version.version} failed checksum verification`,
-        code: 'system_bank.checksum_mismatch',
-      });
+      badRequest(`System question ${dto.sourceQuestionId} version ${version.version} failed checksum verification`, 'system_bank.checksum_mismatch');
     }
     const missingOutcomes: string[] = [];
     for (const outcome of pkg.outcomes) {
@@ -334,25 +299,19 @@ export class SystemBankService {
       }
     }
     if (missingOutcomes.length > 0) {
-      throw new BadRequestException({
-        message: `System bank import blocked: centre has not installed outcomes: ${missingOutcomes.join(', ')}`,
-        code: 'system_bank.outcome_not_installed',
-      });
+      badRequest(`System bank import blocked: centre has not installed outcomes: ${missingOutcomes.join(', ')}`, 'system_bank.outcome_not_installed');
     }
     const targetBank = dto.targetBankId
       ? await this.banks.getBankOrThrow(dto.targetBankId)
       : await this.banks.ensurePersonalBank(actorId, 'question', { forCopy: true });
     if (await this.banks.isForeignPersonalBank(actorId, targetBank)) {
-      throw new NotFoundException({ message: `Question bank ${targetBank.id} not found`, code: 'question.bank_not_found' });
+      notFound(`Question bank ${targetBank.id} not found`, 'question.bank_not_found');
     }
     let targetCategory;
     if (dto.targetCategoryId) {
       targetCategory = await this.questions.getCategory(dto.targetCategoryId);
       if (!(await this.banks.categoryBelongsToBank(targetCategory, targetBank))) {
-        throw new BadRequestException({
-          message: 'Target category does not belong to the target bank',
-          code: 'question.copy_target_category_mismatch',
-        });
+        badRequest('Target category does not belong to the target bank', 'question.copy_target_category_mismatch');
       }
     } else {
       targetCategory = await this.banks.defaultCategoryOfBank(targetBank);
@@ -506,29 +465,23 @@ export class SystemBankService {
   private async assertCentrePackageManager(actorId: string): Promise<{ centreSlug: string; centreContextId: string }> {
     const tenantId = tenantAls.getStore()?.tenantId;
     if (!tenantId) {
-      throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+      forbidden('Centre context required', 'system_bank.centre_context_required');
     }
     const context = await this.contexts.getTenantContext(tenantId);
     if (!context) {
-      throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+      forbidden('Centre context required', 'system_bank.centre_context_required');
     }
     await this.evaluator.requireCapability(actorId, 'tenant:manage', context.id);
     const centreSlug = tenantAls.getStore()?.spaceSlug ?? await this.centreRepo.resolveTenantSlug(tenantId);
     if (!centreSlug || !this.spaceDb || (await this.spaceDb.resolveTarget(centreSlug)).mode !== 'dedicated') {
-      throw new ForbiddenException({
-        message: 'Installing programme packages requires a dedicated centre store',
-        code: 'system_bank.dedicated_centre_required',
-      });
+      forbidden('Installing programme packages requires a dedicated centre store', 'system_bank.dedicated_centre_required');
     }
     return { centreSlug, centreContextId: context.id };
   }
 
   private async assertProgrammeReviewer(actorId: string): Promise<void> {
     if (tenantAls.getStore()?.spaceSlug) {
-      throw new ForbiddenException({
-        message: 'Programme review is only available at the platform',
-        code: 'system_bank.review_platform_only',
-      });
+      forbidden('Programme review is only available at the platform', 'system_bank.review_platform_only');
     }
     const system = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'systembank:review', system.id);
@@ -551,10 +504,7 @@ export class SystemBankService {
           ? await tx.selectFrom('subjects').select(subjectColumns).execute()
           : await tx.selectFrom('subjects').select(subjectColumns).where('slug', '=', dto.scope).execute();
       if (dto.scope !== 'all' && subjectRows.length === 0) {
-        throw new NotFoundException({
-          message: `Subject ${dto.scope} not found in centre programme`,
-          code: 'curriculum.subject_not_found',
-        });
+        notFound(`Subject ${dto.scope} not found in centre programme`, 'curriculum.subject_not_found');
       }
       const subjectIds = subjectRows.map((row) => row.id);
       const curriculumRows =
@@ -644,7 +594,7 @@ export class SystemBankService {
         outcomeCount: packageOutcomes.length, centreSlug,
       }, items);
     } catch (error) {
-      throw new BadRequestException({ message: String(error), code: 'system_bank.bad_package' });
+      badRequest(String(error), 'system_bank.bad_package');
     }
     try {
       const pkg = await this.repo.createPackageWithItems({
@@ -662,10 +612,7 @@ export class SystemBankService {
       return { package: pkg, counts: { curricula: packageCurricula.length, nodes: packageNodes.length, outcomes: packageOutcomes.length } };
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new ConflictException({
-          message: `Outcome package version ${dto.version} already exists`,
-          code: 'system_bank.package_version_exists',
-        });
+        conflict(`Outcome package version ${dto.version} already exists`, 'system_bank.package_version_exists');
       }
       throw err;
     }
@@ -693,30 +640,30 @@ export class SystemBankService {
   async getOutcomePackageForReview(actorId: string, version: string) {
     await this.assertProgrammeReviewer(actorId);
     const pkg = await this.repo.getPackageByVersion(version);
-    if (!pkg) throw new NotFoundException({ message: 'Package not found', code: 'system_bank.package_not_found' });
+    if (!pkg) notFound('Package not found', 'system_bank.package_not_found');
     return { package: pkg, ...await this.repo.getPackageItems(pkg.id) };
   }
 
   async reviewOutcomePackage(actorId: string, version: string, approve: boolean, reason?: string) {
     await this.assertProgrammeReviewer(actorId);
     const pkg = await this.repo.getPackageByVersion(version);
-    if (!pkg) throw new NotFoundException({ message: 'Package not found', code: 'system_bank.package_not_found' });
+    if (!pkg) notFound('Package not found', 'system_bank.package_not_found');
     if (approve) {
       const items = await this.repo.getPackageItems(pkg.id);
       try {
         assertProgrammePackageIntegrity(pkg, items);
       } catch (error) {
-        throw new BadRequestException({ message: String(error), code: 'system_bank.bad_package' });
+        badRequest(String(error), 'system_bank.bad_package');
       }
     }
     if (!approve && !reason?.trim()) {
-      throw new BadRequestException({ message: 'Rejection reason is required', code: 'system_bank.rejection_reason_required' });
+      badRequest('Rejection reason is required', 'system_bank.rejection_reason_required');
     }
     try {
       return await this.repo.reviewPackage(version, actorId, approve, reason?.trim() ?? null);
     } catch (error) {
       if (error instanceof Error && error.message === 'system_bank.package_already_reviewed') {
-        throw new ConflictException({ message: 'Package was already reviewed', code: 'system_bank.package_already_reviewed' });
+        conflict('Package was already reviewed', 'system_bank.package_already_reviewed');
       }
       throw error;
     }
@@ -734,7 +681,7 @@ export class SystemBankService {
     const installed = pkg?.status === 'withdrawn' && tenantAls.getStore()?.tenantId
       ? await this.centreRepo.getOutcomePackageInstallByVersion(version) : null;
     if (!pkg || (pkg.status !== 'published' && !installed)) {
-      throw new NotFoundException({ message: `Outcome package ${version} not found`, code: 'system_bank.package_not_found' });
+      notFound(`Outcome package ${version} not found`, 'system_bank.package_not_found');
     }
     return { package: pkg, ...await this.repo.getPackageItems(pkg.id) };
   }
@@ -745,13 +692,13 @@ export class SystemBankService {
     const alreadyInstalled = pkg?.status === 'withdrawn'
       ? await this.centreRepo.getOutcomePackageInstallByVersion(version) : null;
     if (!pkg || (pkg.status !== 'published' && !alreadyInstalled)) {
-      throw new NotFoundException({ message: `Outcome package ${version} not found`, code: 'system_bank.package_not_found' });
+      notFound(`Outcome package ${version} not found`, 'system_bank.package_not_found');
     }
     const items = await this.repo.getPackageItems(pkg.id);
     try {
       assertProgrammePackageIntegrity(pkg, items);
     } catch (error) {
-      throw new BadRequestException({ message: String(error), code: 'system_bank.bad_package' });
+      badRequest(String(error), 'system_bank.bad_package');
     }
 
     return this.tenantDb.withCurrent(async (tx) => {
@@ -759,9 +706,7 @@ export class SystemBankService {
       const already = await this.centreRepo.getOutcomePackageInstallByVersion(pkg.version, tx);
       if (already) {
         if (already.packageChecksum && already.packageChecksum !== pkg.checksum) {
-          throw new ConflictException({
-            message: 'Already installed package checksum differs', code: 'system_bank.package_conflict',
-          });
+          conflict('Already installed package checksum differs', 'system_bank.package_conflict');
         }
         if (!already.packageChecksum) {
           await tx.updateTable('outcome_package_installs')
@@ -777,10 +722,7 @@ export class SystemBankService {
         if (subjects.has(curriculum.subjectSlug)) continue;
         const existing = await this.centreRepo.findSubjectBySlug(curriculum.subjectSlug, tx);
         if (!existing && !curriculum.subjectName) {
-          throw new BadRequestException({
-            message: `Package has no source subject snapshot for ${curriculum.subjectSlug}`,
-            code: 'system_bank.subject_not_installed',
-          });
+          badRequest(`Package has no source subject snapshot for ${curriculum.subjectSlug}`, 'system_bank.subject_not_installed');
         }
         const subject = existing ?? await this.centreRepo.insertSubject({
           contextId: centreContextId, name: curriculum.subjectName!,
@@ -796,10 +738,7 @@ export class SystemBankService {
           .where('id', '=', curriculum.curriculumId).executeTakeFirst();
         if ((byGrade && byGrade.id !== curriculum.curriculumId)
           || (byId && (byId.subject_id !== subject.id || byId.grade !== curriculum.grade))) {
-          throw new ConflictException({
-            message: `Curriculum identity conflict for ${curriculum.subjectSlug}/${curriculum.grade}`,
-            code: 'system_bank.curriculum_conflict',
-          });
+          conflict(`Curriculum identity conflict for ${curriculum.subjectSlug}/${curriculum.grade}`, 'system_bank.curriculum_conflict');
         }
       }
       for (const node of items.nodes) {
@@ -811,10 +750,7 @@ export class SystemBankService {
           || existing.position !== node.position
           || existing.duration_periods !== node.durationPeriods
           || existing.duration_percent !== node.durationPercent)) {
-          throw new ConflictException({
-            message: `Programme node id ${node.nodeId} conflicts with existing content`,
-            code: 'system_bank.node_conflict',
-          });
+          conflict(`Programme node id ${node.nodeId} conflicts with existing content`, 'system_bank.node_conflict');
         }
       }
       for (const outcome of items.outcomes) {
@@ -825,10 +761,7 @@ export class SystemBankService {
           || existing.tenant_id !== null || existing.source_kind !== outcome.sourceKind
           || existing.source_ref !== outcome.sourceRef
           || canonicalizeJson(existing.content) !== canonicalizeJson(outcome.content))) {
-          throw new ConflictException({
-            message: `Outcome id ${outcome.outcomeId} conflicts with existing content`,
-            code: 'system_bank.outcome_conflict',
-          });
+          conflict(`Outcome id ${outcome.outcomeId} conflicts with existing content`, 'system_bank.outcome_conflict');
         }
       }
 

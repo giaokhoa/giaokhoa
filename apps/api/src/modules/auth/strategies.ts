@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { unauthorized } from '../../common/http-errors';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy as LocalStrategy } from 'passport-local';
@@ -56,13 +57,13 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
   }
   async validate(req: SpaceAwareRequest, payload: JwtPayload): Promise<AuthenticatedUser> {
     if (payload.scope !== undefined || !payload.sid) {
-      throw new UnauthorizedException({ message: 'Token is not an access token', code: 'auth.unauthenticated' });
+      unauthorized('Token is not an access token', 'auth.unauthenticated');
     }
     const space = (payload.aud === 'platform' || payload.aud === 'support')
       ? null
       : await resolveDedicatedSpace(this.spaceDb, req.headers?.host);
     if (isPublicLearningHost(req.headers?.host) && payload.aud !== 'platform' && payload.aud !== 'support' && !payload.centre_id) {
-      throw new UnauthorizedException({ message: 'Public learning requires a store-bound session', code: 'auth.centre_mismatch' });
+      unauthorized('Public learning requires a store-bound session', 'auth.centre_mismatch');
     }
     if (payload.centre_id !== undefined && (!space || payload.centre_id !== space.spaceId)) {
       let rootIsPlatform = false;
@@ -77,7 +78,7 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
         }
       }
       if (!rootIsPlatform) {
-        throw new UnauthorizedException({ message: 'Token belongs to another centre or address', code: 'auth.centre_mismatch' });
+        unauthorized('Token belongs to another centre or address', 'auth.centre_mismatch');
       }
     }
     const isPlatformSession =
@@ -89,7 +90,7 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
       ? await this.spaceDb.withSpaceKysely(space.slug, () => this.users.getByIdOrUndefined(payload.sub))
       : await this.users.getByIdOrUndefined(payload.sub);
     if (!user || user.deleted || user.suspended) {
-      throw new UnauthorizedException({ message: 'Account is not active', code: 'auth.account_inactive' });
+      unauthorized('Account is not active', 'auth.account_inactive');
     }
     return { id: user.id, username: user.username, sessionId: payload.sid, tenantId: payload.tid, centreId: payload.centre_id, audience: payload.aud };
   }

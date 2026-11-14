@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemBankService } from './system-bank.service';
@@ -65,7 +66,7 @@ export class SystemBankController {
   ) {
     const versionNumber = Number(version);
     if (!Number.isInteger(versionNumber) || versionNumber < 1) {
-      throw new BadRequestException({ message: `Invalid version number: ${version}`, code: 'system_bank.bad_version' });
+      badRequest(`Invalid version number: ${version}`, 'system_bank.bad_version');
     }
     return this.bank.getVersion(actor.id, id, versionNumber);
   }

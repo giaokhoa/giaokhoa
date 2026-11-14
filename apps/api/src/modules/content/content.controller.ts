@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseInterceptors } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -117,7 +118,7 @@ export class PlayerController {
   @Get('progress/reports')
   async progressReports(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId') groupId: string | undefined, @Query('format') format: string | undefined, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
     if (format !== undefined && format !== 'csv') {
-      throw new BadRequestException({ message: `Unsupported progress report format: ${format}`, code: 'content.progress_report_format_unsupported' });
+      badRequest(`Unsupported progress report format: ${format}`, 'content.progress_report_format_unsupported');
     }
     const csv = await this.content.getProgressReportCsv(viewer.id, courseId, groupId);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

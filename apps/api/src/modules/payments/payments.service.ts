@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound, unauthorized } from '../../common/http-errors';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
 import { sql, type CentreTx } from '@giaokhoa/db';
@@ -110,10 +111,10 @@ export class PaymentsService {
 
   private async getAccountForRead(id: string): Promise<AccountRow> {
     const row = await this.repo.getAccount(id);
-    if (!row) throw new NotFoundException({ message: `Payment account ${id} not found`, code: 'payment.account_not_found' });
+    if (!row) notFound(`Payment account ${id} not found`, 'payment.account_not_found');
     const active = this.tenantContext.currentTenantId();
     if (active !== undefined && row.tenantId !== active) {
-      throw new NotFoundException({ message: `Payment account ${id} not found`, code: 'payment.account_not_found' });
+      notFound(`Payment account ${id} not found`, 'payment.account_not_found');
     }
     return row;
   }
@@ -137,7 +138,7 @@ export class PaymentsService {
   }
   async getPayment(id: string): Promise<PaymentView> {
     const row = await this.repo.getPayment(id);
-    if (!row) throw new NotFoundException({ message: `Payment ${id} not found`, code: 'payment.not_found' });
+    if (!row) notFound(`Payment ${id} not found`, 'payment.not_found');
     return this.paymentView(row);
   }
 
@@ -154,7 +155,7 @@ export class PaymentsService {
     if (payment.userId === actorId) return;
     const sys = await this.contexts.ensureSystemContext();
     if (await this.evaluator.hasCapability(actorId, 'payment:manageaccounts', sys.id)) return;
-    throw new NotFoundException({ message: `Payment ${payment.id} not found`, code: 'payment.not_found' });
+    notFound(`Payment ${payment.id} not found`, 'payment.not_found');
   }
   async getPaymentForUser(actorId: string, id: string): Promise<PaymentRow> {
     const row = await this.getPayment(id);
@@ -170,10 +171,7 @@ export class PaymentsService {
 
   async createPayment(userId: string, input: { accountId: string; amount: number; currency: string; component?: string; itemId?: string }): Promise<PaymentView> {
     if (input.component !== undefined && (ENTITLEMENT_COMPONENTS as readonly string[]).includes(input.component)) {
-      throw new BadRequestException({
-        message: `Component ${input.component} grants entitlements and can only be created through its dedicated server-priced purchase endpoint`,
-        code: 'payment.entitlement_component_forbidden',
-      });
+      badRequest(`Component ${input.component} grants entitlements and can only be created through its dedicated server-priced purchase endpoint`, 'payment.entitlement_component_forbidden');
     }
     const active = this.tenantContext.currentTenantId();
     return this.createPaymentInTenant(userId, input, active);
@@ -185,13 +183,13 @@ export class PaymentsService {
     contextTenantId: string | undefined,
   ): Promise<PaymentView> {
     if (!Number.isInteger(input.amount) || input.amount <= 0) {
-      throw new BadRequestException({ message: 'Amount must be a positive integer in the smallest currency unit', code: 'payment.amount_not_integer' });
+      badRequest('Amount must be a positive integer in the smallest currency unit', 'payment.amount_not_integer');
     }
     const account = await this.repo.getAccount(input.accountId);
-    if (!account) throw new NotFoundException({ message: `Payment account ${input.accountId} not found`, code: 'payment.account_not_found' });
-    if (!account.enabled) throw new BadRequestException({ message: 'Payment account is disabled', code: 'payment.account_disabled' });
+    if (!account) notFound(`Payment account ${input.accountId} not found`, 'payment.account_not_found');
+    if (!account.enabled) badRequest('Payment account is disabled', 'payment.account_disabled');
     if (contextTenantId !== undefined && account.tenantId !== contextTenantId) {
-      throw new BadRequestException({ message: 'Payment account belongs to a different tenant', code: 'payment.account_tenant_mismatch' });
+      badRequest('Payment account belongs to a different tenant', 'payment.account_tenant_mismatch');
     }
     let paymentCode: string | null = null;
     let expiresAt: Date | null = null;
@@ -248,22 +246,22 @@ export class PaymentsService {
   async createFeePayment(userId: string, enrolInstanceId: string): Promise<PaymentView> {
     const instance = await this.enrol.getInstance(enrolInstanceId);
     if (instance.enrol !== 'fee' || !instance.cost || instance.cost <= 0) {
-      throw new BadRequestException({ message: 'Enrol instance has no fee configured', code: 'payment.no_fee' });
+      badRequest('Enrol instance has no fee configured', 'payment.no_fee');
     }
     const courseTenantId = await this.repo.getCourseTenantId(instance.courseId);
-    if (!courseTenantId) throw new BadRequestException({ message: 'Course not found for this fee enrol instance', code: 'payment.no_course' });
+    if (!courseTenantId) badRequest('Course not found for this fee enrol instance', 'payment.no_course');
     let accountId = instance.paymentAccountId ?? undefined;
     if (accountId) {
       const account = await this.repo.getAccount(accountId);
-      if (!account) throw new BadRequestException({ message: 'Configured payment account no longer exists', code: 'payment.no_account' });
+      if (!account) badRequest('Configured payment account no longer exists', 'payment.no_account');
       if (account.tenantId !== courseTenantId) {
-        throw new BadRequestException({ message: 'Payment account belongs to a different tenant than the course', code: 'payment.account_tenant_mismatch' });
+        badRequest('Payment account belongs to a different tenant than the course', 'payment.account_tenant_mismatch');
       }
     } else {
       const own = (await this.repo.listAccounts()).filter((a) => a.tenantId === courseTenantId && a.enabled);
       accountId = own[0]?.id;
     }
-    if (!accountId) throw new BadRequestException({ message: 'No payment account configured for this fee enrol instance', code: 'payment.no_account' });
+    if (!accountId) badRequest('No payment account configured for this fee enrol instance', 'payment.no_account');
     return this.createPaymentInTenant(userId, { accountId, amount: instance.cost, currency: instance.currency || 'VND', component: 'enrol_fee', itemId: enrolInstanceId }, courseTenantId);
   }
 
@@ -272,15 +270,15 @@ export class PaymentsService {
     let accountId = target.feePaymentAccountId ?? undefined;
     if (accountId) {
       const account = await this.repo.getAccount(accountId);
-      if (!account) throw new BadRequestException({ message: 'Configured payment account no longer exists', code: 'payment.no_account' });
+      if (!account) badRequest('Configured payment account no longer exists', 'payment.no_account');
       if (account.tenantId !== target.tenantId) {
-        throw new BadRequestException({ message: 'Payment account belongs to a different tenant than the class', code: 'payment.account_tenant_mismatch' });
+        badRequest('Payment account belongs to a different tenant than the class', 'payment.account_tenant_mismatch');
       }
     } else {
       const own = (await this.repo.listAccounts()).filter((a) => a.tenantId === target.tenantId && a.enabled);
       accountId = own[0]?.id;
     }
-    if (!accountId) throw new BadRequestException({ message: 'No payment account configured for this class fee', code: 'payment.no_account' });
+    if (!accountId) badRequest('No payment account configured for this class fee', 'payment.no_account');
     return this.createPaymentInTenant(userId, { accountId, amount: target.feeCost, currency: target.feeCurrency || 'VND', component: 'class_fee', itemId: target.classId }, target.tenantId);
   }
 
@@ -306,16 +304,16 @@ export class PaymentsService {
     discountType: string; discountValue: number; startsAt: Date | null; endsAt: Date | null;
   }): void {
     if (fields.discountType === 'percent' && (fields.discountValue < 1 || fields.discountValue > 99)) {
-      throw new BadRequestException({ message: 'Percent discount value must be between 1 and 99', code: 'payment.coupon_invalid' });
+      badRequest('Percent discount value must be between 1 and 99', 'payment.coupon_invalid');
     }
     if (fields.discountType === 'fixed' && (!Number.isInteger(fields.discountValue) || fields.discountValue < 1)) {
-      throw new BadRequestException({ message: 'Fixed discount value must be a positive integer', code: 'payment.coupon_invalid' });
+      badRequest('Fixed discount value must be a positive integer', 'payment.coupon_invalid');
     }
     if (fields.discountType !== 'percent' && fields.discountType !== 'fixed') {
-      throw new BadRequestException({ message: `Unknown coupon discount type: ${fields.discountType}`, code: 'payment.coupon_invalid' });
+      badRequest(`Unknown coupon discount type: ${fields.discountType}`, 'payment.coupon_invalid');
     }
     if (fields.startsAt && fields.endsAt && fields.startsAt.getTime() >= fields.endsAt.getTime()) {
-      throw new BadRequestException({ message: 'Coupon endsAt must be after startsAt', code: 'payment.coupon_invalid' });
+      badRequest('Coupon endsAt must be after startsAt', 'payment.coupon_invalid');
     }
   }
 
@@ -326,7 +324,7 @@ export class PaymentsService {
     const endsAt = input.endsAt ? new Date(input.endsAt) : null;
     this.assertCouponFieldsValid({ discountType: input.discountType, discountValue: input.discountValue, startsAt, endsAt });
     if (await this.repo.getCouponByCode(code)) {
-      throw new ConflictException({ message: `Coupon code ${code} is already taken`, code: 'payment.coupon_code_taken' });
+      conflict(`Coupon code ${code} is already taken`, 'payment.coupon_code_taken');
     }
     const row = await this.repo.insertCoupon({
       code,
@@ -350,14 +348,14 @@ export class PaymentsService {
   async getCoupon(actorId: string, id: string): Promise<Coupon> {
     await this.requireManageCoupons(actorId);
     const row = await this.repo.getCoupon(id);
-    if (!row) throw new NotFoundException({ message: `Coupon ${id} not found`, code: 'payment.coupon_not_found' });
+    if (!row) notFound(`Coupon ${id} not found`, 'payment.coupon_not_found');
     return this.toCouponView(row);
   }
 
   async updateCoupon(actorId: string, id: string, input: UpdateCoupon): Promise<Coupon> {
     await this.requireManageCoupons(actorId);
     const row = await this.repo.getCoupon(id);
-    if (!row) throw new NotFoundException({ message: `Coupon ${id} not found`, code: 'payment.coupon_not_found' });
+    if (!row) notFound(`Coupon ${id} not found`, 'payment.coupon_not_found');
     const merged = {
       discountType: input.discountType ?? row.discountType,
       discountValue: input.discountValue ?? row.discountValue,
@@ -385,42 +383,39 @@ export class PaymentsService {
     const code = couponCode.trim().toUpperCase();
     const coupon = await this.repo.getCouponByCode(code);
     if (!coupon) {
-      throw new BadRequestException({ message: `Coupon ${code} not found`, code: 'payment.coupon_not_found' });
+      badRequest(`Coupon ${code} not found`, 'payment.coupon_not_found');
     }
     if (!coupon.isActive) {
-      throw new BadRequestException({ message: `Coupon ${code} is not active`, code: 'payment.coupon_inactive' });
+      badRequest(`Coupon ${code} is not active`, 'payment.coupon_inactive');
     }
     const now = Date.now();
     if ((coupon.startsAt && now < coupon.startsAt.getTime()) || (coupon.endsAt && now >= coupon.endsAt.getTime())) {
-      throw new BadRequestException({ message: `Coupon ${code} is outside its validity window`, code: 'payment.coupon_not_in_window' });
+      badRequest(`Coupon ${code} is outside its validity window`, 'payment.coupon_not_in_window');
     }
     if (coupon.appliesTo !== 'all' && coupon.appliesTo !== component) {
-      throw new BadRequestException({ message: `Coupon ${code} does not apply to ${component}`, code: 'payment.coupon_not_applicable' });
+      badRequest(`Coupon ${code} does not apply to ${component}`, 'payment.coupon_not_applicable');
     }
     if (coupon.maxRedemptions !== null && (await this.repo.countCouponRedemptions(coupon.id)) >= coupon.maxRedemptions) {
-      throw new BadRequestException({ message: `Coupon ${code} has no redemptions left`, code: 'payment.coupon_exhausted' });
+      badRequest(`Coupon ${code} has no redemptions left`, 'payment.coupon_exhausted');
     }
     const discountAmount = coupon.discountType === 'percent'
       ? Math.floor((configuredPrice * coupon.discountValue) / 100)
       : coupon.discountValue;
     if (discountAmount < 1 || discountAmount >= configuredPrice) {
-      throw new BadRequestException({
-        message: `Coupon ${code} discount must leave a payable amount of at least 1`,
-        code: 'payment.coupon_exceeds_price',
-      });
+      badRequest(`Coupon ${code} discount must leave a payable amount of at least 1`, 'payment.coupon_exceeds_price');
     }
     return { coupon, discountAmount };
   }
 
   async createPlanPayment(userId: string, input: { component: string; couponCode?: string }): Promise<PaymentView> {
     if (input.component !== 'tenant_plan' && input.component !== 'teacher_plan') {
-      throw new BadRequestException({ message: `Unknown plan component: ${input.component}`, code: 'payment.unknown_plan_component' });
+      badRequest(`Unknown plan component: ${input.component}`, 'payment.unknown_plan_component');
     }
     const component = input.component;
     const price = await this.siteConfig.getValue<number>('payments', component === 'tenant_plan' ? 'tenantplanprice' : 'teacherplanprice');
     const periodDays = await this.siteConfig.getValue<number>('payments', component === 'tenant_plan' ? 'tenantplanperioddays' : 'teacherplanperioddays');
     if (price === undefined || !Number.isInteger(price) || price <= 0 || periodDays === undefined || !Number.isInteger(periodDays) || periodDays <= 0) {
-      throw new BadRequestException({ message: 'Plan price is not configured as a positive integer in system settings', code: 'payment.plan_not_configured' });
+      badRequest('Plan price is not configured as a positive integer in system settings', 'payment.plan_not_configured');
     }
     const platformTenantId = await this.tenants.fallbackTenantId();
     const account = (await this.repo.listAccounts())
@@ -430,7 +425,7 @@ export class PaymentsService {
         || a.createdAt.getTime() - b.createdAt.getTime()
         || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       )[0];
-    if (!account) throw new BadRequestException({ message: 'No payment account configured for plan purchases', code: 'payment.no_account' });
+    if (!account) badRequest('No payment account configured for plan purchases', 'payment.no_account');
     const beneficiaryTenantId = await this.effectiveTenantId();
     let amount = price;
     let couponSnapshot: Pick<PlanSnapshot, 'couponId' | 'couponCode' | 'discountAmount'> = {};
@@ -481,11 +476,11 @@ export class PaymentsService {
 
   async handleWebhook(input: { gateway: string; externalTransactionId: string; paymentId: string; status: string }, headers: Record<string, string | string[] | undefined> = {}): Promise<{ status: string; duplicate?: boolean; payment: PaymentRow }> {
     if (input.gateway !== this.gateway.name) {
-      throw new BadRequestException({ message: `Unknown payment gateway: ${input.gateway}`, code: 'payment.webhook_unknown_gateway' });
+      badRequest(`Unknown payment gateway: ${input.gateway}`, 'payment.webhook_unknown_gateway');
     }
     const verified = await this.gateway.verify({ externalTransactionId: input.externalTransactionId, paymentId: input.paymentId, status: input.status, headers });
     if (!verified) {
-      throw new UnauthorizedException({ message: 'Payment webhook verification failed', code: 'payment.webhook_verification_failed' });
+      unauthorized('Payment webhook verification failed', 'payment.webhook_verification_failed');
     }
     const existing = await this.repo.getByExternalTx(input.gateway, input.externalTransactionId);
     if (existing) return { status: existing.status, duplicate: true, payment: existing };
@@ -524,12 +519,12 @@ export class PaymentsService {
     if (allowlist.length > 0) {
       const ip = (input.ip ?? '').replace(/^::ffff:/, '');
       if (!allowlist.includes(ip)) {
-        throw new UnauthorizedException({ message: 'IPN source IP is not allowlisted', code: 'payment.ipn_ip_not_allowed' });
+        unauthorized('IPN source IP is not allowlisted', 'payment.ipn_ip_not_allowed');
       }
     }
     const transactionId = String(body.transaction_id ?? body.transactionId ?? body.id ?? '');
     if (!transactionId) {
-      throw new BadRequestException({ message: 'IPN payload has no transaction id', code: 'payment.ipn_missing_transaction' });
+      badRequest('IPN payload has no transaction id', 'payment.ipn_missing_transaction');
     }
     const amountRaw = Number(body.amount ?? body.transferAmount ?? body.transfer_amount);
     const amount = Number.isFinite(amountRaw) ? Math.trunc(amountRaw) : 0;
@@ -541,18 +536,18 @@ export class PaymentsService {
     let account = xid ? await this.repo.findAccountBySepayXid(xid) : undefined;
     if (!account && accountNumber) account = await this.repo.findAccountByBankNumber(accountNumber);
     if (!account) {
-      throw new UnauthorizedException({ message: 'IPN targets an unknown payment account', code: 'payment.ipn_account_unknown' });
+      unauthorized('IPN targets an unknown payment account', 'payment.ipn_account_unknown');
     }
     const expectedKey = readAccountConfig(account.config).sepayApiKey;
     if (!expectedKey) {
-      throw new UnauthorizedException({ message: 'Payment account has no SePay API key configured', code: 'payment.ipn_not_configured' });
+      unauthorized('Payment account has no SePay API key configured', 'payment.ipn_not_configured');
     }
     const headerMatch = /^Apikey\s+(.+)$/i.exec((input.authorization ?? '').trim());
     const presented = headerMatch?.[1] ?? '';
     const presentedBuf = Buffer.from(presented);
     const expectedBuf = Buffer.from(expectedKey);
     if (!presented || presentedBuf.length !== expectedBuf.length || !timingSafeEqual(presentedBuf, expectedBuf)) {
-      throw new UnauthorizedException({ message: 'IPN API key verification failed', code: 'payment.ipn_unauthorized' });
+      unauthorized('IPN API key verification failed', 'payment.ipn_unauthorized');
     }
     const event = await this.repo.insertProviderEvent({
       provider: 'sepay', tenantId: account.tenantId, accountId: account.id,
@@ -605,20 +600,20 @@ export class PaymentsService {
   async createRefund(actorId: string, paymentId: string, input: CreateRefund): Promise<PaymentRefund> {
     const payment = await this.getPayment(paymentId);
     await this.requireManageAccountsForTenant(actorId, payment.tenantId);
-    if (payment.status !== 'succeeded') throw new BadRequestException({ message: 'Only a succeeded payment can be refunded', code: 'payment.not_succeeded' });
+    if (payment.status !== 'succeeded') badRequest('Only a succeeded payment can be refunded', 'payment.not_succeeded');
     if (!Number.isInteger(input.amount) || input.amount <= 0 || input.amount > payment.amount) {
-      throw new BadRequestException({ message: 'Refund amount must be a positive integer not exceeding the payment amount', code: 'payment.bad_refund_amount' });
+      badRequest('Refund amount must be a positive integer not exceeding the payment amount', 'payment.bad_refund_amount');
     }
     const reason = input.reason.trim();
     if (reason.length === 0) {
-      throw new BadRequestException({ message: 'A refund reason is required', code: 'payment.refund_reason_required' });
+      badRequest('A refund reason is required', 'payment.refund_reason_required');
     }
     const threshold = await this.refundDualApprovalThreshold(payment.tenantId);
     const created = await this.repo.transaction(async (tx) => {
       await sql`select id from payments where id = ${payment.id} for update`.execute(tx);
       const counted = await this.repo.sumRefundsByStatuses(payment.id, ['requested', 'approved', 'settled'], tx);
       if (counted + input.amount > payment.amount) {
-        throw new BadRequestException({ message: 'Cumulative refunds would exceed the original payment amount', code: 'payment.refund_exceeds_total' });
+        badRequest('Cumulative refunds would exceed the original payment amount', 'payment.refund_exceeds_total');
       }
       const dual = input.amount >= threshold || counted + input.amount === payment.amount;
       const now = new Date();
@@ -639,7 +634,7 @@ export class PaymentsService {
   private async getRefundOfPayment(paymentId: string, refundId: string): Promise<RefundRow> {
     const refund = await this.repo.getRefund(refundId);
     if (!refund || refund.paymentId !== paymentId) {
-      throw new NotFoundException({ message: `Refund ${refundId} not found`, code: 'payment.refund_not_found' });
+      notFound(`Refund ${refundId} not found`, 'payment.refund_not_found');
     }
     return refund;
   }
@@ -649,14 +644,14 @@ export class PaymentsService {
     await this.requireManageAccountsForTenant(actorId, payment.tenantId);
     const refund = await this.getRefundOfPayment(paymentId, refundId);
     if (refund.status !== 'requested') {
-      throw new BadRequestException({ message: 'Refund is not pending approval', code: 'payment.refund_not_pending_approval' });
+      badRequest('Refund is not pending approval', 'payment.refund_not_pending_approval');
     }
     if (refund.createdBy !== null && refund.createdBy === actorId) {
-      throw new BadRequestException({ message: 'The second approver must differ from the refund creator', code: 'payment.refund_approver_must_differ' });
+      badRequest('The second approver must differ from the refund creator', 'payment.refund_approver_must_differ');
     }
     const updated = await this.repo.updateRefundFromStatuses(refund.id, ['requested'], { status: 'approved', approvedBy: actorId, approvedAt: new Date() });
     if (!updated) {
-      throw new BadRequestException({ message: 'Refund is not pending approval', code: 'payment.refund_not_pending_approval' });
+      badRequest('Refund is not pending approval', 'payment.refund_not_pending_approval');
     }
     return this.toRefundView(updated);
   }
@@ -666,17 +661,17 @@ export class PaymentsService {
     await this.requireManageAccountsForTenant(actorId, payment.tenantId);
     const refund = await this.getRefundOfPayment(paymentId, refundId);
     if (refund.status !== 'requested' && refund.status !== 'approved') {
-      throw new BadRequestException({ message: 'Refund can no longer be rejected', code: 'payment.refund_not_rejectable' });
+      badRequest('Refund can no longer be rejected', 'payment.refund_not_rejectable');
     }
     const reason = input.reason.trim();
     if (reason.length === 0) {
-      throw new BadRequestException({ message: 'A rejection reason is required', code: 'payment.refund_rejection_reason_required' });
+      badRequest('A rejection reason is required', 'payment.refund_rejection_reason_required');
     }
     const updated = await this.repo.updateRefundFromStatuses(refund.id, ['requested', 'approved'], {
       status: 'rejected', rejectedBy: actorId, rejectedAt: new Date(), rejectionReason: reason,
     });
     if (!updated) {
-      throw new BadRequestException({ message: 'Refund can no longer be rejected', code: 'payment.refund_not_rejectable' });
+      badRequest('Refund can no longer be rejected', 'payment.refund_not_rejectable');
     }
     return this.toRefundView(updated);
   }
@@ -706,7 +701,7 @@ export class PaymentsService {
       const fresh = await this.repo.getRefund(refund.id, tx);
       if (!fresh || fresh.status === 'settled') return { settled: fresh ?? refund, pendingRemoval: null };
       if (fresh.status !== 'approved') {
-        throw new BadRequestException({ message: 'Refund is not approved for settlement', code: 'payment.refund_not_approved' });
+        badRequest('Refund is not approved for settlement', 'payment.refund_not_approved');
       }
       const settledSum = await this.repo.sumRefundsByStatuses(payment.id, ['settled'], tx);
       const full = settledSum + fresh.amount === payment.amount;
@@ -740,14 +735,14 @@ export class PaymentsService {
     await this.requireManageAccountsForTenant(actorId, payment.tenantId);
     const refund = await this.getRefundOfPayment(paymentId, refundId);
     if (refund.status !== 'approved') {
-      throw new BadRequestException({ message: 'Refund is not approved for settlement', code: 'payment.refund_not_approved' });
+      badRequest('Refund is not approved for settlement', 'payment.refund_not_approved');
     }
     const externalTransactionId = input.externalTransactionId ?? refund.externalTransactionId;
     if (!externalTransactionId) {
-      throw new BadRequestException({ message: 'A payout transaction reference is required to settle a refund', code: 'payment.refund_tx_required' });
+      badRequest('A payout transaction reference is required to settle a refund', 'payment.refund_tx_required');
     }
     if (refund.externalTransactionId && input.externalTransactionId && refund.externalTransactionId !== input.externalTransactionId) {
-      throw new BadRequestException({ message: 'Payout transaction reference does not match the reference recorded on the refund', code: 'payment.refund_tx_mismatch' });
+      badRequest('Payout transaction reference does not match the reference recorded on the refund', 'payment.refund_tx_mismatch');
     }
     const settled = await this.applyRefundSettlement({
       payment, refund, externalTransactionId,
@@ -816,7 +811,7 @@ export class PaymentsService {
   async listReviewQueue(actorId: string): Promise<PaymentReviewQueueItem[]> {
     const scope = await this.reviewQueueScopeTenantIds(actorId);
     if (scope.length === 0) {
-      throw new ForbiddenException({ message: 'Missing capability payment:manageaccounts', code: 'access.capability_denied' });
+      forbidden('Missing capability payment:manageaccounts', 'access.capability_denied');
     }
     const now = Date.now();
     const items: PaymentReviewQueueItem[] = [];
@@ -883,11 +878,11 @@ export class PaymentsService {
     const payment = await this.getPayment(paymentId);
     await this.requireManageAccountsForTenant(actorId, payment.tenantId);
     if (payment.status !== 'needs_review') {
-      throw new BadRequestException({ message: 'Payment is not waiting in the review queue', code: 'payment.not_in_review' });
+      badRequest('Payment is not waiting in the review queue', 'payment.not_in_review');
     }
     const reason = input.reason.trim();
     if (reason.length === 0) {
-      throw new BadRequestException({ message: 'A review resolution reason is required', code: 'payment.review_reason_required' });
+      badRequest('A review resolution reason is required', 'payment.review_reason_required');
     }
     const trail = {
       reviewDecision: input.decision, reviewReason: reason,
@@ -898,10 +893,7 @@ export class PaymentsService {
       return this.getPayment(payment.id);
     }
     if (!(await this.verifyPaymentAgainstServerTarget(payment))) {
-      throw new BadRequestException({
-        message: 'Payment amount or tenant does not match the server-side price and tenant of its target; refusing to activate entitlements',
-        code: 'payment.target_mismatch',
-      });
+      badRequest('Payment amount or tenant does not match the server-side price and tenant of its target; refusing to activate entitlements', 'payment.target_mismatch');
     }
     const event = await this.repo.getLatestEventForPayment(payment);
     let externalTransactionId = payment.externalTransactionId;

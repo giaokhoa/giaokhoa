@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import type { SiteSetting } from '@giaokhoa/contracts';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -55,10 +56,7 @@ export class TenantConfigService {
   async viewForTenant(tenantId: string, component: string, name: string): Promise<SiteSetting> {
     const def = findSiteSetting(component, name);
     if (!def) {
-      throw new BadRequestException({
-        message: `Unknown site setting ${component}/${name}`,
-        code: 'site_config.unknown_setting',
-      });
+      badRequest(`Unknown site setting ${component}/${name}`, 'site_config.unknown_setting');
     }
     const tenantRow = def.scope === 'platform' ? undefined : await this.repo.getConfigValue(tenantId, this.settingKey(def));
     const platformStored = await this.platformStoredValue(def.component, def.name);
@@ -79,10 +77,7 @@ export class TenantConfigService {
       (await this.evaluator.hasCapability(actorId, 'tenant:viewall', tenantCtx.id)) ||
       (await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id));
     if (!canView) {
-      throw new BadRequestException({
-        message: 'Missing capability tenant:viewall in the active tenant',
-        code: 'access.capability_denied',
-      });
+      badRequest('Missing capability tenant:viewall in the active tenant', 'access.capability_denied');
     }
     const views: SiteSetting[] = [];
     for (const def of SITE_SETTINGS) {
@@ -103,10 +98,7 @@ export class TenantConfigService {
     await this.assertTenantSettingsManager(actorId, tenantId);
     const problem = validateSiteSettingValue(def, value);
     if (problem) {
-      throw new BadRequestException({
-        message: `Invalid value for ${component}/${name}: ${problem}`,
-        code: 'site_config.invalid_value',
-      });
+      badRequest(`Invalid value for ${component}/${name}: ${problem}`, 'site_config.invalid_value');
     }
     const before = await this.getEffectiveValue(tenantId, component, name);
     await this.repo.upsertConfigValue(tenantId, this.settingKey(def), value);
@@ -119,10 +111,7 @@ export class TenantConfigService {
     await this.assertTenantSettingsManager(actorId, tenantId);
     const existing = await this.repo.getConfigValue(tenantId, this.settingKey(def));
     if (!existing) {
-      throw new NotFoundException({
-        message: `Tenant setting ${component}/${name} has no tenant override`,
-        code: 'site_config.override_not_found',
-      });
+      notFound(`Tenant setting ${component}/${name} has no tenant override`, 'site_config.override_not_found');
     }
     const before = existing.value;
     await this.repo.deleteConfigValue(tenantId, this.settingKey(def));
@@ -134,16 +123,10 @@ export class TenantConfigService {
   private requireTenantDefinition(component: string, name: string): SiteSettingDefinition {
     const def = findSiteSetting(component, name);
     if (!def) {
-      throw new BadRequestException({
-        message: `Unknown site setting ${component}/${name}`,
-        code: 'site_config.unknown_setting',
-      });
+      badRequest(`Unknown site setting ${component}/${name}`, 'site_config.unknown_setting');
     }
     if (def.scope === 'platform') {
-      throw new BadRequestException({
-        message: `Setting ${component}/${name} is platform-scoped and cannot be overridden by a tenant`,
-        code: 'site_config.platform_only',
-      });
+      badRequest(`Setting ${component}/${name} is platform-scoped and cannot be overridden by a tenant`, 'site_config.platform_only');
     }
     return def;
   }

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import ExcelJS from 'exceljs';
 import type {
   ExamMatrixView, MatrixImportIssue, MatrixImportPreview, MatrixImportPreviewCell,
@@ -80,13 +81,13 @@ export class MatrixImportService {
     const subject = await this.curriculum.getSubjectReference(input.subjectId);
     const curriculum = await this.curriculum.getCurriculumReference(input.curriculumId);
     if (curriculum.subjectId !== subject.id) {
-      throw new BadRequestException({ message: 'Curriculum does not belong to the subject', code: 'quiz.matrix_curriculum_mismatch' });
+      badRequest('Curriculum does not belong to the subject', 'quiz.matrix_curriculum_mismatch');
     }
     const levelSet = input.levelSet ?? 'three';
     const tree = await this.curriculum.getTreeReference(curriculum.id);
     const units = this.flattenUnits(tree).filter((u) => this.inScope(u.nodeId, tree, input.scopeNodeIds));
     if (!units.length) {
-      throw new BadRequestException({ message: 'The selected scope contains no knowledge units', code: 'quiz.matrix_import_scope_empty' });
+      badRequest('The selected scope contains no knowledge units', 'quiz.matrix_import_scope_empty');
     }
     const buffer = await this.renderTemplateWorkbook({
       subjectName: subject.name, subjectId: subject.id,

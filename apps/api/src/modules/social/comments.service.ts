@@ -1,4 +1,5 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { forbidden, notFound } from '../../common/http-errors';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -46,11 +47,11 @@ export class CommentsService {
 
   async deleteComment(actorId: string, commentId: string): Promise<{ deleted: boolean }> {
     const comment = await this.repo.getComment(commentId);
-    if (!comment || comment.timeDeleted) throw new NotFoundException({ message: `Comment ${commentId} not found`, code: 'comments.not_found' });
+    if (!comment || comment.timeDeleted) notFound(`Comment ${commentId} not found`, 'comments.not_found');
     if (comment.userId !== actorId) {
       const canDelete = await this.evaluator.hasCapability(actorId, 'comment:delete', comment.contextId);
       if (!canDelete) {
-        throw new ForbiddenException({ message: 'Only the author or a user with comment:delete can delete this comment', code: 'comments.delete_forbidden' });
+        forbidden('Only the author or a user with comment:delete can delete this comment', 'comments.delete_forbidden');
       }
     }
     await this.repo.softDeleteComment(commentId);

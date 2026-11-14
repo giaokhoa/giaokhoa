@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import type {
   ExamMatrixCellView,
   ExamMatrixView,
@@ -52,7 +47,7 @@ export class QuizMatricesService {
 
   private assertValidTfScale(scale: number[] | null | undefined): void {
     if (scale !== undefined && scale !== null && !isValidTfScale(scale)) {
-      throw new BadRequestException({ message: 'tfScale must be 5 percentages (0..100), non-decreasing, ending at 100', code: 'quiz.tf_scale_invalid' });
+      badRequest('tfScale must be 5 percentages (0..100), non-decreasing, ending at 100', 'quiz.tf_scale_invalid');
     }
   }
 
@@ -62,7 +57,7 @@ export class QuizMatricesService {
     await this.banks.syncBankMembership(bank);
     const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
     if (!caps.manage) {
-      throw new ForbiddenException({ message: `Missing capability ${QUIZ_CAPABILITIES.manageMatrix} in matrix bank ${bank.id}`, code: 'access.capability_denied' });
+      forbidden(`Missing capability ${QUIZ_CAPABILITIES.manageMatrix} in matrix bank ${bank.id}`, 'access.capability_denied');
     }
     return bank;
   }
@@ -110,20 +105,20 @@ export class QuizMatricesService {
     const subject = await this.curriculum.getSubjectReference(input.subjectId);
     const curriculum = await this.curriculum.getCurriculumReference(input.curriculumId);
     if (curriculum.subjectId !== subject.id) {
-      throw new BadRequestException({ message: 'Curriculum does not belong to the subject', code: 'quiz.matrix_curriculum_mismatch' });
+      badRequest('Curriculum does not belong to the subject', 'quiz.matrix_curriculum_mismatch');
     }
     let bankTenantId: string | null | undefined;
     if (input.bankId) {
       const bank = await this.banks.findBankById(input.bankId);
       bankTenantId = bank?.tenantId;
-      if (!bank) throw new NotFoundException({ message: `Matrix bank ${input.bankId} not found`, code: 'quiz.matrix_bank_not_found' });
+      if (!bank) notFound(`Matrix bank ${input.bankId} not found`, 'quiz.matrix_bank_not_found');
       if (bank.bankKind !== 'matrix') {
-        throw new BadRequestException({ message: 'Target bank is not a matrix bank', code: 'quiz.matrix_bank_kind_mismatch' });
+        badRequest('Target bank is not a matrix bank', 'quiz.matrix_bank_kind_mismatch');
       }
       await this.banks.syncBankMembership(bank);
       const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
       if (!caps.add) {
-        throw new ForbiddenException({ message: `Missing capability ${QUIZ_CAPABILITIES.addMatrix} in matrix bank ${bank.id}`, code: 'access.capability_denied' });
+        forbidden(`Missing capability ${QUIZ_CAPABILITIES.addMatrix} in matrix bank ${bank.id}`, 'access.capability_denied');
       }
     } else {
       await this.evaluator.requireCapability(actorId, QUIZ_CAPABILITIES.addMatrix, subject.contextId);
@@ -189,7 +184,7 @@ export class QuizMatricesService {
 
   private rethrowAsDuplicateContentConflict(err: unknown): never {
     if (isMatrixContentSignatureConflict(err)) {
-      throw new ConflictException({ message: 'A matrix with identical content already exists in the target bank', code: 'quiz.matrix_duplicate_content' });
+      conflict('A matrix with identical content already exists in the target bank', 'quiz.matrix_duplicate_content');
     }
     throw err;
   }
@@ -203,7 +198,7 @@ export class QuizMatricesService {
     const subject = await this.curriculum.getSubjectReference(input.subjectId);
     const curriculum = await this.curriculum.getCurriculumReference(input.curriculumId);
     if (curriculum.subjectId !== subject.id) {
-      throw new BadRequestException({ message: 'Curriculum does not belong to the subject', code: 'quiz.matrix_curriculum_mismatch' });
+      badRequest('Curriculum does not belong to the subject', 'quiz.matrix_curriculum_mismatch');
     }
     const bank = await this.requirePersonalMatrixBankManage(actorId);
     const signature = this.importedMatrixSignature(input);
@@ -269,7 +264,7 @@ export class QuizMatricesService {
     const row = await this.shared.getMatrixRow(matrixId);
     const activeTenant = this.tenantContext.currentTenantId();
     if (activeTenant !== undefined && row.tenantId !== null && row.tenantId !== activeTenant) {
-      throw new NotFoundException({ message: `Exam matrix ${matrixId} not found`, code: 'quiz.matrix_not_found' });
+      notFound(`Exam matrix ${matrixId} not found`, 'quiz.matrix_not_found');
     }
     await this.shared.requireMatrixCap(actorId, row, QUIZ_CAPABILITIES.viewMatrix);
     return this.matrixView(row);
@@ -279,12 +274,12 @@ export class QuizMatricesService {
     const row = await this.shared.getMatrixRow(matrixId);
     const activeTenant = this.tenantContext.currentTenantId();
     if (activeTenant !== undefined && row.tenantId !== null && row.tenantId !== activeTenant) {
-      throw new NotFoundException({ message: `Exam matrix ${matrixId} not found`, code: 'quiz.matrix_not_found' });
+      notFound(`Exam matrix ${matrixId} not found`, 'quiz.matrix_not_found');
     }
     await this.shared.requireMatrixCap(actorId, row, QUIZ_CAPABILITIES.viewMatrix);
     const versionRow = await this.repo.getMatrixVersionRow(matrixId, version);
     if (!versionRow) {
-      throw new NotFoundException({ message: `Exam matrix ${matrixId} has no version ${version}`, code: 'quiz.matrix_version_not_found' });
+      notFound(`Exam matrix ${matrixId} has no version ${version}`, 'quiz.matrix_version_not_found');
     }
     const cells = await this.repo.listMatrixCellsByVersionId(versionRow.id);
     return {
@@ -314,7 +309,7 @@ export class QuizMatricesService {
     const row = await this.shared.getMatrixRow(matrixId);
     const activeTenant = this.tenantContext.currentTenantId();
     if (activeTenant !== undefined && row.tenantId !== null && row.tenantId !== activeTenant) {
-      throw new NotFoundException({ message: `Exam matrix ${matrixId} not found`, code: 'quiz.matrix_not_found' });
+      notFound(`Exam matrix ${matrixId} not found`, 'quiz.matrix_not_found');
     }
     await this.shared.requireMatrixCap(actorId, row, QUIZ_CAPABILITIES.viewMatrix);
     return this.repo.listExamVersionsByMatrix(matrixId);
@@ -356,27 +351,24 @@ export class QuizMatricesService {
     const row = await this.shared.getMatrixRow(matrixId);
     await this.shared.requireMatrixCap(actorId, row, QUIZ_CAPABILITIES.manageMatrix);
     if (row.withdrawnAt && input.status !== undefined && input.status !== row.status) {
-      throw new ConflictException({
-        message: 'Matrix is withdrawn; restore it before changing its status',
-        code: 'quiz.matrix_status_withdrawn',
-      });
+      conflict('Matrix is withdrawn; restore it before changing its status', 'quiz.matrix_status_withdrawn');
     }
     if (input.bankId !== undefined && input.bankId !== null && input.bankId !== row.bankId) {
       const target = await this.banks.findBankById(input.bankId);
-      if (!target) throw new NotFoundException({ message: `Matrix bank ${input.bankId} not found`, code: 'quiz.matrix_bank_not_found' });
+      if (!target) notFound(`Matrix bank ${input.bankId} not found`, 'quiz.matrix_bank_not_found');
       if (target.bankKind !== 'matrix') {
-        throw new BadRequestException({ message: 'Target bank is not a matrix bank', code: 'quiz.matrix_bank_kind_mismatch' });
+        badRequest('Target bank is not a matrix bank', 'quiz.matrix_bank_kind_mismatch');
       }
       await this.banks.syncBankMembership(target);
       const targetCaps = await this.banks.bankLocalMatrixCaps(actorId, target);
       if (!targetCaps.add) {
-        throw new ForbiddenException({ message: `Missing capability ${QUIZ_CAPABILITIES.addMatrix} in matrix bank ${target.id}`, code: 'access.capability_denied' });
+        forbidden(`Missing capability ${QUIZ_CAPABILITIES.addMatrix} in matrix bank ${target.id}`, 'access.capability_denied');
       }
     }
     if (input.levelSet === 'three' && row.levelSet !== 'three') {
       const cells = await this.repo.listMatrixCells(row.id);
       if (cells.some((c) => c.cognitiveLevel === 'van_dung_cao')) {
-        throw new BadRequestException({ message: 'Cells already use van_dung_cao; remove them before switching to the three-level set', code: 'quiz.matrix_level_in_use' });
+        badRequest('Cells already use van_dung_cao; remove them before switching to the three-level set', 'quiz.matrix_level_in_use');
       }
     }
     const patch: Partial<ExamMatrixRow> = {};
@@ -440,7 +432,7 @@ export class QuizMatricesService {
     const row = await this.shared.getMatrixRow(matrixId);
     await this.shared.requireMatrixCap(actorId, row, QUIZ_CAPABILITIES.manageMatrix);
     if (row.status === 'hidden') {
-      throw new ConflictException({ message: 'Matrix is already withdrawn', code: 'quiz.matrix_already_withdrawn' });
+      conflict('Matrix is already withdrawn', 'quiz.matrix_already_withdrawn');
     }
     await this.repo.updateMatrix(row.id, {
       status: 'hidden',
@@ -459,7 +451,7 @@ export class QuizMatricesService {
     const row = await this.shared.getMatrixRow(matrixId);
     await this.shared.requireMatrixCap(actorId, row, QUIZ_CAPABILITIES.manageMatrix);
     if (row.status !== 'hidden') {
-      throw new ConflictException({ message: 'Matrix is not withdrawn', code: 'quiz.matrix_not_withdrawn' });
+      conflict('Matrix is not withdrawn', 'quiz.matrix_not_withdrawn');
     }
     await this.repo.updateMatrix(row.id, {
       status: 'ready', withdrawnReason: null, withdrawnBy: null, withdrawnAt: null,
@@ -531,7 +523,7 @@ export class QuizMatricesService {
   private async getMatrixCellRow(matrix: ExamMatrixRow, cellId: string): Promise<ExamMatrixCellRow> {
     const row = await this.repo.getMatrixCell(cellId);
     if (!row || row.matrixId !== matrix.id) {
-      throw new NotFoundException({ message: `Exam matrix cell ${cellId} not found`, code: 'quiz.matrix_cell_not_found' });
+      notFound(`Exam matrix cell ${cellId} not found`, 'quiz.matrix_cell_not_found');
     }
     return row;
   }
@@ -541,18 +533,18 @@ export class QuizMatricesService {
     await this.shared.requireMatrixCap(actorId, matrix, QUIZ_CAPABILITIES.manageMatrix);
     this.assertValidTfScale(input.tfScale);
     if (matrix.levelSet === 'three' && input.cognitiveLevel === 'van_dung_cao') {
-      throw new BadRequestException({ message: 'van_dung_cao is not part of the three-level set of this matrix', code: 'quiz.matrix_level_not_in_set' });
+      badRequest('van_dung_cao is not part of the three-level set of this matrix', 'quiz.matrix_level_not_in_set');
     }
     if (matrix.scopeNodeIds && matrix.scopeNodeIds.length && !matrix.scopeNodeIds.includes(input.curriculumNodeId)) {
-      throw new BadRequestException({ message: 'Curriculum node is outside the taught scope of this matrix', code: 'quiz.matrix_cell_out_of_scope' });
+      badRequest('Curriculum node is outside the taught scope of this matrix', 'quiz.matrix_cell_out_of_scope');
     }
     const node = await this.curriculum.getNode(actorId, input.curriculumNodeId);
     if (node.curriculumId !== matrix.curriculumId) {
-      throw new BadRequestException({ message: 'Curriculum node does not belong to the curriculum of this matrix', code: 'quiz.matrix_cell_node_mismatch' });
+      badRequest('Curriculum node does not belong to the curriculum of this matrix', 'quiz.matrix_cell_node_mismatch');
     }
     const cells = await this.repo.listMatrixCells(matrix.id);
     if (cells.some((c) => c.curriculumNodeId === input.curriculumNodeId && c.cognitiveLevel === input.cognitiveLevel && c.qtype === input.qtype)) {
-      throw new BadRequestException({ message: 'A cell already exists for this curriculum node, level and question type', code: 'quiz.matrix_cell_exists' });
+      badRequest('A cell already exists for this curriculum node, level and question type', 'quiz.matrix_cell_exists');
     }
     const position = input.position ?? (cells.length ? Math.max(...cells.map((c) => c.position)) + 1 : 1);
     const cellValues = {

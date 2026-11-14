@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { badRequest, conflict, notFound } from '../../common/http-errors';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
@@ -76,7 +77,7 @@ export class CurriculumService implements OnModuleInit {
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject slug ${input.slug} is already taken`, code: 'curriculum.subject_slug_taken' });
+        conflict(`Subject slug ${input.slug} is already taken`, 'curriculum.subject_slug_taken');
       }
       throw err;
     }
@@ -98,7 +99,7 @@ export class CurriculumService implements OnModuleInit {
       await this.repo.updateSubject(id, input);
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject slug ${input.slug} is already taken`, code: 'curriculum.subject_slug_taken' });
+        conflict(`Subject slug ${input.slug} is already taken`, 'curriculum.subject_slug_taken');
       }
       throw err;
     }
@@ -121,7 +122,7 @@ export class CurriculumService implements OnModuleInit {
       return await this.repo.insertCurriculum({ subjectId: subject.id, grade: input.grade });
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject already has a curriculum for grade ${input.grade}`, code: 'curriculum.grade_exists' });
+        conflict(`Subject already has a curriculum for grade ${input.grade}`, 'curriculum.grade_exists');
       }
       throw err;
     }
@@ -143,7 +144,7 @@ export class CurriculumService implements OnModuleInit {
       await this.repo.updateCurriculum(id, input);
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new ConflictException({ message: `Subject already has a curriculum for grade ${input.grade}`, code: 'curriculum.grade_exists' });
+        conflict(`Subject already has a curriculum for grade ${input.grade}`, 'curriculum.grade_exists');
       }
       throw err;
     }
@@ -188,7 +189,7 @@ export class CurriculumService implements OnModuleInit {
     await this.evaluator.requireCapability(actorId, CURRICULUM_MANAGE, subject.contextId);
     if (input.parentId !== undefined && input.parentId !== null) {
       if (input.parentId === id) {
-        throw new BadRequestException({ message: 'A node cannot be its own parent', code: 'curriculum.node_parent_self' });
+        badRequest('A node cannot be its own parent', 'curriculum.node_parent_self');
       }
       await this.assertParentInCurriculum(input.parentId, node.curriculumId);
       await this.assertNoParentCycle(id, input.parentId, node.curriculumId);
@@ -410,41 +411,38 @@ export class CurriculumService implements OnModuleInit {
     if (refs.examMatrixCells > 0) parts.push(`${refs.examMatrixCells} exam matrix cell(s)`);
     if (refs.questionOutcomes > 0) parts.push(`${refs.questionOutcomes} question–outcome link(s)`);
     if (parts.length === 0) return;
-    throw new ConflictException({
-      message: `Cannot delete ${what}: still referenced by ${parts.join(', ')}. Remove those references first.`,
-      code: 'curriculum.delete_referenced',
-    });
+    conflict(`Cannot delete ${what}: still referenced by ${parts.join(', ')}. Remove those references first.`, 'curriculum.delete_referenced');
   }
 
 
   private async subjectOr404(id: string): Promise<SubjectRow> {
     const row = await this.repo.getSubject(id);
-    if (!row) throw new NotFoundException({ message: `Subject ${id} not found`, code: 'curriculum.subject_not_found' });
+    if (!row) notFound(`Subject ${id} not found`, 'curriculum.subject_not_found');
     return row;
   }
   private async curriculumChainOr404(id: string): Promise<{ curriculum: CurriculumRow; subject: SubjectRow }> {
     const curriculum = await this.repo.getCurriculum(id);
-    if (!curriculum) throw new NotFoundException({ message: `Curriculum ${id} not found`, code: 'curriculum.curriculum_not_found' });
+    if (!curriculum) notFound(`Curriculum ${id} not found`, 'curriculum.curriculum_not_found');
     const subject = await this.subjectOr404(curriculum.subjectId);
     return { curriculum, subject };
   }
   private async nodeChainOr404(id: string): Promise<{ node: CurriculumNodeRow; curriculum: CurriculumRow; subject: SubjectRow }> {
     const node = await this.repo.getNode(id);
-    if (!node) throw new NotFoundException({ message: `Curriculum node ${id} not found`, code: 'curriculum.node_not_found' });
+    if (!node) notFound(`Curriculum node ${id} not found`, 'curriculum.node_not_found');
     const { curriculum, subject } = await this.curriculumChainOr404(node.curriculumId);
     return { node, curriculum, subject };
   }
   private async outcomeChainOr404(id: string): Promise<{ outcome: LearningOutcomeRow; node: CurriculumNodeRow; subject: SubjectRow }> {
     const outcome = await this.repo.getOutcome(id);
-    if (!outcome) throw new NotFoundException({ message: `Learning outcome ${id} not found`, code: 'curriculum.outcome_not_found' });
+    if (!outcome) notFound(`Learning outcome ${id} not found`, 'curriculum.outcome_not_found');
     const { node, subject } = await this.nodeChainOr404(outcome.nodeId);
     return { outcome, node, subject };
   }
   private async assertParentInCurriculum(parentId: string, curriculumId: string): Promise<void> {
     const parent = await this.repo.getNode(parentId);
-    if (!parent) throw new NotFoundException({ message: `Curriculum node ${parentId} not found`, code: 'curriculum.node_not_found' });
+    if (!parent) notFound(`Curriculum node ${parentId} not found`, 'curriculum.node_not_found');
     if (parent.curriculumId !== curriculumId) {
-      throw new BadRequestException({ message: 'Parent node belongs to a different curriculum', code: 'curriculum.node_parent_mismatch' });
+      badRequest('Parent node belongs to a different curriculum', 'curriculum.node_parent_mismatch');
     }
   }
 
@@ -455,10 +453,7 @@ export class CurriculumService implements OnModuleInit {
     let cursor: string | null = newParentId;
     while (cursor !== null) {
       if (cursor === nodeId) {
-        throw new BadRequestException({
-          message: 'The new parent is a descendant of this node; the change would create a cycle in the curriculum tree',
-          code: 'curriculum.node_parent_cycle',
-        });
+        badRequest('The new parent is a descendant of this node; the change would create a cycle in the curriculum tree', 'curriculum.node_parent_cycle');
       }
       if (visited.has(cursor)) break;
       visited.add(cursor);
@@ -468,22 +463,16 @@ export class CurriculumService implements OnModuleInit {
 
   private async assertOutcomeSource(state: { sourceKind: string; derivedFromId: string | null }, selfId?: string): Promise<void> {
     if (state.sourceKind === 'derived' && state.derivedFromId === null) {
-      throw new BadRequestException({
-        message: 'derivedFromId is required when sourceKind is derived',
-        code: 'curriculum.outcome_derived_from_required',
-      });
+      badRequest('derivedFromId is required when sourceKind is derived', 'curriculum.outcome_derived_from_required');
     }
     if (state.derivedFromId === null) return;
     if (selfId !== undefined && state.derivedFromId === selfId) {
-      throw new BadRequestException({ message: 'A learning outcome cannot be derived from itself', code: 'curriculum.outcome_derived_from_self' });
+      badRequest('A learning outcome cannot be derived from itself', 'curriculum.outcome_derived_from_self');
     }
     if (state.sourceKind !== 'derived') {
-      throw new BadRequestException({
-        message: 'derivedFromId is only used when sourceKind is derived',
-        code: 'curriculum.outcome_derived_from_mismatch',
-      });
+      badRequest('derivedFromId is only used when sourceKind is derived', 'curriculum.outcome_derived_from_mismatch');
     }
     const origin = await this.repo.getOutcome(state.derivedFromId);
-    if (!origin) throw new NotFoundException({ message: `Learning outcome ${state.derivedFromId} not found`, code: 'curriculum.outcome_not_found' });
+    if (!origin) notFound(`Learning outcome ${state.derivedFromId} not found`, 'curriculum.outcome_not_found');
   }
 }

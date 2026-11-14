@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -49,10 +50,7 @@ export class TagsService {
 
   private assertArea(component: string, itemType: string): void {
     if (!TAG_AREAS.some((a) => a.component === component && a.itemType === itemType)) {
-      throw new BadRequestException({
-        message: `No tag area registered for ${component}/${itemType}`,
-        code: 'tags.area_not_registered',
-      });
+      badRequest(`No tag area registered for ${component}/${itemType}`, 'tags.area_not_registered');
     }
   }
 
@@ -130,7 +128,7 @@ export class TagsService {
 
   async getCorrelated(tagId: string): Promise<{ tagId: string; correlatedTags: string[] }> {
     const tagRow = await this.repo.getTag(tagId);
-    if (!tagRow) throw new NotFoundException({ message: `Tag ${tagId} not found`, code: 'tags.not_found' });
+    if (!tagRow) notFound(`Tag ${tagId} not found`, 'tags.not_found');
     const row = await this.repo.getCorrelation(tagId);
     return {
       tagId: tagId,

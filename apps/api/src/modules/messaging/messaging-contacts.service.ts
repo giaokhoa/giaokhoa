@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { UsersService } from '../users/users.service';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { MessagingRealtimeService } from './messaging-realtime.service';
@@ -27,13 +27,13 @@ export class MessagingContactsService {
 
 
   async requestContact(userId: string, contactId: string): Promise<{ status: 'pending' | 'accepted'; contacts: string[] }> {
-    if (contactId === userId) throw new BadRequestException({ message: 'You cannot add yourself as a contact', code: 'messaging.contact_self' });
+    if (contactId === userId) badRequest('You cannot add yourself as a contact', 'messaging.contact_self');
     await this.users.getUser(contactId);
     if (await this.repo.isContact(userId, contactId)) {
       return { status: 'accepted', contacts: await this.repo.listContacts(userId) };
     }
     if (await this.repo.isBlocked(contactId, userId) || await this.repo.isBlocked(userId, contactId)) {
-      throw new ForbiddenException({ message: 'A block between you and this user prevents contact requests', code: 'messaging.contact_blocked' });
+      forbidden('A block between you and this user prevents contact requests', 'messaging.contact_blocked');
     }
     if (await this.repo.getContactRequest(contactId, userId)) {
       await this.repo.deleteContactRequest(contactId, userId);
@@ -87,7 +87,7 @@ export class MessagingContactsService {
 
   async getPersonProfile(viewerId: string, targetId: string): Promise<{ userId: string; displayName: string; username: string; email: string }> {
     if (viewerId !== targetId && !(await this.repo.sharesDirectConversation(viewerId, targetId)) && !(await this.users.canViewUserIdentity(viewerId, targetId))) {
-      throw new NotFoundException({ message: `Person profile ${targetId} not found`, code: 'messaging.person_profile_not_found' });
+      notFound(`Person profile ${targetId} not found`, 'messaging.person_profile_not_found');
     }
     const row = await this.users.getUser(targetId);
     return { userId: row.id, displayName: displayNameOf(row), username: row.username, email: row.email };
@@ -96,7 +96,7 @@ export class MessagingContactsService {
   async acceptContactRequest(userId: string, requesterId: string): Promise<{ contacts: string[] }> {
     await this.users.getUser(requesterId);
     const request = await this.repo.getContactRequest(requesterId, userId);
-    if (!request) throw new NotFoundException({ message: `No pending contact request from ${requesterId}`, code: 'messaging.contact_request_not_found' });
+    if (!request) notFound(`No pending contact request from ${requesterId}`, 'messaging.contact_request_not_found');
     await this.repo.deleteContactRequest(requesterId, userId);
     await this.repo.addContactPair(userId, requesterId);
     return { contacts: await this.repo.listContacts(userId) };
@@ -105,7 +105,7 @@ export class MessagingContactsService {
   async declineContactRequest(userId: string, requesterId: string): Promise<{ declined: boolean }> {
     await this.users.getUser(requesterId);
     const request = await this.repo.getContactRequest(requesterId, userId);
-    if (!request) throw new NotFoundException({ message: `No pending contact request from ${requesterId}`, code: 'messaging.contact_request_not_found' });
+    if (!request) notFound(`No pending contact request from ${requesterId}`, 'messaging.contact_request_not_found');
     await this.repo.deleteContactRequest(requesterId, userId);
     return { declined: true };
   }
@@ -127,15 +127,12 @@ export class MessagingContactsService {
       || (await this.repo.isBlocked(recipientId, senderId));
     if (!blockedEitherWay && await this.repo.findTeacherStudentSharedCourseId(senderId, recipientId)) return;
     if (!blockedEitherWay && await this.repo.findTeacherStudentSharedClassId(senderId, recipientId)) return;
-    throw new ForbiddenException({
-      message: 'You can only message a contact directly — send a contact request from the course member list and wait for it to be accepted',
-      code: 'messaging.not_a_contact',
-    });
+    forbidden('You can only message a contact directly — send a contact request from the course member list and wait for it to be accepted', 'messaging.not_a_contact');
   }
 
 
   async blockContact(userId: string, blockedUserId: string): Promise<{ blocked: string[] }> {
-    if (blockedUserId === userId) throw new BadRequestException({ message: 'You cannot block yourself', code: 'messaging.block_self' });
+    if (blockedUserId === userId) badRequest('You cannot block yourself', 'messaging.block_self');
     await this.users.getUser(blockedUserId);
     await this.repo.block(userId, blockedUserId);
     return { blocked: await this.repo.listBlocked(userId) };

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { AccessRepository, type ContextRow } from '@giaokhoa/db/repositories/access';
 import type { CentreTx } from '@giaokhoa/db';
@@ -34,7 +35,7 @@ export class ContextsService {
     const parent = contextLevel === CONTEXT_LEVELS.SYSTEM
       ? undefined
       : await this.repo.getContextById(parentId ?? (await this.ensureSystemContext(tx)).id, tx);
-    if (contextLevel !== CONTEXT_LEVELS.SYSTEM && !parent) throw new BadRequestException({ message: 'Parent context not found', code: 'access.parent_context_not_found' });
+    if (contextLevel !== CONTEXT_LEVELS.SYSTEM && !parent) badRequest('Parent context not found', 'access.parent_context_not_found');
     const row = await this.repo.insertContext({ contextLevel, instanceId, path: '', depth: 0 }, tx);
     const path = parent ? `${parent.path}/${row.id}` : `/${row.id}`;
     const depth = parent ? parent.depth + 1 : 1;
@@ -44,7 +45,7 @@ export class ContextsService {
 
   async getContext(id: string, tx?: CentreTx): Promise<ContextRow> {
     const row = uuidIdSchema.safeParse(id).success ? await this.repo.getContextById(id, tx) : undefined;
-    if (!row) throw new NotFoundException({ message: `Context ${id} not found`, code: 'access.context_not_found' });
+    if (!row) notFound(`Context ${id} not found`, 'access.context_not_found');
     return row;
   }
   async getByLevelInstance(contextLevel: number, instanceId: string): Promise<ContextRow | undefined> {

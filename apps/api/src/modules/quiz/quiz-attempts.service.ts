@@ -1,9 +1,5 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { Logger } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import type {
   QuestionSolution,
   QuizAttemptSummary,
@@ -229,7 +225,7 @@ export class QuizAttemptsService {
     const isStaffViewer = manage || grade || viewReports || preview;
     const view = await this.shared.pinView(quiz, isStaffViewer);
     if (!isStaffViewer && !(await this.isInTargetGroup(quiz, actorId))) {
-      throw new NotFoundException({ message: `Exam pin ${pinId} not found`, code: 'exam.pin_not_found' });
+      notFound(`Exam pin ${pinId} not found`, 'exam.pin_not_found');
     }
     const mine = await this.repo.listAttemptsForUser(quiz.id, actorId, true);
     const rawSummaries = await this.shared.attemptSummaries(quiz, mine);
@@ -272,7 +268,7 @@ export class QuizAttemptsService {
       await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.attempt);
       await this.courses.assertCourseAccess(actorId, quiz.course);
       if (!(await this.isInTargetGroup(quiz, actorId))) {
-        throw new ForbiddenException({ message: 'This exam is limited to a specific group of this course', code: 'exam.pin_not_in_target_group' });
+        forbidden('This exam is limited to a specific group of this course', 'exam.pin_not_in_target_group');
       }
     }
     const existing = await this.repo.listAttemptsForUser(quiz.id, actorId, true);
@@ -288,40 +284,40 @@ export class QuizAttemptsService {
       const effective = await this.resolveEffectiveSettings(quiz, actorId);
       effectiveForSnapshot = effective;
       if (effective.timeOpen && now < effective.timeOpen) {
-        throw new ForbiddenException({ message: 'This quiz is not open yet', code: 'quiz.not_yet_open' });
+        forbidden('This quiz is not open yet', 'quiz.not_yet_open');
       }
       if (quiz.lateEntryMinutes !== null && effective.timeOpen
         && now.getTime() > effective.timeOpen.getTime() + quiz.lateEntryMinutes * 60_000) {
-        throw new ForbiddenException({ message: 'The late-entry window for this quiz has passed', code: 'quiz.late_entry_closed' });
+        forbidden('The late-entry window for this quiz has passed', 'quiz.late_entry_closed');
       }
       if (effective.timeClose && now > effective.timeClose) {
-        throw new ForbiddenException({ message: 'This quiz is closed', code: 'quiz.closed' });
+        forbidden('This quiz is closed', 'quiz.closed');
       }
       const mine = existing.filter((a) => !a.preview);
       if (effective.attemptsAllowed > 0 && mine.length >= effective.attemptsAllowed) {
-        throw new ForbiddenException({ message: 'No more attempts are allowed for this quiz', code: 'quiz.no_more_attempts' });
+        forbidden('No more attempts are allowed for this quiz', 'quiz.no_more_attempts');
       }
       if (effective.passwordRequired) {
         if (opts.password === undefined || opts.password === '') {
-          throw new ForbiddenException({ message: 'A password is required to start this quiz', code: 'quiz.password_required' });
+          forbidden('A password is required to start this quiz', 'quiz.password_required');
         }
         let matched = false;
         for (const hash of effective.passwordHashes) {
           if (await this.passwords.verify(hash, opts.password)) { matched = true; break; }
         }
         if (!matched) {
-          throw new ForbiddenException({ message: 'The quiz password is incorrect', code: 'quiz.password_incorrect' });
+          forbidden('The quiz password is incorrect', 'quiz.password_incorrect');
         }
       }
       this.assertSubnetAllowed(quiz, opts.clientIp);
     }
     const slots = await this.shared.effectiveSlots(quiz);
-    if (!slots.length) throw new BadRequestException({ message: 'This quiz has no questions yet', code: 'quiz.no_questions' });
+    if (!slots.length) badRequest('This quiz has no questions yet', 'quiz.no_questions');
 
     const resolvedSlots: { quizSlot: EffectiveSlotRow; questionId: string }[] = [];
     for (const s of slots) {
       if (!s.questionId) {
-        throw new BadRequestException({ message: `Slot ${s.slot} of this pin has no pinned question`, code: 'exam.pin_slot_unresolved' });
+        badRequest(`Slot ${s.slot} of this pin has no pinned question`, 'exam.pin_slot_unresolved');
       }
       resolvedSlots.push({ quizSlot: s, questionId: s.questionId });
     }
@@ -377,7 +373,7 @@ export class QuizAttemptsService {
   private assertSubnetAllowed(quiz: PinRow, clientIp: string | undefined): void {
     if (!quiz.subnet) return;
     if (!clientIp || !ipMatchesSubnetList(clientIp, quiz.subnet)) {
-      throw new ForbiddenException({ message: 'Your network address is not allowed for this quiz', code: 'quiz.subnet_denied' });
+      forbidden('Your network address is not allowed for this quiz', 'quiz.subnet_denied');
     }
   }
 
@@ -551,10 +547,10 @@ export class QuizAttemptsService {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
     if (row.userId !== actorId) {
-      throw new ForbiddenException({ message: 'Only the attempt owner can answer', code: 'quiz.attempt_forbidden' });
+      forbidden('Only the attempt owner can answer', 'quiz.attempt_forbidden');
     }
     if (row.state !== 'inprogress') {
-      throw new BadRequestException({ message: 'This attempt is already submitted', code: 'quiz.attempt_already_submitted' });
+      badRequest('This attempt is already submitted', 'quiz.attempt_already_submitted');
     }
     if (!row.preview) this.assertSubnetAllowed(quiz, clientIp);
     if (await this.isOverdue(quiz, row)) {
@@ -562,7 +558,7 @@ export class QuizAttemptsService {
     }
     const usage = await this.questions.getUsage(row.usageId);
     if (!usage.attempts.some((a) => a.id === input.questionAttemptId)) {
-      throw new NotFoundException({ message: `Question attempt ${input.questionAttemptId} is not part of this quiz attempt`, code: 'quiz.question_attempt_not_found' });
+      notFound(`Question attempt ${input.questionAttemptId} is not part of this quiz attempt`, 'quiz.question_attempt_not_found');
     }
     await this.questions.submitResponse(actorId, input.questionAttemptId, input.response ?? null);
     return this.buildAttemptView(quiz, await this.shared.getAttemptRow(attemptId), false);
@@ -594,7 +590,7 @@ export class QuizAttemptsService {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
     if (row.userId !== actorId) {
-      throw new ForbiddenException({ message: 'Only the attempt owner can submit', code: 'quiz.attempt_forbidden' });
+      forbidden('Only the attempt owner can submit', 'quiz.attempt_forbidden');
     }
     return this.finalizeAttempt(quiz, row, await this.isOverdue(quiz, row));
   }
@@ -797,7 +793,7 @@ export class QuizAttemptsService {
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.grade);
     const usage = await this.questions.getUsage(row.usageId);
     if (!usage.attempts.some((a) => a.id === input.questionAttemptId)) {
-      throw new NotFoundException({ message: `Question attempt ${input.questionAttemptId} is not part of this quiz attempt`, code: 'quiz.question_attempt_not_found' });
+      notFound(`Question attempt ${input.questionAttemptId} is not part of this quiz attempt`, 'quiz.question_attempt_not_found');
     }
     await this.questions.manualGradeAttempt(actorId, input.questionAttemptId, input.mark, input.comment);
     const after = await this.questions.getUsage(row.usageId);
@@ -822,14 +818,14 @@ export class QuizAttemptsService {
   async recordAttemptEvent(actorId: string, attemptId: string, input: { type: string; data?: Record<string, unknown> }): Promise<ExamAttemptEventRow> {
     const row = await this.shared.getAttemptRow(attemptId);
     if (row.userId !== actorId) {
-      throw new ForbiddenException({ message: 'This attempt belongs to another user', code: 'quiz.attempt_forbidden' });
+      forbidden('This attempt belongs to another user', 'quiz.attempt_forbidden');
     }
     const quiz = await this.shared.getPin(row.pinId);
     if (!quiz.monitorEvents) {
-      throw new BadRequestException({ message: 'Event monitoring is not enabled for this quiz', code: 'quiz.monitoring_disabled' });
+      badRequest('Event monitoring is not enabled for this quiz', 'quiz.monitoring_disabled');
     }
     if (row.state !== 'inprogress') {
-      throw new BadRequestException({ message: 'Events can only be recorded while the attempt is in progress', code: 'quiz.attempt_not_in_progress' });
+      badRequest('Events can only be recorded while the attempt is in progress', 'quiz.attempt_not_in_progress');
     }
     return this.repo.insertAttemptEvent({ attemptId: row.id, type: input.type, data: input.data ?? null });
   }
@@ -888,12 +884,12 @@ export class QuizAttemptsService {
     for (const entry of input.grades) {
       const row = await this.shared.getAttemptRow(entry.attemptId);
       if (row.pinId !== quiz.id) {
-        throw new BadRequestException({ message: `Attempt ${entry.attemptId} does not belong to this quiz`, code: 'quiz.attempt_quiz_mismatch' });
+        badRequest(`Attempt ${entry.attemptId} does not belong to this quiz`, 'quiz.attempt_quiz_mismatch');
       }
       const usage = await this.questions.getUsage(row.usageId);
       const qa = usage.attempts.find((a) => a.questionId === input.questionId);
       if (!qa) {
-        throw new BadRequestException({ message: `Attempt ${entry.attemptId} does not contain question ${input.questionId}`, code: 'quiz.question_not_in_attempt' });
+        badRequest(`Attempt ${entry.attemptId} does not contain question ${input.questionId}`, 'quiz.question_not_in_attempt');
       }
       const view = await this.manualGrade(actorId, entry.attemptId, {
         questionAttemptId: qa.id, mark: entry.mark, comment: entry.comment,

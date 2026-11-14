@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { ForbiddenException, BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
+import { badRequest, conflict, notFound } from '../../common/http-errors';
 import type { Queue } from 'bullmq';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { FilesRepository, type FileRow } from '@giaokhoa/db/repositories/files';
@@ -47,7 +48,7 @@ export class FilesService {
 
   async upload(input: UploadInput): Promise<FileRow> {
     if (!input.fileName || input.fileName.includes('/') || input.fileName.includes('\\')) {
-      throw new BadRequestException({ message: 'Invalid filename', code: 'file.invalid_filename' });
+      badRequest('Invalid filename', 'file.invalid_filename');
     }
     const contentHash = sha256Hex(input.data);
     const storageDomain = await this.currentStorageDomain();
@@ -66,14 +67,14 @@ export class FilesService {
     fileName: string; data: Buffer; userId?: string;
   }): Promise<FileRow> {
     if (input.data.length === 0) {
-      throw new BadRequestException({ message: 'Empty file', code: 'file.empty' });
+      badRequest('Empty file', 'file.empty');
     }
     if (input.data.length > QUESTION_IMAGE_MAX_BYTES) {
-      throw new BadRequestException({ message: 'Question image exceeds 8 MB', code: 'file.image_too_large' });
+      badRequest('Question image exceeds 8 MB', 'file.image_too_large');
     }
     const mimeType = sniffImageMimeType(input.data);
     if (!mimeType) {
-      throw new BadRequestException({ message: 'Only PNG, JPEG, WebP or GIF images are allowed in question content', code: 'file.not_image' });
+      badRequest('Only PNG, JPEG, WebP or GIF images are allowed in question content', 'file.not_image');
     }
     return this.upload({
       contextId: input.contextId, component: 'question', fileArea: input.fileArea,
@@ -110,7 +111,7 @@ export class FilesService {
 
   async getFile(id: string): Promise<FileRow> {
     const row = await this.repo.getById(id);
-    if (!row || !(await this.canAccessDomain(row))) throw new NotFoundException({ message: `File ${id} not found`, code: 'file.not_found' });
+    if (!row || !(await this.canAccessDomain(row))) notFound(`File ${id} not found`, 'file.not_found');
     return row;
   }
   private async currentStorageDomain(): Promise<string> {
@@ -217,14 +218,14 @@ export class FilesService {
     }
     for (const s of submissions.values()) {
       if (s.userId !== actor.id) {
-        throw new NotFoundException({ message: `File ${file.id} is not part of this submission`, code: 'assign.submission_file_not_found' });
+        notFound(`File ${file.id} is not part of this submission`, 'assign.submission_file_not_found');
       }
       const grade = await this.repo.getGradeForSubmission(s.assignmentId, s.userId);
       if (grade && grade.attemptNumber === s.attemptNumber && grade.status === 'released') {
-        throw new ConflictException({ message: 'Submission has been returned and is locked', code: 'assign.already_graded' });
+        conflict('Submission has been returned and is locked', 'assign.already_graded');
       }
       if (s.status !== 'draft') {
-        throw new ConflictException({ message: 'Submission is finalized; reopen it before changing files', code: 'assign.submission_finalized' });
+        conflict('Submission is finalized; reopen it before changing files', 'assign.submission_finalized');
       }
     }
   }
@@ -276,30 +277,30 @@ export class FilesService {
       ...(slug ? { spaceSlug: slug, spaceId: scope?.spaceId, spaceHandle: scope?.spaceHandle } : {}),
     };
     const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
-    if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+    if (!file) notFound(`File ${fileId} not found`, 'file.not_found');
 
     const owner = file.component === 'core_contentbank' && file.itemId
       ? await tenantAls.run(platformScope, () => this.repo.contentBankTenant(file.itemId!))
       : undefined;
     if (file.component === 'core_contentbank' && !owner) {
-      throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+      notFound(`File ${fileId} not found`, 'file.not_found');
     }
     if (file.storageDomain !== LEGACY_FILE_DOMAIN && file.storageDomain !== await this.currentStorageDomain()) {
-      throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+      notFound(`File ${fileId} not found`, 'file.not_found');
     }
     this.signing.verify(fileId, await this.signatureScope(file, owner), token);
 
     if (file.component === 'core_contentbank') {
       if (slug) {
-        if (!this.spaceDb) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+        if (!this.spaceDb) notFound(`File ${fileId} not found`, 'file.not_found');
         const tenant = await tenantAls.run(platformScope, () =>
           this.spaceDb!.routedKysely.selectFrom('tenants').select('id').where('slug', '=', slug).executeTakeFirst());
         if (!tenant || tenant.id !== owner) {
-          throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+          notFound(`File ${fileId} not found`, 'file.not_found');
         }
       }
     } else if (!(await this.canAccessDomain(file))) {
-      throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+      notFound(`File ${fileId} not found`, 'file.not_found');
     }
     return { file, data: await this.storage.get(file.storageDomain, file.contentHash) };
   }

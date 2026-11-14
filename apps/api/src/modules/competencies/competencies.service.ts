@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -95,10 +96,10 @@ export class CompetenciesService implements OnModuleInit {
 
   async createFramework(actorId: string, input: { shortName: string; idNumber?: string; description?: string; scale: ScaleConfiguration; visible?: boolean }): Promise<FrameworkRow> {
     await this.requireManage(actorId);
-    if (!input.scale.values.length) throw new BadRequestException({ message: 'A framework scale needs at least one value', code: 'competency.scale_empty' });
+    if (!input.scale.values.length) badRequest('A framework scale needs at least one value', 'competency.scale_empty');
     for (const idx of input.scale.proficient) {
       if (idx < 0 || idx >= input.scale.values.length) {
-        throw new BadRequestException({ message: `Proficient index ${idx} is outside the scale`, code: 'competency.scale_proficient_range' });
+        badRequest(`Proficient index ${idx} is outside the scale`, 'competency.scale_proficient_range');
       }
     }
     return this.repo.insertFramework({
@@ -108,7 +109,7 @@ export class CompetenciesService implements OnModuleInit {
   }
   async getFramework(id: string): Promise<FrameworkRow> {
     const row = await this.repo.getFramework(id);
-    if (!row) throw new NotFoundException({ message: `Framework ${id} not found`, code: 'competency.framework_not_found' });
+    if (!row) notFound(`Framework ${id} not found`, 'competency.framework_not_found');
     return row;
   }
   async listFrameworks(): Promise<FrameworkRow[]> { return this.repo.listFrameworks(); }
@@ -120,7 +121,7 @@ export class CompetenciesService implements OnModuleInit {
     let parent: CompetencyRow | undefined;
     if (input.parentId) {
       parent = await this.getCompetency(input.parentId);
-      if (parent.frameworkId !== frameworkId) throw new BadRequestException({ message: 'Parent competency belongs to another framework', code: 'competency.parent_framework_mismatch' });
+      if (parent.frameworkId !== frameworkId) badRequest('Parent competency belongs to another framework', 'competency.parent_framework_mismatch');
     }
     const created = await this.repo.insertCompetency({
       frameworkId: frameworkId, shortName: input.shortName, idNumber: input.idNumber ?? '',
@@ -133,7 +134,7 @@ export class CompetenciesService implements OnModuleInit {
   }
   async getCompetency(id: string): Promise<CompetencyRow> {
     const row = await this.repo.getCompetency(id);
-    if (!row) throw new NotFoundException({ message: `Competency ${id} not found`, code: 'competency.not_found' });
+    if (!row) notFound(`Competency ${id} not found`, 'competency.not_found');
     return row;
   }
   async listCompetencies(frameworkId: string): Promise<CompetencyRow[]> {
@@ -157,7 +158,7 @@ export class CompetenciesService implements OnModuleInit {
     const canView = (await this.evaluator.hasCapability(actorId, 'competency:competencymanage', sys))
       || (await this.evaluator.hasCapability(actorId, 'competency:usercompetencyreview', sys));
     if (!canView) {
-      throw new ForbiddenException({ message: 'You cannot view competency rule configuration', code: 'competency.rule_forbidden' });
+      forbidden('You cannot view competency rule configuration', 'competency.rule_forbidden');
     }
     return this.getCompetencyRule(competencyId);
   }
@@ -166,7 +167,7 @@ export class CompetenciesService implements OnModuleInit {
     await this.requireManage(actorId);
     const parent = await this.getCompetency(competencyId);
     void parent;
-    const invalid = (msg: string): never => { throw new BadRequestException({ message: msg, code: 'competency.rule_invalid' }); };
+    const invalid = (msg: string): never => { badRequest(msg, 'competency.rule_invalid'); };
     const outcome = this.assertOutcome(input.outcome === 'nothing' ? 'nothing' : input.outcome);
     if (!Number.isInteger(input.pointsRequired) || input.pointsRequired < 1) invalid('The points required must be at least 1');
     const children = await this.repo.listChildren(competencyId);
@@ -263,7 +264,7 @@ export class CompetenciesService implements OnModuleInit {
   }
 
   private validateFrameworkExport(doc: FrameworkExportDoc): void {
-    const invalid = (msg: string): never => { throw new BadRequestException({ message: msg, code: 'competency.import_invalid' }); };
+    const invalid = (msg: string): never => { badRequest(msg, 'competency.import_invalid'); };
     if (!doc.framework.scale.values.length) invalid('The framework scale needs at least one value');
     for (const idx of doc.framework.scale.proficient) {
       if (!Number.isInteger(idx) || idx < 0 || idx >= doc.framework.scale.values.length) invalid('A proficient index is outside the scale');
@@ -309,7 +310,7 @@ export class CompetenciesService implements OnModuleInit {
       const pending = [...doc.competencies];
       while (pending.length) {
         const idx = pending.findIndex((c) => c.parentKey === null || mapped.has(c.parentKey));
-        if (idx === -1) throw new BadRequestException({ message: 'The competency tree contains a cycle', code: 'competency.import_invalid' });
+        if (idx === -1) badRequest('The competency tree contains a cycle', 'competency.import_invalid');
         const [node] = pending.splice(idx, 1);
         const parentInfo = node.parentKey ? mapped.get(node.parentKey)! : undefined;
         const created = await this.repo.insertCompetency({
@@ -354,7 +355,7 @@ export class CompetenciesService implements OnModuleInit {
 
   private assertOutcome(outcome: string): RuleOutcome {
     if (!RULE_OUTCOMES.includes(outcome as RuleOutcome)) {
-      throw new BadRequestException({ message: `Unknown ruleOutcome ${outcome} (expected complete | attach-evidence | nothing)`, code: 'competency.bad_ruleoutcome' });
+      badRequest(`Unknown ruleOutcome ${outcome} (expected complete | attach-evidence | nothing)`, 'competency.bad_ruleoutcome');
     }
     return outcome as RuleOutcome;
   }
@@ -392,7 +393,7 @@ export class CompetenciesService implements OnModuleInit {
 
   async getUsercomp(id: string): Promise<UsercompRow> {
     const row = await this.repo.getUsercomp(id);
-    if (!row) throw new NotFoundException({ message: `User competency ${id} not found`, code: 'competency.usercomp_not_found' });
+    if (!row) notFound(`User competency ${id} not found`, 'competency.usercomp_not_found');
     return row;
   }
   async listUsercompsForUser(userId: string): Promise<UsercompRow[]> {
@@ -403,7 +404,7 @@ export class CompetenciesService implements OnModuleInit {
     if (actorId === targetUserId) return;
     const sys = await this.systemCtx();
     if (await this.evaluator.hasCapability(actorId, 'competency:usercompetencyreview', sys)) return;
-    throw new ForbiddenException({ message: 'You cannot view the competency profile of another user', code: 'competency.usercomp_forbidden' });
+    forbidden('You cannot view the competency profile of another user', 'competency.usercomp_forbidden');
   }
 
   async listUsercompsForUserFor(actorId: string, userId: string): Promise<UsercompRow[]> {
@@ -421,10 +422,7 @@ export class CompetenciesService implements OnModuleInit {
     const framework = await this.getFramework(competencyRow.frameworkId);
     const scale = parseScale(framework);
     if (!Number.isInteger(grade) || grade < 0 || grade >= scale.values.length) {
-      throw new BadRequestException({
-        message: `Grade ${grade} is not a value of the framework scale (0..${scale.values.length - 1})`,
-        code: 'competency.grade_outside_scale',
-      });
+      badRequest(`Grade ${grade} is not a value of the framework scale (0..${scale.values.length - 1})`, 'competency.grade_outside_scale');
     }
     return framework;
   }
@@ -496,7 +494,7 @@ export class CompetenciesService implements OnModuleInit {
         await this.evaluator.requireCapability(actorId, 'competency:planmanage', systemCtx);
       }
       if (usercomp.status !== USERCOMP_REVIEW.NONE) {
-        throw new BadRequestException({ message: 'A review is already in progress for this competency', code: 'competency.review_in_progress' });
+        badRequest('A review is already in progress for this competency', 'competency.review_in_progress');
       }
       await this.repo.updateUsercomp(usercompId, { status: USERCOMP_REVIEW.WAITING });
       await this.repo.insertEvidence({ userCompetencyId: usercompId, actionUserId: actorId, action: 'review_requested', description: 'Review requested', note: opts?.note ?? '' });
@@ -504,20 +502,20 @@ export class CompetenciesService implements OnModuleInit {
       await this.evaluator.requireCapability(actorId, 'competency:usercompetencyreview', systemCtx);
       if (action === 'start') {
         if (usercomp.status !== USERCOMP_REVIEW.WAITING) {
-          throw new BadRequestException({ message: 'Review can only start from waitingforreview', code: 'competency.review_not_waiting' });
+          badRequest('Review can only start from waitingforreview', 'competency.review_not_waiting');
         }
         await this.repo.updateUsercomp(usercompId, { status: USERCOMP_REVIEW.IN_REVIEW, reviewerId: actorId });
         await this.repo.insertEvidence({ userCompetencyId: usercompId, actionUserId: actorId, action: 'review_started', description: 'Review started', note: opts?.note ?? '' });
       } else if (action === 'approve') {
         if (usercomp.status !== USERCOMP_REVIEW.IN_REVIEW && usercomp.status !== USERCOMP_REVIEW.WAITING) {
-          throw new BadRequestException({ message: 'Only a competency in review can be approved', code: 'competency.review_not_in_review' });
+          badRequest('Only a competency in review can be approved', 'competency.review_not_in_review');
         }
         if (opts?.grade !== undefined) await this.validateGrade(usercomp.competencyId, opts.grade);
         const competencyRow = await this.getCompetency(usercomp.competencyId);
         const framework = await this.getFramework(competencyRow.frameworkId);
         const scale = parseScale(framework);
         const grade = opts?.grade ?? scale.proficient[0];
-        if (grade === undefined) throw new BadRequestException({ message: 'The framework scale has no proficient value to approve with', code: 'competency.scale_no_proficient' });
+        if (grade === undefined) badRequest('The framework scale has no proficient value to approve with', 'competency.scale_no_proficient');
         await this.repo.updateUsercomp(usercompId, {
           status: USERCOMP_REVIEW.NONE, grade, proficiency: isProficientGrade(framework, grade), reviewerId: actorId,
         });
@@ -535,7 +533,7 @@ export class CompetenciesService implements OnModuleInit {
         }
       } else {
         if (usercomp.status !== USERCOMP_REVIEW.IN_REVIEW && usercomp.status !== USERCOMP_REVIEW.WAITING) {
-          throw new BadRequestException({ message: 'Only a competency in review can be rejected', code: 'competency.review_not_in_review' });
+          badRequest('Only a competency in review can be rejected', 'competency.review_not_in_review');
         }
         await this.repo.updateUsercomp(usercompId, { status: USERCOMP_REVIEW.NONE, reviewerId: actorId });
         await this.repo.insertEvidence({
@@ -633,7 +631,7 @@ export class CompetenciesService implements OnModuleInit {
   }
   async getTemplate(id: string): Promise<TemplateRow> {
     const row = await this.repo.getTemplate(id);
-    if (!row) throw new NotFoundException({ message: `Template ${id} not found`, code: 'competency.template_not_found' });
+    if (!row) notFound(`Template ${id} not found`, 'competency.template_not_found');
     return row;
   }
   async listTemplates(): Promise<TemplateRow[]> { return this.repo.listTemplates(); }
@@ -707,7 +705,7 @@ export class CompetenciesService implements OnModuleInit {
 
   async getPlanView(actorId: string, planId: string): Promise<{ plan: PlanRow; competencies: { competency: CompetencyRow; usercomp: UsercompRow | null }[]; reviews: unknown }> {
     const plan = await this.repo.getPlan(planId);
-    if (!plan) throw new NotFoundException({ message: `Learning plan ${planId} not found`, code: 'competency.plan_not_found' });
+    if (!plan) notFound(`Learning plan ${planId} not found`, 'competency.plan_not_found');
     if (plan.userId !== actorId) {
       await this.evaluator.requireCapability(actorId, 'competency:planview', await this.systemCtx());
     }
@@ -735,9 +733,9 @@ export class CompetenciesService implements OnModuleInit {
   private async planTransition(actorId: string, planId: string, action: 'activate' | 'request-review' | 'cancel-review' | 'start-review' | 'stop-review' | 'approve' | 'unapprove' | 'complete',
     note?: string): Promise<PlanRow> {
     const plan = await this.repo.getPlan(planId);
-    if (!plan) throw new NotFoundException({ message: `Learning plan ${planId} not found`, code: 'competency.plan_not_found' });
+    if (!plan) notFound(`Learning plan ${planId} not found`, 'competency.plan_not_found');
     const from = plan.status;
-    const bad = (msg: string): never => { throw new BadRequestException({ message: msg, code: 'competency.plan_bad_transition' }); };
+    const bad = (msg: string): never => { badRequest(msg, 'competency.plan_bad_transition'); };
     let to = from;
     switch (action) {
       case 'activate':
@@ -809,6 +807,6 @@ export class CompetenciesService implements OnModuleInit {
   async completePlan(actorId: string, planId: string): Promise<PlanRow> { return this.planTransition(actorId, planId, 'complete'); }
 
   async assertNotSelfReview(actorId: string, userId: string): Promise<void> {
-    if (actorId === userId) throw new ForbiddenException({ message: 'You cannot review your own competencies', code: 'competency.self_review' });
+    if (actorId === userId) forbidden('You cannot review your own competencies', 'competency.self_review');
   }
 }

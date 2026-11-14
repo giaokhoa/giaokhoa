@@ -1,4 +1,5 @@
-import { ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { forbidden } from '../../common/http-errors';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ConfigService } from '@nestjs/config';
 import type { Cache } from 'cache-manager';
@@ -317,7 +318,7 @@ export class PermissionEvaluator {
 
   async requireCapability(userId: string, capability: string, contextId: string, opts?: { isGuest?: boolean }): Promise<void> {
     if (!(await this.hasCapability(userId, capability, contextId, opts))) {
-      throw new ForbiddenException({ message: `Missing capability ${capability} in context ${contextId}`, code: 'access.capability_denied' });
+      forbidden(`Missing capability ${capability} in context ${contextId}`, 'access.capability_denied');
     }
   }
 }

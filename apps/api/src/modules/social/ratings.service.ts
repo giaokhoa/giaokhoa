@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -47,10 +48,7 @@ export class RatingsService {
     await this.assertItemAccess(actorId, input.contextId);
     const max = await this.scaleMax(input.scaleId);
     if (!Number.isInteger(input.rating) || input.rating < 0 || (max > 0 && input.rating > max)) {
-      throw new BadRequestException({
-        message: `Rating ${input.rating} is outside the scale (0..${max})`,
-        code: 'ratings.outside_scale',
-      });
+      badRequest(`Rating ${input.rating} is outside the scale (0..${max})`, 'ratings.outside_scale');
     }
     return this.repo.upsertRating({
       contextId: input.contextId, component: input.component, ratingArea: input.ratingArea,

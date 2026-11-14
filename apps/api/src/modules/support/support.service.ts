@@ -1,10 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import type {
   CreateSupportGrant,
   SupportAuditEntry,
@@ -70,16 +65,10 @@ export class SupportService {
   private async requireCentreManager(actorId: string): Promise<string> {
     const tenantId = this.tenantContext.currentTenantId();
     if (!tenantId)
-      throw new ForbiddenException({
-        message: "Centre context required",
-        code: "support.centre_required",
-      });
+      forbidden("Centre context required", "support.centre_required");
     const tenant = await this.tenants.getTenant(tenantId);
     if (!tenant || tenant.kind !== "center" || tenant.status !== "active") {
-      throw new ForbiddenException({
-        message: "Active centre required",
-        code: "support.centre_required",
-      });
+      forbidden("Active centre required", "support.centre_required");
     }
     await this.tenants.assertTenantManager(actorId, tenantId);
     return tenantId;
@@ -98,18 +87,12 @@ export class SupportService {
       !recipient || recipient.deleted || recipient.suspended ||
       !(await this.tenants.isPlatformSupportMember(dto.recipientId))
     ) {
-      throw new BadRequestException({
-        message: "Recipient must be an active platform member",
-        code: "support.invalid_recipient",
-      });
+      badRequest("Recipient must be an active platform member", "support.invalid_recipient");
     }
     const expiresAt = new Date(dto.expiresAt);
     const remaining = expiresAt.getTime() - Date.now();
     if (remaining <= 0 || remaining > MAX_DURATION_MS) {
-      throw new BadRequestException({
-        message: "Support grant must expire within 30 days",
-        code: "support.invalid_expiry",
-      });
+      badRequest("Support grant must expire within 30 days", "support.invalid_expiry");
     }
     const row = await this.spaceDb.routedKysely
       .transaction()
@@ -157,10 +140,7 @@ export class SupportService {
           tx,
         );
         if (!revoked)
-          throw new ConflictException({
-            message: "Grant absent or already revoked",
-            code: "support.grant_not_active",
-          });
+          conflict("Grant absent or already revoked", "support.grant_not_active");
         await this.repo.appendAudit(
           {
             tenantId,
@@ -183,16 +163,10 @@ export class SupportService {
 
   private async resolveCentre(slug: string): Promise<string> {
     if (!SLUG_PATTERN.test(slug))
-      throw new BadRequestException({
-        message: "Invalid slug",
-        code: "support.invalid_centre",
-      });
+      badRequest("Invalid slug", "support.invalid_centre");
     const target = await this.spaceDb.resolveTarget(slug);
     if (target.status !== "active")
-      throw new ForbiddenException({
-        message: "Centre inactive",
-        code: "support.centre_inactive",
-      });
+      forbidden("Centre inactive", "support.centre_inactive");
     const tenant = await tenantAls.run({ platform: true }, () =>
       this.spaceDb.withSpaceKysely(slug, (db) =>
         db
@@ -203,10 +177,7 @@ export class SupportService {
       ),
     );
     if (!tenant || tenant.kind !== "center" || tenant.status !== "active") {
-      throw new NotFoundException({
-        message: "Active centre not found",
-        code: "support.centre_not_found",
-      });
+      notFound("Active centre not found", "support.centre_not_found");
     }
     return tenant.id;
   }
@@ -231,10 +202,7 @@ export class SupportService {
           db,
         );
         if (!grant)
-          throw new ForbiddenException({
-            message: "Active scoped grant required",
-            code: "support.access_denied",
-          });
+          forbidden("Active scoped grant required", "support.access_denied");
         return scope === "classes:read"
           ? this.repo.listClasses(tenantId, db)
           : this.repo.listCourses(tenantId, db);
@@ -245,10 +213,7 @@ export class SupportService {
 
   async myAccess(actorId: string, slug: string): Promise<SupportGrant[]> {
     if (!(await this.tenants.isPlatformSupportMember(actorId))) {
-      throw new ForbiddenException({
-        message: "Active platform membership required for support",
-        code: "support.staff_required",
-      });
+      forbidden("Active platform membership required for support", "support.staff_required");
     }
     const tenantId = await this.resolveCentre(slug);
     return this.spaceDb.withSpaceKysely(

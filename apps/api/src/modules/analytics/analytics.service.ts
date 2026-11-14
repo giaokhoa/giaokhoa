@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { notFound } from '../../common/http-errors';
 import { AnalyticsRepository, type InsightRow, type ModelRow } from '@giaokhoa/db/repositories/analytics';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -81,7 +82,7 @@ export class AnalyticsService {
   async getModelByName(name: string): Promise<ModelRow> {
     await this.syncModels();
     const row = await this.repo.getModelByName(name);
-    if (!row) throw new NotFoundException({ message: `Model ${name} not found`, code: 'analytics.model_not_found' });
+    if (!row) notFound(`Model ${name} not found`, 'analytics.model_not_found');
     return row;
   }
 
@@ -90,7 +91,7 @@ export class AnalyticsService {
     await this.evaluator.requireCapability(actorId, 'analytics:manage', ctxId);
     const model = await this.getModelByName(modelName);
     const providerDef = this.modelProviders.find((p) => p.name === modelName);
-    if (!providerDef) throw new NotFoundException({ message: `Model provider ${modelName} not registered`, code: 'analytics.provider_not_found' });
+    if (!providerDef) notFound(`Model provider ${modelName} not registered`, 'analytics.provider_not_found');
     const db = this.repo.dbHandle;
     const enrolments = await this.enrol.listEnrolmentsForCourse(courseId);
     const activeUserIds = [...new Set(enrolments.filter((e) => e.status === 0).map((e) => e.userId))];

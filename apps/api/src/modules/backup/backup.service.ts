@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { BackupRepository, type JobRow } from '@giaokhoa/db/repositories/backup';
 import { sql, type CentreDB, type RawBuilder, type Selectable } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -717,7 +718,7 @@ export class BackupService {
 
   async getJob(id: string): Promise<JobRow> {
     const row = await this.repo.getJob(id);
-    if (!row) throw new NotFoundException({ message: `Backup job ${id} not found`, code: 'backup.job_not_found' });
+    if (!row) notFound(`Backup job ${id} not found`, 'backup.job_not_found');
     return row;
   }
 
@@ -732,7 +733,7 @@ export class BackupService {
   }
   private async assertJobReadable(actorId: string, job: JobRow): Promise<void> {
     if (await this.canReadJob(actorId, job)) return;
-    throw new ForbiddenException({ message: 'You cannot view this backup job', code: 'backup.job_forbidden' });
+    forbidden('You cannot view this backup job', 'backup.job_forbidden');
   }
   async getJobForRead(actorId: string, id: string): Promise<JobRow> {
     const job = await this.getJob(id);
@@ -756,10 +757,10 @@ export class BackupService {
 
   async createBackup(actorId: string, courseId: string | null, anonymize = false, scope: 'course' | 'site' = 'course'): Promise<JobRow> {
     if (scope === 'site' && courseId) {
-      throw new BadRequestException({ message: 'A site backup must not be attached to a course', code: 'backup.site_course_forbidden' });
+      badRequest('A site backup must not be attached to a course', 'backup.site_course_forbidden');
     }
     if (scope === 'course' && !courseId) {
-      throw new BadRequestException({ message: 'A course backup requires a course', code: 'backup.course_required' });
+      badRequest('A course backup requires a course', 'backup.course_required');
     }
     const courseRow = scope === 'course' ? await this.courses.getCourse(courseId!) : null;
     if (scope === 'course') {
@@ -798,7 +799,7 @@ export class BackupService {
   async restore(actorId: string, backupJobId: string, mode: 'new' | 'merge' | 'replace', targetCourseId?: string): Promise<JobRow> {
     const backup = await this.getJob(backupJobId);
     if (backup.type !== 'backup' || backup.status !== 'completed' || !backup.archive) {
-      throw new BadRequestException({ message: 'Backup job is not a completed backup', code: 'backup.not_completed' });
+      badRequest('Backup job is not a completed backup', 'backup.not_completed');
     }
     await this.assertJobReadable(actorId, backup);
     const archive = backup.archive as {
@@ -807,13 +808,13 @@ export class BackupService {
       contributors: Record<string, unknown>;
     };
     if (archive.format !== BACKUP_FORMAT || archive.version !== BACKUP_FORMAT_VERSION) {
-      throw new BadRequestException({ message: `Unsupported backup format ${archive.format} v${archive.version}`, code: 'backup.unsupported_format' });
+      badRequest(`Unsupported backup format ${archive.format} v${archive.version}`, 'backup.unsupported_format');
     }
     const scope: 'course' | 'site' = backup.scope === 'site' || archive.scope === 'site' ? 'site' : 'course';
 
     if (scope === 'site') {
       if (mode !== 'new' || targetCourseId) {
-        throw new BadRequestException({ message: 'A site backup can only be restored as new site-level data, without a target course', code: 'backup.site_target_forbidden' });
+        badRequest('A site backup can only be restored as new site-level data, without a target course', 'backup.site_target_forbidden');
       }
       await this.evaluator.requireCapability(actorId, 'backup:restorecourse', (await this.contexts.ensureSystemContext()).id);
       const job = await this.repo.insertJob({
@@ -845,10 +846,10 @@ export class BackupService {
     }
 
     if (!archive.course) {
-      throw new BadRequestException({ message: 'Backup archive has no course payload', code: 'backup.not_completed' });
+      badRequest('Backup archive has no course payload', 'backup.not_completed');
     }
-    if (mode !== 'new' && !targetCourseId) throw new BadRequestException({ message: `Restore mode ${mode} requires targetCourseId`, code: 'backup.target_required' });
-    if (mode === 'new' && targetCourseId) throw new BadRequestException({ message: 'Restore mode new must not pass targetCourseId', code: 'backup.target_forbidden' });
+    if (mode !== 'new' && !targetCourseId) badRequest(`Restore mode ${mode} requires targetCourseId`, 'backup.target_required');
+    if (mode === 'new' && targetCourseId) badRequest('Restore mode new must not pass targetCourseId', 'backup.target_forbidden');
 
     let targetId: string;
     if (mode === 'new') {

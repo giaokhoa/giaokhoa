@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import type {
   PinRegradeLogEntry,
   PinRegradeResult,
@@ -56,7 +57,7 @@ export class QuizPinsService {
   async assertPinUnlocked(pin: PinRow): Promise<void> {
     const attempts = await this.repo.listAttempts(pin.id, QUIZ_PIN_ATTEMPTS_LIMIT);
     if (attempts.some((a) => !a.preview)) {
-      throw new BadRequestException({ message: 'This pin already has real attempts; its pinned exam version is locked', code: 'exam.pin_locked' });
+      badRequest('This pin already has real attempts; its pinned exam version is locked', 'exam.pin_locked');
     }
   }
 
@@ -73,7 +74,7 @@ export class QuizPinsService {
 
   private assertValidSubnet(subnet: string | null | undefined): void {
     if (subnet !== undefined && subnet !== null && !isValidSubnetList(subnet)) {
-      throw new BadRequestException({ message: 'Subnet must be a comma-separated list of IPs or CIDR ranges', code: 'quiz.subnet_invalid' });
+      badRequest('Subnet must be a comma-separated list of IPs or CIDR ranges', 'quiz.subnet_invalid');
     }
   }
 
@@ -86,16 +87,13 @@ export class QuizPinsService {
     if (targetGroupId === undefined || targetGroupId === null) return;
     const group = await this.groups.getGroup(targetGroupId).catch(() => null);
     if (!group || group.courseId !== courseId) {
-      throw new BadRequestException({ message: 'Target group does not belong to this course', code: 'exam.pin_target_group_invalid' });
+      badRequest('Target group does not belong to this course', 'exam.pin_target_group_invalid');
     }
   }
 
   private assertVersionModeAllowed(preset: string | null | undefined, versionMode: string | null | undefined): void {
     if (versionMode === 'float_latest_ready' && preset !== 'regular') {
-      throw new BadRequestException({
-        message: 'float_latest_ready is only allowed for practice pins (preset regular); official exam pins (periodic/mock or no preset) must stay pinned',
-        code: 'exam.version_mode_not_allowed',
-      });
+      badRequest('float_latest_ready is only allowed for practice pins (preset regular); official exam pins (periodic/mock or no preset) must stay pinned', 'exam.version_mode_not_allowed');
     }
   }
 
@@ -122,12 +120,12 @@ export class QuizPinsService {
     await this.assertTargetGroup(courseId, input.targetGroupId);
     const version = await this.repo.getExamVersion(input.examVersionId);
     if (!version || version.examId !== input.examId) {
-      throw new NotFoundException({ message: `Exam version ${input.examVersionId} not found for exam ${input.examId}`, code: 'exam.version_not_found' });
+      notFound(`Exam version ${input.examVersionId} not found for exam ${input.examId}`, 'exam.version_not_found');
     }
     const timeOpen = input.timeOpen ? new Date(input.timeOpen) : null;
     const timeClose = input.timeClose ? new Date(input.timeClose) : null;
     if (timeOpen && timeClose && timeClose <= timeOpen) {
-      throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
+      badRequest('timeClose must be after timeOpen', 'quiz.bad_window');
     }
     this.assertValidSubnet(input.subnet);
     this.assertVersionModeAllowed(input.preset ?? null, input.versionMode ?? 'pinned');
@@ -342,7 +340,7 @@ export class QuizPinsService {
       await this.assertPinUnlocked(pin);
       const v = await this.repo.getExamVersion(input.examVersionId);
       if (!v || v.examId !== pin.examId) {
-        throw new NotFoundException({ message: `Exam version ${input.examVersionId} not found for exam ${pin.examId}`, code: 'exam.version_not_found' });
+        notFound(`Exam version ${input.examVersionId} not found for exam ${pin.examId}`, 'exam.version_not_found');
       }
       newVersion = v;
       patch.examVersionId = input.examVersionId;
@@ -355,7 +353,7 @@ export class QuizPinsService {
     const nextOpen = patch.timeOpen !== undefined ? patch.timeOpen : pin.timeOpen;
     const nextClose = patch.timeClose !== undefined ? patch.timeClose : pin.timeClose;
     if (nextOpen && nextClose && nextClose <= nextOpen) {
-      throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
+      badRequest('timeClose must be after timeOpen', 'quiz.bad_window');
     }
     const targetHasShared = newVersion
       ? (await this.repo.listExamSlots(newVersion.id)).some((slot) => slot.sourceDomain === 'bank-system')
@@ -468,23 +466,17 @@ export class QuizPinsService {
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
     await this.assertPinUnlocked(pin);
     if (pin.examStatus !== 'ready') {
-      throw new BadRequestException({
-        message: `Exam ${pin.examId} is not ready (status ${pin.examStatus}); there is no ready version to update this pin to`,
-        code: 'exam.version_not_ready',
-      });
+      badRequest(`Exam ${pin.examId} is not ready (status ${pin.examStatus}); there is no ready version to update this pin to`, 'exam.version_not_ready');
     }
     const target = await this.repo.getExamVersion(toExamVersionId);
     if (!target || target.examId !== pin.examId) {
-      throw new NotFoundException({ message: `Exam version ${toExamVersionId} not found for exam ${pin.examId}`, code: 'exam.version_not_found' });
+      notFound(`Exam version ${toExamVersionId} not found for exam ${pin.examId}`, 'exam.version_not_found');
     }
     if (target.id === pin.examVersionId) {
-      throw new BadRequestException({ message: 'This pin already uses the requested exam version', code: 'exam.pin_version_unchanged' });
+      badRequest('This pin already uses the requested exam version', 'exam.pin_version_unchanged');
     }
     if (target.version !== pin.examLatestVersion) {
-      throw new BadRequestException({
-        message: `Exam version ${toExamVersionId} is not the latest version of exam ${pin.examId}; pins only update to the latest ready version`,
-        code: 'exam.version_not_latest',
-      });
+      badRequest(`Exam version ${toExamVersionId} is not the latest version of exam ${pin.examId}; pins only update to the latest ready version`, 'exam.version_not_latest');
     }
     await this.prepareVersionAndApply(actorId, pin, target.id, pin.versionMode, async (questionSnapshots) => {
       await this.repo.transaction(async (tx) => {
@@ -511,17 +503,11 @@ export class QuizPinsService {
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.grade);
     const questionView = await this.questions.getQuestion(input.questionId);
     if (questionView.question.qtype === 'essay') {
-      throw new BadRequestException({
-        message: 'Essay questions are graded manually and cannot be regraded against an answer key',
-        code: 'question.regrade_not_supported',
-      });
+      badRequest('Essay questions are graded manually and cannot be regraded against an answer key', 'question.regrade_not_supported');
     }
     const { version: targetVersion } = await this.questions.getVersionContent(input.questionId, input.toVersionId);
     if (targetVersion.status !== 'ready') {
-      throw new BadRequestException({
-        message: `Question version ${input.toVersionId} is not ready (status ${targetVersion.status}); regrading needs the corrected ready version`,
-        code: 'question.regrade_version_not_ready',
-      });
+      badRequest(`Question version ${input.toVersionId} is not ready (status ${targetVersion.status}); regrading needs the corrected ready version`, 'question.regrade_version_not_ready');
     }
     type Candidate = {
       attempt: ExamAttemptRow;
@@ -699,7 +685,7 @@ export class QuizPinsService {
   private async getOverrideRow(quiz: PinRow, overrideId: string): Promise<ExamPinOverrideRow> {
     const row = await this.repo.getOverride(overrideId);
     if (!row || row.pinId !== quiz.id) {
-      throw new NotFoundException({ message: `Quiz override ${overrideId} not found`, code: 'quiz.override_not_found' });
+      notFound(`Quiz override ${overrideId} not found`, 'quiz.override_not_found');
     }
     return row;
   }
@@ -721,19 +707,19 @@ export class QuizPinsService {
 
   async updatePinOverride(actorId: string, overrideId: string, dto: UpdateExamPinOverrideDto): Promise<ExamPinOverrideView> {
     const row = await this.repo.getOverride(overrideId);
-    if (!row) throw new NotFoundException({ message: `Exam pin override ${overrideId} not found`, code: 'quiz.override_not_found' });
+    if (!row) notFound(`Exam pin override ${overrideId} not found`, 'quiz.override_not_found');
     return this.updateOverride(actorId, row.pinId, overrideId, dto);
   }
 
   async deletePinOverride(actorId: string, overrideId: string): Promise<void> {
     const row = await this.repo.getOverride(overrideId);
-    if (!row) throw new NotFoundException({ message: `Exam pin override ${overrideId} not found`, code: 'quiz.override_not_found' });
+    if (!row) notFound(`Exam pin override ${overrideId} not found`, 'quiz.override_not_found');
     await this.deleteOverride(actorId, row.pinId, overrideId);
   }
 
   async deletePinFeedback(actorId: string, feedbackId: string): Promise<void> {
     const row = await this.repo.getFeedback(feedbackId);
-    if (!row) throw new NotFoundException({ message: `Exam pin feedback ${feedbackId} not found`, code: 'quiz.feedback_not_found' });
+    if (!row) notFound(`Exam pin feedback ${feedbackId} not found`, 'quiz.feedback_not_found');
     await this.deleteFeedback(actorId, row.pinId, feedbackId);
   }
 
@@ -750,17 +736,17 @@ export class QuizPinsService {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manageOverrides);
     if (!!input.groupId === !!input.userId) {
-      throw new BadRequestException({ message: 'An override needs exactly one target: groupId or userId', code: 'quiz.override_target' });
+      badRequest('An override needs exactly one target: groupId or userId', 'quiz.override_target');
     }
     const timeOpen = input.timeOpen ? new Date(input.timeOpen) : null;
     const timeClose = input.timeClose ? new Date(input.timeClose) : null;
     if (timeOpen && timeClose && timeClose <= timeOpen) {
-      throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
+      badRequest('timeClose must be after timeOpen', 'quiz.bad_window');
     }
     if (input.groupId) {
       const group = await this.groups.getGroup(input.groupId);
       if (group.courseId !== quiz.course) {
-        throw new BadRequestException({ message: 'Group does not belong to the course of this quiz', code: 'quiz.override_group_mismatch' });
+        badRequest('Group does not belong to the course of this quiz', 'quiz.override_group_mismatch');
       }
     }
     if (input.userId) {
@@ -769,10 +755,10 @@ export class QuizPinsService {
     }
     const existing = await this.repo.listOverrides(quiz.id);
     if (existing.some((o) => o.groupId === (input.groupId ?? null) && o.userId === (input.userId ?? null))) {
-      throw new BadRequestException({ message: 'An override already exists for this target', code: 'quiz.override_exists' });
+      badRequest('An override already exists for this target', 'quiz.override_exists');
     }
     if (input.userId && (input.timeLimitSeconds != null || input.timeOpen != null) && !input.reason) {
-      throw new BadRequestException({ message: 'A reason is required for a user override that extends time or opens a separate window', code: 'quiz.override_reason_required' });
+      badRequest('A reason is required for a user override that extends time or opens a separate window', 'quiz.override_reason_required');
     }
     const row = await this.repo.insertOverride({
       pinId: quiz.id,
@@ -802,12 +788,12 @@ export class QuizPinsService {
     const nextOpen = patch.timeOpen !== undefined ? patch.timeOpen : row.timeOpen;
     const nextClose = patch.timeClose !== undefined ? patch.timeClose : row.timeClose;
     if (nextOpen && nextClose && nextClose <= nextOpen) {
-      throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
+      badRequest('timeClose must be after timeOpen', 'quiz.bad_window');
     }
     const nextTimeLimit = patch.timeLimit !== undefined ? patch.timeLimit : row.timeLimit;
     const nextReason = patch.reason !== undefined ? patch.reason : row.reason;
     if (row.userId && (nextTimeLimit != null || nextOpen != null) && !nextReason) {
-      throw new BadRequestException({ message: 'A reason is required for a user override that extends time or opens a separate window', code: 'quiz.override_reason_required' });
+      badRequest('A reason is required for a user override that extends time or opens a separate window', 'quiz.override_reason_required');
     }
     if (Object.keys(patch).length) await this.repo.updateOverride(row.id, patch);
     await this.outbox.enqueueStandalone({ aggregate: 'quiz', type: 'quiz_override_updated', payload: { pinId: quiz.id, courseId: quiz.course, overrideId: row.id, actorId } });
@@ -840,7 +826,7 @@ export class QuizPinsService {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manage);
     if (!(input.minPercent < input.maxPercent)) {
-      throw new BadRequestException({ message: 'minPercent must be below maxPercent', code: 'quiz.feedback_range' });
+      badRequest('minPercent must be below maxPercent', 'quiz.feedback_range');
     }
     return this.repo.insertFeedback({ pinId: quiz.id, minPercent: input.minPercent, maxPercent: input.maxPercent, feedback: input.feedback });
   }
@@ -850,7 +836,7 @@ export class QuizPinsService {
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.manage);
     const bands = await this.repo.listFeedbacks(quiz.id);
     if (!bands.some((b) => b.id === feedbackId)) {
-      throw new NotFoundException({ message: `Quiz feedback ${feedbackId} not found`, code: 'quiz.feedback_not_found' });
+      notFound(`Quiz feedback ${feedbackId} not found`, 'quiz.feedback_not_found');
     }
     await this.repo.deleteFeedback(feedbackId);
   }

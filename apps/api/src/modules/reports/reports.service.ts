@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { I18nService } from '@nestjs/i18n';
 import { ReportsRepository, type ReportRow, type ScheduleRow } from '@giaokhoa/db/repositories/reports';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -92,9 +93,9 @@ export class ReportsService {
     const sys = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'reportbuilder:manage', sys.id);
     const ds = this.datasources.get(input.dataSource);
-    if (!ds) throw new BadRequestException({ message: `Unknown dataSource ${input.dataSource}`, code: 'report.unknown_datasource' });
+    if (!ds) badRequest(`Unknown dataSource ${input.dataSource}`, 'report.unknown_datasource');
     const columns = input.columns?.length ? input.columns : ds.columns;
-    for (const c of columns) if (!ds.columns.includes(c)) throw new BadRequestException({ message: `Unknown column ${c}`, code: 'report.unknown_column' });
+    for (const c of columns) if (!ds.columns.includes(c)) badRequest(`Unknown column ${c}`, 'report.unknown_column');
     const report = await this.repo.insertReport({
       name: input.name, dataSource: input.dataSource, columns, filters: input.filters ?? {}, createdBy: actorId, contextId: sys.id,
     });
@@ -106,7 +107,7 @@ export class ReportsService {
 
   private async getReportRow(id: string): Promise<ReportRow> {
     const row = await this.repo.getReport(id);
-    if (!row) throw new NotFoundException({ message: `Report ${id} not found`, code: 'report.not_found' });
+    if (!row) notFound(`Report ${id} not found`, 'report.not_found');
     return row;
   }
   async getReport(actorId: string, id: string): Promise<ReportRow> {
@@ -131,10 +132,10 @@ export class ReportsService {
   async runReport(viewerId: string, reportId: string): Promise<{ report: ReportRow; rows: Record<string, unknown>[] }> {
     const report = await this.getReportRow(reportId);
     if (!(await this.isInAudience(viewerId, report))) {
-      throw new ForbiddenException({ message: 'You are not in the audience of this report', code: 'report.not_in_audience' });
+      forbidden('You are not in the audience of this report', 'report.not_in_audience');
     }
     const ds = this.datasources.get(report.dataSource);
-    if (!ds) throw new BadRequestException({ message: 'Datasource no longer registered', code: 'report.datasource_missing' });
+    if (!ds) badRequest('Datasource no longer registered', 'report.datasource_missing');
     const allRows = await ds.fetchRows();
     const filters = (report.filters ?? {}) as Record<string, unknown>;
     const filtered = allRows.filter((row) => Object.entries(filters).every(([k, v]) => v === undefined || v === null || row[k] === v));
@@ -182,7 +183,7 @@ export class ReportsService {
 
   async runSchedule(scheduleId: string): Promise<{ scheduleId: string; rows: number }> {
     const schedule = await this.repo.getSchedule(scheduleId);
-    if (!schedule) throw new NotFoundException({ message: `Schedule ${scheduleId} not found`, code: 'report.schedule_not_found' });
+    if (!schedule) notFound(`Schedule ${scheduleId} not found`, 'report.schedule_not_found');
     let rowCount = 0;
     try {
       const { rows } = await this.runReport(schedule.createdBy, schedule.reportId);

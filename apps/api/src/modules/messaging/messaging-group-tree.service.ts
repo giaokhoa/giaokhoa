@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import type { ContactRelationship, PersonSummaryView } from './messaging-contacts.service';
 import { MessagingMembershipSyncService } from './messaging-membership-sync.service';
@@ -215,7 +215,7 @@ export class MessagingGroupTreeService {
       }
       return { displayName: parsed.d, username: parsed.u, userId: parsed.i };
     } catch {
-      throw new BadRequestException({ message: 'Invalid roster cursor', code: 'messaging.roster_cursor_invalid' });
+      badRequest('Invalid roster cursor', 'messaging.roster_cursor_invalid');
     }
   }
 
@@ -225,7 +225,7 @@ export class MessagingGroupTreeService {
   }> {
     const course = await this.repo.getCourseSummary(courseId);
     if (!course || !(await this.repo.isCourseMember(courseId, actorId))) {
-      throw new NotFoundException({ message: 'Course not found', code: 'messaging.course_not_found' });
+      notFound('Course not found', 'messaging.course_not_found');
     }
     const limit = Math.min(Math.max(query.limit ?? ROSTER_DEFAULT_PAGE_SIZE, 1), ROSTER_MAX_PAGE_SIZE);
     const cursor = query.cursor ? this.decodeRosterCursor(query.cursor) : null;
@@ -268,7 +268,7 @@ export class MessagingGroupTreeService {
   }> {
     const cls = await this.repo.getClassSummary(classId);
     if (!cls || cls.status !== 'active' || !(await this.repo.isClassMember(classId, actorId))) {
-      throw new NotFoundException({ message: 'Class not found', code: 'messaging.class_not_found' });
+      notFound('Class not found', 'messaging.class_not_found');
     }
     const limit = Math.min(Math.max(query.limit ?? ROSTER_DEFAULT_PAGE_SIZE, 1), ROSTER_MAX_PAGE_SIZE);
     const cursor = query.cursor ? this.decodeRosterCursor(query.cursor) : null;

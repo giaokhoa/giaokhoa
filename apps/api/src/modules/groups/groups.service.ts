@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { I18nService } from '@nestjs/i18n';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -72,7 +73,7 @@ export class GroupsService implements OnModuleInit {
   }
   async getGroup(id: string): Promise<GroupRow> {
     const row = await this.repo.getGroup(id);
-    if (!row) throw new NotFoundException({ message: `Group ${id} not found`, code: 'group.not_found' });
+    if (!row) notFound(`Group ${id} not found`, 'group.not_found');
     return row;
   }
   async updateGroup(actorId: string, id: string, input: { name?: string; idNumber?: string; description?: string; enrolmentKey?: string | null }): Promise<GroupRow> {
@@ -127,7 +128,7 @@ export class GroupsService implements OnModuleInit {
     const group = await this.getGroup(groupId);
     await this.requireManageGroups(actorId, group.courseId);
     if (!(await this.courses.isActivelyEnrolled(group.courseId, userId))) {
-      throw new BadRequestException({ message: 'User is not actively enrolled in this course', code: 'group.member_not_enrolled' });
+      badRequest('User is not actively enrolled in this course', 'group.member_not_enrolled');
     }
     await this.repo.addMember(groupId, userId);
     await this.outbox.enqueueStandalone({ aggregate: 'group', type: 'group_member_added', payload: { groupId, courseId: group.courseId, userId } });
@@ -143,7 +144,7 @@ export class GroupsService implements OnModuleInit {
     const group = await this.getGroup(groupId);
     const visible = await this.visibleGroupsFor(actorId, group.courseId);
     if (!visible.some((g) => g.id === groupId)) {
-      throw new ForbiddenException({ message: 'Separate groups: you cannot see members of a group you are not in', code: 'group.separate_groups_denied' });
+      forbidden('Separate groups: you cannot see members of a group you are not in', 'group.separate_groups_denied');
     }
     const rows = await this.repo.listMembers(groupId);
     return rows.map((r) => ({ userId: r.userId, timeAdded: r.timeAdded }));
@@ -177,7 +178,7 @@ export class GroupsService implements OnModuleInit {
   }
   async getGrouping(id: string): Promise<GroupingRow> {
     const row = await this.repo.getGrouping(id);
-    if (!row) throw new NotFoundException({ message: `Grouping ${id} not found`, code: 'group.grouping_not_found' });
+    if (!row) notFound(`Grouping ${id} not found`, 'group.grouping_not_found');
     return row;
   }
   async listGroupings(courseId: string, actorId?: string): Promise<GroupingRow[]> {
@@ -204,7 +205,7 @@ export class GroupsService implements OnModuleInit {
   async addGroupToGrouping(actorId: string, groupingId: string, groupId: string): Promise<void> {
     const grouping = await this.getGrouping(groupingId);
     const group = await this.getGroup(groupId);
-    if (group.courseId !== grouping.courseId) throw new ForbiddenException({ message: 'Group and grouping are in different courses', code: 'group.course_mismatch' });
+    if (group.courseId !== grouping.courseId) forbidden('Group and grouping are in different courses', 'group.course_mismatch');
     await this.requireManageGroups(actorId, grouping.courseId);
     await this.repo.addGroupToGrouping(groupingId, groupId);
   }
@@ -222,7 +223,7 @@ export class GroupsService implements OnModuleInit {
   private async cohortContextId(input: { contextLevel?: number; categoryId?: string }, tenantId: string): Promise<string> {
     if (input.categoryId !== undefined) {
       const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSECAT, input.categoryId);
-      if (!ctx) throw new NotFoundException({ message: `No context for category ${input.categoryId}`, code: 'cohort.category_context_missing' });
+      if (!ctx) notFound(`No context for category ${input.categoryId}`, 'cohort.category_context_missing');
       return ctx.id;
     }
     return (await this.contexts.ensureTenantContext(tenantId)).id;
@@ -244,7 +245,7 @@ export class GroupsService implements OnModuleInit {
     const row = await this.repo.getCohort(id);
     const active = this.tenantContext.currentTenantId();
     if (!row || (active !== undefined && row.tenantId !== active)) {
-      throw new NotFoundException({ message: `Cohort ${id} not found`, code: 'cohort.not_found' });
+      notFound(`Cohort ${id} not found`, 'cohort.not_found');
     }
     if (actorId !== undefined) await this.requireCohortViewer(actorId, row);
     return row;
@@ -281,7 +282,7 @@ export class GroupsService implements OnModuleInit {
   private async requireCohortViewer(actorId: string, cohortRow: CohortRow): Promise<void> {
     const canView = await this.evaluator.hasCapability(actorId, 'cohort:view', cohortRow.contextId);
     const canManage = canView ? false : await this.evaluator.hasCapability(actorId, 'cohort:manage', cohortRow.contextId);
-    if (!canView && !canManage) throw new NotFoundException({ message: `Cohort ${cohortRow.id} not found`, code: 'cohort.not_found' });
+    if (!canView && !canManage) notFound(`Cohort ${cohortRow.id} not found`, 'cohort.not_found');
   }
   async isCohortMember(cohortId: string, userId: string): Promise<boolean> { return this.repo.isCohortMember(cohortId, userId); }
 

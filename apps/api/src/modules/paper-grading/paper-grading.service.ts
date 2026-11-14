@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import {
-  BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, notFound, unprocessableEntity } from '../../common/http-errors';
 import {
   PAPER_SCAN_STATUSES, type CreatePaperBatch, type PaperBatch, type PaperReading,
   type PaperRosterEntry, type PaperScan, type PaperScanStatus, type ResolvePaperReadings,
@@ -56,7 +55,7 @@ export class PaperGradingService {
       if (ctx) return ctx.id;
     }
     const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, quiz.course);
-    if (!courseCtx) throw new NotFoundException({ message: `No context for quiz ${quiz.id}`, code: 'quiz.context_missing' });
+    if (!courseCtx) notFound(`No context for quiz ${quiz.id}`, 'quiz.context_missing');
     return courseCtx.id;
   }
 
@@ -67,14 +66,14 @@ export class PaperGradingService {
   private async getBatchRow(pinId: string, batchId: string): Promise<PaperBatchRow> {
     const row = await this.repo.getBatch(batchId);
     if (!row || row.examPinId !== pinId) {
-      throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
+      notFound(`Paper batch ${batchId} not found`, 'paper.batch_not_found');
     }
     return row;
   }
 
   private async getScanRow(scanId: string): Promise<PaperScanRow> {
     const row = await this.repo.getScan(scanId);
-    if (!row) throw new NotFoundException({ message: `Paper scan ${scanId} not found`, code: 'paper.scan_not_found' });
+    if (!row) notFound(`Paper scan ${scanId} not found`, 'paper.scan_not_found');
     return row;
   }
 
@@ -157,7 +156,7 @@ export class PaperGradingService {
     let variantCode = input.variantCode?.trim().toUpperCase();
     if (variantCode) {
       if (existing.some((b) => b.variantCode === variantCode)) {
-        throw new ConflictException({ message: `Variant ${variantCode} already exists for this quiz`, code: 'paper.variant_exists' });
+        conflict(`Variant ${variantCode} already exists for this quiz`, 'paper.variant_exists');
       }
     } else {
       variantCode = this.nextVariantCode(existing.map((b) => b.variantCode));
@@ -166,7 +165,7 @@ export class PaperGradingService {
     let examCode = input.examCode ?? null;
     if (examCode) {
       if (existing.some((b) => b.examCode === examCode)) {
-        throw new ConflictException({ message: `Exam code ${examCode} already exists for this quiz`, code: 'paper.exam_code_exists' });
+        conflict(`Exam code ${examCode} already exists for this quiz`, 'paper.exam_code_exists');
       }
     } else {
       examCode = this.nextExamCode(existing.map((b) => b.examCode));
@@ -188,7 +187,7 @@ export class PaperGradingService {
     }
     students.sort((a, b) => a.displayName.localeCompare(b.displayName, 'vi') || a.userId.localeCompare(b.userId));
     if (students.length > 999) {
-      throw new UnprocessableEntityException({ message: 'Paper roster supports at most 999 students per batch', code: 'paper.roster_too_large' });
+      unprocessableEntity('Paper roster supports at most 999 students per batch', 'paper.roster_too_large');
     }
     const roster = students.map((s, i) => ({ code: codeForIndex(i, codeDigits), userId: s.userId, displayName: s.displayName }));
 
@@ -212,7 +211,7 @@ export class PaperGradingService {
       if (code && /^\d{4}$/.test(code)) max = Math.max(max, Number(code));
     }
     if (max + 1 > 9999) {
-      throw new UnprocessableEntityException({ message: 'Exam code space exhausted for this quiz', code: 'paper.exam_code_exhausted' });
+      unprocessableEntity('Exam code space exhausted for this quiz', 'paper.exam_code_exhausted');
     }
     return String(max + 1).padStart(4, '0');
   }
@@ -226,7 +225,7 @@ export class PaperGradingService {
 
   async getBatch(actorId: string, batchId: string): Promise<PaperBatch> {
     const row = await this.repo.getBatch(batchId);
-    if (!row) throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
+    if (!row) notFound(`Paper batch ${batchId} not found`, 'paper.batch_not_found');
     const quiz = await this.quiz.getPin(row.examPinId);
     await this.requireGradePaper(actorId, quiz);
     return this.batchView(row);
@@ -234,19 +233,19 @@ export class PaperGradingService {
 
   async sheetsPdf(actorId: string, batchId: string, opts: { studentId?: string; kind?: string; copies?: number }): Promise<{ buffer: Buffer; fileName: string }> {
     const batch = await this.repo.getBatch(batchId);
-    if (!batch) throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
+    if (!batch) notFound(`Paper batch ${batchId} not found`, 'paper.batch_not_found');
     const quiz = await this.quiz.getPin(batch.examPinId);
     await this.requireGradePaper(actorId, quiz);
     let pages: (SheetPageStudent | null)[];
     let suffix: string;
     if (opts.studentId) {
       const entry = batch.roster.find((r) => r.userId === opts.studentId);
-      if (!entry) throw new NotFoundException({ message: 'Student is not in this batch roster', code: 'paper.student_not_in_batch' });
+      if (!entry) notFound('Student is not in this batch roster', 'paper.student_not_in_batch');
       pages = [entry];
       suffix = entry.code;
     } else if (opts.kind === 'personalized') {
       if (!batch.roster.length) {
-        throw new BadRequestException({ message: 'Batch roster is empty; print shared sheets instead', code: 'paper.empty_roster' });
+        badRequest('Batch roster is empty; print shared sheets instead', 'paper.empty_roster');
       }
       pages = batch.roster;
       suffix = 'ca-nhan';
@@ -397,10 +396,10 @@ export class PaperGradingService {
     anchor: PaperBatchRow | null,
     files: { originalname: string; buffer: Buffer; mimetype: string }[],
   ): Promise<ScanUploadOutcome[]> {
-    if (!files.length) throw new BadRequestException({ message: 'No image files were uploaded', code: 'paper.no_files' });
+    if (!files.length) badRequest('No image files were uploaded', 'paper.no_files');
     const batches = await this.repo.listBatchesForPin(quiz.id);
     if (!batches.length) {
-      throw new BadRequestException({ message: 'Quiz has no paper batches yet', code: 'paper.no_batches' });
+      badRequest('Quiz has no paper batches yet', 'paper.no_batches');
     }
     const thresholds = await this.omrThresholds();
     const retentionMonths = (await this.config.getValue<number>('mod_quiz', 'paperscanretentionmonths')) ?? 18;
@@ -424,17 +423,14 @@ export class PaperGradingService {
     }
     if (outcomes.length && outcomes.every((o) => !o.stored)) {
       const reasons = [...new Set(outcomes.flatMap((o) => o.reasons ?? []))];
-      throw new UnprocessableEntityException({
-        message: `All uploaded images were rejected by the quality gate: ${reasons.join(', ')}`,
-        code: 'paper.all_images_rejected',
-      });
+      unprocessableEntity(`All uploaded images were rejected by the quality gate: ${reasons.join(', ')}`, 'paper.all_images_rejected');
     }
     return outcomes;
   }
 
   async uploadScans(actorId: string, batchId: string, files: { originalname: string; buffer: Buffer; mimetype: string }[]): Promise<ScanUploadOutcome[]> {
     const anchor = await this.repo.getBatch(batchId);
-    if (!anchor) throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
+    if (!anchor) notFound(`Paper batch ${batchId} not found`, 'paper.batch_not_found');
     const quiz = await this.quiz.getPin(anchor.examPinId);
     await this.requireGradePaper(actorId, quiz);
     return this.ingestUpload(actorId, quiz, anchor, files);
@@ -451,7 +447,7 @@ export class PaperGradingService {
     const quiz = await this.quiz.getPin(pinId);
     await this.requireGradePaper(actorId, quiz);
     if (status && !(PAPER_SCAN_STATUSES as readonly string[]).includes(status)) {
-      throw new BadRequestException({ message: `Unknown paper scan status ${status}`, code: 'paper.bad_status' });
+      badRequest(`Unknown paper scan status ${status}`, 'paper.bad_status');
     }
     const rows = await this.repo.listScansForPin(pinId);
     const batches = new Map((await this.repo.listBatchesForPin(pinId)).map((b) => [b.id, b]));
@@ -475,23 +471,23 @@ export class PaperGradingService {
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     const fileId = kind === 'warped' ? scan.warpedFileId : kind === 'original' ? scan.fileId : null;
-    if (!fileId) throw new NotFoundException({ message: `No ${kind} image for this scan`, code: 'paper.image_not_found' });
+    if (!fileId) notFound(`No ${kind} image for this scan`, 'paper.image_not_found');
     const { file, data } = await this.files.readContent(fileId);
     return { data, mimeType: file.mimeType ?? 'application/octet-stream', fileName: file.fileName };
   }
 
   async assignIdentity(actorId: string, scanId: string, studentId: string): Promise<PaperScan> {
     const scan = await this.getScanRow(scanId);
-    if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
+    if (scan.status === 'recorded') conflict('Scan is already recorded as an attempt', 'paper.already_recorded');
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     if (!scan.batchId) {
-      throw new BadRequestException({ message: 'Scan is not attached to a print batch yet; assign the batch first', code: 'paper.batch_required' });
+      badRequest('Scan is not attached to a print batch yet; assign the batch first', 'paper.batch_required');
     }
     const batch = await this.repo.getBatch(scan.batchId);
-    if (!batch) throw new NotFoundException({ message: 'Paper batch of this scan no longer exists', code: 'paper.batch_not_found' });
+    if (!batch) notFound('Paper batch of this scan no longer exists', 'paper.batch_not_found');
     const entry = batch.roster.find((r) => r.userId === studentId);
-    if (!entry) throw new BadRequestException({ message: 'Student is not in this batch roster', code: 'paper.student_not_in_roster' });
+    if (!entry) badRequest('Student is not in this batch roster', 'paper.student_not_in_roster');
     const updated = await this.repo.updateScan(scan.id, {
       studentId, identitySource: 'manual', identityCode: entry.code,
       status: this.statusFor(studentId, scan.readings),
@@ -509,12 +505,12 @@ export class PaperGradingService {
 
   async assignBatch(actorId: string, scanId: string, batchId: string): Promise<PaperScan> {
     const scan = await this.getScanRow(scanId);
-    if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
+    if (scan.status === 'recorded') conflict('Scan is already recorded as an attempt', 'paper.already_recorded');
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     const batch = await this.repo.getBatch(batchId);
     if (!batch || batch.examPinId !== scan.examPinId) {
-      throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
+      notFound(`Paper batch ${batchId} not found`, 'paper.batch_not_found');
     }
 
     let readings = scan.readings;
@@ -572,26 +568,26 @@ export class PaperGradingService {
 
   async resolveReadings(actorId: string, scanId: string, input: ResolvePaperReadings): Promise<PaperScan> {
     const scan = await this.getScanRow(scanId);
-    if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
+    if (scan.status === 'recorded') conflict('Scan is already recorded as an attempt', 'paper.already_recorded');
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     if (!scan.batchId) {
-      throw new BadRequestException({ message: 'Scan is not attached to a print batch yet; assign the batch first', code: 'paper.batch_required' });
+      badRequest('Scan is not attached to a print batch yet; assign the batch first', 'paper.batch_required');
     }
     const batch = await this.repo.getBatch(scan.batchId);
-    if (!batch) throw new NotFoundException({ message: 'Paper batch of this scan no longer exists', code: 'paper.batch_not_found' });
+    if (!batch) notFound('Paper batch of this scan no longer exists', 'paper.batch_not_found');
     const layoutBySlot = new Map(batch.layout.map((l) => [l.slot, l]));
     const readings = scan.readings.map((r) => ({ ...r }));
     for (const item of input.readings) {
       const reading = readings.find((r) => r.slot === item.slot);
-      if (!reading) throw new BadRequestException({ message: `Slot ${item.slot} is not on this sheet`, code: 'paper.unknown_slot' });
+      if (!reading) badRequest(`Slot ${item.slot} is not on this sheet`, 'paper.unknown_slot');
       if (reading.state !== 'ambiguous') {
-        throw new BadRequestException({ message: `Slot ${item.slot} is not ambiguous`, code: 'paper.reading_not_ambiguous' });
+        badRequest(`Slot ${item.slot} is not ambiguous`, 'paper.reading_not_ambiguous');
       }
       const layoutEntry = layoutBySlot.get(item.slot);
       if (layoutEntry?.qtype === 'truefalse') {
         if (!item.pairChoices || item.pairChoices.length !== layoutEntry.statementIds.length) {
-          throw new BadRequestException({ message: `Slot ${item.slot} is a true/false cluster slot; resolve it per statement via pairChoices`, code: 'paper.pair_choices_required' });
+          badRequest(`Slot ${item.slot} is a true/false cluster slot; resolve it per statement via pairChoices`, 'paper.pair_choices_required');
         }
         reading.pairChoices = [...item.pairChoices];
         reading.chosen = null;
@@ -602,7 +598,7 @@ export class PaperGradingService {
       const optionCount = layoutEntry?.optionCount ?? 0;
       const chosen = item.chosen ?? null;
       if (chosen !== null && (chosen < 0 || chosen >= optionCount)) {
-        throw new BadRequestException({ message: `Chosen option ${chosen} is out of range for slot ${item.slot}`, code: 'paper.choice_out_of_range' });
+        badRequest(`Chosen option ${chosen} is out of range for slot ${item.slot}`, 'paper.choice_out_of_range');
       }
       reading.chosen = chosen;
       reading.state = chosen === null ? 'blank' : 'filled';
@@ -616,22 +612,19 @@ export class PaperGradingService {
 
   async recordScan(actorId: string, scanId: string): Promise<PaperScan & { sumGrades: number | null }> {
     const scan = await this.getScanRow(scanId);
-    if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
+    if (scan.status === 'recorded') conflict('Scan is already recorded as an attempt', 'paper.already_recorded');
     if (scan.status !== 'ready' || !scan.studentId) {
-      throw new ConflictException({ message: 'Scan is not ready to record (identity or ambiguous readings unresolved)', code: 'paper.scan_not_ready' });
+      conflict('Scan is not ready to record (identity or ambiguous readings unresolved)', 'paper.scan_not_ready');
     }
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     if (!scan.batchId) {
-      throw new ConflictException({ message: 'Scan is not attached to a print batch', code: 'paper.scan_not_ready' });
+      conflict('Scan is not attached to a print batch', 'paper.scan_not_ready');
     }
     const batch = await this.repo.getBatch(scan.batchId);
-    if (!batch) throw new NotFoundException({ message: 'Paper batch of this scan no longer exists', code: 'paper.batch_not_found' });
+    if (!batch) notFound('Paper batch of this scan no longer exists', 'paper.batch_not_found');
     if (scan.variantCodeRead && batch.examCode && scan.variantCodeRead !== batch.examCode) {
-      throw new ConflictException({
-        message: `Sheet exam code ${scan.variantCodeRead} does not match batch exam code ${batch.examCode}`,
-        code: 'paper.variant_mismatch',
-      });
+      conflict(`Sheet exam code ${scan.variantCodeRead} does not match batch exam code ${batch.examCode}`, 'paper.variant_mismatch');
     }
 
     const maxSlot = Math.max(...batch.layout.map((l) => l.slot));
@@ -664,7 +657,7 @@ export class PaperGradingService {
 
   async deleteScan(actorId: string, scanId: string): Promise<void> {
     const scan = await this.getScanRow(scanId);
-    if (scan.status === 'recorded') throw new ConflictException({ message: 'A recorded scan is grade evidence and cannot be deleted', code: 'paper.scan_recorded' });
+    if (scan.status === 'recorded') conflict('A recorded scan is grade evidence and cannot be deleted', 'paper.scan_recorded');
     const quiz = await this.quiz.getPin(scan.examPinId);
     await this.requireGradePaper(actorId, quiz);
     await this.repo.deleteScan(scan.id);

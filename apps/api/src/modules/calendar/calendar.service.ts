@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound, unauthorized } from '../../common/http-errors';
 import type { Queue } from 'bullmq';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -81,20 +82,20 @@ export class CalendarService {
 
   async createEvent(actorId: string, input: CreateEventInput): Promise<{ event: CalendarEventRow; occurrences: CalendarEventRow[] }> {
     if (!EVENT_TYPES.includes(input.eventType)) {
-      throw new BadRequestException({ message: `Unknown event type ${input.eventType}`, code: 'calendar.bad_type' });
+      badRequest(`Unknown event type ${input.eventType}`, 'calendar.bad_type');
     }
-    if (input.eventType === 'course' && !input.courseId) throw new BadRequestException({ message: 'Course events require courseId', code: 'calendar.course_required' });
-    if (input.eventType === 'group' && (!input.courseId || !input.groupId)) throw new BadRequestException({ message: 'Group events require courseId and groupId', code: 'calendar.group_required' });
-    if (input.eventType === 'category' && !input.categoryId) throw new BadRequestException({ message: 'Category events require categoryId', code: 'calendar.category_required' });
+    if (input.eventType === 'course' && !input.courseId) badRequest('Course events require courseId', 'calendar.course_required');
+    if (input.eventType === 'group' && (!input.courseId || !input.groupId)) badRequest('Group events require courseId and groupId', 'calendar.group_required');
+    if (input.eventType === 'category' && !input.categoryId) badRequest('Category events require categoryId', 'calendar.category_required');
     if (input.eventType === 'group') {
       const group = await this.groups.getGroup(input.groupId!);
-      if (group.courseId !== input.courseId) throw new BadRequestException({ message: 'Group belongs to another course', code: 'calendar.group_course_mismatch' });
+      if (group.courseId !== input.courseId) badRequest('Group belongs to another course', 'calendar.group_course_mismatch');
     }
     const owner = input.eventType === 'user' ? actorId : undefined;
     await this.requireManage(actorId, { eventType: input.eventType, courseId: input.courseId, categoryId: input.categoryId, userId: owner });
     const contextId = await this.manageContextId({ eventType: input.eventType, courseId: input.courseId, categoryId: input.categoryId, userId: owner });
     const start = new Date(input.timeStart);
-    if (Number.isNaN(start.getTime())) throw new BadRequestException({ message: 'Invalid timeStart', code: 'calendar.bad_time' });
+    if (Number.isNaN(start.getTime())) badRequest('Invalid timeStart', 'calendar.bad_time');
 
     const base = {
       name: input.name, description: input.description ?? '', eventType: input.eventType,
@@ -126,13 +127,13 @@ export class CalendarService {
 
   async getEvent(id: string): Promise<CalendarEventRow> {
     const row = await this.repo.getEvent(id);
-    if (!row) throw new NotFoundException({ message: `Calendar event ${id} not found`, code: 'calendar.event_not_found' });
+    if (!row) notFound(`Calendar event ${id} not found`, 'calendar.event_not_found');
     return row;
   }
 
   async createException(actorId: string, occurrenceId: string, input: { name?: string; timeStart: string; description?: string }): Promise<CalendarEventRow> {
     const occurrence = await this.getEvent(occurrenceId);
-    if (!occurrence.repeatId) throw new BadRequestException({ message: 'Only a series occurrence can have an exception', code: 'calendar.not_series' });
+    if (!occurrence.repeatId) badRequest('Only a series occurrence can have an exception', 'calendar.not_series');
     await this.requireManage(actorId, { eventType: occurrence.eventType, courseId: occurrence.courseId || undefined, categoryId: occurrence.categoryId || undefined, userId: occurrence.userId || undefined });
     const exception = await this.repo.insertEvent({
       name: input.name ?? occurrence.name, description: input.description ?? occurrence.description,
@@ -236,7 +237,7 @@ export class CalendarService {
   async exportIcsByToken(rawToken: string, filter: { from?: string; to?: string; eventType?: string }): Promise<string> {
     const row: CalendarExportTokenRow | undefined = await this.repo.getExportTokenByHash(hashExportToken(rawToken));
     if (!row) {
-      throw new UnauthorizedException({ message: 'Calendar export token is invalid or has been revoked', code: 'calendar.export_token_invalid' });
+      unauthorized('Calendar export token is invalid or has been revoked', 'calendar.export_token_invalid');
     }
     await this.repo.touchExportToken(row.id);
     return this.exportIcsForUser(row.userId, filter);
@@ -246,7 +247,7 @@ export class CalendarService {
   async scheduleReminder(actorId: string, eventId: string, minutesBefore: number): Promise<{ eventId: string; userId: string; remindAt: string; delayMs: number }> {
     const event = await this.getEvent(eventId);
     if (!(await this.isVisibleTo(event, actorId))) {
-      throw new ForbiddenException({ message: 'You cannot set a reminder for an event you cannot see', code: 'calendar.reminder_forbidden' });
+      forbidden('You cannot set a reminder for an event you cannot see', 'calendar.reminder_forbidden');
     }
     const remindAt = new Date(event.timeStart.getTime() - minutesBefore * 60_000);
     const delayMs = Math.max(0, remindAt.getTime() - Date.now());
@@ -282,7 +283,7 @@ export class CalendarService {
 
   async requestImport(actorId: string, subscriptionId: string): Promise<{ queued: boolean; subscriptionId: string }> {
     const sub = await this.repo.getSubscription(subscriptionId);
-    if (!sub) throw new NotFoundException({ message: `Subscription ${subscriptionId} not found`, code: 'calendar.subscription_not_found' });
+    if (!sub) notFound(`Subscription ${subscriptionId} not found`, 'calendar.subscription_not_found');
     await this.evaluator.requireCapability(actorId, 'calendar:managesubscriptions', await this.systemCtx());
 
 

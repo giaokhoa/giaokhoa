@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import type { SiteSetting, SiteSettingAuditEntry } from '@giaokhoa/contracts';
 import {
   MESSAGE_PROVIDERS,
@@ -37,10 +38,7 @@ export class SiteConfigService {
   private requireDefinition(component: string, name: string): SiteSettingDefinition {
     const def = findSiteSetting(component, name);
     if (!def) {
-      throw new BadRequestException({
-        message: `Unknown site setting ${component}/${name}`,
-        code: 'site_config.unknown_setting',
-      });
+      badRequest(`Unknown site setting ${component}/${name}`, 'site_config.unknown_setting');
     }
     return def;
   }
@@ -71,18 +69,12 @@ export class SiteConfigService {
     const def = this.requireDefinition(component, name);
     const problem = validateSiteSettingValue(def, value);
     if (problem) {
-      throw new BadRequestException({
-        message: `Invalid value for ${component}/${name}: ${problem}`,
-        code: 'site_config.invalid_value',
-      });
+      badRequest(`Invalid value for ${component}/${name}: ${problem}`, 'site_config.invalid_value');
     }
     if (def.component === NOTIFICATION_POLICY_COMPONENT && value === false) {
       const provider = MESSAGE_PROVIDERS.find((p) => notificationPolicySettingName(p.name) === def.name);
       if (provider?.mandatoryInApp) {
-        throw new BadRequestException({
-          message: `Notification type ${provider.name} is mandatory and cannot be disabled at site level`,
-          code: 'site_config.notification_mandatory',
-        });
+        badRequest(`Notification type ${provider.name} is mandatory and cannot be disabled at site level`, 'site_config.notification_mandatory');
       }
     }
     const before = await this.toView(def);
@@ -100,10 +92,7 @@ export class SiteConfigService {
     const def = this.requireDefinition(component, name);
     const before = await this.toView(def);
     if (before.source === 'default') {
-      throw new NotFoundException({
-        message: `Site setting ${component}/${name} has no stored override`,
-        code: 'site_config.override_not_found',
-      });
+      notFound(`Site setting ${component}/${name} has no stored override`, 'site_config.override_not_found');
     }
     await this.repo.deleteValue(component, name);
     await this.repo.insertAudit({

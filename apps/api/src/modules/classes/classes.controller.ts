@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -113,7 +114,7 @@ export class ClassesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: ROSTER_UPLOAD_MAX_BYTES } }))
   async importRosterFile(@Param('id', { schema: uuidIdSchema }) id: string, @UploadedFile() file: { buffer: Buffer } | undefined, @CurrentUser() actor: AuthenticatedUser) {
     if (!file) {
-      throw new BadRequestException({ message: 'An .xlsx file is required in the multipart field "file"', code: 'class.import_file_required' });
+      badRequest('An .xlsx file is required in the multipart field "file"', 'class.import_file_required');
     }
     const rows = await this.classes.parseRosterWorkbook(file.buffer);
     return this.classes.importRoster(actor.id, id, rows);

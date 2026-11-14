@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { notFound } from '../../common/http-errors';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -39,7 +40,7 @@ export class EventLogService {
   async listLogs(actorId: string, query: ListEventLogsQueryDto): Promise<{ items: EventLogView[]; total: number; page: number; pageSize: number }> {
     if (query.courseId) {
       const courseContext = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, query.courseId);
-      if (!courseContext) throw new NotFoundException({ message: `No context for course ${query.courseId}`, code: 'event_log.course_context_missing' });
+      if (!courseContext) notFound(`No context for course ${query.courseId}`, 'event_log.course_context_missing');
       await this.evaluator.requireCapability(actorId, EVENT_LOG_VIEW_CAPABILITY, courseContext.id);
     } else {
       const system = await this.contexts.ensureSystemContext();

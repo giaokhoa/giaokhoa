@@ -1,4 +1,5 @@
-import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { forbidden, serviceUnavailable } from '../../common/http-errors';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { ContextsService } from '../access/contexts.service';
 import { RolesService } from '../access/roles.service';
@@ -33,20 +34,20 @@ export class PublicRegistrationService {
 
   async register(host: string | string[] | undefined, input: PublicRegistrationInput): Promise<{ id: string }> {
     if (!isPublicLearningHost(host) || !this.betterAuth.enabled) {
-      throw new ForbiddenException({ message: 'Registration is only available on the public learning site', code: 'public_learning.registration_denied' });
+      forbidden('Registration is only available on the public learning site', 'public_learning.registration_denied');
     }
     const target = await this.spaces.resolveTarget(PUBLIC_LEARNING_SLUG);
     if (target.mode !== 'dedicated' || target.status !== 'active') {
-      throw new ServiceUnavailableException({ message: 'Public learning store is not active', code: 'public_learning.store_unavailable' });
+      serviceUnavailable('Public learning store is not active', 'public_learning.store_unavailable');
     }
     return this.spaces.withSpaceKysely(PUBLIC_LEARNING_SLUG, async () => {
       const tenant = await this.tenants.getTenantInSpace(PUBLIC_LEARNING_SLUG);
       if (!tenant || tenant.kind !== 'platform' || tenant.status !== 'active') {
-        throw new ServiceUnavailableException({ message: 'Public learning tenant is not ready', code: 'public_learning.tenant_unavailable' });
+        serviceUnavailable('Public learning tenant is not ready', 'public_learning.tenant_unavailable');
       }
       return tenantAls.run({ spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle, tenantId: tenant.id, platform: true }, async () => {
         const role = await this.roles.getRoleByShortname(input.role === 'teacher' ? 'coursecreator' : 'student');
-        if (!role) throw new ServiceUnavailableException({ message: 'Public learning role baseline is missing', code: 'public_learning.role_missing' });
+        if (!role) serviceUnavailable('Public learning role baseline is missing', 'public_learning.role_missing');
         const system = await this.contexts.ensureSystemContext();
         const tenantContext = await this.contexts.ensureTenantContext(tenant.id);
         const user = await this.bridge.createUserWithCredential({
@@ -78,10 +79,7 @@ export class PublicRegistrationService {
               'Unable to compensate public registration for ' + user.id,
               cleanupError instanceof Error ? cleanupError.stack : String(cleanupError),
             );
-            throw new ServiceUnavailableException({
-              message: 'Public registration cleanup failed',
-              code: 'public_learning.registration_cleanup_failed',
-            });
+            serviceUnavailable('Public registration cleanup failed', 'public_learning.registration_cleanup_failed');
           }
           throw error;
         }

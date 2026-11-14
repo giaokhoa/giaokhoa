@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import { createHash } from 'node:crypto';
 import type { ExamMatrixContributionView, ExamMatrixView } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -44,16 +45,16 @@ export class MatrixBanksService {
 
   private async getMatrixBankOrThrow(bankId: string): Promise<QuestionBankRow> {
     const bank = await this.banks.findBankById(bankId);
-    if (!bank) throw new NotFoundException({ message: `Matrix bank ${bankId} not found`, code: 'quiz.matrix_bank_not_found' });
+    if (!bank) notFound(`Matrix bank ${bankId} not found`, 'quiz.matrix_bank_not_found');
     if (bank.bankKind !== 'matrix') {
-      throw new BadRequestException({ message: 'Bank is not a matrix bank', code: 'quiz.matrix_bank_kind_mismatch' });
+      badRequest('Bank is not a matrix bank', 'quiz.matrix_bank_kind_mismatch');
     }
     return bank;
   }
 
   private async getMatrixRow(id: string): Promise<ExamMatrixRow> {
     const row = await this.repo.getMatrix(id);
-    if (!row) throw new NotFoundException({ message: `Exam matrix ${id} not found`, code: 'quiz.matrix_not_found' });
+    if (!row) notFound(`Exam matrix ${id} not found`, 'quiz.matrix_not_found');
     return row;
   }
 
@@ -122,7 +123,7 @@ export class MatrixBanksService {
       });
     } catch (err) {
       if (isMatrixContentSignatureConflict(err)) {
-        throw new ConflictException({ message: 'A matrix with identical content already exists in the target bank', code: 'quiz.matrix_duplicate_content' });
+        conflict('A matrix with identical content already exists in the target bank', 'quiz.matrix_duplicate_content');
       }
       throw err;
     }
@@ -168,12 +169,12 @@ export class MatrixBanksService {
   async listBankMatrices(actorId: string, bankId: string): Promise<ExamMatrixView[]> {
     const bank = await this.getMatrixBankOrThrow(bankId);
     if (await this.banks.isForeignPersonalBank(actorId, bank)) {
-      throw new NotFoundException({ message: `Matrix bank ${bankId} not found`, code: 'quiz.matrix_bank_not_found' });
+      notFound(`Matrix bank ${bankId} not found`, 'quiz.matrix_bank_not_found');
     }
     await this.banks.syncBankMembership(bank);
     const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
     if (!caps.view) {
-      throw new ForbiddenException({ message: `No access to matrix bank ${bankId}`, code: 'quiz.matrix_bank_forbidden' });
+      forbidden(`No access to matrix bank ${bankId}`, 'quiz.matrix_bank_forbidden');
     }
     const isAdmin = await this.evaluator.isSiteAdmin(actorId);
     const rows = await this.repo.listMatricesByBank(bank.id);
@@ -188,10 +189,10 @@ export class MatrixBanksService {
     const source = await this.getMatrixRow(matrixId);
     const sourceCaps = await this.sourceCapsOf(actorId, source);
     if (!sourceCaps.copy) {
-      throw new ForbiddenException({ message: 'No matrix:copy on the source matrix', code: 'quiz.matrix_copy_source_forbidden' });
+      forbidden('No matrix:copy on the source matrix', 'quiz.matrix_copy_source_forbidden');
     }
     if (source.status === 'hidden' && source.createdBy !== actorId && !sourceCaps.moderate) {
-      throw new ForbiddenException({ message: 'Hidden matrices can only be copied by their owner or a moderator', code: 'quiz.matrix_hidden' });
+      forbidden('Hidden matrices can only be copied by their owner or a moderator', 'quiz.matrix_hidden');
     }
     const target = input.targetBankId
       ? await this.getMatrixBankOrThrow(input.targetBankId)
@@ -199,7 +200,7 @@ export class MatrixBanksService {
     await this.banks.syncBankMembership(target);
     const targetCaps = await this.banks.bankLocalMatrixCaps(actorId, target);
     if (!targetCaps.add) {
-      throw new ForbiddenException({ message: 'No matrix:add on the target matrix bank', code: 'quiz.matrix_copy_target_forbidden' });
+      forbidden('No matrix:add on the target matrix bank', 'quiz.matrix_copy_target_forbidden');
     }
     const copy = await this.deepCopyMatrix(actorId, source, target, { status: 'ready', isTemplate: false, name: input.name });
     await this.outbox.enqueueStandalone({
@@ -213,22 +214,22 @@ export class MatrixBanksService {
   async proposeContribution(actorId: string, matrixId: string, input: CreateMatrixContributionDto): Promise<ExamMatrixContributionView> {
     const target = await this.getMatrixBankOrThrow(input.targetBankId);
     if (target.scope === 'personal') {
-      throw new BadRequestException({ message: 'Contributions target shared matrix banks, not a personal bank', code: 'quiz.matrix_contribution_target_personal' });
+      badRequest('Contributions target shared matrix banks, not a personal bank', 'quiz.matrix_contribution_target_personal');
     }
     const source = await this.getMatrixRow(matrixId);
     if (source.status !== 'ready') {
-      throw new BadRequestException({ message: 'Only a ready matrix can be proposed as a contribution', code: 'quiz.matrix_contribution_source_not_ready' });
+      badRequest('Only a ready matrix can be proposed as a contribution', 'quiz.matrix_contribution_source_not_ready');
     }
     const sourceCaps = await this.sourceCapsOf(actorId, source);
     if (!sourceCaps.view) {
-      throw new ForbiddenException({ message: 'No access to the source matrix', code: 'quiz.matrix_contribution_source_forbidden' });
+      forbidden('No access to the source matrix', 'quiz.matrix_contribution_source_forbidden');
     }
     if (!sourceCaps.share) {
-      throw new ForbiddenException({ message: 'No matrix:share on the source matrix', code: 'quiz.matrix_share_forbidden' });
+      forbidden('No matrix:share on the source matrix', 'quiz.matrix_share_forbidden');
     }
     const pending = await this.repo.findPendingMatrixContribution(source.id, target.id, actorId);
     if (pending) {
-      throw new ConflictException({ message: 'A pending contribution for this matrix to this bank already exists', code: 'quiz.matrix_contribution_pending_exists' });
+      conflict('A pending contribution for this matrix to this bank already exists', 'quiz.matrix_contribution_pending_exists');
     }
     const hash = this.matrixContentHash(source, await this.repo.listMatrixCells(source.id));
     let nearDuplicateOf: string | null = null;
@@ -252,7 +253,7 @@ export class MatrixBanksService {
     await this.banks.syncBankMembership(bank);
     const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
     if (!caps.view) {
-      throw new ForbiddenException({ message: `No access to matrix bank ${bankId}`, code: 'quiz.matrix_bank_forbidden' });
+      forbidden(`No access to matrix bank ${bankId}`, 'quiz.matrix_bank_forbidden');
     }
     let rows = await this.repo.listMatrixContributions(bank.id, status);
     if (!caps.moderate) rows = rows.filter((r) => r.proposerId === actorId);
@@ -271,10 +272,10 @@ export class MatrixBanksService {
   private async getPendingContribution(bank: QuestionBankRow, contributionId: string): Promise<ExamMatrixContributionRow> {
     const row = await this.repo.getMatrixContribution(contributionId);
     if (!row || row.targetBankId !== bank.id) {
-      throw new NotFoundException({ message: `Matrix contribution ${contributionId} not found`, code: 'quiz.matrix_contribution_not_found' });
+      notFound(`Matrix contribution ${contributionId} not found`, 'quiz.matrix_contribution_not_found');
     }
     if (row.status !== 'pending') {
-      throw new ConflictException({ message: 'Contribution is no longer pending', code: 'quiz.matrix_contribution_not_pending' });
+      conflict('Contribution is no longer pending', 'quiz.matrix_contribution_not_pending');
     }
     return row;
   }
@@ -283,7 +284,7 @@ export class MatrixBanksService {
     await this.banks.syncBankMembership(bank);
     const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
     if (!caps.moderate) {
-      throw new ForbiddenException({ message: 'No matrix:moderate on the target matrix bank', code: 'quiz.matrix_moderate_forbidden' });
+      forbidden('No matrix:moderate on the target matrix bank', 'quiz.matrix_moderate_forbidden');
     }
   }
 
@@ -294,10 +295,7 @@ export class MatrixBanksService {
     const source = await this.getMatrixRow(contribution.matrixId);
     const inTarget = await this.repo.listMatricesByBank(bank.id);
     if (inTarget.some((m) => m.derivedFromMatrixId === source.id)) {
-      throw new ConflictException({
-        message: `An identical matrix already exists in the target bank (copied from ${source.id})`,
-        code: 'quiz.matrix_duplicate_in_bank',
-      });
+      conflict(`An identical matrix already exists in the target bank (copied from ${source.id})`, 'quiz.matrix_duplicate_in_bank');
     }
     const copy = await this.deepCopyMatrix(actorId, source, bank, {
       status: 'ready', isTemplate: bank.scope === 'personal' ? source.isTemplate : true,
@@ -316,7 +314,7 @@ export class MatrixBanksService {
     const matrix = await this.getMatrixRow(matrixId);
     const caps = await this.sourceCapsOf(actorId, matrix);
     if (!caps.view) {
-      throw new ForbiddenException({ message: 'No access to the source matrix', code: 'quiz.matrix_attribution_source_forbidden' });
+      forbidden('No access to the source matrix', 'quiz.matrix_attribution_source_forbidden');
     }
     const [names, generated, sourceBank] = await Promise.all([
       matrix.originalAuthorId ? this.banks.displayNames([matrix.originalAuthorId]) : Promise.resolve(new Map<string, string>()),

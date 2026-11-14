@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -18,10 +19,10 @@ export class NotesService {
   }): Promise<NoteRow> {
     const publishState = input.publishState ?? 'draft';
     if (!['draft', 'public', 'site'].includes(publishState)) {
-      throw new BadRequestException({ message: `Unknown publishState ${publishState}`, code: 'notes.bad_publishstate' });
+      badRequest(`Unknown publishState ${publishState}`, 'notes.bad_publishstate');
     }
     if (publishState === 'public' && !input.courseId) {
-      throw new BadRequestException({ message: 'A course (public) note requires courseId', code: 'notes.course_required' });
+      badRequest('A course (public) note requires courseId', 'notes.course_required');
     }
     const ctxId = (publishState === 'public' || (publishState === 'draft' && input.courseId))
       ? await this.courses.courseContextId(input.courseId!)
@@ -57,16 +58,16 @@ export class NotesService {
 
   async getNote(viewerId: string, id: string): Promise<NoteRow> {
     const note = await this.repo.getNote(id);
-    if (!note) throw new NotFoundException({ message: `Note ${id} not found`, code: 'notes.not_found' });
+    if (!note) notFound(`Note ${id} not found`, 'notes.not_found');
     if (!(await this.canView(note, viewerId))) {
-      throw new ForbiddenException({ message: 'You cannot view this note', code: 'notes.view_forbidden' });
+      forbidden('You cannot view this note', 'notes.view_forbidden');
     }
     return note;
   }
 
   async deleteNote(actorId: string, id: string): Promise<{ deleted: boolean }> {
     const note = await this.repo.getNote(id);
-    if (!note) throw new NotFoundException({ message: `Note ${id} not found`, code: 'notes.not_found' });
+    if (!note) notFound(`Note ${id} not found`, 'notes.not_found');
     if (note.createdBy !== actorId) {
       const ctx = note.publishState === 'public'
         ? await this.courses.courseContextId(note.courseId!)

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import type { UserListStatus, UserWithAssignmentsListResponse } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { AccessRepository, type AssignmentListRow, type RoleRow } from '@giaokhoa/db/repositories/access';
@@ -69,7 +70,7 @@ export class RolesService {
   async createRole(input: { name: string; shortName: string; description?: string; archetype?: string }): Promise<RoleRow> {
     const shortName = input.shortName.trim().toLowerCase();
     if (await this.repo.getRoleByShortname(shortName)) {
-      throw new BadRequestException({ message: `Role shortName ${shortName} already exists`, code: 'access.role_shortname_taken' });
+      badRequest(`Role shortName ${shortName} already exists`, 'access.role_shortname_taken');
     }
     const roles = await this.repo.listRoles();
     return this.repo.insertRole({ name: input.name, shortName, description: input.description ?? '', archetype: input.archetype, sortOrder: roles.length + 1 });
@@ -96,7 +97,7 @@ export class RolesService {
   }
   async getRole(id: string): Promise<RoleRow> {
     const row = await this.repo.getRoleById(id);
-    if (!row) throw new NotFoundException({ message: `Role ${id} not found`, code: 'access.role_not_found' });
+    if (!row) notFound(`Role ${id} not found`, 'access.role_not_found');
     return row;
   }
   async getRoleByShortname(shortName: string): Promise<RoleRow | undefined> { return this.repo.getRoleByShortname(shortName); }
@@ -108,17 +109,11 @@ export class RolesService {
   async deleteRole(id: string): Promise<void> {
     const roleRow = await this.getRole(id);
     if (roleRow.archetype) {
-      throw new BadRequestException({
-        message: `Role ${roleRow.shortName} is a built-in archetype role and cannot be deleted`,
-        code: 'access.role_archetype_delete_forbidden',
-      });
+      badRequest(`Role ${roleRow.shortName} is a built-in archetype role and cannot be deleted`, 'access.role_archetype_delete_forbidden');
     }
     const assignments = await this.repo.listAssignmentsByRole(id);
     if (assignments.length > 0) {
-      throw new BadRequestException({
-        message: `Role ${roleRow.shortName} is still held by ${assignments.length} assignment(s) and cannot be deleted`,
-        code: 'access.role_has_assignments',
-      });
+      badRequest(`Role ${roleRow.shortName} is still held by ${assignments.length} assignment(s) and cannot be deleted`, 'access.role_has_assignments');
     }
     const overrides = await this.repo.listRoleCapabilities(id);
     const contextIds = [...new Set([...assignments.map((a) => a.contextId), ...overrides.map((o) => o.contextId)])];
@@ -163,10 +158,7 @@ export class RolesService {
   async unassignRole(assignmentId: string, modifierId?: string, opts?: { allowEnrolManaged?: boolean }): Promise<void> {
     const existing = await this.repo.getAssignment(assignmentId);
     if (existing && isEnrolManagedAssignment(existing) && !opts?.allowEnrolManaged) {
-      throw new BadRequestException({
-        message: 'This role assignment is managed by an enrolment and cannot be removed directly; unenrol the user from the enrolment instance instead',
-        code: 'access.assignment_enrol_managed',
-      });
+      badRequest('This role assignment is managed by an enrolment and cannot be removed directly; unenrol the user from the enrolment instance instead', 'access.assignment_enrol_managed');
     }
     await this.repo.deleteAssignment(assignmentId);
     if (existing) {
@@ -207,7 +199,7 @@ export class RolesService {
 
   async setCapabilityOverride(roleId: string, capability: string, contextId: string, permission: number, modifierId?: string, tx?: CentreTx): Promise<void> {
     if (!VALID_PERMISSIONS.includes(permission)) {
-      throw new BadRequestException({ message: `Invalid permission ${permission}`, code: 'access.invalid_permission' });
+      badRequest(`Invalid permission ${permission}`, 'access.invalid_permission');
     }
     await this.getRole(roleId);
     await this.contexts.getContext(contextId, tx);
@@ -229,20 +221,17 @@ export class RolesService {
     const seen = new Set<string>();
     for (const entry of overrides) {
       if (seen.has(entry.capability)) {
-        throw new BadRequestException({
-          message: `Capability ${entry.capability} appears more than once in the submitted matrix`,
-          code: 'access.duplicate_capability_override',
-        });
+        badRequest(`Capability ${entry.capability} appears more than once in the submitted matrix`, 'access.duplicate_capability_override');
       }
       seen.add(entry.capability);
       if (!VALID_PERMISSIONS.includes(entry.permission)) {
-        throw new BadRequestException({ message: `Invalid permission ${entry.permission}`, code: 'access.invalid_permission' });
+        badRequest(`Invalid permission ${entry.permission}`, 'access.invalid_permission');
       }
     }
     const catalog = new Set((await this.repo.listCapabilities()).map((row) => row.name));
     for (const entry of overrides) {
       if (!catalog.has(entry.capability)) {
-        throw new BadRequestException({ message: `Unknown capability ${entry.capability}`, code: 'access.unknown_capability' });
+        badRequest(`Unknown capability ${entry.capability}`, 'access.unknown_capability');
       }
     }
     const effective = overrides.filter((entry) => entry.permission !== CAP_INHERIT);

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { I18nService } from '@nestjs/i18n';
 import { UsersService } from '../users/users.service';
 import {
@@ -34,7 +35,7 @@ export class AvailabilityService {
     try {
       return parseAvailabilityTree(raw);
     } catch (err) {
-      throw new BadRequestException({ message: (err as Error).message, code: 'availability.invalid_tree' });
+      badRequest((err as Error).message, 'availability.invalid_tree');
     }
   }
 

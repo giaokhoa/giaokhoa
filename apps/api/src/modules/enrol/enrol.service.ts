@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import { OnEvent } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
 import { CohortMaterializationSurface } from '@giaokhoa/enrol';
@@ -94,21 +95,21 @@ export class EnrolService implements OnModuleInit {
     await this.courses.getCourse(courseId);
     await this.requireManage(actorId, courseId);
     if (!ENROL_METHODS.includes(input.method as EnrolMethod)) {
-      throw new BadRequestException({ message: `Unknown enrol method ${input.method}`, code: 'enrol.unknown_method' });
+      badRequest(`Unknown enrol method ${input.method}`, 'enrol.unknown_method');
     }
     if (input.method === 'cohort' && !input.cohortId) {
-      throw new BadRequestException({ message: 'A cohort enrol instance requires cohortId', code: 'enrol.cohort_required' });
+      badRequest('A cohort enrol instance requires cohortId', 'enrol.cohort_required');
     }
     let roleId: string | undefined;
     if (input.roleShortname) {
       const roleRow = await this.roles.getRoleByShortname(input.roleShortname);
-      if (!roleRow) throw new BadRequestException({ message: `Role ${input.roleShortname} not found`, code: 'enrol.role_not_found' });
+      if (!roleRow) badRequest(`Role ${input.roleShortname} not found`, 'enrol.role_not_found');
       roleId = roleRow.id;
     } else {
       roleId = await this.defaultStudentRoleId();
     }
     if (input.method === 'fee' && (!input.cost || input.cost <= 0 || !input.currency)) {
-      throw new BadRequestException({ message: 'A fee enrol instance requires a positive integer cost and a currency', code: 'enrol.fee_config_required' });
+      badRequest('A fee enrol instance requires a positive integer cost and a currency', 'enrol.fee_config_required');
     }
     const instance = await this.repo.insertInstance({
       courseId: courseId, enrol: input.method, name: input.name ?? null, roleId,
@@ -154,7 +155,7 @@ export class EnrolService implements OnModuleInit {
 
   async getInstance(id: string): Promise<EnrolRow> {
     const row = await this.repo.getInstance(id);
-    if (!row) throw new NotFoundException({ message: `Enrol instance ${id} not found`, code: 'enrol.instance_not_found' });
+    if (!row) notFound(`Enrol instance ${id} not found`, 'enrol.instance_not_found');
     return row;
   }
   async listInstances(courseId: string, viewerId?: string): Promise<EnrolRow[]> {
@@ -181,7 +182,7 @@ export class EnrolService implements OnModuleInit {
     let newRoleId: string | undefined;
     if (input.roleShortname !== undefined) {
       const roleRow = await this.roles.getRoleByShortname(input.roleShortname);
-      if (!roleRow) throw new BadRequestException({ message: `Role ${input.roleShortname} not found`, code: 'enrol.role_not_found' });
+      if (!roleRow) badRequest(`Role ${input.roleShortname} not found`, 'enrol.role_not_found');
       newRoleId = roleRow.id;
       patch.roleId = newRoleId;
     }
@@ -258,9 +259,9 @@ export class EnrolService implements OnModuleInit {
   async selfEnrol(userId: string, instanceId: string, enrolmentKey?: string): Promise<UserEnrolmentRow> {
     const instance = await this.getInstance(instanceId);
     if (instance.enrol === 'fee') {
-      throw new BadRequestException({ message: 'Fee enrol instance requires a succeeded payment before enrolment is activated', code: 'enrol.payment_required' });
+      badRequest('Fee enrol instance requires a succeeded payment before enrolment is activated', 'enrol.payment_required');
     }
-    if (instance.enrol !== 'self') throw new BadRequestException({ message: 'Instance is not a self-enrol instance', code: 'enrol.not_self' });
+    if (instance.enrol !== 'self') badRequest('Instance is not a self-enrol instance', 'enrol.not_self');
     const providedKey = enrolmentKey ? enrolmentKey : undefined;
     const courseGroups = await this.groups.groupsForCourseInternal(instance.courseId);
     const matchedGroup = providedKey
@@ -269,10 +270,10 @@ export class EnrolService implements OnModuleInit {
     const instanceKey = instance.enrolmentKey ? instance.enrolmentKey : null;
     if (instanceKey) {
       if (!providedKey) {
-        throw new BadRequestException({ message: 'This course requires an enrolment key', code: 'enrol.enrolment_key_required' });
+        badRequest('This course requires an enrolment key', 'enrol.enrolment_key_required');
       }
       if (providedKey !== instanceKey && !matchedGroup) {
-        throw new BadRequestException({ message: 'Invalid enrolment key', code: 'enrol.invalid_enrolment_key' });
+        badRequest('Invalid enrolment key', 'enrol.invalid_enrolment_key');
       }
     }
     const ue = await this.enrolUserInternal(instance, userId, userId);
@@ -285,18 +286,18 @@ export class EnrolService implements OnModuleInit {
   async selfUnenrol(userId: string, instanceId: string): Promise<{ withdrawn: boolean }> {
     const instance = await this.getInstance(instanceId);
     if (instance.enrol !== 'self') {
-      throw new BadRequestException({ message: 'You can only unenrol yourself from a self-enrolment instance', code: 'enrol.self_unenrol_not_allowed' });
+      badRequest('You can only unenrol yourself from a self-enrolment instance', 'enrol.self_unenrol_not_allowed');
     }
     const ue = await this.repo.getUserEnrolment(instanceId, userId);
     if (!ue || ue.status === ENROL_WITHDRAWN) {
-      throw new NotFoundException({ message: 'User enrolment not found', code: 'enrol.user_not_enrolled' });
+      notFound('User enrolment not found', 'enrol.user_not_enrolled');
     }
     return this.unenrolInternal(instance, userId, userId);
   }
 
   async activatePaidEnrol(instanceId: string, userId: string): Promise<UserEnrolmentRow> {
     const instance = await this.getInstance(instanceId);
-    if (instance.enrol !== 'fee') throw new BadRequestException({ message: 'Instance is not a fee enrol instance', code: 'enrol.not_fee' });
+    if (instance.enrol !== 'fee') badRequest('Instance is not a fee enrol instance', 'enrol.not_fee');
     const existing = await this.repo.getUserEnrolment(instanceId, userId);
     if (existing && existing.status === ENROL_ACTIVE) return existing;
     return this.enrolUserInternal(instance, userId, userId);
@@ -306,7 +307,7 @@ export class EnrolService implements OnModuleInit {
     const instance = await this.getInstance(instanceId);
     await this.requireManage(actorId, instance.courseId);
     const ue = await this.repo.getUserEnrolment(instanceId, userId);
-    if (!ue || ue.status === ENROL_WITHDRAWN) throw new NotFoundException({ message: 'User enrolment not found', code: 'enrol.user_not_enrolled' });
+    if (!ue || ue.status === ENROL_WITHDRAWN) notFound('User enrolment not found', 'enrol.user_not_enrolled');
     if (!suspended && ue.status !== ENROL_ACTIVE && await this.roleSeparation.isLearnerGrantRole(instance.roleId)) {
       await this.roleSeparation.assertLearnerEnrolmentAllowed(userId, instance.courseId);
     }
@@ -366,7 +367,7 @@ export class EnrolService implements OnModuleInit {
       contextId: await this.courses.courseContextId(courseId),
     });
     if (assignments.length) return;
-    throw new NotFoundException({ message: `Course ${courseId} not found`, code: 'course.not_found' });
+    notFound(`Course ${courseId} not found`, 'course.not_found');
   }
 
   async listEnrolmentsForCourse(courseId: string, viewerId?: string): Promise<(UserEnrolmentRow & { enrolMethod: string })[]> {

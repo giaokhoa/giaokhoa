@@ -1,4 +1,5 @@
-import { Inject, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { unauthorized } from '../../common/http-errors';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { OBJECT_STORAGE, supportsPresignedDownloads, type ObjectStorage } from './storage';
@@ -30,16 +31,16 @@ export class FileSigningService {
     return { url: `/api/v1/files/${file.id}/download?sig=${encodeURIComponent(token)}`, expiresAt };
   }
   verify(fileId: string, domain: string, token: string | undefined): void {
-    if (!token) throw new UnauthorizedException({ message: 'Missing file signature', code: 'file.signature_missing' });
+    if (!token) unauthorized('Missing file signature', 'file.signature_missing');
     const [expRaw, mac] = token.split('.');
     const expiresAt = Number(expRaw);
     if (!mac || Number.isNaN(expiresAt) || expiresAt < Math.floor(Date.now() / 1000)) {
-      throw new UnauthorizedException({ message: 'File signature expired or invalid', code: 'file.signature_invalid' });
+      unauthorized('File signature expired or invalid', 'file.signature_invalid');
     }
     const expected = createHmac('sha256', this.secret).update(`${domain}.${fileId}.${expiresAt}`).digest('base64url');
     const a = Buffer.from(mac); const b = Buffer.from(expected);
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new UnauthorizedException({ message: 'File signature expired or invalid', code: 'file.signature_invalid' });
+      unauthorized('File signature expired or invalid', 'file.signature_invalid');
     }
   }
 }

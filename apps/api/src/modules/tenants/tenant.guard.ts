@@ -1,11 +1,5 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-  Optional,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, Optional } from '@nestjs/common';
+import { forbidden, unauthorized } from '../../common/http-errors';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
 import { Reflector } from '@nestjs/core';
 import { IS_PLATFORM_ROUTE_KEY } from '../../common/platform-route.decorator';
@@ -48,13 +42,13 @@ export class TenantGuard implements CanActivate {
     if (!user && !platformRoute && isPublicLearningHost(request.headers?.host)) {
       const space = await resolveDedicatedSpace(this.spaceDb, request.headers?.host);
       if (!space || space.slug !== PUBLIC_LEARNING_SLUG) {
-        throw new UnauthorizedException({ message: 'Public learning store is not ready', code: 'public_learning.store_unavailable' });
+        unauthorized('Public learning store is not ready', 'public_learning.store_unavailable');
       }
       const publicTenant = await this.spaceDb.withSpaceKysely(space.slug, () =>
         this.repo.getTenantBySlug(PUBLIC_LEARNING_SLUG),
       );
       if (!publicTenant || publicTenant.kind !== 'platform' || publicTenant.status !== 'active') {
-        throw new UnauthorizedException({ message: 'Public learning tenant is not active', code: 'public_learning.tenant_unavailable' });
+        unauthorized('Public learning tenant is not active', 'public_learning.tenant_unavailable');
       }
       this.tenantContext.enter({ tenantId: publicTenant.id });
       request.tenantId = publicTenant.id;
@@ -68,26 +62,17 @@ export class TenantGuard implements CanActivate {
           this.repo.getTenantBySlug(space.slug),
         );
         if (!spaceTenant) {
-          throw new UnauthorizedException({
-            message: 'Space tenant is not ready in its own store',
-            code: 'space.tenant_missing',
-          });
+          unauthorized('Space tenant is not ready in its own store', 'space.tenant_missing');
         }
         if (spaceTenant.status !== 'active') {
-          throw new ForbiddenException({
-            message: `Tenant ${spaceTenant.slug} is ${spaceTenant.status}`,
-            code: 'tenant.not_active',
-          });
+          forbidden(`Tenant ${spaceTenant.slug} is ${spaceTenant.status}`, 'tenant.not_active');
         }
         if (spaceTenant.kind !== 'platform') {
           const membership = await this.spaceDb.withSpaceKysely(space.slug, () =>
             this.repo.getMembership(spaceTenant.id, user.id),
           );
           if (membership?.status !== 'active') {
-            throw new UnauthorizedException({
-              message: 'Membership in the active tenant is no longer active',
-              code: 'tenant.membership_inactive',
-            });
+            unauthorized('Membership in the active tenant is no longer active', 'tenant.membership_inactive');
           }
         }
         this.tenantContext.enter({ tenantId: spaceTenant.id, userId: user.id });
@@ -100,16 +85,10 @@ export class TenantGuard implements CanActivate {
       if (user.tenantId) {
         const tenant = await this.repo.getTenant(user.tenantId);
         if (!tenant) {
-          throw new UnauthorizedException({
-            message: 'Tenant declared by the session could not be resolved',
-            code: 'tenant.unknown',
-          });
+          unauthorized('Tenant declared by the session could not be resolved', 'tenant.unknown');
         }
         if (tenant.status !== 'active') {
-          throw new ForbiddenException({
-            message: `Tenant ${tenant.slug} is ${tenant.status}`,
-            code: 'tenant.not_active',
-          });
+          forbidden(`Tenant ${tenant.slug} is ${tenant.status}`, 'tenant.not_active');
         }
         if (tenant.kind === 'platform') {
           tenantId = tenant.id;
@@ -120,10 +99,7 @@ export class TenantGuard implements CanActivate {
           } else if (await this.evaluator.isSiteAdmin(user.id)) {
             tenantId = zero.id;
           } else {
-            throw new UnauthorizedException({
-              message: 'Membership in the active tenant is no longer active',
-              code: 'tenant.membership_inactive',
-            });
+            unauthorized('Membership in the active tenant is no longer active', 'tenant.membership_inactive');
           }
         }
       } else {

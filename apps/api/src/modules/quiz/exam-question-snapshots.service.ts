@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { extractRichTextPlainText, systemBankPackageSchema, type RichTextDocument } from '@giaokhoa/contracts';
 import type { ExamQuestionSnapshot } from '@giaokhoa/db';
 import type { ExamSlotRow } from '@giaokhoa/db/repositories/exams';
@@ -29,7 +30,7 @@ export class ExamQuestionSnapshotsService {
       throw new BadRequestException({ code: 'system_bank.checksum_mismatch' });
     }
     const error = packageValidationError(question.qtype, pkg);
-    if (error) throw new BadRequestException({ code: 'system_bank.bad_package', message: error });
+    if (error) badRequest(error, 'system_bank.bad_package');
     assertSupportedQtype(question.qtype);
     normaliseQuestionContent(question.qtype, {
       questionText: pkg.questionText as RichTextDocument,

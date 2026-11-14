@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -62,7 +63,7 @@ export class MessagingMessagesService {
     beforeSeq?: number; afterSeq?: number; limit?: number;
   }): Promise<{ messages: MessageWithQuoteRow[]; hasMoreBefore: boolean }> {
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertConversationMember(userId, conversation);
     await this.conversations.assertDirectConversationVisible(userId, conversation);
@@ -90,10 +91,10 @@ export class MessagingMessagesService {
   }): Promise<{ results: { id: string; conversationId: string; userIdFrom: string; seq: number; excerpt: string; createdAt: Date }[] }> {
     const q = query.q.trim();
     if (q.length === 0) {
-      throw new BadRequestException({ message: 'Search query must not be empty', code: 'messaging.search_query_empty' });
+      badRequest('Search query must not be empty', 'messaging.search_query_empty');
     }
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertConversationMember(userId, conversation);
     await this.conversations.assertDirectConversationVisible(userId, conversation);
@@ -122,7 +123,7 @@ export class MessagingMessagesService {
     const senderCtx = await this.contexts.getByLevelInstance(30, actorId);
     await this.evaluator.requireCapability(actorId, 'site:sendmessage', senderCtx?.id ?? systemCtx.id);
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertConversationMember(actorId, conversation);
     if (!conversation.enabled && !(await this.conversations.canManageConversation(actorId, conversation))) {
@@ -160,10 +161,7 @@ export class MessagingMessagesService {
     if (input.replyToMessageId) {
       const original = await this.repo.getMessage(input.replyToMessageId);
       if (!original || original.conversationId !== conversationId) {
-        throw new BadRequestException({
-          message: 'Quoted message not found in this conversation',
-          code: 'messaging.reply_target_not_found',
-        });
+        badRequest('Quoted message not found in this conversation', 'messaging.reply_target_not_found');
       }
     }
     await this.assertMessageLengthAllowed(input.text);
@@ -213,10 +211,7 @@ export class MessagingMessagesService {
     if (max <= 0) return;
     const count = countUserVisibleCharacters(text);
     if (count > max) {
-      throw new BadRequestException({
-        message: `Message is too long: ${count} characters (maximum ${max})`,
-        code: 'messaging.message_too_long',
-      });
+      badRequest(`Message is too long: ${count} characters (maximum ${max})`, 'messaging.message_too_long');
     }
   }
 
@@ -255,9 +250,9 @@ export class MessagingMessagesService {
 
   async deleteMessage(actorId: string, messageId: string): Promise<MessageRow> {
     const existing = await this.repo.getMessage(messageId);
-    if (!existing) throw new NotFoundException({ message: `Message ${messageId} not found`, code: 'messaging.message_not_found' });
+    if (!existing) notFound(`Message ${messageId} not found`, 'messaging.message_not_found');
     const conversation = await this.repo.getConversation(existing.conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${existing.conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${existing.conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertDirectConversationVisible(actorId, conversation);
     if (existing.userIdFrom !== actorId) {
@@ -283,9 +278,9 @@ export class MessagingMessagesService {
 
   async recallMessage(actorId: string, messageId: string): Promise<MessageRow> {
     const existing = await this.repo.getMessage(messageId);
-    if (!existing) throw new NotFoundException({ message: `Message ${messageId} not found`, code: 'messaging.message_not_found' });
+    if (!existing) notFound(`Message ${messageId} not found`, 'messaging.message_not_found');
     const conversation = await this.repo.getConversation(existing.conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${existing.conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${existing.conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertDirectConversationVisible(actorId, conversation);
     if (existing.userIdFrom !== actorId) {
@@ -296,10 +291,7 @@ export class MessagingMessagesService {
     }
     if (existing.recalledAt) return existing;
     if (existing.deletedAt) {
-      throw new BadRequestException({
-        message: 'This message is already deleted and can no longer be recalled',
-        code: 'messaging.message_already_deleted',
-      });
+      badRequest('This message is already deleted and can no longer be recalled', 'messaging.message_already_deleted');
     }
     const windowMinutes = await this.recallWindowMinutes();
     if (!isWithinRecallWindow(existing.createdAt, new Date(), windowMinutes)) {
@@ -326,9 +318,9 @@ export class MessagingMessagesService {
 
   async hardDeleteMessage(actorId: string, messageId: string, input: { reason: string }): Promise<{ deleted: true; messageId: string; conversationId: string }> {
     const existing = await this.repo.getMessage(messageId);
-    if (!existing) throw new NotFoundException({ message: `Message ${messageId} not found`, code: 'messaging.message_not_found' });
+    if (!existing) notFound(`Message ${messageId} not found`, 'messaging.message_not_found');
     const conversation = await this.repo.getConversation(existing.conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${existing.conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${existing.conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.assertCanHardDelete(actorId, conversation);
     await this.repo.insertModeratorAction({
@@ -351,14 +343,14 @@ export class MessagingMessagesService {
     const uniqueIds = [...new Set(input.messageIds)];
     const rows = await this.repo.getMessagesByIds(uniqueIds);
     if (rows.length !== uniqueIds.length) {
-      throw new NotFoundException({ message: 'One or more messages were not found', code: 'messaging.message_not_found' });
+      notFound('One or more messages were not found', 'messaging.message_not_found');
     }
     const conversations = new Map<string, ConversationRow>();
     for (const row of rows) {
       let conversation = conversations.get(row.conversationId);
       if (!conversation) {
         conversation = (await this.repo.getConversation(row.conversationId)) ?? undefined;
-        if (!conversation) throw new NotFoundException({ message: `Conversation ${row.conversationId} not found`, code: 'messaging.conversation_not_found' });
+        if (!conversation) notFound(`Conversation ${row.conversationId} not found`, 'messaging.conversation_not_found');
         await this.membershipSync.syncGroupConversationIfLinked(conversation);
         conversations.set(row.conversationId, conversation);
       }
@@ -390,7 +382,7 @@ export class MessagingMessagesService {
 
   async reportConversation(actorId: string, conversationId: string, reason?: string): Promise<ReportRow> {
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.conversations.assertConversationMember(actorId, conversation);
     const report = await this.repo.insertReport({
@@ -440,9 +432,9 @@ export class MessagingMessagesService {
     conversation: ConversationRow & { members: string[]; messages: MessageRow[] };
   }> {
     const report = await this.repo.getReport(reportId);
-    if (!report) throw new NotFoundException({ message: `Report ${reportId} not found`, code: 'messaging.report_not_found' });
+    if (!report) notFound(`Report ${reportId} not found`, 'messaging.report_not_found');
     const conversation = await this.repo.getConversation(report.conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${report.conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${report.conversationId} not found`, 'messaging.conversation_not_found');
     if (!(await this.conversations.canModerateConversation(actorId, conversation))) {
       throw new ForbiddenException({
         message: 'Only an administrator or the teacher in charge of this conversation\'s course can review a reported conversation',
@@ -467,9 +459,9 @@ export class MessagingMessagesService {
 
   async updateReportStatus(actorId: string, reportId: string, status: string): Promise<ReportRow> {
     const report = await this.repo.getReport(reportId);
-    if (!report) throw new NotFoundException({ message: `Report ${reportId} not found`, code: 'messaging.report_not_found' });
+    if (!report) notFound(`Report ${reportId} not found`, 'messaging.report_not_found');
     const conversation = await this.repo.getConversation(report.conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${report.conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${report.conversationId} not found`, 'messaging.conversation_not_found');
     if (!(await this.conversations.canModerateConversation(actorId, conversation))) {
       throw new ForbiddenException({
         message: 'Only an administrator or the teacher in charge of this conversation\'s course can handle its reports',

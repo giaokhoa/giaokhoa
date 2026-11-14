@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { badRequest } from '../../../common/http-errors';
 import {
   getTrueFalseStatements, richTextBlocksContainStatementList,
   richTextBlocksHaveContent, toRichTextDocument, TRUE_FALSE_STATEMENT_COUNT,
@@ -66,7 +67,7 @@ export function badAnswerData(message: string): BadRequestException {
 
 export function assertSupportedQtype(qtype: string): asserts qtype is SupportedQtype {
   if (!(SUPPORTED_QTYPES as readonly string[]).includes(qtype)) {
-    throw new BadRequestException({ message: `qtype ${qtype} is not one of the standard Moodle qtypes supported by the core (multichoice, truefalse, shortanswer, essay)`, code: 'question.qtype_not_supported' });
+    badRequest(`qtype ${qtype} is not one of the standard Moodle qtypes supported by the core (multichoice, truefalse, shortanswer, essay)`, 'question.qtype_not_supported');
   }
 }
 

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
 import { FilesService, QUESTION_FILE_CONTENT_SRC_PATTERN, QUESTION_IMAGE_MAX_BYTES, questionFileContentSrc, sniffImageMimeType } from '../files/files.service';
@@ -21,7 +22,7 @@ function imageAttrs(value: unknown): ImageAttrs[] {
     if (item.type === 'image' && item.attrs && typeof item.attrs === 'object') {
       const attrs = item.attrs as Record<string, unknown>;
       if (typeof attrs.src !== 'string') {
-        throw new BadRequestException({ message: 'Invalid image reference', code: 'system_bank.invalid_media' });
+        badRequest('Invalid image reference', 'system_bank.invalid_media');
       }
       found.push(attrs as ImageAttrs);
     }
@@ -44,17 +45,17 @@ export class SystemBankMediaService {
     for (const attrs of imageAttrs(result)) {
       const match = QUESTION_FILE_CONTENT_SRC_PATTERN.exec(attrs.src);
       if (!match) {
-        throw new BadRequestException({ message: 'Image must reference an owned file', code: 'system_bank.invalid_media' });
+        badRequest('Image must reference an owned file', 'system_bank.invalid_media');
       }
       const file = await this.files.getFile(match[1]!);
       if (file.component !== 'question' || file.contextId !== sourceContextId ||
         !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.mimeType ?? '')) {
-        throw new BadRequestException({ message: 'Image does not belong to source question', code: 'system_bank.invalid_media' });
+        badRequest('Image does not belong to source question', 'system_bank.invalid_media');
       }
       const bytes = await this.storage.get(file.storageDomain, file.contentHash);
       if (sha256Hex(bytes) !== file.contentHash || bytes.length > QUESTION_IMAGE_MAX_BYTES ||
         sniffImageMimeType(bytes) !== file.mimeType) {
-        throw new BadRequestException({ message: 'Source image checksum or format mismatch', code: 'system_bank.invalid_media' });
+        badRequest('Source image checksum or format mismatch', 'system_bank.invalid_media');
       }
       await this.storage.put(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(file.contentHash), bytes);
       manifest.set(file.contentHash, {
@@ -70,12 +71,12 @@ export class SystemBankMediaService {
   async readPreview(pkg: SystemBankPackage, contentHash: string): Promise<{ data: Buffer; mimeType: string }> {
     const item = pkg.media?.find((file) => file.contentHash === contentHash);
     if (!item) {
-      throw new BadRequestException({ message: 'Image missing from submission', code: 'system_bank.invalid_media' });
+      badRequest('Image missing from submission', 'system_bank.invalid_media');
     }
     const data = await this.storage.get(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(contentHash));
     if (sha256Hex(data) !== contentHash || data.length > QUESTION_IMAGE_MAX_BYTES ||
       sniffImageMimeType(data) !== item.mimeType) {
-      throw new BadRequestException({ message: 'Published image checksum or format mismatch', code: 'system_bank.invalid_media' });
+      badRequest('Published image checksum or format mismatch', 'system_bank.invalid_media');
     }
     return { data, mimeType: item.mimeType };
   }
@@ -119,19 +120,19 @@ export class SystemBankMediaService {
         continue;
       }
       if (!attrs.src.startsWith(BANK_IMAGE_PREFIX)) {
-        throw new BadRequestException({ message: 'Published image has unsafe source', code: 'system_bank.invalid_media' });
+        badRequest('Published image has unsafe source', 'system_bank.invalid_media');
       }
       const hash = attrs.src.slice(BANK_IMAGE_PREFIX.length);
       const item = manifest.get(hash);
       if (!item) {
-        throw new BadRequestException({ message: 'Published image missing from manifest', code: 'system_bank.invalid_media' });
+        badRequest('Published image missing from manifest', 'system_bank.invalid_media');
       }
       let fileId = copied.get(hash);
       if (!fileId) {
         const bytes = verified.get(hash)!;
         if (sha256Hex(bytes) !== hash || bytes.length > QUESTION_IMAGE_MAX_BYTES ||
           sniffImageMimeType(bytes) !== item.mimeType) {
-          throw new BadRequestException({ message: 'Published image checksum or format mismatch', code: 'system_bank.invalid_media' });
+          badRequest('Published image checksum or format mismatch', 'system_bank.invalid_media');
         }
         const file = await this.files.upload({
           contextId: targetContextId, component: 'question', fileArea: immutable ? 'exam_snapshot' : 'question', itemId: preparationId,

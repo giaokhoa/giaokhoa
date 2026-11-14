@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { tenantAls } from '../tenants/tenant-als';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
@@ -75,7 +76,7 @@ export class ContentBankService {
 
   async get(id: string): Promise<ContentRow> {
     const row = await this.repo.get(id);
-    if (!row || row.tenantId !== tenantAls.getStore()?.tenantId) throw new NotFoundException({ message: `Content ${id} not found`, code: 'contentbank.not_found' });
+    if (!row || row.tenantId !== tenantAls.getStore()?.tenantId) notFound(`Content ${id} not found`, 'contentbank.not_found');
     return row;
   }
 
@@ -92,9 +93,9 @@ export class ContentBankService {
   private async resolveContext(actorId: string, scope: string, spaceId?: string | null): Promise<string> {
     if (scope === 'personal') return this.personalContextId(actorId);
     if (scope === 'org') {
-      if (!spaceId) throw new BadRequestException({ message: 'Org scope requires spaceId (cohort id)', code: 'contentbank.space_required' });
+      if (!spaceId) badRequest('Org scope requires spaceId (cohort id)', 'contentbank.space_required');
       const cohortRow = await this.repo.getCohort(spaceId);
-      if (!cohortRow) throw new BadRequestException({ message: `Cohort ${spaceId} not found`, code: 'contentbank.space_not_found' });
+      if (!cohortRow) badRequest(`Cohort ${spaceId} not found`, 'contentbank.space_not_found');
       return this.systemContextId();
     }
     return this.systemContextId();
@@ -102,7 +103,7 @@ export class ContentBankService {
 
   private async assertOrgMembership(actorId: string, spaceId: string): Promise<void> {
     if (!(await this.repo.isCohortMember(spaceId, actorId))) {
-      throw new ForbiddenException({ message: 'You are not a member of this department (cohort)', code: 'contentbank.not_org_member' });
+      forbidden('You are not a member of this department (cohort)', 'contentbank.not_org_member');
     }
   }
 
@@ -136,7 +137,7 @@ export class ContentBankService {
 
   async getFor(userId: string, id: string): Promise<ContentRow> {
     const row = await this.get(id);
-    if (!(await this.canView(userId, row))) throw new ForbiddenException({ message: 'You cannot view this content bank item', code: 'contentbank.view_denied' });
+    if (!(await this.canView(userId, row))) forbidden('You cannot view this content bank item', 'contentbank.view_denied');
     return row;
   }
 
@@ -173,7 +174,7 @@ export class ContentBankService {
     ];
     for (const [value, allowed, code] of checks) {
       if (value !== undefined && !allowed.includes(value)) {
-        throw new BadRequestException({ message: `Unknown value ${value}`, code });
+        badRequest(`Unknown value ${value}`, code);
       }
     }
   }
@@ -182,17 +183,17 @@ export class ContentBankService {
 
   private async assertDerivedFromValid(selfId: string | null, derivedFromId: string): Promise<void> {
     if (selfId && derivedFromId === selfId) {
-      throw new BadRequestException({ message: 'An item cannot be derived from itself', code: 'contentbank.derived_from_self_reference' });
+      badRequest('An item cannot be derived from itself', 'contentbank.derived_from_self_reference');
     }
     let current = await this.repo.get(derivedFromId);
     if (!current) {
-      throw new BadRequestException({ message: `Derived-from item ${derivedFromId} not found`, code: 'contentbank.derived_from_not_found' });
+      badRequest(`Derived-from item ${derivedFromId} not found`, 'contentbank.derived_from_not_found');
     }
     const visited = new Set<string>(selfId ? [selfId, derivedFromId] : [derivedFromId]);
     for (let depth = 0; current.derivedFromId; depth++) {
       const nextId = current.derivedFromId;
       if (visited.has(nextId) || depth >= ContentBankService.DERIVED_CHAIN_MAX_DEPTH) {
-        throw new BadRequestException({ message: `Derived-from chain is cyclic or too deep at item ${nextId}`, code: 'contentbank.derived_from_cycle' });
+        badRequest(`Derived-from chain is cyclic or too deep at item ${nextId}`, 'contentbank.derived_from_cycle');
       }
       visited.add(nextId);
       const next = await this.repo.get(nextId);
@@ -203,16 +204,16 @@ export class ContentBankService {
 
   private async assertCanUsePersonalBank(actorId: string): Promise<void> {
     if (await this.evaluator.hasCapabilityFromRealAssignmentAnywhere(actorId, 'contentbank:upload')) return;
-    throw new ForbiddenException({ message: 'Missing capability contentbank:upload for your personal content bank', code: 'access.capability_denied' });
+    forbidden('Missing capability contentbank:upload for your personal content bank', 'access.capability_denied');
   }
 
   async create(actorId: string, input: LibraryItemInput): Promise<ContentRow> {
     const tenantId = tenantAls.getStore()?.tenantId;
-    if (!tenantId) throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+    if (!tenantId) forbidden('Centre context required', 'system_bank.centre_context_required');
     const scope = input.scope ?? 'personal';
-    if (!SCOPES.includes(scope as never)) throw new BadRequestException({ message: `Unknown scope ${scope}`, code: 'contentbank.bad_scope' });
+    if (!SCOPES.includes(scope as never)) badRequest(`Unknown scope ${scope}`, 'contentbank.bad_scope');
     if (input.resourceType && !RESOURCE_TYPES.includes(input.resourceType as never)) {
-      throw new BadRequestException({ message: `Unknown resourceType ${input.resourceType}`, code: 'contentbank.bad_resource_type' });
+      badRequest(`Unknown resourceType ${input.resourceType}`, 'contentbank.bad_resource_type');
     }
     this.assertEnumFields(input);
     if (input.derivedFromId) await this.assertDerivedFromValid(null, input.derivedFromId);
@@ -264,13 +265,13 @@ export class ContentBankService {
     const row = await this.get(id);
     await this.assertCanEdit(actorId, row);
     const scope = input.scope ?? row.scope;
-    if (!SCOPES.includes(scope as never)) throw new BadRequestException({ message: `Unknown scope ${scope}`, code: 'contentbank.bad_scope' });
+    if (!SCOPES.includes(scope as never)) badRequest(`Unknown scope ${scope}`, 'contentbank.bad_scope');
     const spaceId = scope === 'org' ? (input.spaceId ?? row.spaceId) : null;
     if (scope === 'org' && spaceId && spaceId !== row.spaceId) await this.assertOrgMembership(actorId, spaceId);
     const contextId = scope !== row.scope ? await this.resolveContext(row.creatorId, scope, spaceId) : row.contextId;
     this.assertEnumFields(input);
     if (input.resourceType && !RESOURCE_TYPES.includes(input.resourceType as never)) {
-      throw new BadRequestException({ message: `Unknown resourceType ${input.resourceType}`, code: 'contentbank.bad_resource_type' });
+      badRequest(`Unknown resourceType ${input.resourceType}`, 'contentbank.bad_resource_type');
     }
     if (input.derivedFromId) await this.assertDerivedFromValid(id, input.derivedFromId);
     const changes: Partial<typeof row> = {
@@ -346,7 +347,7 @@ export class ContentBankService {
 
   async signedUrl(actorId: string, id: string): Promise<{ url: string; expiresAt: number }> {
     const row = await this.getFor(actorId, id);
-    if (!row.fileId) throw new NotFoundException({ message: 'Content has no file', code: 'contentbank.no_file' });
+    if (!row.fileId) notFound('Content has no file', 'contentbank.no_file');
     return this.files.createSignedUrl(row.fileId, actorId);
   }
 
@@ -370,16 +371,16 @@ export class ContentBankService {
       if (row.sourceKind === 'derived' && !row.derivedFromId) missing.push('derivedFromId');
     }
     if (missing.length) {
-      throw new BadRequestException({ message: `Missing required program metadata: ${missing.join(', ')}`, code: 'contentbank.metadata_incomplete' });
+      badRequest(`Missing required program metadata: ${missing.join(', ')}`, 'contentbank.metadata_incomplete');
     }
   }
 
   async submitForReview(actorId: string, id: string): Promise<ContentRow> {
     const row = await this.get(id);
     await this.assertCanEdit(actorId, row);
-    if (row.scope === 'personal') throw new BadRequestException({ message: 'Personal items do not need review', code: 'contentbank.submit_not_needed' });
+    if (row.scope === 'personal') badRequest('Personal items do not need review', 'contentbank.submit_not_needed');
     if (row.reviewStatus !== 'draft' && row.reviewStatus !== 'rejected') {
-      throw new BadRequestException({ message: `Cannot submit from status ${row.reviewStatus}`, code: 'contentbank.bad_review_transition' });
+      badRequest(`Cannot submit from status ${row.reviewStatus}`, 'contentbank.bad_review_transition');
     }
     this.assertMetadataComplete(row);
     await this.repo.update(id, { reviewStatus: 'pending', reviewNote: null });
@@ -389,18 +390,18 @@ export class ContentBankService {
   async review(actorId: string, id: string, input: { decision: 'approved' | 'rejected'; note?: string; checklist?: ReviewChecklist }): Promise<ContentRow> {
     const row = await this.get(id);
     if (row.scope === 'personal' || row.reviewStatus !== 'pending') {
-      throw new BadRequestException({ message: 'Item is not pending review', code: 'contentbank.not_pending' });
+      badRequest('Item is not pending review', 'contentbank.not_pending');
     }
     if (!(await this.canReview(actorId, row))) {
-      throw new ForbiddenException({ message: 'You cannot review this item', code: 'contentbank.review_denied' });
+      forbidden('You cannot review this item', 'contentbank.review_denied');
     }
     if (input.decision === 'rejected' && !input.note?.trim()) {
-      throw new BadRequestException({ message: 'Rejection requires a reason (note)', code: 'contentbank.review_note_required' });
+      badRequest('Rejection requires a reason (note)', 'contentbank.review_note_required');
     }
     if (input.decision === 'approved') {
       const c = input.checklist;
       if (!c || !c.contentAccurate || !c.sourceClear || !c.pedagogyAesthetics || !c.mobileReady) {
-        throw new BadRequestException({ message: 'Approval requires the full review checklist (all criteria met)', code: 'contentbank.review_checklist_incomplete' });
+        badRequest('Approval requires the full review checklist (all criteria met)', 'contentbank.review_checklist_incomplete');
       }
     }
     await this.repo.update(id, {
@@ -417,12 +418,12 @@ export class ContentBankService {
 
   async insertIntoCourse(actorId: string, id: string, input: { courseId: string; sectionId: string }): Promise<{ cmId: string; courseId: string; sectionId: string; fileId: string | null; sourceContentId: string }> {
     const row = await this.get(id);
-    if (!(await this.canView(actorId, row))) throw new ForbiddenException({ message: 'You cannot view this content bank item', code: 'contentbank.view_denied' });
+    if (!(await this.canView(actorId, row))) forbidden('You cannot view this content bank item', 'contentbank.view_denied');
     if (row.creatorId !== actorId && row.reviewStatus !== 'approved') {
-      throw new ForbiddenException({ message: 'Only approved library items can be inserted into a course', code: 'contentbank.not_approved' });
+      forbidden('Only approved library items can be inserted into a course', 'contentbank.not_approved');
     }
     if (row.resourceType === 'question_set' && !row.fileId) {
-      throw new BadRequestException({ message: 'Question-set references are used from the question bank, not inserted as course resources', code: 'contentbank.question_set_not_insertable' });
+      badRequest('Question-set references are used from the question bank, not inserted as course resources', 'contentbank.question_set_not_insertable');
     }
     const cm = await this.courses.createCm(actorId, input.courseId, { sectionId: input.sectionId, component: 'mod_resource', name: row.name });
     const cmContextId = await this.courses.cmContextId(cm.id);

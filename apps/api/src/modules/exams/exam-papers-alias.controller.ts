@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, Res, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, Res, UseInterceptors } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -138,7 +139,7 @@ export class ExamPapersAliasController {
   @ApiOperation({ operationId: 'examPapersAliasSpecification' })
   async aliasSpecification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId') pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
+      badRequest('pinId must be a uuid', 'quiz.spec_quiz_invalid');
     }
     return this.exams.getPaperSpecification(actor.id, id, pinId);
   }
@@ -154,7 +155,7 @@ export class ExamPapersAliasController {
     @Res() res: Response,
   ) {
     if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
+      badRequest('pinId must be a uuid', 'quiz.spec_quiz_invalid');
     }
     const file = await this.exams.exportPaperSpecification(actor.id, id, format ?? 'xlsx', pinId);
     res.setHeader('Content-Type', file.contentType);

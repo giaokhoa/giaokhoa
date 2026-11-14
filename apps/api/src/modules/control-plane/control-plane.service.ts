@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { conflict, notFound } from '../../common/http-errors';
 import type {
   ChangeSpaceStatus,
   CreateSpaceRegistration,
@@ -79,16 +80,10 @@ export class ControlPlaneRegistryService {
   async createRegistration(actorId: string, dto: CreateSpaceRegistration): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);
     if (await this.repo.findSpaceBySlug(dto.slug)) {
-      throw new ConflictException({
-        message: `Space slug ${dto.slug} is already registered`,
-        code: 'control_plane.slug_taken',
-      });
+      conflict(`Space slug ${dto.slug} is already registered`, 'control_plane.slug_taken');
     }
     if (await this.repo.findSpaceByDatabaseName(dto.databaseName)) {
-      throw new ConflictException({
-        message: `Database name ${dto.databaseName} is already registered`,
-        code: 'control_plane.database_name_taken',
-      });
+      conflict(`Database name ${dto.databaseName} is already registered`, 'control_plane.database_name_taken');
     }
     let created: SpaceRegistryRow;
     try {
@@ -109,10 +104,7 @@ export class ControlPlaneRegistryService {
           tx,
         );
         if (!row) {
-          throw new ConflictException({
-            message: `Space slug ${dto.slug} is already registered`,
-            code: 'control_plane.slug_taken',
-          });
+          conflict(`Space slug ${dto.slug} is already registered`, 'control_plane.slug_taken');
         }
         await this.repo.insertHistory(
           {
@@ -128,10 +120,7 @@ export class ControlPlaneRegistryService {
       });
     } catch (error) {
       if (isDedicatedDatabaseNameConflict(error)) {
-        throw new ConflictException({
-          message: `Database name ${dto.databaseName} is already registered`,
-          code: 'control_plane.database_name_taken',
-        });
+        conflict(`Database name ${dto.databaseName} is already registered`, 'control_plane.database_name_taken');
       }
       throw error;
     }
@@ -146,18 +135,12 @@ export class ControlPlaneRegistryService {
       updated = await this.repo.transaction(async (tx) => {
         const existing = await this.repo.findSpaceByIdForUpdate(id, tx);
         if (!existing) {
-          throw new NotFoundException({
-            message: `Space registration ${id} not found`,
-            code: 'control_plane.space_not_found',
-          });
+          notFound(`Space registration ${id} not found`, 'control_plane.space_not_found');
         }
         if (dto.databaseName !== undefined && dto.databaseName !== existing.databaseName) {
           const clash = await this.repo.findOtherSpaceByDatabaseName(dto.databaseName, id, tx);
           if (clash) {
-            throw new ConflictException({
-              message: `Database name ${dto.databaseName} is already registered`,
-              code: 'control_plane.database_name_taken',
-            });
+            conflict(`Database name ${dto.databaseName} is already registered`, 'control_plane.database_name_taken');
           }
         }
         const effectiveDatabaseName = dto.databaseName ?? existing.databaseName;
@@ -165,10 +148,7 @@ export class ControlPlaneRegistryService {
         if (effectiveStorageMode === 'dedicated') {
           const clash = await this.repo.findOtherSpaceByDatabaseName(effectiveDatabaseName, id, tx);
           if (clash) {
-            throw new ConflictException({
-              message: `Database name ${effectiveDatabaseName} is already registered`,
-              code: 'control_plane.database_name_taken',
-            });
+            conflict(`Database name ${effectiveDatabaseName} is already registered`, 'control_plane.database_name_taken');
           }
         }
         const row = await this.repo.updateSpace(id, { ...dto }, tx);
@@ -186,10 +166,7 @@ export class ControlPlaneRegistryService {
       });
     } catch (error) {
       if (isDedicatedDatabaseNameConflict(error)) {
-        throw new ConflictException({
-          message: `Database name ${dto.databaseName} is already registered`,
-          code: 'control_plane.database_name_taken',
-        });
+        conflict(`Database name ${dto.databaseName} is already registered`, 'control_plane.database_name_taken');
       }
       throw error;
     }
@@ -203,23 +180,14 @@ export class ControlPlaneRegistryService {
     const updated = await this.repo.transaction(async (tx) => {
       const existing = await this.repo.findSpaceByIdForUpdate(id, tx);
       if (!existing) {
-        throw new NotFoundException({
-          message: `Space registration ${id} not found`,
-          code: 'control_plane.space_not_found',
-        });
+        notFound(`Space registration ${id} not found`, 'control_plane.space_not_found');
       }
       if (existing.status === dto.status) return existing;
       if (dto.status === 'closed') {
-        throw new ConflictException({
-          message: 'Closing a centre requires the fleet lifecycle CLI',
-          code: 'control_plane.close_requires_fleet_cli',
-        });
+        conflict('Closing a centre requires the fleet lifecycle CLI', 'control_plane.close_requires_fleet_cli');
       }
       if (existing.status === 'closed') {
-        throw new ConflictException({
-          message: 'A closed centre cannot be reactivated through the API',
-          code: 'control_plane.closed_cannot_reactivate',
-        });
+        conflict('A closed centre cannot be reactivated through the API', 'control_plane.closed_cannot_reactivate');
       }
       const row = await this.repo.updateSpace(id, { status: dto.status }, tx);
       await this.repo.insertHistory(
@@ -243,10 +211,7 @@ export class ControlPlaneRegistryService {
     await this.assertPlatformManager(actorId);
     const row = await this.repo.findSpaceBySlug(slug);
     if (!row) {
-      throw new NotFoundException({
-        message: `Space slug ${slug} is not registered`,
-        code: 'control_plane.space_not_found',
-      });
+      notFound(`Space slug ${slug} is not registered`, 'control_plane.space_not_found');
     }
     return this.toRegistration(row);
   }
@@ -254,10 +219,7 @@ export class ControlPlaneRegistryService {
   async listHistory(actorId: string, spaceId: string): Promise<SpaceRegistryHistoryEntry[]> {
     await this.assertPlatformManager(actorId);
     if (!(await this.repo.findSpaceById(spaceId))) {
-      throw new NotFoundException({
-        message: `Space registration ${spaceId} not found`,
-        code: 'control_plane.space_not_found',
-      });
+      notFound(`Space registration ${spaceId} not found`, 'control_plane.space_not_found');
     }
     const rows = await this.repo.listHistory(spaceId);
     return rows.map((row) => ({
@@ -275,10 +237,7 @@ export class ControlPlaneRegistryService {
     await this.assertPlatformManager(actorId);
     const space = await this.repo.findSpaceById(spaceId);
     if (!space) {
-      throw new NotFoundException({
-        message: `Space registration ${spaceId} not found`,
-        code: 'control_plane.space_not_found',
-      });
+      notFound(`Space registration ${spaceId} not found`, 'control_plane.space_not_found');
     }
     const row = await this.repo.findSchemaRegistry(spaceId);
     return {
@@ -300,10 +259,7 @@ export class ControlPlaneRegistryService {
     await this.assertPlatformManager(actorId);
     const space = await this.repo.findSpaceById(spaceId);
     if (!space) {
-      throw new NotFoundException({
-        message: `Space registration ${spaceId} not found`,
-        code: 'control_plane.space_not_found',
-      });
+      notFound(`Space registration ${spaceId} not found`, 'control_plane.space_not_found');
     }
     const row = await this.repo.transaction(async (tx) => {
       await this.repo.findSpaceByIdForUpdate(spaceId, tx);
@@ -353,10 +309,7 @@ export class ControlPlaneRegistryService {
     await this.assertPlatformManager(actorId);
     const space = await this.repo.findSpaceById(spaceId);
     if (!space) {
-      throw new NotFoundException({
-        message: `Space registration ${spaceId} not found`,
-        code: 'control_plane.space_not_found',
-      });
+      notFound(`Space registration ${spaceId} not found`, 'control_plane.space_not_found');
     }
     let versionChanged = false;
     const run = await this.repo.transaction(async (tx) => {
@@ -408,10 +361,7 @@ export class ControlPlaneRegistryService {
   async listMigrationRuns(actorId: string, spaceId: string): Promise<SpaceSchemaMigrationRun[]> {
     await this.assertPlatformManager(actorId);
     if (!(await this.repo.findSpaceById(spaceId))) {
-      throw new NotFoundException({
-        message: `Space registration ${spaceId} not found`,
-        code: 'control_plane.space_not_found',
-      });
+      notFound(`Space registration ${spaceId} not found`, 'control_plane.space_not_found');
     }
     const rows = await this.repo.listMigrationRuns(spaceId);
     return rows.map((run) => ({

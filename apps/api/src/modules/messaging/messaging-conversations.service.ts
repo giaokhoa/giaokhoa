@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { UsersService } from '../users/users.service';
@@ -34,13 +34,13 @@ export class MessagingConversationsService {
     const type = input.type ?? 1;
     const memberIds = [...new Set([actorId, ...input.memberIds])];
     if (type === 1) {
-      if (memberIds.length !== 2) throw new BadRequestException({ message: 'An individual conversation has exactly 2 members', code: 'messaging.individual_members' });
+      if (memberIds.length !== 2) badRequest('An individual conversation has exactly 2 members', 'messaging.individual_members');
       const other = memberIds.find((id) => id !== actorId)!;
       const existing = await this.repo.findIndividualConversation(actorId, other);
       if (existing) return { ...existing, members: await this.repo.listMembers(existing.id) };
     }
     if (type === 2 && memberIds.length < 2) {
-      throw new BadRequestException({ message: 'A group conversation needs at least 2 members', code: 'messaging.group_members' });
+      badRequest('A group conversation needs at least 2 members', 'messaging.group_members');
     }
     for (const id of memberIds) await this.users.getUser(id);
     if (type === 1) {
@@ -49,10 +49,7 @@ export class MessagingConversationsService {
     }
     if (type === 2) {
       if (!(await this.canCreateFreeGroup(actorId))) {
-        throw new ForbiddenException({
-          message: 'Only site administrators or centre owners can create group conversations',
-          code: 'messaging.group_creation_forbidden',
-        });
+        forbidden('Only site administrators or centre owners can create group conversations', 'messaging.group_creation_forbidden');
       }
     }
     const conversation = await this.repo.transaction(async (tx) => {
@@ -66,9 +63,9 @@ export class MessagingConversationsService {
   async assertConversationMember(userId: string, conversation: ConversationRow): Promise<void> {
     if (await this.repo.isMember(conversation.id, userId)) return;
     if (this.membershipSync.isCourseLinked(conversation) || this.membershipSync.isClassLinked(conversation)) {
-      throw new NotFoundException({ message: `Conversation ${conversation.id} not found`, code: 'messaging.conversation_not_found' });
+      notFound(`Conversation ${conversation.id} not found`, 'messaging.conversation_not_found');
     }
-    throw new ForbiddenException({ message: 'You are not a member of this conversation', code: 'messaging.not_member' });
+    forbidden('You are not a member of this conversation', 'messaging.not_member');
   }
 
   private async isCourseStaff(userId: string, courseId: string): Promise<boolean> {
@@ -86,10 +83,10 @@ export class MessagingConversationsService {
 
   async createGroupConversation(actorId: string, input: { groupId: string; name?: string }): Promise<ConversationRow & { members: string[] }> {
     const group = await this.repo.getCourseGroup(input.groupId);
-    if (!group) throw new NotFoundException({ message: `Course group ${input.groupId} not found`, code: 'messaging.group_not_found' });
+    if (!group) notFound(`Course group ${input.groupId} not found`, 'messaging.group_not_found');
     const groupMemberIds = await this.repo.listGroupMemberIds(group.id);
     if (!groupMemberIds.includes(actorId) && !(await this.isCourseStaff(actorId, group.courseId))) {
-      throw new ForbiddenException({ message: 'Only group members or course staff can create the group conversation', code: 'messaging.group_conversation_forbidden' });
+      forbidden('Only group members or course staff can create the group conversation', 'messaging.group_conversation_forbidden');
     }
     const existing = await this.repo.findGroupConversation(group.id);
     if (existing) return { ...existing, members: await this.membershipSync.syncGroupConversationMembers(existing) };
@@ -110,9 +107,9 @@ export class MessagingConversationsService {
 
   async ensureCourseConversation(actorId: string, courseId: string): Promise<ConversationRow & { members: string[] }> {
     const course = await this.repo.getCourseSummary(courseId);
-    if (!course) throw new NotFoundException({ message: `Course ${courseId} not found`, code: 'messaging.course_not_found' });
+    if (!course) notFound(`Course ${courseId} not found`, 'messaging.course_not_found');
     if (!(await this.repo.isCourseMember(courseId, actorId)) && !(await this.isCourseStaff(actorId, courseId))) {
-      throw new NotFoundException({ message: `Course ${courseId} not found`, code: 'messaging.course_not_found' });
+      notFound(`Course ${courseId} not found`, 'messaging.course_not_found');
     }
     const existing = await this.repo.findCourseConversation(courseId);
     let conversation: ConversationRow;
@@ -154,10 +151,10 @@ export class MessagingConversationsService {
   async ensureClassConversation(actorId: string, classId: string): Promise<ConversationRow & { members: string[] }> {
     const cls = await this.repo.getClassSummary(classId);
     if (!cls || cls.status !== 'active') {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'messaging.class_not_found' });
+      notFound(`Class ${classId} not found`, 'messaging.class_not_found');
     }
     if (!(await this.repo.isClassMember(classId, actorId)) && !(await this.isClassStaff(actorId, classId))) {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'messaging.class_not_found' });
+      notFound(`Class ${classId} not found`, 'messaging.class_not_found');
     }
     const existing = await this.repo.findClassConversation(classId);
     let conversation: ConversationRow;
@@ -244,13 +241,10 @@ export class MessagingConversationsService {
 
   async updateConversation(actorId: string, conversationId: string, input: { enabled: boolean }): Promise<ConversationRow & { members: string[] }> {
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     if (!(await this.canManageConversation(actorId, conversation))) {
-      throw new ForbiddenException({
-        message: 'Only the teacher in charge, course staff, an administrator, or the group creator can change this conversation',
-        code: 'messaging.conversation_manage_forbidden',
-      });
+      forbidden('Only the teacher in charge, course staff, an administrator, or the group creator can change this conversation', 'messaging.conversation_manage_forbidden');
     }
     const updated = await this.repo.setConversationEnabled(conversationId, input.enabled);
     return { ...updated!, members: await this.repo.listMembers(conversationId) };
@@ -258,27 +252,21 @@ export class MessagingConversationsService {
 
   async removeConversationMember(actorId: string, conversationId: string, targetUserId: string): Promise<ConversationRow & { members: string[] }> {
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     if (!(await this.canManageConversation(actorId, conversation))) {
-      throw new ForbiddenException({
-        message: 'Only the teacher in charge, course staff, an administrator, or the group creator can change this conversation',
-        code: 'messaging.conversation_manage_forbidden',
-      });
+      forbidden('Only the teacher in charge, course staff, an administrator, or the group creator can change this conversation', 'messaging.conversation_manage_forbidden');
     }
     if (conversation.type !== 2 || this.membershipSync.isGroupLinked(conversation) || this.membershipSync.isCourseLinked(conversation) || this.membershipSync.isClassLinked(conversation)) {
-      throw new BadRequestException({
-        message: 'Members of a class, course or course-group conversation come from its roster — manage them on the roster screen, not in chat',
-        code: 'messaging.member_remove_structural',
-      });
+      badRequest('Members of a class, course or course-group conversation come from its roster — manage them on the roster screen, not in chat', 'messaging.member_remove_structural');
     }
     if (targetUserId === actorId) {
-      throw new BadRequestException({ message: 'You cannot remove yourself from the group', code: 'messaging.member_remove_self' });
+      badRequest('You cannot remove yourself from the group', 'messaging.member_remove_self');
     }
     if (conversation.createdBy !== null && conversation.createdBy === targetUserId) {
-      throw new ForbiddenException({ message: 'The group creator cannot be removed', code: 'messaging.member_remove_creator' });
+      forbidden('The group creator cannot be removed', 'messaging.member_remove_creator');
     }
     if (!(await this.repo.isMember(conversationId, targetUserId))) {
-      throw new NotFoundException({ message: `User ${targetUserId} is not a member of conversation ${conversationId}`, code: 'messaging.member_not_found' });
+      notFound(`User ${targetUserId} is not a member of conversation ${conversationId}`, 'messaging.member_not_found');
     }
     await this.repo.removeMember(conversationId, targetUserId);
     const updated = await this.repo.getConversation(conversationId);
@@ -291,14 +279,14 @@ export class MessagingConversationsService {
     input: { pinned?: boolean; archived?: boolean; muted?: boolean },
   ): Promise<{ conversationId: string; pinned: boolean; pinnedAt: Date | null; archived: boolean; archivedAt: Date | null; muted: boolean }> {
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     if (!(await this.repo.isMember(conversationId, userId))) {
-      throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+      notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     }
     await this.assertDirectConversationVisible(userId, conversation);
     const state = await this.repo.updateMemberConversationState(conversationId, userId, input);
-    if (!state) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!state) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     return {
       conversationId,
       pinned: state.pinnedAt !== null,
@@ -407,7 +395,7 @@ export class MessagingConversationsService {
     const other = members.find((id) => id !== userId);
     if (!other) return;
     if ((await this.repo.listBlockedCounterpartIds(userId)).includes(other)) {
-      throw new NotFoundException({ message: `Conversation ${conversation.id} not found`, code: 'messaging.conversation_not_found' });
+      notFound(`Conversation ${conversation.id} not found`, 'messaging.conversation_not_found');
     }
   }
 
@@ -419,7 +407,7 @@ export class MessagingConversationsService {
     pinnedAt: Date | null; archivedAt: Date | null; muted: boolean;
   }> {
     const conversation = await this.repo.getConversation(conversationId);
-    if (!conversation) throw new NotFoundException({ message: `Conversation ${conversationId} not found`, code: 'messaging.conversation_not_found' });
+    if (!conversation) notFound(`Conversation ${conversationId} not found`, 'messaging.conversation_not_found');
     await this.membershipSync.syncGroupConversationIfLinked(conversation);
     await this.assertConversationMember(userId, conversation);
     await this.assertDirectConversationVisible(userId, conversation);

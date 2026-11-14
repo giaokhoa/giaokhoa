@@ -1,4 +1,5 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { forbidden } from '../../common/http-errors';
 import type {
   CourseCardPrefView,
   DashboardGradingQueueView,
@@ -290,9 +291,6 @@ export class DashboardService {
       const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
       if (ctx && await this.evaluator.hasCapability(userId, 'grade:viewall', ctx.id)) return;
     }
-    throw new ForbiddenException({
-      message: 'User does not belong to this course',
-      code: 'dashboard.course_not_accessible',
-    });
+    forbidden('User does not belong to this course', 'dashboard.course_not_accessible');
   }
 }

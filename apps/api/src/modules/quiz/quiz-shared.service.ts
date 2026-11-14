@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { forbidden, notFound } from '../../common/http-errors';
 import type { QuizAttemptSummary, QuizView } from '@giaokhoa/contracts';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { TenantsService } from '../tenants/tenants.service';
@@ -55,7 +55,7 @@ export class QuizSharedService {
 
   async getPin(id: string): Promise<PinRow> {
     const row = await this.repo.getPin(id);
-    if (!row || row.preparationState !== 'ready') throw new NotFoundException({ message: `Exam pin ${id} not found`, code: 'exam.pin_not_found' });
+    if (!row || row.preparationState !== 'ready') notFound(`Exam pin ${id} not found`, 'exam.pin_not_found');
     return this.enrichPin(row);
   }
 
@@ -65,9 +65,9 @@ export class QuizSharedService {
 
   public async enrichPin(row: ExamPinRow): Promise<PinRow> {
     const version = await this.repo.getExamVersion(row.examVersionId);
-    if (!version) throw new NotFoundException({ message: `Exam version ${row.examVersionId} not found`, code: 'exam.version_not_found' });
+    if (!version) notFound(`Exam version ${row.examVersionId} not found`, 'exam.version_not_found');
     const exam = await this.repo.getExam(row.examId);
-    if (!exam) throw new NotFoundException({ message: `Exam ${row.examId} not found`, code: 'exam.not_found' });
+    if (!exam) notFound(`Exam ${row.examId} not found`, 'exam.not_found');
     return {
       ...row,
       course: row.courseId,
@@ -102,7 +102,7 @@ export class QuizSharedService {
 
   public async getAttemptRow(id: string): Promise<ExamAttemptRow> {
     const row = await this.repo.getAttempt(id);
-    if (!row) throw new NotFoundException({ message: `Quiz attempt ${id} not found`, code: 'quiz.attempt_not_found' });
+    if (!row) notFound(`Quiz attempt ${id} not found`, 'quiz.attempt_not_found');
     return row;
   }
 
@@ -112,7 +112,7 @@ export class QuizSharedService {
       if (ctx) return ctx.id;
     }
     const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, quiz.course);
-    if (!courseCtx) throw new NotFoundException({ message: `No context for quiz ${quiz.id}`, code: 'quiz.context_missing' });
+    if (!courseCtx) notFound(`No context for quiz ${quiz.id}`, 'quiz.context_missing');
     return courseCtx.id;
   }
 
@@ -262,7 +262,7 @@ export class QuizSharedService {
 
   public async getMatrixRow(id: string): Promise<ExamMatrixRow> {
     const row = await this.repo.getMatrix(id);
-    if (!row) throw new NotFoundException({ message: `Exam matrix ${id} not found`, code: 'quiz.matrix_not_found' });
+    if (!row) notFound(`Exam matrix ${id} not found`, 'quiz.matrix_not_found');
     return row;
   }
 
@@ -271,7 +271,7 @@ export class QuizSharedService {
       const bank = await this.banks.findBankById(matrix.bankId);
       if (bank) {
         if (await this.banks.isForeignPersonalBank(actorId, bank)) {
-          throw new NotFoundException({ message: `Exam matrix ${matrix.id} not found`, code: 'quiz.matrix_not_found' });
+          notFound(`Exam matrix ${matrix.id} not found`, 'quiz.matrix_not_found');
         }
         await this.banks.syncBankMembership(bank);
         const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
@@ -279,7 +279,7 @@ export class QuizSharedService {
           : capability === QUIZ_CAPABILITIES.addMatrix ? caps.add
           : caps.manage;
         if (!ok) {
-          throw new ForbiddenException({ message: `Missing capability ${capability} in matrix bank ${bank.id}`, code: 'access.capability_denied' });
+          forbidden(`Missing capability ${capability} in matrix bank ${bank.id}`, 'access.capability_denied');
         }
         return;
       }
@@ -344,6 +344,6 @@ export class QuizSharedService {
     for (const cap of [QUIZ_CAPABILITIES.grade, QUIZ_CAPABILITIES.viewReports, QUIZ_CAPABILITIES.manage]) {
       if (await this.evaluator.hasCapability(actorId, cap, ctx)) return;
     }
-    throw new ForbiddenException({ message: 'This attempt belongs to another user', code: 'quiz.attempt_forbidden' });
+    forbidden('This attempt belongs to another user', 'quiz.attempt_forbidden');
   }
 }

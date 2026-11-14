@@ -1,11 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  HttpException,
-  Injectable,
-  NotFoundException,
-  OnModuleInit,
-} from '@nestjs/common';
+import { HttpException, Injectable, OnModuleInit } from '@nestjs/common';
+import { badRequest, conflict, notFound } from '../../common/http-errors';
 import { randomBytes } from 'node:crypto';
 import type {
   AddRosterStudentResult,
@@ -141,7 +135,7 @@ export class ClassesService implements OnModuleInit {
 
   private async classContextId(classId: string): Promise<string> {
     const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.CLASS, classId);
-    if (!ctx) throw new NotFoundException({ message: `No context for class ${classId}`, code: 'class.context_missing' });
+    if (!ctx) notFound(`No context for class ${classId}`, 'class.context_missing');
     return ctx.id;
   }
 
@@ -149,7 +143,7 @@ export class ClassesService implements OnModuleInit {
     const row = await this.repo.getClass(id);
     const tenantId = await this.effectiveTenantId();
     if (!row || row.tenantId !== tenantId) {
-      throw new NotFoundException({ message: `Class ${id} not found`, code: 'class.not_found' });
+      notFound(`Class ${id} not found`, 'class.not_found');
     }
     return row;
   }
@@ -172,7 +166,7 @@ export class ClassesService implements OnModuleInit {
     for (const row of rows) {
       if (row.ownerId === actorId) continue;
       const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.CLASS, row.id);
-      if (!ctx) throw new NotFoundException({ message: `No context for class ${row.id}`, code: 'class.context_missing' });
+      if (!ctx) notFound(`No context for class ${row.id}`, 'class.context_missing');
       evaluated.push({ row, ctx });
     }
     const viewByClassId = new Map<string, boolean>();
@@ -209,7 +203,7 @@ export class ClassesService implements OnModuleInit {
     }
     await this.users.getUser(ownerId);
     if (input.code && (await this.repo.getClassByCode(tenantId, input.code))) {
-      throw new ConflictException({ message: `Class code ${input.code} is taken in this tenant`, code: 'class.code_taken' });
+      conflict(`Class code ${input.code} is taken in this tenant`, 'class.code_taken');
     }
     await this.tenants.ensureActiveMembership(tenantId, ownerId);
     await this.ensureClassRoles();
@@ -299,7 +293,7 @@ export class ClassesService implements OnModuleInit {
   async getClass(actorId: string, id: string): Promise<ClassView> {
     const row = await this.getClassRow(id);
     if (!(await this.canViewClass(actorId, row))) {
-      throw new NotFoundException({ message: `Class ${id} not found`, code: 'class.not_found' });
+      notFound(`Class ${id} not found`, 'class.not_found');
     }
     return toClassDto(row, await this.canSeeJoinCode(actorId, row));
   }
@@ -307,7 +301,7 @@ export class ClassesService implements OnModuleInit {
   async getClassOverview(actorId: string, id: string): Promise<Omit<ClassOverview, 'courses'> & { courses: CourseRow[] }> {
     const row = await this.getClassRow(id);
     if (!(await this.canViewClass(actorId, row))) {
-      throw new NotFoundException({ message: `Class ${id} not found`, code: 'class.not_found' });
+      notFound(`Class ${id} not found`, 'class.not_found');
     }
     const ctxId = await this.classContextId(id);
     const isOwner = actorId === row.ownerId;
@@ -359,7 +353,7 @@ export class ClassesService implements OnModuleInit {
       if (input.code !== null && input.code !== row.code) {
         const taken = await this.repo.getClassByCode(row.tenantId, input.code);
         if (taken && taken.id !== id) {
-          throw new ConflictException({ message: `Class code ${input.code} is taken in this tenant`, code: 'class.code_taken' });
+          conflict(`Class code ${input.code} is taken in this tenant`, 'class.code_taken');
         }
       }
       patch.code = input.code;
@@ -378,7 +372,7 @@ export class ClassesService implements OnModuleInit {
     if (patch.joinCode) {
       const taken = await this.repo.getClassByJoinCode(patch.joinCode);
       if (taken && taken.id !== id) {
-        throw new ConflictException({ message: 'Class join code already exists in this store', code: 'class.join_code_taken' });
+        conflict('Class join code already exists in this store', 'class.join_code_taken');
       }
     }
     if (Object.keys(patch).length) await this.repo.updateClass(id, patch);
@@ -414,7 +408,7 @@ export class ClassesService implements OnModuleInit {
       await this.evaluator.requireCapability(actorId, 'tenant:manage', tenantCtx.id);
     }
     if ((await this.repo.countCoursesInClass(id)) > 0) {
-      throw new ConflictException({ message: 'Class still has courses; archive or delete its courses first', code: 'class.has_courses' });
+      conflict('Class still has courses; archive or delete its courses first', 'class.has_courses');
     }
     await this.repo.deleteClass(id);
     await this.repo.deleteCohort(row.cohortId);
@@ -430,7 +424,7 @@ export class ClassesService implements OnModuleInit {
   async listRoster(actorId: string, classId: string): Promise<ClassRosterMember[]> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
+      notFound(`Class ${classId} not found`, 'class.not_found');
     }
     const ctxId = await this.classContextId(classId);
     const canManageRoster = actorId === row.ownerId || (await this.evaluator.hasCapability(actorId, 'class:manageroster', ctxId));
@@ -452,7 +446,7 @@ export class ClassesService implements OnModuleInit {
   async addToRoster(actorId: string, classId: string, userId: string): Promise<void> {
     const row = await this.getClassRow(classId);
     if (row.status === 'archived') {
-      throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
+      badRequest('Class is archived; roster is frozen', 'class.archived');
     }
     const ctxId = await this.classContextId(classId);
     await this.evaluator.requireCapability(actorId, 'class:manageroster', ctxId);
@@ -464,7 +458,7 @@ export class ClassesService implements OnModuleInit {
   async removeFromRoster(actorId: string, classId: string, userId: string): Promise<void> {
     const row = await this.getClassRow(classId);
     if (row.status === 'archived') {
-      throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
+      badRequest('Class is archived; roster is frozen', 'class.archived');
     }
     const ctxId = await this.classContextId(classId);
     await this.evaluator.requireCapability(actorId, 'class:manageroster', ctxId);
@@ -474,7 +468,7 @@ export class ClassesService implements OnModuleInit {
   async listClassCourses(actorId: string, classId: string): Promise<CourseRow[]> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
+      notFound(`Class ${classId} not found`, 'class.not_found');
     }
     return this.repo.listCoursesInClass(classId);
   }
@@ -482,7 +476,7 @@ export class ClassesService implements OnModuleInit {
 
   private async requireRosterManager(actorId: string, row: ClassRow): Promise<void> {
     if (row.status === 'archived') {
-      throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
+      badRequest('Class is archived; roster is frozen', 'class.archived');
     }
     const ctxId = await this.classContextId(row.id);
     await this.evaluator.requireCapability(actorId, 'class:manageroster', ctxId);
@@ -521,7 +515,7 @@ export class ClassesService implements OnModuleInit {
     const email = input.email?.trim().toLowerCase() || undefined;
     const phone = input.phone ? input.phone.replace(/[^0-9]/g, '') || undefined : undefined;
     if (!email && !phone) {
-      throw new BadRequestException({ message: 'A student row needs an email or a phone number to match or create an account', code: 'class.roster_identity_missing' });
+      badRequest('A student row needs an email or a phone number to match or create an account', 'class.roster_identity_missing');
     }
     let user = email ? await this.users.getByEmail(email) : undefined;
     if (!user && phone) user = await this.users.getByUsername(phone);
@@ -597,7 +591,7 @@ export class ClassesService implements OnModuleInit {
     await wb.xlsx.load(buffer as never);
     const ws = wb.worksheets[0];
     if (!ws) {
-      throw new BadRequestException({ message: 'The workbook has no worksheet', code: 'class.import_file_empty' });
+      badRequest('The workbook has no worksheet', 'class.import_file_empty');
     }
     const cellText = (value: unknown): string => {
       if (value === null || value === undefined) return '';
@@ -631,7 +625,7 @@ export class ClassesService implements OnModuleInit {
       : { name: 0, phone: 1, email: 2, dob: 3 };
     const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
     if (dataRows.length > 500) {
-      throw new BadRequestException({ message: 'Roster import is limited to 500 rows per file', code: 'class.import_too_many_rows' });
+      badRequest('Roster import is limited to 500 rows per file', 'class.import_too_many_rows');
     }
     const out: RosterStudentIdentity[] = [];
     for (const cells of dataRows) {
@@ -666,7 +660,7 @@ export class ClassesService implements OnModuleInit {
   async listStaff(actorId: string, classId: string): Promise<ClassStaffView> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
+      notFound(`Class ${classId} not found`, 'class.not_found');
     }
     const ctxId = await this.classContextId(classId);
     const roleIds = new Map<string, ClassStaffRole>();
@@ -716,15 +710,15 @@ export class ClassesService implements OnModuleInit {
     if (!targetId && input.email) {
       const byEmail = await this.users.getByEmail(input.email.trim().toLowerCase());
       if (!byEmail) {
-        throw new NotFoundException({ message: `No account with email ${input.email}`, code: 'class.staff_user_not_found' });
+        notFound(`No account with email ${input.email}`, 'class.staff_user_not_found');
       }
       targetId = byEmail.id;
     }
     if (!targetId) {
-      throw new BadRequestException({ message: 'A staff member must be identified by userId or email', code: 'class.staff_identity_missing' });
+      badRequest('A staff member must be identified by userId or email', 'class.staff_identity_missing');
     }
     if (targetId === row.ownerId) {
-      throw new BadRequestException({ message: 'The class owner keeps the owner role; transfer ownership instead of editing class roles', code: 'class.owner_roles_locked' });
+      badRequest('The class owner keeps the owner role; transfer ownership instead of editing class roles', 'class.owner_roles_locked');
     }
     await this.ensureClassRoles();
     await this.users.getUser(targetId);
@@ -750,7 +744,7 @@ export class ClassesService implements OnModuleInit {
     );
     const activeTenantId = this.tenantContext.currentTenantId();
     if (!row || !row.allowSelfReport || !row.joinCode || (activeTenantId && row.tenantId !== activeTenantId)) {
-      throw new NotFoundException({ message: 'Join code is not valid for any open class in this space', code: 'class.join_code_invalid' });
+      notFound('Join code is not valid for any open class in this space', 'class.join_code_invalid');
     }
     return row;
   }
@@ -773,7 +767,7 @@ export class ClassesService implements OnModuleInit {
   async joinByCode(actorId: string, joinCode: string): Promise<JoinClassResult> {
     const row = await this.resolveClassByJoinCode(joinCode);
     if (row.status === 'archived') {
-      throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
+      badRequest('Class is archived; roster is frozen', 'class.archived');
     }
     const view = { id: row.id, name: row.name, schoolYear: row.schoolYear };
     const body = async (): Promise<JoinClassResult> => {
@@ -830,10 +824,10 @@ export class ClassesService implements OnModuleInit {
     await this.evaluator.requireCapability(actorId, 'class:manageroster', ctxId);
     const request = await this.repo.getJoinRequest(requestId);
     if (!request || request.classId !== classId) {
-      throw new NotFoundException({ message: `Join request ${requestId} not found`, code: 'class.join_request_not_found' });
+      notFound(`Join request ${requestId} not found`, 'class.join_request_not_found');
     }
     if (request.status !== 'pending') {
-      throw new ConflictException({ message: 'Join request was already decided', code: 'class.join_request_decided' });
+      conflict('Join request was already decided', 'class.join_request_decided');
     }
     if (approve) await this.addToRoster(actorId, classId, request.userId);
     await this.repo.updateJoinRequest(requestId, {
@@ -850,7 +844,7 @@ export class ClassesService implements OnModuleInit {
   async listSuspendedMembers(actorId: string, classId: string): Promise<ClassSuspendedMember[]> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
+      notFound(`Class ${classId} not found`, 'class.not_found');
     }
     const suspendedIds = await this.repo.listSuspendedMemberIds(row.cohortId);
     if (suspendedIds.length === 0) return [];
@@ -894,13 +888,13 @@ export class ClassesService implements OnModuleInit {
   async resolveClassFeePurchase(classId: string, userId: string): Promise<ClassFeeTarget> {
     const row = await this.getClassRow(classId);
     if (row.status === 'archived') {
-      throw new BadRequestException({ message: 'Class is archived; enrolment is frozen', code: 'class.archived' });
+      badRequest('Class is archived; enrolment is frozen', 'class.archived');
     }
     if (row.feeCost === null || row.feeCost <= 0) {
-      throw new BadRequestException({ message: 'Class has no fee configured', code: 'payment.no_fee' });
+      badRequest('Class has no fee configured', 'payment.no_fee');
     }
     if (await this.groups.isCohortMember(row.cohortId, userId)) {
-      throw new ConflictException({ message: 'User is already a member of this class', code: 'class.already_member' });
+      conflict('User is already a member of this class', 'class.already_member');
     }
     return {
       classId: row.id,
@@ -923,10 +917,10 @@ export class ClassesService implements OnModuleInit {
     await this.tenantContext.run({ platform: true }, async () => {
       const row = await this.repo.getClass(classId);
       if (!row) {
-        throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
+        notFound(`Class ${classId} not found`, 'class.not_found');
       }
       if (row.status === 'archived') {
-        throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
+        badRequest('Class is archived; roster is frozen', 'class.archived');
       }
       if (await this.groups.isCohortMember(row.cohortId, userId)) return;
       await this.tenants.ensureActiveMembership(row.tenantId, userId);
@@ -956,10 +950,10 @@ export class ClassesService implements OnModuleInit {
   async resolveClass(classId: string, tenantId: string): Promise<{ classId: string; contextId: string }> {
     const row = await this.repo.getClass(classId);
     if (!row || row.tenantId !== tenantId) {
-      throw new NotFoundException({ message: `Class ${classId} not found`, code: 'class.not_found' });
+      notFound(`Class ${classId} not found`, 'class.not_found');
     }
     if (row.status === 'archived') {
-      throw new BadRequestException({ message: 'Class is archived; cannot add courses', code: 'class.archived' });
+      badRequest('Class is archived; cannot add courses', 'class.archived');
     }
     return { classId: row.id, contextId: await this.classContextId(row.id) };
   }

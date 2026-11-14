@@ -1,6 +1,5 @@
-import {
-  BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Res, UploadedFiles, UseInterceptors,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { badRequest } from '../../common/http-errors';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { uuidIdSchema } from '@giaokhoa/contracts';
@@ -53,7 +52,7 @@ export class ExamBatchesController {
     @Res() res: Response,
   ) {
     if (format !== undefined && format !== 'pdf') {
-      throw new BadRequestException({ message: `Unsupported sheets format ${format}`, code: 'paper.sheets_format_unsupported' });
+      badRequest(`Unsupported sheets format ${format}`, 'paper.sheets_format_unsupported');
     }
     const { buffer, fileName } = await this.paper.sheetsPdf(actor.id, batchId, {
       studentId, kind, copies: copies ? Number(copies) : undefined,

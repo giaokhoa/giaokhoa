@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import { CustomFieldsRepository, type FieldRow } from '@giaokhoa/db/repositories/custom-fields';
 
 export type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'date';
@@ -15,18 +16,18 @@ export class CustomFieldsService {
   }
   async listCategories(component: string, area: string): Promise<unknown[]> { return this.repo.listCategories(component, area); }
   async deleteCategory(id: string): Promise<void> {
-    if (!(await this.repo.getCategory(id))) throw new NotFoundException({ message: `Category ${id} not found`, code: 'customfield.category_not_found' });
+    if (!(await this.repo.getCategory(id))) notFound(`Category ${id} not found`, 'customfield.category_not_found');
     await this.repo.deleteCategory(id);
   }
   async createField(categoryId: string, input: { shortName: string; name: string; type: string; configData?: FieldConfig }): Promise<FieldRow> {
     const category = await this.repo.getCategory(categoryId);
-    if (!category) throw new NotFoundException({ message: `Category ${categoryId} not found`, code: 'customfield.category_not_found' });
+    if (!category) notFound(`Category ${categoryId} not found`, 'customfield.category_not_found');
     if (!FIELD_TYPES.includes(input.type as CustomFieldType)) {
-      throw new BadRequestException({ message: `Unsupported field type ${input.type}`, code: 'customfield.invalid_type' });
+      badRequest(`Unsupported field type ${input.type}`, 'customfield.invalid_type');
     }
     const siblings = await this.repo.listFieldsByCategory(categoryId);
     if (siblings.some((f) => f.shortName === input.shortName)) {
-      throw new BadRequestException({ message: `Field shortName ${input.shortName} already exists in category`, code: 'customfield.shortname_taken' });
+      badRequest(`Field shortName ${input.shortName} already exists in category`, 'customfield.shortname_taken');
     }
     return this.repo.insertField({ categoryId, shortName: input.shortName, name: input.name, type: input.type, configData: input.configData ?? {}, sortOrder: siblings.length });
   }
@@ -37,7 +38,7 @@ export class CustomFieldsService {
     return all;
   }
   async deleteField(id: string): Promise<void> {
-    if (!(await this.repo.getField(id))) throw new NotFoundException({ message: `Field ${id} not found`, code: 'customfield.field_not_found' });
+    if (!(await this.repo.getField(id))) notFound(`Field ${id} not found`, 'customfield.field_not_found');
     await this.repo.deleteField(id);
   }
 
@@ -68,7 +69,7 @@ export class CustomFieldsService {
       const err = this.validateValue(field, values[field.shortName]);
       if (err) errors.push(err);
     }
-    if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'customfield.validation_failed' });
+    if (errors.length) badRequest(errors.join('; '), 'customfield.validation_failed');
   }
 
   async setValuesForInstance(component: string, area: string, instanceId: string, values: Record<string, string>): Promise<void> {
@@ -78,7 +79,7 @@ export class CustomFieldsService {
       const err = this.validateValue(field, values[field.shortName]);
       if (err) errors.push(err);
     }
-    if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'customfield.validation_failed' });
+    if (errors.length) badRequest(errors.join('; '), 'customfield.validation_failed');
     for (const field of fields) {
       if (values[field.shortName] !== undefined) await this.repo.upsertData(field.id, instanceId, values[field.shortName]!);
     }

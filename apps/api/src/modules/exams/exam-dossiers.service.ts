@@ -1,6 +1,5 @@
-import {
-  BadRequestException, GoneException, Injectable, NotFoundException,
-} from '@nestjs/common';
+import { GoneException, Injectable } from '@nestjs/common';
+import { badRequest, notFound } from '../../common/http-errors';
 import type {
   CreateExamDossier, ExamDossierView, RejectExamDossier,
 } from '@giaokhoa/contracts';
@@ -37,7 +36,7 @@ export class ExamDossiersService {
 
   private async getDossierOrThrow(id: string): Promise<ExamDossierRow> {
     const row = await this.repo.getDossier(id);
-    if (!row) throw new NotFoundException({ message: `Exam dossier ${id} not found`, code: 'exam.dossier_not_found' });
+    if (!row) notFound(`Exam dossier ${id} not found`, 'exam.dossier_not_found');
     return row;
   }
 
@@ -120,7 +119,7 @@ export class ExamDossiersService {
   async getDossier(actorId: string, dossierId: string): Promise<ExamDossierView> {
     const dossier = await this.getDossierOrThrow(dossierId);
     if (!(await this.canViewDossier(actorId, dossier))) {
-      throw new NotFoundException({ message: `Exam dossier ${dossierId} not found`, code: 'exam.dossier_not_found' });
+      notFound(`Exam dossier ${dossierId} not found`, 'exam.dossier_not_found');
     }
     return this.dossierView(dossier);
   }
@@ -145,10 +144,10 @@ export class ExamDossiersService {
   async getDossierSpecification(actorId: string, dossierId: string): Promise<Record<string, unknown>> {
     const dossier = await this.getDossierOrThrow(dossierId);
     if (!(await this.canViewDossier(actorId, dossier))) {
-      throw new NotFoundException({ message: `Exam dossier ${dossierId} not found`, code: 'exam.dossier_not_found' });
+      notFound(`Exam dossier ${dossierId} not found`, 'exam.dossier_not_found');
     }
     if (!dossier.specSnapshot) {
-      throw new BadRequestException({ message: 'The dossier has not been submitted yet; it carries no specification', code: 'exam.dossier_not_submitted' });
+      badRequest('The dossier has not been submitted yet; it carries no specification', 'exam.dossier_not_submitted');
     }
     const bank = await this.banks.findBankById(dossier.targetBankId);
     const isModerator = bank

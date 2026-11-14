@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, unauthorized } from '../../common/http-errors';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
@@ -51,10 +52,10 @@ export class TotpService {
     const existing = await this.repo.getTotpByUserId(userId);
     if (existing?.confirmed) {
       if (!currentCode) {
-        throw new UnauthorizedException({ message: 'Current two-factor authentication code is required to replace the active authenticator', code: 'auth.mfa_reauth_required' });
+        unauthorized('Current two-factor authentication code is required to replace the active authenticator', 'auth.mfa_reauth_required');
       }
       if (!(await this.verifyCode(this.decryptSecret(existing.secretEncrypted), currentCode))) {
-        throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+        unauthorized('Invalid two-factor authentication code', 'auth.mfa_invalid_code');
       }
     }
     const secret = generateSecret();
@@ -63,12 +64,12 @@ export class TotpService {
         userId, this.encryptSecret(secret), existing.secretEncrypted,
       );
       if (!staged) {
-        throw new ConflictException({ message: 'MFA factor changed during replacement setup', code: 'auth.mfa_state_changed' });
+        conflict('MFA factor changed during replacement setup', 'auth.mfa_state_changed');
       }
     } else {
       const staged = await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
       if (!staged) {
-        throw new ConflictException({ message: 'MFA status changed during setup', code: 'auth.mfa_state_changed' });
+        conflict('MFA status changed during setup', 'auth.mfa_state_changed');
       }
     }
     const otpauthUrl = generateURI({ issuer: TOTP_ISSUER, label: username, secret });
@@ -77,34 +78,34 @@ export class TotpService {
 
   async confirm(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
-    if (!row) throw new BadRequestException({ message: 'TOTP has not been set up for this account', code: 'auth.mfa_not_setup' });
+    if (!row) badRequest('TOTP has not been set up for this account', 'auth.mfa_not_setup');
     if (row.confirmed) {
       const pending = await this.repo.getPendingTotpReplacement(userId);
-      if (!pending) throw new BadRequestException({ message: 'TOTP replacement has expired or was not started', code: 'auth.mfa_not_setup' });
+      if (!pending) badRequest('TOTP replacement has expired or was not started', 'auth.mfa_not_setup');
       if (!(await this.verifyCode(this.decryptSecret(pending.secretEncrypted), code))) {
-        throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+        unauthorized('Invalid two-factor authentication code', 'auth.mfa_invalid_code');
       }
       if (!(await this.repo.activateTotpReplacement(userId, pending))) {
-        throw new ConflictException({ message: 'MFA factor changed during replacement confirmation', code: 'auth.mfa_state_changed' });
+        conflict('MFA factor changed during replacement confirmation', 'auth.mfa_state_changed');
       }
       return;
     }
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
-      throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+      unauthorized('Invalid two-factor authentication code', 'auth.mfa_invalid_code');
     }
     if (!(await this.repo.confirmTotp(userId, row.secretEncrypted))) {
-      throw new ConflictException({ message: 'MFA factor changed during confirmation', code: 'auth.mfa_state_changed' });
+      conflict('MFA factor changed during confirmation', 'auth.mfa_state_changed');
     }
   }
 
   async disable(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
-    if (!row?.confirmed) throw new BadRequestException({ message: 'Two-factor authentication is not enabled for this account', code: 'auth.mfa_not_enabled' });
+    if (!row?.confirmed) badRequest('Two-factor authentication is not enabled for this account', 'auth.mfa_not_enabled');
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
-      throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+      unauthorized('Invalid two-factor authentication code', 'auth.mfa_invalid_code');
     }
     if (!(await this.repo.disableTotpIfMatches(userId, row.secretEncrypted))) {
-      throw new ConflictException({ message: 'MFA factor changed during disable', code: 'auth.mfa_state_changed' });
+      conflict('MFA factor changed during disable', 'auth.mfa_state_changed');
     }
   }
 

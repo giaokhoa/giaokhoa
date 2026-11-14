@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { forbidden } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
@@ -98,10 +99,7 @@ export class AuthController {
   private async inPlatformLoginContext<T>(req: Request, fn: () => Promise<T>): Promise<T> {
     if (process.env.PUBLIC_LEARNING_ENABLED === 'true') {
       if (!isPublicLearningHost(req.headers.host)) {
-        throw new ForbiddenException({
-          message: 'Platform login is only available on the root host',
-          code: 'auth.platform_root_only',
-        });
+        forbidden('Platform login is only available on the root host', 'auth.platform_root_only');
       }
       return fn();
     }
@@ -136,7 +134,7 @@ export class AuthController {
 
   private assertRootSupportHost(req: Request): void {
     if (spaceSlugForHost(req.headers.host)) {
-      throw new ForbiddenException({ message: 'Support login requires platform root host', code: 'auth.support_root_only' });
+      forbidden('Support login requires platform root host', 'auth.support_root_only');
     }
   }
 

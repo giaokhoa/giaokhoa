@@ -1,10 +1,5 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { forbidden, unauthorized } from '../../common/http-errors';
 import { Reflector } from '@nestjs/core';
 import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
@@ -51,10 +46,7 @@ export class SpaceContextGuard implements CanActivate {
           }
         }
         if (!platformRoot) {
-          throw new UnauthorizedException({
-            message: 'Centre session requires its registered centre address',
-            code: 'auth.centre_mismatch',
-          });
+          unauthorized('Centre session requires its registered centre address', 'auth.centre_mismatch');
         }
       }
       return true;
@@ -63,20 +55,14 @@ export class SpaceContextGuard implements CanActivate {
     const target: ResolvedSpaceConnection = await this.spaceDb.resolveTarget(slug);
 
     if (target.status !== 'active') {
-      throw new ForbiddenException({
-        message: `Space ${slug} is ${target.status}`,
-        code: 'space.not_active',
-      });
+      forbidden(`Space ${slug} is ${target.status}`, 'space.not_active');
     }
 
     const user = request.user;
     if (target.mode === 'dedicated' && user) {
       if (user.centreId !== undefined) {
         if (user.centreId !== target.spaceId) {
-          throw new UnauthorizedException({
-            message: 'Access token was issued for a different centre',
-            code: 'auth.centre_mismatch',
-          });
+          unauthorized('Access token was issued for a different centre', 'auth.centre_mismatch');
         }
       } else if (request[AUTHENTICATED_VIA_BETTER_AUTH]) {
         const tenantId = request.tenantId;
@@ -88,16 +74,10 @@ export class SpaceContextGuard implements CanActivate {
             )
           : undefined;
         if (!effectiveTenant || effectiveTenant.slug !== slug) {
-          throw new UnauthorizedException({
-            message: 'Session is not bound to the centre at this address',
-            code: 'auth.centre_mismatch',
-          });
+          unauthorized('Session is not bound to the centre at this address', 'auth.centre_mismatch');
         }
       } else {
-        throw new UnauthorizedException({
-          message: 'Access token carries no centre claim for this dedicated centre; sign in again at this centre address',
-          code: 'auth.centre_mismatch',
-        });
+        unauthorized('Access token carries no centre claim for this dedicated centre; sign in again at this centre address', 'auth.centre_mismatch');
       }
     }
 

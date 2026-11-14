@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound, unauthorized } from '../../common/http-errors';
 import { createHash, randomBytes } from 'node:crypto';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -64,14 +65,14 @@ export class IntegrationsService {
   async createService(actorId: string, input: { name: string; shortName: string; enabled?: boolean; functions?: string[] }): Promise<ServiceRow> {
     await this.requireManage(actorId);
     for (const fn of input.functions ?? []) {
-      if (!this.functions.has(fn)) throw new BadRequestException({ message: `Unknown function ${fn}`, code: 'webservice.unknown_function' });
+      if (!this.functions.has(fn)) badRequest(`Unknown function ${fn}`, 'webservice.unknown_function');
     }
     return this.repo.insertService({ name: input.name, shortName: input.shortName, enabled: input.enabled ?? true, functions: input.functions ?? [] });
   }
   async listServices(): Promise<ServiceRow[]> { return this.repo.listServices(); }
   async getService(id: string): Promise<ServiceRow> {
     const row = await this.repo.getService(id);
-    if (!row) throw new NotFoundException({ message: `Service ${id} not found`, code: 'webservice.service_not_found' });
+    if (!row) notFound(`Service ${id} not found`, 'webservice.service_not_found');
     return row;
   }
   async setServiceEnabled(actorId: string, id: string, enabled: boolean): Promise<ServiceRow> {
@@ -96,35 +97,35 @@ export class IntegrationsService {
   async revokeToken(actorId: string, id: string): Promise<TokenRow> {
     await this.requireManage(actorId);
     const row = await this.repo.getToken(id);
-    if (!row) throw new NotFoundException({ message: `Token ${id} not found`, code: 'webservice.token_not_found' });
+    if (!row) notFound(`Token ${id} not found`, 'webservice.token_not_found');
     await this.repo.updateToken(id, { revoked: true });
     return (await this.repo.getToken(id))!;
   }
 
   async callFunction(input: { token: string; functionName: string; args?: Record<string, unknown>; ip?: string }): Promise<unknown> {
     const row = await this.repo.getTokenByHash(hashToken(input.token));
-    if (!row || row.revoked) throw new UnauthorizedException({ message: 'Invalid or revoked token', code: 'webservice.invalid_token' });
-    if (row.validUntil && row.validUntil < new Date()) throw new UnauthorizedException({ message: 'Token expired', code: 'webservice.token_expired' });
+    if (!row || row.revoked) unauthorized('Invalid or revoked token', 'webservice.invalid_token');
+    if (row.validUntil && row.validUntil < new Date()) unauthorized('Token expired', 'webservice.token_expired');
     const owner = await this.repo.getTokenOwnerState(row.userId);
     if (!owner || owner.deleted || owner.suspended) {
-      throw new UnauthorizedException({ message: 'Token owner account is not active', code: 'webservice.owner_inactive' });
+      unauthorized('Token owner account is not active', 'webservice.owner_inactive');
     }
     if (row.ipRestriction) {
       const allowed = row.ipRestriction.split(',').map((s) => s.trim());
-      if (!input.ip || !allowed.includes(input.ip)) throw new ForbiddenException({ message: 'IP not allowed for this token', code: 'webservice.ip_denied' });
+      if (!input.ip || !allowed.includes(input.ip)) forbidden('IP not allowed for this token', 'webservice.ip_denied');
     }
     const service = await this.getService(row.serviceId);
-    if (!service.enabled) throw new ForbiddenException({ message: 'Service is disabled', code: 'webservice.service_disabled' });
+    if (!service.enabled) forbidden('Service is disabled', 'webservice.service_disabled');
     const serviceFunctions = (service.functions as string[]) ?? [];
     if (!serviceFunctions.includes(input.functionName)) {
-      throw new ForbiddenException({ message: `Function ${input.functionName} is not part of service ${service.shortName}`, code: 'webservice.function_not_in_service' });
+      forbidden(`Function ${input.functionName} is not part of service ${service.shortName}`, 'webservice.function_not_in_service');
     }
     const def = this.functions.get(input.functionName);
-    if (!def) throw new NotFoundException({ message: `Unknown function ${input.functionName}`, code: 'webservice.unknown_function' });
+    if (!def) notFound(`Unknown function ${input.functionName}`, 'webservice.unknown_function');
     const args = input.args ?? {};
     const contextId = def.resolveContext ? await def.resolveContext(args, this.contexts, this.courses) : (await this.contexts.ensureSystemContext()).id;
     const ok = await this.evaluator.hasCapability(row.userId, def.capability, contextId);
-    if (!ok) throw new ForbiddenException({ message: `Token owner lacks capability ${def.capability}`, code: 'webservice.capability_denied' });
+    if (!ok) forbidden(`Token owner lacks capability ${def.capability}`, 'webservice.capability_denied');
     await this.repo.updateToken(row.id, { lastAccess: new Date() });
     return def.handler(row.userId, args);
   }

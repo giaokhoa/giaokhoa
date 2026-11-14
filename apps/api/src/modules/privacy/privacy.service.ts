@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { PrivacyRepository, type PrivacyRequestRow } from '@giaokhoa/db/repositories/privacy';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -238,14 +239,14 @@ export class PrivacyService {
       const sys = await this.contexts.ensureSystemContext();
       await this.evaluator.requireCapability(actorId, 'privacy:manage', sys.id);
     }
-    if (!['export', 'delete'].includes(input.type)) throw new BadRequestException({ message: 'Unknown privacy request type', code: 'privacy.bad_type' });
+    if (!['export', 'delete'].includes(input.type)) badRequest('Unknown privacy request type', 'privacy.bad_type');
     const user = await this.usersService.getByIdOrUndefined(target);
-    if (!user) throw new NotFoundException({ message: `User ${target} not found`, code: 'privacy.user_not_found' });
+    if (!user) notFound(`User ${target} not found`, 'privacy.user_not_found');
     return this.repo.insertRequest({ userId: target, type: input.type, requestedBy: actorId, status: 'pending' });
   }
   async getRequest(id: string): Promise<PrivacyRequestRow> {
     const row = await this.repo.getRequest(id);
-    if (!row) throw new NotFoundException({ message: `Privacy request ${id} not found`, code: 'privacy.request_not_found' });
+    if (!row) notFound(`Privacy request ${id} not found`, 'privacy.request_not_found');
     return row;
   }
   async getRequestFor(actorId: string, id: string): Promise<PrivacyRequestRow> {
@@ -253,7 +254,7 @@ export class PrivacyService {
     if (row.userId === actorId || row.requestedBy === actorId) return row;
     const sys = await this.contexts.ensureSystemContext();
     if (await this.evaluator.hasCapability(actorId, 'privacy:manage', sys.id)) return row;
-    throw new NotFoundException({ message: `Privacy request ${id} not found`, code: 'privacy.request_not_found' });
+    notFound(`Privacy request ${id} not found`, 'privacy.request_not_found');
   }
   async listRequestsFor(actorId: string): Promise<PrivacyRequestRow[]> {
     const sys = await this.contexts.ensureSystemContext();
@@ -265,7 +266,7 @@ export class PrivacyService {
     const sys = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'privacy:manage', sys.id);
     const req = await this.getRequest(id);
-    if (req.status !== 'pending') throw new BadRequestException({ message: `Request is ${req.status}, not pending`, code: 'privacy.not_pending' });
+    if (req.status !== 'pending') badRequest(`Request is ${req.status}, not pending`, 'privacy.not_pending');
     if (decision === 'rejected') {
       await this.repo.updateRequest(id, { status: 'rejected', approvedBy: actorId });
       return this.getRequest(id);
@@ -276,7 +277,7 @@ export class PrivacyService {
 
   async processRequest(id: string): Promise<PrivacyRequestRow> {
     const req = await this.getRequest(id);
-    if (req.status !== 'approved') throw new ForbiddenException({ message: 'Privacy request is not approved', code: 'privacy.not_approved' });
+    if (req.status !== 'approved') forbidden('Privacy request is not approved', 'privacy.not_approved');
     const missing = this.missingProviders();
     if (missing.length) {
       await this.repo.updateRequest(id, { status: 'failed', result: { missingProviders: missing } });

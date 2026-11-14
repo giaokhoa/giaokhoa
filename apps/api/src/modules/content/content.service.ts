@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ContentRepository, type PageRow, type ResourceRow } from '@giaokhoa/db/repositories/content';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -116,7 +117,7 @@ export class ContentService {
 
   async getPage(id: string): Promise<PageRow> {
     const row = await this.repo.getPage(id);
-    if (!row) throw new NotFoundException({ message: `Page ${id} not found`, code: 'content.page_not_found' });
+    if (!row) notFound(`Page ${id} not found`, 'content.page_not_found');
     return { ...row, content: sanitizePageContent(row.content) };
   }
 
@@ -154,7 +155,7 @@ export class ContentService {
 
   private assertSafeResourceUrl(url: string): void {
     if (!isSafeExternalResourceUrl(url)) {
-      throw new BadRequestException({ message: 'url must use the http or https scheme', code: 'content.url_scheme_not_allowed' });
+      badRequest('url must use the http or https scheme', 'content.url_scheme_not_allowed');
     }
   }
 
@@ -165,10 +166,10 @@ export class ContentService {
     await this.courses.getCourse(courseId);
     let fileMime: string | null = null;
     if (input.kind === 'file') {
-      if (!input.fileId) throw new BadRequestException({ message: 'fileId is required for a file resource', code: 'content.file_required' });
+      if (!input.fileId) badRequest('fileId is required for a file resource', 'content.file_required');
       fileMime = (await this.files.getFile(input.fileId)).mimeType;
     } else {
-      if (!input.url) throw new BadRequestException({ message: 'url is required for a link resource', code: 'content.url_required' });
+      if (!input.url) badRequest('url is required for a link resource', 'content.url_required');
       this.assertSafeResourceUrl(input.url);
     }
     const mode = input.completionMode ?? (input.kind === 'file' ? defaultModeForFile(fileMime) : 'none');
@@ -194,7 +195,7 @@ export class ContentService {
 
   async getResource(id: string): Promise<ResourceRow> {
     const row = await this.repo.getResource(id);
-    if (!row) throw new NotFoundException({ message: `Resource ${id} not found`, code: 'content.resource_not_found' });
+    if (!row) notFound(`Resource ${id} not found`, 'content.resource_not_found');
     return row;
   }
 
@@ -207,7 +208,7 @@ export class ContentService {
     await this.courses.assertCourseAccess(userId, resource.course);
     const cm = resource.cmId ? await this.courses.getCm(resource.cmId) : null;
     if (cm && !(await this.courses.checkCmAccess(userId, cm)).available) {
-      throw new ForbiddenException({ message: 'Activity unavailable', code: 'availability.not_available' });
+      forbidden('Activity unavailable', 'availability.not_available');
     }
     const reference = await this.systemMaterials.reference(id);
     if (reference) {
@@ -252,7 +253,7 @@ export class ContentService {
     const resource = await this.getResource(id);
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(resource.course));
     if (await this.systemMaterials.reference(id)) {
-      throw new ConflictException({ message: 'Published material is immutable', code: 'system_material.reference_immutable' });
+      conflict('Published material is immutable', 'system_material.reference_immutable');
     }
     const patch: Partial<ResourceRow> = {};
     if (input.name !== undefined) patch.name = input.name;
@@ -422,9 +423,9 @@ export class ContentService {
   }): Promise<{ cmId: string; percent: number; positionSeconds: number | null; page: number | null; state: number }> {
     await this.courses.assertCourseAccess(userId, courseId);
     const cm = await this.courses.getCm(cmId);
-    if (cm.course !== courseId) throw new NotFoundException({ message: `Course module ${cmId} not found in course ${courseId}`, code: 'content.cm_not_in_course' });
+    if (cm.course !== courseId) notFound(`Course module ${cmId} not found in course ${courseId}`, 'content.cm_not_in_course');
     const access = await this.courses.checkCmAccess(userId, cm);
-    if (!access.available) throw new ForbiddenException({ message: 'This activity is not available to you yet', code: 'availability.not_available' });
+    if (!access.available) forbidden('This activity is not available to you yet', 'availability.not_available');
     const row = await this.repo.upsertModuleProgress(userId, courseId, cmId, input);
     await this.repo.upsertLastAccess(userId, courseId, cmId);
     let state = (await this.completion.getCmCompletion(cmId, userId)).state;
@@ -603,9 +604,9 @@ export class ContentService {
   }> {
     const courseRow = await this.courses.assertCourseAccess(userId, courseId);
     const cm = await this.courses.getCm(cmId);
-    if (cm.course !== courseId) throw new NotFoundException({ message: `Course module ${cmId} not found in course ${courseId}`, code: 'content.cm_not_in_course' });
+    if (cm.course !== courseId) notFound(`Course module ${cmId} not found in course ${courseId}`, 'content.cm_not_in_course');
     const access = await this.courses.checkCmAccess(userId, cm);
-    if (!access.available) throw new ForbiddenException({ message: 'This activity is not available to you yet', code: 'availability.not_available' });
+    if (!access.available) forbidden('This activity is not available to you yet', 'availability.not_available');
     await this.repo.upsertLastAccess(userId, courseId, cmId);
     let content: { type: 'page'; page: PageRow } | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null; embedUrl: string | null } | { type: 'other'; component: string };
     if (cm.component === PAGE_COMPONENT && cm.instanceId) {

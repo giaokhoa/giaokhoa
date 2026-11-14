@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { GradesService } from '../grades/grades.service';
@@ -38,10 +39,7 @@ export class GuardiansService {
     for (const [side, userId] of [['guardian', guardianUserId], ['student', studentUserId]] as const) {
       const membership = await this.tenantRepo.getMembership(tenantId, userId);
       if (!membership || membership.status !== 'active') {
-        throw new BadRequestException({
-          message: `The ${side} is not an active member of this tenant`,
-          code: 'guardian.membership_required',
-        });
+        badRequest(`The ${side} is not an active member of this tenant`, 'guardian.membership_required');
       }
     }
   }
@@ -49,14 +47,14 @@ export class GuardiansService {
   private async assertCanManageLinks(actorId: string): Promise<void> {
     const allowed = await this.evaluator.hasCapabilityFromRealAssignmentAnywhere(actorId, GUARDIAN_MANAGE_CAPABILITY);
     if (!allowed) {
-      throw new ForbiddenException({ message: 'Missing capability guardian:manage', code: 'guardian.manage_denied' });
+      forbidden('Missing capability guardian:manage', 'guardian.manage_denied');
     }
   }
 
   async createLink(actorId: string, input: { guardianUserId: string; studentUserId: string; relationship: string; note?: string }): Promise<GuardianLinkRow> {
     await this.assertCanManageLinks(actorId);
     if (input.guardianUserId === input.studentUserId) {
-      throw new BadRequestException({ message: 'Guardian and student must be different users', code: 'guardian.link_self' });
+      badRequest('Guardian and student must be different users', 'guardian.link_self');
     }
     await this.users.getUser(input.guardianUserId);
     await this.users.getUser(input.studentUserId);
@@ -64,7 +62,7 @@ export class GuardiansService {
     await this.assertBothMembers(tenantId, input.guardianUserId, input.studentUserId);
     const existing = await this.repo.findActiveLink(input.guardianUserId, input.studentUserId);
     if (existing) {
-      throw new ConflictException({ message: 'An active guardian link already exists for this pair', code: 'guardian.link_already_active' });
+      conflict('An active guardian link already exists for this pair', 'guardian.link_already_active');
     }
     const link = await this.repo.insertLink({
       tenantId,
@@ -96,7 +94,7 @@ export class GuardiansService {
     const link = await this.repo.getLink(linkId);
     const active = this.tenantContext.currentTenantId();
     if (!link || link.status !== 'active' || (active !== undefined && link.tenantId !== active)) {
-      throw new NotFoundException({ message: `Active guardian link ${linkId} not found`, code: 'guardian.link_not_found' });
+      notFound(`Active guardian link ${linkId} not found`, 'guardian.link_not_found');
     }
     await this.repo.updateLink(linkId, { status: 'revoked', revokedBy: actorId, revokedAt: new Date() });
     await this.outbox.enqueueStandalone({
@@ -126,7 +124,7 @@ export class GuardiansService {
   private async assertActiveLink(guardianId: string, studentId: string): Promise<GuardianLinkRow> {
     const link = await this.repo.findActiveLink(guardianId, studentId);
     if (!link) {
-      throw new ForbiddenException({ message: 'No active guardian link to this student', code: 'guardian.no_active_link' });
+      forbidden('No active guardian link to this student', 'guardian.no_active_link');
     }
     return link;
   }
@@ -134,7 +132,7 @@ export class GuardiansService {
   async requireActiveLinkOr404(guardianId: string, studentId: string): Promise<GuardianLinkRow> {
     const link = await this.repo.findActiveLink(guardianId, studentId);
     if (!link) {
-      throw new NotFoundException({ message: 'Student not found', code: 'guardian.student_not_found' });
+      notFound('Student not found', 'guardian.student_not_found');
     }
     return link;
   }

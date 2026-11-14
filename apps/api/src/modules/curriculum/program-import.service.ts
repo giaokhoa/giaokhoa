@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, notFound } from '../../common/http-errors';
 import type { ProgramDatasetStatus, ProgramImportChange, ProgramImportResult } from '@giaokhoa/contracts';
 import type { CentreTx } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -90,14 +91,14 @@ export class ProgramImportService {
   private defOr404(datasetKey: string): ProgramDatasetDef {
     const def = programDatasetByKey(datasetKey);
     if (!def) {
-      throw new NotFoundException({ message: `Program dataset ${datasetKey} is not in the manifest`, code: 'curriculum.program_dataset_not_found' });
+      notFound(`Program dataset ${datasetKey} is not in the manifest`, 'curriculum.program_dataset_not_found');
     }
     return def;
   }
 
   private async runGuarded(def: ProgramDatasetDef, systemContextId: string, file: ProgramDatasetFile): Promise<ProgramImportResult> {
     if (this.running.has(def.key)) {
-      throw new ConflictException({ message: `Import of dataset ${def.key} is already running`, code: 'curriculum.program_import_in_progress' });
+      conflict(`Import of dataset ${def.key} is already running`, 'curriculum.program_import_in_progress');
     }
     this.running.add(def.key);
     try {
@@ -109,7 +110,7 @@ export class ProgramImportService {
 
   private async runImport(def: ProgramDatasetDef, systemContextId: string, file: ProgramDatasetFile): Promise<ProgramImportResult> {
     if (file.records.length === 0) {
-      throw new BadRequestException({ message: `Program dataset ${def.key} has no records`, code: 'curriculum.program_dataset_empty' });
+      badRequest(`Program dataset ${def.key} has no records`, 'curriculum.program_dataset_empty');
     }
     let subject = await this.repo.getSubjectBySlug(def.slug);
     if (!subject) {

@@ -1,12 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  GoneException,
-  Injectable,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { GoneException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import { hashCentreInviteToken } from './centre-provision';
 import { SpaceRoutingError } from '../../db/routing/space-connection-resolver';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
@@ -29,7 +22,7 @@ export class CentreIdentityService {
   assertRequestAddress(slug: string, hostHeader: string | string[] | undefined) {
     const addressSlug = extractSpaceSlugFromHost(Array.isArray(hostHeader) ? hostHeader[0] : hostHeader);
     if (addressSlug && addressSlug !== slug) {
-      throw new BadRequestException({ message: 'Request address does not match the requested centre', code: 'centre.address_mismatch' });
+      badRequest('Request address does not match the requested centre', 'centre.address_mismatch');
     }
   }
 
@@ -39,7 +32,7 @@ export class CentreIdentityService {
       : await this.bindCentreSpace(slug, false);
     return this.runInCentreSpace(slug, async () => {
       const tenant = await this.tenants.getTenantBySlug(slug);
-      if (!tenant) throw new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
+      if (!tenant) notFound('Centre not found', 'centre.not_found');
       const identity = await this.centreRepo.getIdentity(tenant.id);
       return {
         tenantId: tenant.id,
@@ -54,10 +47,10 @@ export class CentreIdentityService {
     const binding = await this.bindCentreSpace(slug, true);
     return this.runInCentreSpace(slug, async () => {
       const tenant = await this.tenants.getTenantBySlug(slug);
-      if (!tenant) throw new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
+      if (!tenant) notFound('Centre not found', 'centre.not_found');
       const admins = await this.centreRepo.listSiteAdmins();
       if (!admins.includes(actorId)) {
-        throw new ForbiddenException({ message: 'Only an admin of this centre may change its identity', code: 'centre.not_admin' });
+        forbidden('Only an admin of this centre may change its identity', 'centre.not_admin');
       }
       const row = await this.centreRepo.upsertIdentity(tenant.id, dto);
       return { tenantId: tenant.id, displayName: row.displayName, logoPath: row.logoPath, brandColor: row.brandColor };
@@ -68,14 +61,14 @@ export class CentreIdentityService {
     const binding = await this.bindCentreSpace(dto.slug, true);
     const invite = await this.runInCentreSpace(dto.slug, async () => {
       const tenant = await this.tenants.getTenantBySlug(dto.slug);
-      if (!tenant) throw new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
+      if (!tenant) notFound('Centre not found', 'centre.not_found');
       const found = await this.centreRepo.findInviteByTokenHash(hashCentreInviteToken(dto.token));
-      if (!found) throw new NotFoundException({ message: 'Invite not found', code: 'centre.invite_not_found' });
+      if (!found) notFound('Invite not found', 'centre.invite_not_found');
       if (found.expiresAt <= new Date()) throw new GoneException({ message: 'Invite has expired', code: 'centre.invite_expired' });
-      if (found.usedAt) throw new ConflictException({ message: 'Invite has already been used', code: 'centre.invite_consumed' });
-      if (found.revokedAt) throw new ConflictException({ message: 'Invite has been revoked', code: 'centre.invite_revoked' });
+      if (found.usedAt) conflict('Invite has already been used', 'centre.invite_consumed');
+      if (found.revokedAt) conflict('Invite has been revoked', 'centre.invite_revoked');
       const marked = await this.centreRepo.markInviteUsed(found.id);
-      if (!marked) throw new ConflictException({ message: 'Invite has already been used', code: 'centre.invite_consumed' });
+      if (!marked) conflict('Invite has already been used', 'centre.invite_consumed');
       return found;
     }, binding);
     await this.runInCentreSpace(dto.slug, async () => {
@@ -94,7 +87,7 @@ export class CentreIdentityService {
       throw this.mapRoutingError(err);
     }
     if (requireActive && target.status !== 'active') {
-      throw new ForbiddenException({ message: 'Centre is not active', code: 'space.not_active' });
+      forbidden('Centre is not active', 'space.not_active');
     }
     try {
       const db = await this.spaceDb.getKyselyForSpace(slug);

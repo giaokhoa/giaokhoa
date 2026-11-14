@@ -1,5 +1,6 @@
 import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
-import { BadRequestException, ForbiddenException, Logger, NotFoundException, type MessageEvent } from '@nestjs/common';
+import { Logger, type MessageEvent } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
@@ -58,7 +59,7 @@ function decodeNotificationCursor(raw: string): { at: Date; id: string } {
     if (Number.isNaN(at.getTime())) throw new Error('bad cursor');
     return { at, id: parsed.id };
   } catch {
-    throw new BadRequestException({ message: 'Invalid notification cursor', code: 'messaging.invalid_cursor' });
+    badRequest('Invalid notification cursor', 'messaging.invalid_cursor');
   }
 }
 
@@ -185,27 +186,21 @@ export class MessagingNotificationsService {
 
   async setPreference(userId: string, input: { provider: string; popupEnabled?: boolean; emailFrequency?: EmailFrequency }): Promise<NotificationPreferenceView> {
     if (!(await this.hasFullNotificationPreferences(userId))) {
-      throw new ForbiddenException({
-        message: 'Per-type notification preferences are only available to teaching and administrative staff',
-        code: 'messaging.preference_staff_only',
-      });
+      forbidden('Per-type notification preferences are only available to teaching and administrative staff', 'messaging.preference_staff_only');
     }
     const provider = providerByName(input.provider);
-    if (!provider) throw new BadRequestException({ message: `Unknown message provider ${input.provider}`, code: 'messaging.unknown_provider' });
+    if (!provider) badRequest(`Unknown message provider ${input.provider}`, 'messaging.unknown_provider');
     if (!providerVisibleToAudiences(provider, await this.resolvePreferenceAudiences(userId))) {
-      throw new ForbiddenException({
-        message: `Notification type ${input.provider} is not available for your roles`,
-        code: 'messaging.preference_audience',
-      });
+      forbidden(`Notification type ${input.provider} is not available for your roles`, 'messaging.preference_audience');
     }
     if (input.popupEnabled === undefined && input.emailFrequency === undefined) {
-      throw new BadRequestException({ message: 'Nothing to update: provide popupEnabled and/or emailFrequency', code: 'messaging.preference_empty' });
+      badRequest('Nothing to update: provide popupEnabled and/or emailFrequency', 'messaging.preference_empty');
     }
     if (input.emailFrequency !== undefined && !provider.channels.includes('email')) {
-      throw new BadRequestException({ message: `Provider ${input.provider} has no channel email`, code: 'messaging.unknown_channel' });
+      badRequest(`Provider ${input.provider} has no channel email`, 'messaging.unknown_channel');
     }
     if (input.popupEnabled === false && provider.mandatoryInApp) {
-      throw new BadRequestException({ message: `Provider ${input.provider} is mandatory in-app and cannot be turned off`, code: 'messaging.preference_mandatory' });
+      badRequest(`Provider ${input.provider} is mandatory in-app and cannot be turned off`, 'messaging.preference_mandatory');
     }
     if (input.popupEnabled !== undefined) {
       await this.users.setPreference(userId, preferenceNameV2(input.provider, 'popup'), input.popupEnabled ? '1' : '0');
@@ -240,7 +235,7 @@ export class MessagingNotificationsService {
     const courses = await this.groupTree.listMyMessagingCourses(userId);
     const course = courses.find((c) => c.courseId === input.courseId);
     if (!course) {
-      throw new NotFoundException({ message: 'Course not found', code: 'messaging.course_not_found' });
+      notFound('Course not found', 'messaging.course_not_found');
     }
     await this.users.setPreference(userId, coursePreferenceName(input.courseId), input.mode);
     return { courseId: course.courseId, courseName: course.fullName, mode: input.mode };
@@ -386,7 +381,7 @@ export class MessagingNotificationsService {
 
   async sendSystemNotification(actorId: string, dto: { userId: string; provider: string; subject: string; body: string; contextUrl?: string }): Promise<NotifyResult> {
     if (!(await this.evaluator.isSiteAdmin(actorId))) {
-      throw new ForbiddenException({ message: 'Only site administrators can trigger system notifications directly', code: 'messaging.system_send_forbidden' });
+      forbidden('Only site administrators can trigger system notifications directly', 'messaging.system_send_forbidden');
     }
     return this.notify(dto.userId, dto.provider, { subject: dto.subject, body: dto.body, contextUrl: dto.contextUrl, forceExternalMinimized: true });
   }
@@ -465,7 +460,7 @@ export class MessagingNotificationsService {
 
   async deleteNotification(userId: string, notificationId: string): Promise<{ deleted: boolean }> {
     const ok = await this.repo.deleteNotification(notificationId, userId, this.tenantScope());
-    if (!ok) throw new NotFoundException({ message: `Notification ${notificationId} not found`, code: 'messaging.notification_not_found' });
+    if (!ok) notFound(`Notification ${notificationId} not found`, 'messaging.notification_not_found');
     return { deleted: true };
   }
 
@@ -479,7 +474,7 @@ export class MessagingNotificationsService {
 
   async markNotificationRead(userId: string, notificationId: string): Promise<{ read: boolean }> {
     const ok = await this.repo.markNotificationRead(notificationId, userId, this.tenantScope());
-    if (!ok) throw new NotFoundException({ message: `Notification ${notificationId} not found`, code: 'messaging.notification_not_found' });
+    if (!ok) notFound(`Notification ${notificationId} not found`, 'messaging.notification_not_found');
     await this.unreadStream.signalUnreadCountChanged(userId);
     return { read: true };
   }

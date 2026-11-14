@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { OnEvent } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
@@ -91,13 +92,13 @@ export class BadgesService implements OnModuleInit {
     expireDate?: string; expirePeriod?: number; version?: string;
   }): Promise<BadgeRow> {
     const type = input.type ?? 1;
-    if (type === 2 && !input.courseId) throw new BadRequestException({ message: 'A course badge requires courseId', code: 'badges.course_required' });
+    if (type === 2 && !input.courseId) badRequest('A course badge requires courseId', 'badges.course_required');
     const ctx = type === 2 ? await this.courses.courseContextId(input.courseId!) : await this.systemCtx();
     await this.evaluator.requireCapability(actorId, 'badges:createbadge', ctx);
     if (type === 1 && !(await this.evaluator.isSiteAdmin(actorId))) {
       const manager = await this.roles.getRoleByShortname('manager');
       const assignments = manager ? await this.evaluator.hasCapability(actorId, 'badges:createbadge', ctx) : false;
-      if (!assignments) throw new ForbiddenException({ message: 'Site badges require a manager role at the system context', code: 'badges.site_badge_manager_only' });
+      if (!assignments) forbidden('Site badges require a manager role at the system context', 'badges.site_badge_manager_only');
     }
     return this.repo.insertBadge({
       name: input.name, description: input.description ?? '', type,
@@ -111,7 +112,7 @@ export class BadgesService implements OnModuleInit {
 
   async getBadge(id: string): Promise<BadgeRow> {
     const row = await this.repo.getBadge(id);
-    if (!row) throw new NotFoundException({ message: `Badge ${id} not found`, code: 'badges.not_found' });
+    if (!row) notFound(`Badge ${id} not found`, 'badges.not_found');
     return row;
   }
   async listBadges(): Promise<BadgeRow[]> { return this.repo.listBadges(); }
@@ -139,12 +140,12 @@ export class BadgesService implements OnModuleInit {
     const badgeRow = await this.getBadge(id);
     await this.evaluator.requireCapability(actorId, 'badges:configurecriteria', await this.badgeContextId(badgeRow));
     if (![BADGE_STATUS.INACTIVE, BADGE_STATUS.ACTIVE, BADGE_STATUS.DISABLED].includes(status as never)) {
-      throw new BadRequestException({ message: `Status ${status} cannot be set directly`, code: 'badges.bad_status' });
+      badRequest(`Status ${status} cannot be set directly`, 'badges.bad_status');
     }
     if (status === BADGE_STATUS.ACTIVE) {
       const leaves = (await this.repo.listCriteria(id)).filter((c) => c.criteriaType !== 'overall');
       if (!leaves.length) {
-        throw new BadRequestException({ message: 'A badge cannot be enabled without criteria', code: 'badges.no_criteria' });
+        badRequest('A badge cannot be enabled without criteria', 'badges.no_criteria');
       }
     }
     await this.repo.updateBadge(id, { status, userModified: actorId });
@@ -162,16 +163,10 @@ export class BadgesService implements OnModuleInit {
 
   async assertCriteriaEditable(badgeRow: BadgeRow): Promise<void> {
     if (badgeRow.status === BADGE_STATUS.ACTIVE || badgeRow.status === BADGE_STATUS.DISABLED) {
-      throw new ForbiddenException({
-        message: 'Criteria of an active badge are frozen. Duplicate the badge to change its criteria.',
-        code: 'badges.criteria_frozen',
-      });
+      forbidden('Criteria of an active badge are frozen. Duplicate the badge to change its criteria.', 'badges.criteria_frozen');
     }
     if ((await this.repo.countIssued(badgeRow.id)) > 0) {
-      throw new ForbiddenException({
-        message: 'This badge has already been issued; its criteria are frozen. Duplicate the badge to change them.',
-        code: 'badges.criteria_frozen',
-      });
+      forbidden('This badge has already been issued; its criteria are frozen. Duplicate the badge to change them.', 'badges.criteria_frozen');
     }
   }
 
@@ -180,15 +175,15 @@ export class BadgesService implements OnModuleInit {
     await this.evaluator.requireCapability(actorId, 'badges:configurecriteria', await this.badgeContextId(badgeRow));
     await this.assertCriteriaEditable(badgeRow);
     if (![CRITERIA_AGGREGATION.ALL, CRITERIA_AGGREGATION.ANY].includes(input.method as never)) {
-      throw new BadRequestException({ message: 'Criteria method must be 1 (ALL) or 2 (ANY)', code: 'badges.bad_method' });
+      badRequest('Criteria method must be 1 (ALL) or 2 (ANY)', 'badges.bad_method');
     }
     for (const leaf of input.criteria) {
       if (!LEAF_TYPES.includes(leaf.criteriaType as never)) {
-        throw new BadRequestException({ message: `Unknown criteria type ${leaf.criteriaType}`, code: 'badges.bad_criteria_type' });
+        badRequest(`Unknown criteria type ${leaf.criteriaType}`, 'badges.bad_criteria_type');
       }
       const paramError = this.leafParamError(leaf.criteriaType, (leaf.params ?? {}) as Record<string, unknown>);
       if (paramError) {
-        throw new BadRequestException({ message: paramError, code: 'badges.bad_criteria_params' });
+        badRequest(paramError, 'badges.bad_criteria_params');
       }
     }
     await this.repo.transaction(async (tx) => {
@@ -399,7 +394,7 @@ export class BadgesService implements OnModuleInit {
   async manualAward(actorId: string, badgeId: string, recipientId: string): Promise<{ award: unknown; issued: IssuedRow | null; evaluation: unknown }> {
     const badgeRow = await this.getBadge(badgeId);
     if (badgeRow.status !== BADGE_STATUS.ACTIVE) {
-      throw new BadRequestException({ message: 'Only an active badge can be awarded', code: 'badges.not_active' });
+      badRequest('Only an active badge can be awarded', 'badges.not_active');
     }
     const ctx = await this.badgeContextId(badgeRow);
     await this.evaluator.requireCapability(actorId, 'badges:awardbadge', ctx);
@@ -407,13 +402,13 @@ export class BadgesService implements OnModuleInit {
     const { criteria } = await this.getCriteria(badgeId);
     const manualLeaf = criteria.find((c) => c.criteriaType === 'manual');
     if (!manualLeaf) {
-      throw new BadRequestException({ message: 'This badge has no manual award criterion', code: 'badges.no_manual_criteria' });
+      badRequest('This badge has no manual award criterion', 'badges.no_manual_criteria');
     }
     const roleIdParam = (manualLeaf.params as Record<string, unknown>)?.roleId;
     let issuerRole: string | null = null;
     if (roleIdParam) {
       const assignments = await this.evaluator.hasCapabilityFromRealAssignment(actorId, 'badges:awardbadge', ctx);
-      if (!assignments) throw new ForbiddenException({ message: 'Issuer does not hold the required awarding role', code: 'badges.issuer_role' });
+      if (!assignments) forbidden('Issuer does not hold the required awarding role', 'badges.issuer_role');
       issuerRole = typeof roleIdParam === 'string' ? roleIdParam : null;
     }
     const award = await this.repo.insertManualAward({ badgeId: badgeId, recipientId: recipientId, issuerId: actorId, issuerRole: issuerRole });
@@ -439,7 +434,7 @@ export class BadgesService implements OnModuleInit {
   }
   async getIssued(id: string): Promise<IssuedRow> {
     const row = await this.repo.getIssued(id);
-    if (!row) throw new NotFoundException({ message: `Badge assertion ${id} not found`, code: 'badges.assertion_not_found' });
+    if (!row) notFound(`Badge assertion ${id} not found`, 'badges.assertion_not_found');
     return row;
   }
 

@@ -1,4 +1,5 @@
-import { BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import { UnprocessableEntityException } from '@nestjs/common';
+import { badRequest, unprocessableEntity } from '../../common/http-errors';
 import type { PaperSlotLayout, RichTextDocument } from '@giaokhoa/contracts';
 import { getTrueFalseStatements, TRUE_FALSE_STATEMENT_COUNT } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -111,7 +112,7 @@ export class QuizGenerationService {
     await this.shared.requireMatrixCap(actorId, matrix, QUIZ_CAPABILITIES.manageMatrix);
     const cells = await this.repo.listMatrixCells(matrix.id);
     if (!cells.length) {
-      throw new BadRequestException({ message: 'This matrix has no cells yet', code: 'quiz.matrix_empty' });
+      badRequest('This matrix has no cells yet', 'quiz.matrix_empty');
     }
     return { matrix, cells };
   }
@@ -157,7 +158,7 @@ export class QuizGenerationService {
   private async assertNoRealAttempts(quiz: PinRow): Promise<void> {
     const attempts = await this.repo.listAttempts(quiz.id, QUIZ_PIN_ATTEMPTS_LIMIT);
     if (attempts.some((a) => !a.preview)) {
-      throw new BadRequestException({ message: 'This quiz already has real attempts; its slots are frozen', code: 'quiz.slots_frozen' });
+      badRequest('This quiz already has real attempts; its slots are frozen', 'quiz.slots_frozen');
     }
   }
 
@@ -169,7 +170,7 @@ export class QuizGenerationService {
     if (pinId) {
       quiz = await this.shared.getPin(pinId);
       if (quiz.matrixId !== matrix.id) {
-        throw new BadRequestException({ message: 'The quiz was not generated from this matrix', code: 'quiz.spec_quiz_mismatch' });
+        badRequest('The quiz was not generated from this matrix', 'quiz.spec_quiz_mismatch');
       }
       slots = (await this.shared.effectiveSlots(quiz)).map((s) => ({
         matrixCellId: s.matrixCellId, slot: s.slot, questionId: s.questionId,
@@ -305,7 +306,7 @@ export class QuizGenerationService {
 
   async exportMatrixSpecification(actorId: string, matrixId: string, format: string, pinId?: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
     if (format !== 'xlsx' && format !== 'docx') {
-      throw new BadRequestException({ message: 'Specification export format must be xlsx or docx', code: 'quiz.spec_export_format' });
+      badRequest('Specification export format must be xlsx or docx', 'quiz.spec_export_format');
     }
     const spec = await this.getMatrixSpecification(actorId, matrixId, pinId);
     return this.renderSpecification(spec, format);
@@ -313,7 +314,7 @@ export class QuizGenerationService {
 
   async renderSpecification(spec: MatrixSpecification, format: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
     if (format !== 'xlsx' && format !== 'docx') {
-      throw new BadRequestException({ message: 'Specification export format must be xlsx or docx', code: 'quiz.spec_export_format' });
+      badRequest('Specification export format must be xlsx or docx', 'quiz.spec_export_format');
     }
     const flat = flattenSpecification(spec);
     if (format === 'xlsx') {
@@ -386,20 +387,20 @@ export class QuizGenerationService {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.gradePaper);
     const slots = await this.shared.effectiveSlots(quiz);
-    if (!slots.length) throw new BadRequestException({ message: 'This quiz has no questions yet', code: 'quiz.no_questions' });
+    if (!slots.length) badRequest('This quiz has no questions yet', 'quiz.no_questions');
     if (slots.length > 60) {
-      throw new UnprocessableEntityException({ message: 'A paper answer sheet supports at most 60 questions', code: 'paper.too_many_questions' });
+      unprocessableEntity('A paper answer sheet supports at most 60 questions', 'paper.too_many_questions');
     }
     const layout: PaperSlotLayout[] = [];
     for (const slot of slots) {
       if (!slot.questionId) {
-        throw new UnprocessableEntityException({ message: 'Paper sheets need a fixed paper: every slot must pin a specific question (no random category/matrix slots)', code: 'paper.requires_fixed_slots' });
+        unprocessableEntity('Paper sheets need a fixed paper: every slot must pin a specific question (no random category/matrix slots)', 'paper.requires_fixed_slots');
       }
       const snapshot = quiz.questionSnapshots?.[slot.slot - 1];
       const view = snapshot ? null : await this.questions.getQuestion(slot.questionId);
       const qtype = snapshot?.qtype ?? view!.question.qtype;
       if (qtype !== 'multichoice' && qtype !== 'truefalse') {
-        throw new UnprocessableEntityException({ message: `Question type ${qtype} cannot be printed on an OMR answer sheet`, code: 'paper.unsupported_qtype' });
+        unprocessableEntity(`Question type ${qtype} cannot be printed on an OMR answer sheet`, 'paper.unsupported_qtype');
       }
       const pinnedId = slot.versionMode === 'pinned' ? slot.pinnedVersionId : null;
       const content = snapshot ? {
@@ -413,13 +414,13 @@ export class QuizGenerationService {
       if (qtype === 'truefalse') {
         const statements = getTrueFalseStatements(content.version.questionText as RichTextDocument);
         if (!statements || statements.length !== TRUE_FALSE_STATEMENT_COUNT) {
-          throw new UnprocessableEntityException({ message: 'True/false question is missing its four statements', code: 'paper.bad_truefalse' });
+          unprocessableEntity('True/false question is missing its four statements', 'paper.bad_truefalse');
         }
         statementIds = statements.map((s) => s.id);
         answerIds = [];
       } else {
         if (content.answers.length < 2 || content.answers.length > 5) {
-          throw new UnprocessableEntityException({ message: 'A printed multichoice question needs 2–5 answers', code: 'paper.bad_option_count' });
+          unprocessableEntity('A printed multichoice question needs 2–5 answers', 'paper.bad_option_count');
         }
         answerIds = content.answers.map((a) => a.id);
       }
@@ -467,7 +468,7 @@ export class QuizGenerationService {
         const response = input.responses[s.slot - 1] ?? null;
         if (response === null) continue;
         const qa = usageView.attempts.find((a) => a.slot === s.slot);
-        if (!qa) throw new BadRequestException({ message: `Usage is missing slot ${s.slot}`, code: 'paper.slot_missing' });
+        if (!qa) badRequest(`Usage is missing slot ${s.slot}`, 'paper.slot_missing');
         await this.questions.submitResponse(input.studentId, qa.id, response);
       }
       await this.attempts.finalizeAttempt(quiz, row, false);

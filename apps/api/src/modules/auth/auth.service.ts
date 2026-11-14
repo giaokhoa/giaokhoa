@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { badRequest, forbidden, notFound, unauthorized } from '../../common/http-errors';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -94,16 +95,16 @@ export class AuthService {
   async validateCredentials(username: string, password: string, ip?: string): Promise<UserRow> {
     const user = await this.users.getByUsername(username);
     if (!user || user.deleted) {
-      throw new UnauthorizedException({ message: 'Invalid username or password', code: 'auth.invalid_credentials' });
+      unauthorized('Invalid username or password', 'auth.invalid_credentials');
     }
     if (await this.lockout.isLockedOut(user.id)) {
-      throw new UnauthorizedException({ message: AUTH_LOCKED_OUT_MESSAGE, code: AUTH_LOCKED_OUT_CODE });
+      unauthorized(AUTH_LOCKED_OUT_MESSAGE, AUTH_LOCKED_OUT_CODE);
     }
     const ok = await this.users.verifyPassword(user, password);
     await this.lockout.recordAttempt({ userId: user.id, username: user.username, success: ok, ip });
-    if (!ok) throw new UnauthorizedException({ message: 'Invalid username or password', code: 'auth.invalid_credentials' });
-    if (user.suspended) throw new ForbiddenException({ message: 'Account is suspended', code: 'auth.account_suspended' });
-    if (user.isGuest) throw new ForbiddenException({ message: 'The guest account cannot log in with a password', code: 'auth.guest_login_denied' });
+    if (!ok) unauthorized('Invalid username or password', 'auth.invalid_credentials');
+    if (user.suspended) forbidden('Account is suspended', 'auth.account_suspended');
+    if (user.isGuest) forbidden('The guest account cannot log in with a password', 'auth.guest_login_denied');
     return user;
   }
 
@@ -155,7 +156,7 @@ export class AuthService {
   async platformLogin(username: string, password: string, ip?: string, _userAgent?: string): Promise<PlatformLoginOutcome> {
     const user = await this.validateCredentials(username, password, ip);
     if (!(await this.evaluator.isPlatformSiteAdmin(user.id))) {
-      throw new ForbiddenException({ message: 'Only platform administrators may use this login surface', code: 'auth.platform_admin_required' });
+      forbidden('Only platform administrators may use this login surface', 'auth.platform_admin_required');
     }
     if (await this.totp.isEnabled(user.id)) {
       const challengeToken = await this.signMfaChallenge(user, 'platform');
@@ -170,7 +171,7 @@ export class AuthService {
   async verifyPlatformMfa(challengeToken: string, code: string, ip?: string, _userAgent?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'platform');
     if (!(await this.evaluator.isPlatformSiteAdmin(user.id))) {
-      throw new ForbiddenException({ message: 'Only platform administrators may use this login surface', code: 'auth.platform_admin_required' });
+      forbidden('Only platform administrators may use this login surface', 'auth.platform_admin_required');
     }
     await this.users.recordLogin(user.id);
     const issued = await this.issuePlatformToken(user);
@@ -181,7 +182,7 @@ export class AuthService {
   async supportLogin(username: string, password: string, ip?: string): Promise<PlatformLoginOutcome> {
     const user = await this.validateCredentials(username, password, ip);
     if (!(await this.tenants.isPlatformSupportMember(user.id))) {
-      throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
+      forbidden('Active platform membership required for support', 'auth.support_staff_required');
     }
     if (await this.totp.isEnabled(user.id)) {
       return { mfaRequired: true, user, challengeToken: await this.signMfaChallenge(user, 'support') };
@@ -195,7 +196,7 @@ export class AuthService {
   async verifySupportMfa(challengeToken: string, code: string, ip?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'support');
     if (!(await this.tenants.isPlatformSupportMember(user.id))) {
-      throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
+      forbidden('Active platform membership required for support', 'auth.support_staff_required');
     }
     await this.users.recordLogin(user.id);
     const issued = await this.issueSupportToken(user);
@@ -236,26 +237,26 @@ export class AuthService {
     try {
       payload = await this.jwt.verifyAsync<{ sub?: string; scope?: string; flow?: string; space?: string }>(challengeToken);
     } catch {
-      throw new UnauthorizedException({ message: 'MFA challenge is invalid or expired', code: 'auth.mfa_challenge_invalid' });
+      unauthorized('MFA challenge is invalid or expired', 'auth.mfa_challenge_invalid');
     }
     const challengeFlow = payload.flow ?? 'token';
     if (payload.scope !== 'mfa_challenge' || !payload.sub || challengeFlow !== flow) {
-      throw new UnauthorizedException({ message: 'MFA challenge is invalid or expired', code: 'auth.mfa_challenge_invalid' });
+      unauthorized('MFA challenge is invalid or expired', 'auth.mfa_challenge_invalid');
     }
     if (payload.space !== tenantAls.getStore()?.spaceSlug) {
-      throw new UnauthorizedException({ message: 'MFA challenge is invalid or expired', code: 'auth.mfa_challenge_invalid' });
+      unauthorized('MFA challenge is invalid or expired', 'auth.mfa_challenge_invalid');
     }
     const user = await this.users.getByIdOrUndefined(payload.sub);
     if (!user || user.deleted || user.suspended) {
-      throw new UnauthorizedException({ message: 'Account is not active', code: 'auth.account_inactive' });
+      unauthorized('Account is not active', 'auth.account_inactive');
     }
     if (await this.lockout.isLockedOut(user.id)) {
-      throw new UnauthorizedException({ message: AUTH_LOCKED_OUT_MESSAGE, code: AUTH_LOCKED_OUT_CODE });
+      unauthorized(AUTH_LOCKED_OUT_MESSAGE, AUTH_LOCKED_OUT_CODE);
     }
     const ok = await this.totp.verifyForUser(user.id, code);
     await this.lockout.recordAttempt({ userId: user.id, username: user.username, success: ok, ip });
     if (!ok) {
-      throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+      unauthorized('Invalid two-factor authentication code', 'auth.mfa_invalid_code');
     }
     return user;
   }
@@ -283,7 +284,7 @@ export class AuthService {
     if (space) {
       const spaceTenant = await this.tenants.getTenantInSpace(space.slug);
       if (!spaceTenant) {
-        throw new UnauthorizedException({ message: 'Space tenant is not ready in its own store', code: 'space.tenant_missing' });
+        unauthorized('Space tenant is not ready in its own store', 'space.tenant_missing');
       }
       tid = spaceTenant.id;
       centreId = space.spaceId;
@@ -323,33 +324,33 @@ export class AuthService {
     const tokenHash = hashToken(refreshToken);
     const family = await this.repo.getFamilyByHash(tokenHash);
     if (!family || family.revoked || family.expiresAt < new Date()) {
-      throw new UnauthorizedException({ message: 'Refresh token is invalid or expired', code: 'auth.refresh_invalid' });
+      unauthorized('Refresh token is invalid or expired', 'auth.refresh_invalid');
     }
     if (family.previousTokenHash === tokenHash) {
       await this.repo.revokeFamily(family.id);
-      throw new UnauthorizedException({ message: 'Refresh token reuse detected; token family revoked', code: 'auth.refresh_reuse_detected' });
+      unauthorized('Refresh token reuse detected; token family revoked', 'auth.refresh_reuse_detected');
     }
     if (family.currentTokenHash !== tokenHash) {
-      throw new UnauthorizedException({ message: 'Refresh token is invalid', code: 'auth.refresh_invalid' });
+      unauthorized('Refresh token is invalid', 'auth.refresh_invalid');
     }
     const user = await this.users.getUser(family.userId);
     if (user.deleted || user.suspended) {
       await this.repo.revokeFamily(family.id);
-      throw new UnauthorizedException({ message: 'Account is not active', code: 'auth.account_inactive' });
+      unauthorized('Account is not active', 'auth.account_inactive');
     }
     const space = await this.requestDedicatedSpace();
     const spaceTenant = space ? await this.tenants.getTenantInSpace(space.slug) : undefined;
     if (space) {
       if (!spaceTenant) {
-        throw new UnauthorizedException({ message: 'Space tenant is not ready in its own store', code: 'space.tenant_missing' });
+        unauthorized('Space tenant is not ready in its own store', 'space.tenant_missing');
       }
       if (spaceTenant.status !== 'active') {
-        throw new UnauthorizedException({ message: `Tenant ${spaceTenant.slug} is ${spaceTenant.status}`, code: 'tenant.not_active' });
+        unauthorized(`Tenant ${spaceTenant.slug} is ${spaceTenant.status}`, 'tenant.not_active');
       }
       if (spaceTenant.kind !== 'platform') {
         const membership = await this.tenants.getMembershipInSpace(space.slug, spaceTenant.id, user.id);
         if (!membership || membership.status !== 'active') {
-          throw new UnauthorizedException({ message: 'User is not an active member of this tenant', code: 'tenant.not_member' });
+          unauthorized('User is not an active member of this tenant', 'tenant.not_member');
         }
       }
     }
@@ -390,10 +391,7 @@ export class AuthService {
 
   async switchTenant(user: UserRow, tenantId: string, currentFamilyId?: string, client?: SessionClientInfo): Promise<TokenPair> {
     if (await this.requestDedicatedSpace()) {
-      throw new ForbiddenException({
-        message: 'Tenant switching does not apply to dedicated-store centres',
-        code: 'auth.switch_tenant_not_in_space',
-      });
+      forbidden('Tenant switching does not apply to dedicated-store centres', 'auth.switch_tenant_not_in_space');
     }
     const target = await this.tenants.resolveSwitchTarget(user.id, tenantId);
     if (currentFamilyId) {
@@ -424,10 +422,10 @@ export class AuthService {
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
     const user = await this.users.getUser(userId);
     if (!(await this.users.verifyPassword(user, currentPassword))) {
-      throw new UnauthorizedException({ message: 'Current password is incorrect', code: 'auth.invalid_credentials' });
+      unauthorized('Current password is incorrect', 'auth.invalid_credentials');
     }
     const errors = this.passwords.validatePolicy(newPassword);
-    if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'user.password_policy' });
+    if (errors.length) badRequest(errors.join('; '), 'user.password_policy');
     await this.users.updateUser(userId, { password: newPassword });
     await this.repo.revokeAllForUser(userId);
   }
@@ -435,16 +433,13 @@ export class AuthService {
   async loginAs(adminId: string, targetUserId: string, reason: string, client?: SessionClientInfo): Promise<LoginAsOutcome> {
     const trimmedReason = reason?.trim() ?? '';
     if (!trimmedReason) {
-      throw new BadRequestException({
-        message: 'Login-as requires a reason (platform access into a tenant is audited)',
-        code: 'auth.loginas_reason_required',
-      });
+      badRequest('Login-as requires a reason (platform access into a tenant is audited)', 'auth.loginas_reason_required');
     }
     const system = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(adminId, 'user:loginas', system.id);
     const target = await this.users.getUser(targetUserId);
-    if (target.deleted || target.suspended) throw new ForbiddenException({ message: 'Target account is not active', code: 'auth.account_inactive' });
-    if (await this.evaluator.isSiteAdmin(target.id)) throw new ForbiddenException({ message: 'Cannot log in as a site administrator', code: 'auth.loginas_admin_denied' });
+    if (target.deleted || target.suspended) forbidden('Target account is not active', 'auth.account_inactive');
+    if (await this.evaluator.isSiteAdmin(target.id)) forbidden('Cannot log in as a site administrator', 'auth.loginas_admin_denied');
     const tenant = await this.tenants.resolveDefaultTenant(target.id);
     const baSession = this.betterAuth.cutoverStage === 'bake'
       ? await this.credentialBridge.createProgrammaticSession(target.id)
@@ -499,17 +494,17 @@ export class AuthService {
     return { sessionId, user };
   }
   async sessionUser(sessionId: string | undefined): Promise<UserRow> {
-    if (!sessionId) throw new UnauthorizedException({ message: 'No session', code: 'auth.unauthenticated' });
+    if (!sessionId) unauthorized('No session', 'auth.unauthenticated');
     const session = await this.sessions.get(sessionId);
-    if (!session) throw new UnauthorizedException({ message: 'Session expired', code: 'auth.session_expired' });
+    if (!session) unauthorized('Session expired', 'auth.session_expired');
     if (session.spaceSlug !== undefined && session.spaceSlug !== tenantAls.getStore()?.spaceSlug) {
       await this.sessions.destroy(sessionId);
-      throw new UnauthorizedException({ message: 'Session belongs to another space', code: 'auth.session_space_mismatch' });
+      unauthorized('Session belongs to another space', 'auth.session_space_mismatch');
     }
     const user = await this.users.getByIdOrUndefined(session.userId);
     if (!user || user.deleted || user.suspended) {
       await this.sessions.destroy(sessionId);
-      throw new UnauthorizedException({ message: 'Account is not active; session invalidated', code: 'auth.account_inactive' });
+      unauthorized('Account is not active; session invalidated', 'auth.account_inactive');
     }
     await this.sessions.touch(sessionId);
     return user;
@@ -557,7 +552,7 @@ export class AuthService {
   }
   async revokeMySession(userId: string, sessionId: string, current: CurrentSessionRefs = {}): Promise<{ revoked: number }> {
     if (sessionId === current.webSessionId || sessionId === current.familyId || sessionId === current.betterAuthSessionId) {
-      throw new BadRequestException({ message: 'The current session cannot be revoked here; use logout instead', code: 'auth.cannot_revoke_current_session' });
+      badRequest('The current session cannot be revoked here; use logout instead', 'auth.cannot_revoke_current_session');
     }
     if (this.betterAuth.auth) {
       const betterAuthSession = await this.spaceDb.routedKysely.selectFrom('session')
@@ -566,7 +561,7 @@ export class AuthService {
         .executeTakeFirst();
       if (betterAuthSession) {
         if (betterAuthSession.user_id !== userId) {
-          throw new NotFoundException({ message: 'Session not found', code: 'auth.session_not_found' });
+          notFound('Session not found', 'auth.session_not_found');
         }
         await this.spaceDb.routedKysely.deleteFrom('session')
           .where('id', '=', sessionId).where('user_id', '=', userId).execute();
@@ -575,13 +570,13 @@ export class AuthService {
     }
     const web = await this.sessions.get(sessionId);
     if (web) {
-      if (web.userId !== userId) throw new NotFoundException({ message: 'Session not found', code: 'auth.session_not_found' });
+      if (web.userId !== userId) notFound('Session not found', 'auth.session_not_found');
       await this.sessions.destroy(sessionId);
       return { revoked: 1 };
     }
     const family = await this.repo.getFamilyByFamilyId(sessionId);
     if (!family || family.userId !== userId || family.revoked) {
-      throw new NotFoundException({ message: 'Session not found', code: 'auth.session_not_found' });
+      notFound('Session not found', 'auth.session_not_found');
     }
     await this.repo.revokeFamily(family.id);
     return { revoked: 1 };

@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import type { MyAccessView } from '@giaokhoa/contracts';
 import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { UsersRepository, type UserListFilter, type UserPatch, type UserRow } from '@giaokhoa/db/repositories/users';
@@ -71,7 +72,7 @@ export class UsersService {
     const ancestorIds = new Set<string>();
     for (const id of assignmentContextIds) {
       const ctx = contextById.get(id);
-      if (!ctx) throw new NotFoundException({ message: `Context ${id} not found`, code: 'access.context_not_found' });
+      if (!ctx) notFound(`Context ${id} not found`, 'access.context_not_found');
       for (const pathId of ctx.path.split('/').filter(Boolean)) {
         if (!contextById.has(pathId)) ancestorIds.add(pathId);
       }
@@ -132,11 +133,11 @@ export class UsersService {
   async createUser(input: { username: string; email: string; password: string; firstName?: string; lastName?: string; forcePasswordChange?: boolean; customFields?: Record<string, string> }): Promise<UserRow> {
     const username = normalizeIdentity(input.username);
     const email = normalizeIdentity(input.email);
-    if (await this.repo.getByUsername(username)) throw new ConflictException({ message: `Username ${username} is taken`, code: 'user.username_taken' });
-    if (await this.repo.getByEmail(email)) throw new ConflictException({ message: `Email ${email} is taken`, code: 'user.email_taken' });
+    if (await this.repo.getByUsername(username)) conflict(`Username ${username} is taken`, 'user.username_taken');
+    if (await this.repo.getByEmail(email)) conflict(`Email ${email} is taken`, 'user.email_taken');
     if (input.customFields) await this.customFields.validateValuesForInstance(USER_COMPONENT, USER_AREA, input.customFields);
     const policyErrors = this.passwords.validatePolicy(input.password);
-    if (policyErrors.length) throw new BadRequestException({ message: policyErrors.join('; '), code: 'user.password_policy' });
+    if (policyErrors.length) badRequest(policyErrors.join('; '), 'user.password_policy');
     const passwordHash = await this.passwords.hash(input.password);
     const user = await this.repo.transaction(async (tx) => {
       const created = await this.repo.insertUser({
@@ -163,12 +164,12 @@ export class UsersService {
 
   async getUser(id: string): Promise<UserRow> {
     const row = await this.repo.getById(id);
-    if (!row) throw new NotFoundException({ message: `User ${id} not found`, code: 'user.not_found' });
+    if (!row) notFound(`User ${id} not found`, 'user.not_found');
     return row;
   }
   async createExternalUser(input: { email: string; firstName?: string; lastName?: string }): Promise<UserRow> {
     const email = normalizeIdentity(input.email);
-    if (await this.repo.getByEmail(email)) throw new ConflictException({ message: `Email ${email} is taken`, code: 'user.email_taken' });
+    if (await this.repo.getByEmail(email)) conflict(`Email ${email} is taken`, 'user.email_taken');
     const base = email.split('@')[0]!.replace(/[^a-z0-9._-]+/g, '.').replace(/^\.+|\.+$/g, '') || 'user';
     let username = base;
     for (let suffix = 2; await this.repo.getByUsername(username); suffix += 1) username = `${base}${suffix}`;
@@ -198,23 +199,23 @@ export class UsersService {
 
   async updateUser(id: string, input: { email?: string; firstName?: string; lastName?: string; password?: string; customFields?: Record<string, string> }, actorId?: string): Promise<UserRow> {
     if (input.password !== undefined && actorId !== undefined && actorId === id) {
-      throw new ForbiddenException({ message: 'Use the change-password flow with your current password to change your own password', code: 'user.password_self_change_forbidden' });
+      forbidden('Use the change-password flow with your current password to change your own password', 'user.password_self_change_forbidden');
     }
     const user = await this.getUser(id);
     if (input.customFields) await this.customFields.validateValuesForInstance(USER_COMPONENT, USER_AREA, input.customFields);
-    if (user.deleted) throw new BadRequestException({ message: 'Cannot update a deleted user', code: 'user.deleted' });
+    if (user.deleted) badRequest('Cannot update a deleted user', 'user.deleted');
     const patch: UserPatch = {};
     if (input.email !== undefined) {
       const email = normalizeIdentity(input.email);
       const clash = await this.repo.getByEmail(email);
-      if (clash && clash.id !== id) throw new ConflictException({ message: `Email ${email} is taken`, code: 'user.email_taken' });
+      if (clash && clash.id !== id) conflict(`Email ${email} is taken`, 'user.email_taken');
       patch.email = email;
     }
     if (input.firstName !== undefined) patch.firstName = input.firstName;
     if (input.lastName !== undefined) patch.lastName = input.lastName;
     if (input.password !== undefined) {
       const errors = this.passwords.validatePolicy(input.password);
-      if (errors.length) throw new BadRequestException({ message: errors.join('; '), code: 'user.password_policy' });
+      if (errors.length) badRequest(errors.join('; '), 'user.password_policy');
       patch.passwordHash = await this.passwords.hash(input.password);
       patch.forcePasswordChange = false;
     }
@@ -234,7 +235,7 @@ export class UsersService {
 
   async setSuspended(id: string, suspended: boolean): Promise<UserRow> {
     const user = await this.getUser(id);
-    if (user.isGuest) throw new BadRequestException({ message: 'The guest account cannot be suspended', code: 'user.guest_immutable' });
+    if (user.isGuest) badRequest('The guest account cannot be suspended', 'user.guest_immutable');
     if (!suspended && user.suspended) {
       await this.planLimits.assertUserReactivationWithinSlotLimits(id);
     }
@@ -247,7 +248,7 @@ export class UsersService {
 
   async deleteUser(id: string): Promise<UserRow> {
     const user = await this.getUser(id);
-    if (user.isGuest) throw new BadRequestException({ message: 'The guest account cannot be deleted', code: 'user.guest_immutable' });
+    if (user.isGuest) badRequest('The guest account cannot be deleted', 'user.guest_immutable');
     if (user.deleted) return user;
     await this.repo.transaction(async (tx) => {
       await this.repo.updateUser(id, {
@@ -320,7 +321,7 @@ export class UsersService {
     if (actorId === targetId) return;
     const systemCtx = await this.contexts.ensureSystemContext();
     if (!(await this.evaluator.hasCapability(actorId, 'user:update', systemCtx.id))) {
-      throw new ForbiddenException({ message: 'Missing capability user:update', code: 'access.capability_denied' });
+      forbidden('Missing capability user:update', 'access.capability_denied');
     }
   }
 }

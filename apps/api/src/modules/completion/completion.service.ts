@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { badRequest, forbidden, notFound } from '../../common/http-errors';
 import { I18nService } from '@nestjs/i18n';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { Queue } from 'bullmq';
@@ -183,9 +184,9 @@ export class CompletionService implements OnModuleInit {
 
   async markManual(actorId: string, cmId: string, targetUserId: string, complete: boolean): Promise<{ cmId: string; userId: string; state: number }> {
     const cm = await this.courses.getCm(cmId);
-    if (cm.completion === 0) throw new BadRequestException({ message: 'Completion tracking is not enabled for this activity', code: 'completion.not_enabled' });
+    if (cm.completion === 0) badRequest('Completion tracking is not enabled for this activity', 'completion.not_enabled');
     if (!cm.completionManual && cm.completion !== 1) {
-      throw new BadRequestException({ message: 'This activity does not use manual completion', code: 'completion.not_manual' });
+      badRequest('This activity does not use manual completion', 'completion.not_manual');
     }
     if (actorId !== targetUserId) {
       await this.evaluator.requireCapability(actorId, 'completion:markothers', await this.courses.courseContextId(cm.course));
@@ -221,38 +222,38 @@ export class CompletionService implements OnModuleInit {
     await this.evaluator.requireCapability(actorId, 'completion:manage', await this.courses.courseContextId(courseId));
     const method = input.method ?? AGGREGATION_ALL;
     if (![AGGREGATION_ALL, AGGREGATION_ANY].includes(method)) {
-      throw new BadRequestException({ message: `Unknown aggregation method ${method}`, code: 'completion.bad_method' });
+      badRequest(`Unknown aggregation method ${method}`, 'completion.bad_method');
     }
     for (const c of input.criteria) {
       if (!['module', 'date', 'grade', 'self', 'course', 'duration', 'role', 'unenrol'].includes(c.criteriaType)) {
-        throw new BadRequestException({ message: `Unknown criteria type ${c.criteriaType}`, code: 'completion.bad_criteria_type' });
+        badRequest(`Unknown criteria type ${c.criteriaType}`, 'completion.bad_criteria_type');
       }
       if (c.criteriaType === 'module' && !c.moduleInstance) {
-        throw new BadRequestException({ message: 'Module criteria require moduleInstance (a cm id)', code: 'completion.criteria_cm_required' });
+        badRequest('Module criteria require moduleInstance (a cm id)', 'completion.criteria_cm_required');
       }
       if (c.criteriaType === 'date' && !c.date) {
-        throw new BadRequestException({ message: 'Date criteria require a date', code: 'completion.criteria_date_required' });
+        badRequest('Date criteria require a date', 'completion.criteria_date_required');
       }
       if (c.criteriaType === 'course') {
         if (!c.courseInstance) {
-          throw new BadRequestException({ message: 'Course criteria require courseInstance (the prerequisite course id)', code: 'completion.criteria_course_required' });
+          badRequest('Course criteria require courseInstance (the prerequisite course id)', 'completion.criteria_course_required');
         }
         if (c.courseInstance === courseId) {
-          throw new BadRequestException({ message: 'A course cannot be its own completion prerequisite', code: 'completion.criteria_course_self_reference' });
+          badRequest('A course cannot be its own completion prerequisite', 'completion.criteria_course_self_reference');
         }
         await this.courses.getCourse(c.courseInstance).catch(() => {
-          throw new BadRequestException({ message: `Prerequisite course ${c.courseInstance} does not exist`, code: 'completion.criteria_course_not_found' });
+          badRequest(`Prerequisite course ${c.courseInstance} does not exist`, 'completion.criteria_course_not_found');
         });
       }
       if (c.criteriaType === 'duration' && (c.enrolPeriodDays === undefined || c.enrolPeriodDays === null)) {
-        throw new BadRequestException({ message: 'Duration criteria require enrolPeriodDays (days after enrolment)', code: 'completion.criteria_duration_required' });
+        badRequest('Duration criteria require enrolPeriodDays (days after enrolment)', 'completion.criteria_duration_required');
       }
       if (c.criteriaType === 'role') {
         if (!c.roleId) {
-          throw new BadRequestException({ message: 'Role criteria require roleId (the role allowed to mark completion)', code: 'completion.criteria_role_required' });
+          badRequest('Role criteria require roleId (the role allowed to mark completion)', 'completion.criteria_role_required');
         }
         await this.roles.getRole(c.roleId).catch(() => {
-          throw new BadRequestException({ message: `Role ${c.roleId} does not exist`, code: 'completion.criteria_role_not_found' });
+          badRequest(`Role ${c.roleId} does not exist`, 'completion.criteria_role_not_found');
         });
       }
     }
@@ -366,7 +367,7 @@ export class CompletionService implements OnModuleInit {
     await this.courses.assertCourseAccess(actorId, courseId);
     const selfCriteria = (await this.repo.listCriteria(courseId)).filter((c) => c.criteriaType === 'self');
     if (!selfCriteria.length) {
-      throw new BadRequestException({ message: 'This course has no self completion criterion', code: 'completion.no_self_criterion' });
+      badRequest('This course has no self completion criterion', 'completion.no_self_criterion');
     }
     for (const c of selfCriteria) {
       if (complete) await this.repo.upsertCritCompl({ criteriaId: c.id, userId: actorId, markedBy: actorId });
@@ -380,14 +381,14 @@ export class CompletionService implements OnModuleInit {
     await this.courses.getCourse(courseId);
     const criterion = await this.repo.getCriteria(criteriaId);
     if (!criterion || criterion.course !== courseId || criterion.criteriaType !== 'role' || !criterion.roleId) {
-      throw new BadRequestException({ message: 'Criterion is not a role criterion of this course', code: 'completion.criteria_not_role' });
+      badRequest('Criterion is not a role criterion of this course', 'completion.criteria_not_role');
     }
     const contextId = await this.courses.courseContextId(courseId);
     const courseContext = await this.contexts.getContext(contextId);
     const pathIds = (await this.contexts.getPathContexts(courseContext)).map((c) => c.id);
     const assignments = await this.roles.listAssignmentsInContexts(actorId, pathIds);
     if (!assignments.some((a) => a.roleId === criterion.roleId)) {
-      throw new ForbiddenException({ message: 'Only holders of the role named by this criterion may mark completion', code: 'completion.role_marker_forbidden' });
+      forbidden('Only holders of the role named by this criterion may mark completion', 'completion.role_marker_forbidden');
     }
     if (complete) await this.repo.upsertCritCompl({ criteriaId, userId: targetUserId, markedBy: actorId });
     else await this.repo.deleteCritCompl(criteriaId, targetUserId);
@@ -421,6 +422,6 @@ export class CompletionService implements OnModuleInit {
   async requireCompletionManage(actorId: string, courseId: string): Promise<void> {
     await this.evaluator.requireCapability(actorId, 'completion:manage', await this.courses.courseContextId(courseId));
   }
-  notFound(): never { throw new NotFoundException({ message: 'Completion record not found', code: 'completion.not_found' }); }
-  forbidden(msg: string): never { throw new ForbiddenException({ message: msg, code: 'completion.forbidden' }); }
+  notFound(): never { notFound('Completion record not found', 'completion.not_found'); }
+  forbidden(msg: string): never { forbidden(msg, 'completion.forbidden'); }
 }

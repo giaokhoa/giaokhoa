@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
+import { forbidden } from '../../common/http-errors';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
@@ -29,7 +30,7 @@ export class CoursesController {
   async deleteCategory(@Param('id', { schema: uuidIdSchema }) id: string, @Query('mode') mode: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     const parsed = mode === undefined ? undefined : (mode as CategoryDeleteMode);
     if (parsed !== undefined && parsed !== 'moveup' && parsed !== 'recursive') {
-      throw new ForbiddenException({ message: `Unknown category delete mode ${mode} (expected moveup|recursive)`, code: 'course.category_bad_mode' });
+      forbidden(`Unknown category delete mode ${mode} (expected moveup|recursive)`, 'course.category_bad_mode');
     }
     return this.courses.deleteCategory(actor.id, id, parsed);
   }
@@ -121,7 +122,7 @@ export class CoursesController {
     await this.courses.assertCourseAccess(viewer.id, id);
     const section = await this.courses.getSection(sectionId);
     const result = await this.courses.checkSectionAccess(viewer.id, section);
-    if (!result.available) throw new ForbiddenException({ message: 'This section is not available to you yet', code: 'availability.not_available' });
+    if (!result.available) forbidden('This section is not available to you yet', 'availability.not_available');
     return { sectionId, available: true };
   }
 
@@ -141,7 +142,7 @@ export class CoursesController {
     await this.courses.assertCourseAccess(viewer.id, id);
     const cm = await this.courses.getCm(cmId);
     const result = await this.courses.checkCmAccess(viewer.id, cm);
-    if (!result.available) throw new ForbiddenException({ message: 'This activity is not available to you yet', code: 'availability.not_available' });
+    if (!result.available) forbidden('This activity is not available to you yet', 'availability.not_available');
     return { cmId, available: true };
   }
   @Post(':id/modules/:cmId/copy')

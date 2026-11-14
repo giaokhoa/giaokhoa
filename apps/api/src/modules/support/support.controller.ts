@@ -1,12 +1,5 @@
-import {
-  Body,
-  Controller,
-  ForbiddenException,
-  Get,
-  Headers,
-  Param,
-  Post,
-} from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import { forbidden } from '../../common/http-errors';
 import { ApiTags } from "@nestjs/swagger";
 import {
   createSupportGrantSchema,
@@ -63,10 +56,7 @@ export class SupportCentresController {
 
   private assertPlatformHost(host?: string): void {
     if (spaceSlugForHost(host)) {
-      throw new ForbiddenException({
-        message: "Use the platform root address",
-        code: "support.platform_host_required",
-      });
+      forbidden("Use the platform root address", "support.platform_host_required");
     }
   }
 

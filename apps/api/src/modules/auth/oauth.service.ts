@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, notFound, unauthorized } from '../../common/http-errors';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
@@ -103,7 +104,7 @@ export class OAuthService {
 
   async buildAuthorizeUrl(issuer: OAuthIssuer, redirectUri: string, linkUserId?: string): Promise<string> {
     if (!this.isEnabled(issuer)) {
-      throw new NotFoundException({ message: 'OAuth issuer is not configured', code: 'auth.oauth_issuer_not_configured' });
+      notFound('OAuth issuer is not configured', 'auth.oauth_issuer_not_configured');
     }
     const ttl = this.config.get<number>('OAUTH_STATE_TTL_SECONDS') ?? 600;
     const state = await this.jwt.signAsync(
@@ -267,20 +268,17 @@ export class OAuthService {
     const key = `oauthhandoff:${code}`;
     const stored = await this.store.get<string | OAuthHandoffRecord>(key);
     if (!stored) {
-      throw new UnauthorizedException({ message: 'OAuth handoff code is invalid or expired', code: 'auth.oauth_handoff_invalid' });
+      unauthorized('OAuth handoff code is invalid or expired', 'auth.oauth_handoff_invalid');
     }
     await this.store.delete(key);
     const userId = typeof stored === 'string' ? stored : stored.userId;
     const mfaSatisfied = typeof stored === 'string' ? false : stored.mfaSatisfied === true;
     const user = await this.users.getByIdOrUndefined(userId);
     if (!user || user.deleted || user.suspended) {
-      throw new UnauthorizedException({ message: 'Account is not active', code: 'auth.account_inactive' });
+      unauthorized('Account is not active', 'auth.account_inactive');
     }
     if (!mfaSatisfied && (await this.auth.isMfaEnabled(user.id))) {
-      throw new UnauthorizedException({
-        message: 'Two-factor authentication must be completed before this sign-in can be completed',
-        code: 'auth.oauth_mfa_required',
-      });
+      unauthorized('Two-factor authentication must be completed before this sign-in can be completed', 'auth.oauth_mfa_required');
     }
     const tokens = await this.auth.issueTokensFor(user, client);
     await this.auth.recordLoginEvent(user, 'oauth', client);
@@ -296,16 +294,13 @@ export class OAuthService {
   async unlink(userId: string, linkId: string): Promise<void> {
     const link = await this.repo.getOauthLinkById(linkId);
     if (!link || link.userId !== userId) {
-      throw new NotFoundException({ message: 'Linked login not found', code: 'auth.oauth_link_not_found' });
+      notFound('Linked login not found', 'auth.oauth_link_not_found');
     }
     const user = await this.users.getUser(userId);
     if (!user.passwordHash) {
       const links = await this.repo.listOauthLinksByUser(userId);
       if (links.length <= 1) {
-        throw new BadRequestException({
-          message: 'Cannot remove the only remaining sign-in method of an account without a password; set a password first',
-          code: 'auth.last_login_method',
-        });
+        badRequest('Cannot remove the only remaining sign-in method of an account without a password; set a password first', 'auth.last_login_method');
       }
     }
     await this.repo.deleteOauthLink(linkId);

@@ -1,10 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { badRequest, conflict, forbidden, notFound } from '../../common/http-errors';
 import type { MyTenant, Tenant as TenantDto, TenantMembership as TenantMembershipDto } from '@giaokhoa/contracts';
 import { ensureActiveTenantMembership } from '@giaokhoa/enrol';
 import {
@@ -105,7 +100,7 @@ export class TenantsService {
       ? PUBLIC_LEARNING_SLUG
       : PLATFORM_TENANT_SLUG;
     const zero = await this.repo.getTenantBySlug(slug);
-    if (!zero) throw new NotFoundException({ message: 'Platform tenant (tenant-zero) is not seeded', code: 'tenant.platform_missing' });
+    if (!zero) notFound('Platform tenant (tenant-zero) is not seeded', 'tenant.platform_missing');
     return zero;
   }
 
@@ -161,7 +156,7 @@ export class TenantsService {
 
   async getTenant(id: string): Promise<TenantRow> {
     const row = await this.repo.getTenant(id);
-    if (!row) throw new NotFoundException({ message: `Tenant ${id} not found`, code: 'tenant.not_found' });
+    if (!row) notFound(`Tenant ${id} not found`, 'tenant.not_found');
     return row;
   }
 
@@ -203,7 +198,7 @@ export class TenantsService {
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
     if (await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id)) return;
     if (await this.isOwnCentreAdmin(actorId, tenantId)) return;
-    throw new ForbiddenException({ message: 'Missing capability tenant:manage', code: 'access.capability_denied' });
+    forbidden('Missing capability tenant:manage', 'access.capability_denied');
   }
 
   async assertTenantViewer(actorId: string, tenantId: string): Promise<void> {
@@ -213,7 +208,7 @@ export class TenantsService {
       (await this.evaluator.hasCapability(actorId, 'tenant:viewall', tenantCtx.id))
     ) return;
     if (await this.isOwnCentreAdmin(actorId, tenantId)) return;
-    throw new ForbiddenException({ message: 'Missing capability tenant:viewall', code: 'access.capability_denied' });
+    forbidden('Missing capability tenant:viewall', 'access.capability_denied');
   }
 
 
@@ -227,7 +222,7 @@ export class TenantsService {
       (await this.evaluator.hasCapability(actorId, 'tenant:viewall', systemId)) ||
       (await this.evaluator.hasCapability(actorId, 'tenant:manage', systemId));
     if (!canView) {
-      throw new ForbiddenException({ message: 'Missing capability tenant:viewall', code: 'access.capability_denied' });
+      forbidden('Missing capability tenant:viewall', 'access.capability_denied');
     }
     return (await this.repo.listTenants()).map(toTenantDto);
   }
@@ -236,7 +231,7 @@ export class TenantsService {
     const contextSlug = tenantAls.getStore()?.spaceSlug;
     const row = await this.tenantRowForTargetResolution(tenantId);
     if (contextSlug && (!row || row.slug !== contextSlug)) {
-      throw new NotFoundException({ message: 'Tenant does not belong to the addressed centre', code: 'tenant.not_found' });
+      notFound('Tenant does not belong to the addressed centre', 'tenant.not_found');
     }
     if (!row) return null;
     try {
@@ -300,17 +295,14 @@ export class TenantsService {
   private async createTenantInContext(actorId: string, dto: CreateTenantDto): Promise<TenantDto> {
     await this.assertPlatformManager(actorId);
     if (dto.kind === 'center') {
-      throw new BadRequestException({
-        message: 'New centres require dedicated provisioning; use the space-provision operator command',
-        code: 'centre.provision_required',
-      });
+      badRequest('New centres require dedicated provisioning; use the space-provision operator command', 'centre.provision_required');
     }
     const slug = dto.slug.trim().toLowerCase();
     if (!SLUG_RE.test(slug)) {
-      throw new BadRequestException({ message: `Invalid tenant slug: ${dto.slug}`, code: 'tenant.invalid_slug' });
+      badRequest(`Invalid tenant slug: ${dto.slug}`, 'tenant.invalid_slug');
     }
     if (await this.repo.getTenantBySlug(slug)) {
-      throw new ConflictException({ message: `Tenant slug ${slug} is already taken`, code: 'tenant.slug_taken' });
+      conflict(`Tenant slug ${slug} is already taken`, 'tenant.slug_taken');
     }
     const tenant = await this.repo.insertTenant({
       slug,
@@ -337,7 +329,7 @@ export class TenantsService {
     await this.assertPlatformManager(actorId);
     const tenant = await this.getTenant(tenantId);
     if (tenant.kind === 'platform' && dto.status !== undefined && dto.status !== 'active') {
-      throw new BadRequestException({ message: 'The platform tenant cannot be suspended or archived', code: 'tenant.platform_immutable_status' });
+      badRequest('The platform tenant cannot be suspended or archived', 'tenant.platform_immutable_status');
     }
     const patch: Partial<TenantRow> = {};
     if (dto.name !== undefined) patch.name = dto.name.trim();
@@ -370,7 +362,7 @@ export class TenantsService {
     await this.assertTenantManager(actorId, tenantId);
     const tenant = await this.getTenant(tenantId);
     if (tenant.status !== 'active') {
-      throw new BadRequestException({ message: `Tenant ${tenantId} is not active`, code: 'tenant.not_active' });
+      badRequest(`Tenant ${tenantId} is not active`, 'tenant.not_active');
     }
     const user = await this.users.getUser(dto.userId);
     const existingMembership = await this.repo.getMembership(tenantId, user.id);
@@ -408,7 +400,7 @@ export class TenantsService {
   ): Promise<TenantMembershipDto> {
     await this.assertTenantManager(actorId, tenantId);
     const existing = await this.repo.getMembership(tenantId, userId);
-    if (!existing) throw new NotFoundException({ message: 'Membership not found', code: 'tenant.membership_not_found' });
+    if (!existing) notFound('Membership not found', 'tenant.membership_not_found');
     if (status === 'active' && existing.status !== 'active') {
       const user = await this.users.getUser(userId);
       if (!user.suspended && !user.deleted) {
@@ -460,7 +452,7 @@ export class TenantsService {
   ): Promise<TenantUserView> {
     const spaceTenant = await this.getTenantInSpace(slug);
     if (!spaceTenant) {
-      throw new NotFoundException({ message: `Tenant ${slug} is not ready in its own store`, code: 'tenant.not_found' });
+      notFound(`Tenant ${slug} is not ready in its own store`, 'tenant.not_found');
     }
     const view = await this.spaceDb.withSpaceKysely(slug, async () => {
       await this.assertTenantManager(actorId, spaceTenant.id);
@@ -571,12 +563,12 @@ export class TenantsService {
   private async resolveSwitchTargetInContext(userId: string, tenantId: string): Promise<TenantRow> {
     const tenant = await this.getTenant(tenantId);
     if (tenant.status !== 'active') {
-      throw new ForbiddenException({ message: `Tenant ${tenant.slug} is ${tenant.status}`, code: 'tenant.not_active' });
+      forbidden(`Tenant ${tenant.slug} is ${tenant.status}`, 'tenant.not_active');
     }
     if (tenant.kind !== 'platform') {
       const membership = await this.repo.getMembership(tenantId, userId);
       if (!membership || membership.status !== 'active') {
-        throw new ForbiddenException({ message: 'User is not an active member of this tenant', code: 'tenant.not_member' });
+        forbidden('User is not an active member of this tenant', 'tenant.not_member');
       }
     }
     return tenant;

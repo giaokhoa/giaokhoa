@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { badRequest, conflict, notFound } from '../../common/http-errors';
 import type {
   AssignAnnotationView, AssignFeedbackMessageView, AssignGradeView, AssignRubricEvaluationInput,
   AssignRubricView, AssignSubmissionDetail, AssignSubmissionFileView, AssignSubmissionSummary,
@@ -47,7 +48,7 @@ export class AssignmentsService {
 
   async getAssignment(id: string): Promise<AssignmentRow> {
     const row = await this.repo.getAssignment(id);
-    if (!row) throw new NotFoundException({ message: `Assignment ${id} not found`, code: 'assign.not_found' });
+    if (!row) notFound(`Assignment ${id} not found`, 'assign.not_found');
     return row;
   }
   private async cmContextId(assignment: AssignmentRow): Promise<string> {
@@ -56,7 +57,7 @@ export class AssignmentsService {
       if (ctx) return ctx.id;
     }
     const courseCtx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, assignment.course);
-    if (!courseCtx) throw new NotFoundException({ message: `No context for assignment ${assignment.id}`, code: 'assign.context_missing' });
+    if (!courseCtx) notFound(`No context for assignment ${assignment.id}`, 'assign.context_missing');
     return courseCtx.id;
   }
   private async requireCap(actorId: string, assignment: AssignmentRow, capability: string): Promise<void> {
@@ -134,10 +135,10 @@ export class AssignmentsService {
   private assertGradeComplete(assignment: AssignmentRow, g: AssignGradeRow): void {
     if (assignment.resultMode === 'level') {
       if (!g.level) {
-        throw new BadRequestException({ message: 'A level (Đạt/Chưa đạt) is required before returning this assignment', code: 'assign.grade_incomplete' });
+        badRequest('A level (Đạt/Chưa đạt) is required before returning this assignment', 'assign.grade_incomplete');
       }
     } else if (g.grade == null) {
-      throw new BadRequestException({ message: 'A grade is required before returning this assignment', code: 'assign.grade_incomplete' });
+      badRequest('A grade is required before returning this assignment', 'assign.grade_incomplete');
     }
   }
   private async submissionFilesView(submissionId: string, viewerId: string): Promise<AssignSubmissionFileView[]> {
@@ -163,7 +164,7 @@ export class AssignmentsService {
     const g = await this.repo.getGrade(assignment.id, userId);
     const current = this.currentGrade(s, g);
     if (current && current.status === 'released') {
-      throw new ConflictException({ message: 'Submission has been returned and is locked', code: 'assign.already_graded' });
+      conflict('Submission has been returned and is locked', 'assign.already_graded');
     }
   }
   private async requireTeacherSurface(actorId: string, assignment: AssignmentRow): Promise<void> {
@@ -183,7 +184,7 @@ export class AssignmentsService {
     await this.courses.getCourse(courseId);
     const dueDate = input.dueDate ? new Date(input.dueDate) : null;
     if (dueDate && Number.isNaN(dueDate.getTime())) {
-      throw new BadRequestException({ message: 'dueDate must be an ISO datetime', code: 'assign.bad_due_date' });
+      badRequest('dueDate must be an ISO datetime', 'assign.bad_due_date');
     }
     const resultMode = input.resultMode ?? 'score_feedback';
     const assignment = await this.repo.insertAssignment({
@@ -223,7 +224,7 @@ export class AssignmentsService {
     if (input.dueDate !== undefined) {
       patch.dueDate = input.dueDate ? new Date(input.dueDate) : null;
       if (patch.dueDate && Number.isNaN(patch.dueDate.getTime())) {
-        throw new BadRequestException({ message: 'dueDate must be an ISO datetime', code: 'assign.bad_due_date' });
+        badRequest('dueDate must be an ISO datetime', 'assign.bad_due_date');
       }
     }
     if (input.maxFiles !== undefined) patch.maxFiles = input.maxFiles;
@@ -319,18 +320,18 @@ export class AssignmentsService {
     const submission = await this.getOrCreateDraft(actorId, assignment.id);
     await this.assertSubmissionEditable(actorId, assignment, submission);
     if (submission.status !== 'draft') {
-      throw new ConflictException({ message: 'Submission is finalized; reopen it before changing files', code: 'assign.submission_finalized' });
+      conflict('Submission is finalized; reopen it before changing files', 'assign.submission_finalized');
     }
     if (assignment.acceptedFileTypes) {
       const allowed = assignment.acceptedFileTypes.split(',').map((t) => t.trim().toLowerCase().replace(/^\./, '')).filter(Boolean);
       const ext = file.fileName.includes('.') ? file.fileName.split('.').pop()!.toLowerCase() : '';
       if (!allowed.includes(ext)) {
-        throw new BadRequestException({ message: `File type .${ext} is not accepted for this assignment`, code: 'assign.file_type_not_accepted' });
+        badRequest(`File type .${ext} is not accepted for this assignment`, 'assign.file_type_not_accepted');
       }
     }
     const existing = await this.repo.listSubmissionFiles(submission.id);
     if (existing.length >= assignment.maxFiles) {
-      throw new BadRequestException({ message: `A submission can hold at most ${assignment.maxFiles} files`, code: 'assign.too_many_files' });
+      badRequest(`A submission can hold at most ${assignment.maxFiles} files`, 'assign.too_many_files');
     }
     const row = await this.files.upload({
       contextId: await this.cmContextId(assignment), component: ASSIGN_COMPONENT, fileArea: ASSIGN_FILE_AREA,
@@ -348,14 +349,14 @@ export class AssignmentsService {
     const assignment = await this.getAssignment(assignmentId);
     await this.requireCap(actorId, assignment, ASSIGN_CAPABILITIES.submit);
     const submission = await this.repo.getSubmission(assignment.id, actorId);
-    if (!submission) throw new NotFoundException({ message: 'No submission to edit', code: 'assign.submission_not_found' });
+    if (!submission) notFound('No submission to edit', 'assign.submission_not_found');
     await this.assertSubmissionEditable(actorId, assignment, submission);
     if (submission.status !== 'draft') {
-      throw new ConflictException({ message: 'Submission is finalized; reopen it before changing files', code: 'assign.submission_finalized' });
+      conflict('Submission is finalized; reopen it before changing files', 'assign.submission_finalized');
     }
     const links = await this.repo.listSubmissionFiles(submission.id);
     if (!links.some((l) => l.fileId === fileId)) {
-      throw new NotFoundException({ message: `File ${fileId} is not part of this submission`, code: 'assign.submission_file_not_found' });
+      notFound(`File ${fileId} is not part of this submission`, 'assign.submission_file_not_found');
     }
     await this.repo.deleteSubmissionFile(submission.id, fileId);
     await this.files.deleteFile(fileId);
@@ -365,14 +366,14 @@ export class AssignmentsService {
     const assignment = await this.getAssignment(assignmentId);
     await this.requireCap(actorId, assignment, ASSIGN_CAPABILITIES.submit);
     const submission = await this.repo.getSubmission(assignment.id, actorId);
-    if (!submission) throw new NotFoundException({ message: 'No submission to submit', code: 'assign.submission_not_found' });
+    if (!submission) notFound('No submission to submit', 'assign.submission_not_found');
     await this.assertSubmissionEditable(actorId, assignment, submission);
     if (submission.status !== 'draft') {
-      throw new ConflictException({ message: 'Submission has already been submitted', code: 'assign.already_submitted' });
+      conflict('Submission has already been submitted', 'assign.already_submitted');
     }
     const links = await this.repo.listSubmissionFiles(submission.id);
     if (links.length === 0) {
-      throw new BadRequestException({ message: 'A submission needs at least one file', code: 'assign.submission_empty' });
+      badRequest('A submission needs at least one file', 'assign.submission_empty');
     }
     const now = new Date();
     await this.repo.updateSubmission(submission.id, { status: 'submitted', submittedAt: now });
@@ -387,10 +388,10 @@ export class AssignmentsService {
     const assignment = await this.getAssignment(assignmentId);
     await this.requireCap(actorId, assignment, ASSIGN_CAPABILITIES.submit);
     const submission = await this.repo.getSubmission(assignment.id, actorId);
-    if (!submission) throw new NotFoundException({ message: 'No submission to reopen', code: 'assign.submission_not_found' });
+    if (!submission) notFound('No submission to reopen', 'assign.submission_not_found');
     await this.assertSubmissionEditable(actorId, assignment, submission);
     if (submission.status !== 'submitted') {
-      throw new ConflictException({ message: 'Only a submitted submission can be reopened', code: 'assign.not_submitted' });
+      conflict('Only a submitted submission can be reopened', 'assign.not_submitted');
     }
     await this.repo.updateSubmission(submission.id, { status: 'draft', attemptNumber: submission.attemptNumber + 1 });
     return this.getAssignmentForUser(actorId, assignmentId);
@@ -515,25 +516,25 @@ export class AssignmentsService {
   private async validateEvaluations(assignment: AssignmentRow, evaluations: AssignRubricEvaluationInput[]): Promise<void> {
     const rubric = await this.repo.getRubric(assignment.id);
     if (!rubric) {
-      throw new BadRequestException({ message: 'This assignment has no rubric', code: 'assign.no_rubric' });
+      badRequest('This assignment has no rubric', 'assign.no_rubric');
     }
     const criteria = await this.repo.listCriteria(rubric.id);
     const byId = new Map(criteria.map((c) => [c.id, c]));
     for (const ev of evaluations) {
       const c = byId.get(ev.criterionId);
       if (!c) {
-        throw new BadRequestException({ message: `Criterion ${ev.criterionId} is not part of this assignment's rubric`, code: 'assign.bad_criterion' });
+        badRequest(`Criterion ${ev.criterionId} is not part of this assignment's rubric`, 'assign.bad_criterion');
       }
       if (c.mode === 'levels') {
         if (!ev.levelId) {
-          throw new BadRequestException({ message: `Criterion "${c.name}" needs a chosen level`, code: 'assign.bad_evaluation' });
+          badRequest(`Criterion "${c.name}" needs a chosen level`, 'assign.bad_evaluation');
         }
         const levels = await this.repo.listLevels(c.id);
         if (!levels.some((l) => l.id === ev.levelId)) {
-          throw new BadRequestException({ message: `Level is not part of criterion "${c.name}"`, code: 'assign.bad_evaluation' });
+          badRequest(`Level is not part of criterion "${c.name}"`, 'assign.bad_evaluation');
         }
       } else if (ev.score != null && c.maxScore != null && ev.score > c.maxScore) {
-        throw new BadRequestException({ message: `Score for criterion "${c.name}" exceeds its max ${c.maxScore}`, code: 'assign.bad_evaluation' });
+        badRequest(`Score for criterion "${c.name}" exceeds its max ${c.maxScore}`, 'assign.bad_evaluation');
       }
     }
   }
@@ -568,7 +569,7 @@ export class AssignmentsService {
     await this.requireCap(actorId, assignment, ASSIGN_CAPABILITIES.grade);
     const submission = await this.repo.getSubmission(assignment.id, userId);
     if (!submission || submission.status !== 'submitted') {
-      throw new ConflictException({ message: 'Only a submitted submission can be graded', code: 'assign.not_submitted' });
+      conflict('Only a submitted submission can be graded', 'assign.not_submitted');
     }
     const existing = await this.repo.getGrade(assignment.id, userId);
     const existingCurrent = this.currentGrade(submission, existing);
@@ -578,7 +579,7 @@ export class AssignmentsService {
       grade = (await this.suggestGradeFromEvaluations(assignment, input.evaluations)) ?? undefined;
     }
     if (grade !== undefined && (grade < 0 || grade > assignment.grade)) {
-      throw new BadRequestException({ message: `Grade must be within [0, ${assignment.grade}]`, code: 'assign.grade_out_of_range' });
+      badRequest(`Grade must be within [0, ${assignment.grade}]`, 'assign.grade_out_of_range');
     }
     const isPostReleaseEdit = !!existingCurrent && existingCurrent.status === 'released';
     const next = {
@@ -655,11 +656,11 @@ export class AssignmentsService {
     const gradeRow = submission ? await this.repo.getGrade(assignment.id, userId) : undefined;
     const current = this.currentGrade(submission, gradeRow);
     if (!current) {
-      if (strict) throw new ConflictException({ message: 'There is no grading draft to return for this submission', code: 'assign.nothing_to_release' });
+      if (strict) conflict('There is no grading draft to return for this submission', 'assign.nothing_to_release');
       return false;
     }
     if (current.status === 'released') {
-      if (strict) throw new ConflictException({ message: 'This submission has already been returned', code: 'assign.already_released' });
+      if (strict) conflict('This submission has already been returned', 'assign.already_released');
       return false;
     }
     try {
@@ -687,16 +688,16 @@ export class AssignmentsService {
     const assignment = await this.getAssignment(assignmentId);
     await this.requireCap(actorId, assignment, ASSIGN_CAPABILITIES.grade);
     const submission = await this.repo.getSubmission(assignment.id, userId);
-    if (!submission) throw new NotFoundException({ message: 'No submission to annotate', code: 'assign.submission_not_found' });
+    if (!submission) notFound('No submission to annotate', 'assign.submission_not_found');
     const links = await this.repo.listSubmissionFiles(submission.id);
     if (!links.some((l) => l.fileId === input.fileId)) {
-      throw new BadRequestException({ message: 'fileId is not part of this submission', code: 'assign.annotation_file_mismatch' });
+      badRequest('fileId is not part of this submission', 'assign.annotation_file_mismatch');
     }
     if (input.kind === 'note' && !input.text) {
-      throw new BadRequestException({ message: 'A note annotation needs text', code: 'assign.annotation_text_required' });
+      badRequest('A note annotation needs text', 'assign.annotation_text_required');
     }
     if (input.kind === 'draw' && (!input.points || input.points.length === 0)) {
-      throw new BadRequestException({ message: 'A draw annotation needs stroke points', code: 'assign.annotation_points_required' });
+      badRequest('A draw annotation needs stroke points', 'assign.annotation_points_required');
     }
     const row = await this.repo.insertAnnotation({
       submissionId: submission.id, fileId: input.fileId, page: input.page ?? 1,
@@ -745,7 +746,7 @@ export class AssignmentsService {
     const submission = await this.repo.getSubmission(assignmentId, userId);
     const annotation = await this.repo.getAnnotation(annotationId);
     if (!submission || !annotation || annotation.submissionId !== submission.id) {
-      throw new NotFoundException({ message: `Annotation ${annotationId} not found`, code: 'assign.annotation_not_found' });
+      notFound(`Annotation ${annotationId} not found`, 'assign.annotation_not_found');
     }
     return annotation;
   }
@@ -791,14 +792,14 @@ export class AssignmentsService {
     await this.requireCap(actorId, assignment, ASSIGN_CAPABILITIES.manage);
     const grades = await this.repo.listGrades(assignment.id);
     if (grades.some((g) => g.status === 'released')) {
-      throw new ConflictException({ message: 'The rubric cannot change after grades have been returned', code: 'assign.rubric_locked' });
+      conflict('The rubric cannot change after grades have been returned', 'assign.rubric_locked');
     }
     for (const c of input.criteria) {
       if (c.mode === 'levels' && (!c.levels || c.levels.length === 0)) {
-        throw new BadRequestException({ message: `Criterion "${c.name}" (levels mode) needs at least one level`, code: 'assign.rubric_levels_required' });
+        badRequest(`Criterion "${c.name}" (levels mode) needs at least one level`, 'assign.rubric_levels_required');
       }
       if (c.mode === 'score' && (c.maxScore == null || c.maxScore <= 0)) {
-        throw new BadRequestException({ message: `Criterion "${c.name}" (score mode) needs a positive maxScore`, code: 'assign.rubric_max_score_required' });
+        badRequest(`Criterion "${c.name}" (score mode) needs a positive maxScore`, 'assign.rubric_max_score_required');
       }
     }
     await this.repo.deleteRubricByAssignment(assignment.id);
@@ -842,7 +843,7 @@ export class AssignmentsService {
     const gradeRow = await this.repo.getGrade(assignment.id, userId);
     const current = this.currentGrade(submission, gradeRow);
     if (!current || current.status !== 'released') {
-      throw new ConflictException({ message: 'The feedback conversation opens after the work is returned', code: 'assign.not_released' });
+      conflict('The feedback conversation opens after the work is returned', 'assign.not_released');
     }
     const row = await this.repo.insertMessage({ gradeId: current.id, authorId: actorId, body });
     await this.outbox.enqueueStandalone({
