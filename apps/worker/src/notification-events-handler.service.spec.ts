@@ -10,6 +10,7 @@ function build(
   t: (key: string) => string = (key) => key,
 ) {
   const notify = vi.fn(async () => undefined);
+  const updateCalls = { count: 0 };
   const rows: Record<string, unknown[]> = {
     assignments: [
       {
@@ -78,14 +79,22 @@ function build(
         execute: async () => matchedRows(),
         executeTakeFirst: async () => {
           const found = matchedRows();
-          if (orderColumn === "created_at" && orderDirection === "desc") {
+          if (orderColumn === "created_at") {
             const timeOf = (row: Record<string, unknown>) => {
               const value = row.created_at;
-              if (value instanceof Date) return value.getTime();
+              if (value instanceof Date) {
+                const t = value.getTime();
+                return Number.isNaN(t) ? 0 : t;
+              }
               const parsed = Date.parse(String(value ?? ""));
               return Number.isNaN(parsed) ? 0 : parsed;
             };
-            return [...found].sort((a, b) => timeOf(b) - timeOf(a))[0];
+            const sorted = [...found].sort((a, b) =>
+              orderDirection === "asc"
+                ? timeOf(a) - timeOf(b)
+                : timeOf(b) - timeOf(a),
+            );
+            return sorted[0];
           }
           return found[0];
         },
@@ -105,6 +114,7 @@ function build(
           return query;
         },
         execute: async () => {
+          updateCalls.count += 1;
           for (const row of (rows[table] ?? []) as Record<string, unknown>[]) {
             if (row.id === id) Object.assign(row, values);
           }
@@ -118,7 +128,7 @@ function build(
     { notify } as unknown as NotificationDeliveryService,
     { t } as unknown as I18nService,
   );
-  return { service, notify, rows };
+  return { service, notify, rows, updateCalls };
 }
 
 const longBody = "nội dung thông báo dài ".repeat(12);
@@ -174,7 +184,7 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
   });
 
   it("giao bài tập không gửi lại khi đã có thông báo chưa đọc cùng loại và cùng đường dẫn", async () => {
-    const { service, notify } = build(true, {
+    const { service, notify, updateCalls } = build(true, {
       notifications: [
         {
           id: "notif-1",
@@ -193,23 +203,14 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
       actorId: "teacher-1",
     });
     expect(notify).not.toHaveBeenCalled();
+    expect(updateCalls.count).toBe(0);
   });
 
   it("giao bài tập cập nhật nội dung thông báo chưa đọc thay vì gửi mới khi nội dung đã đổi", async () => {
-    const { service, notify, rows } = build(
+    const { service, notify, rows, updateCalls } = build(
       true,
       {
         notifications: [
-          {
-            id: "notif-1",
-            user_id_to: "student-1",
-            event_type: "assignment_assigned",
-            context_url: "/courses/course-1/assignments/assignment-1",
-            time_read: null,
-            created_at: "2026-11-14T02:00:00.000Z",
-            subject: "tiêu đề cũ",
-            fullMessage: "nội dung cũ",
-          },
           {
             id: "notif-2",
             user_id_to: "student-1",
@@ -219,6 +220,16 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
             created_at: "2026-11-14T01:00:00.000Z",
             subject: "tiêu đề khác",
             fullMessage: "nội dung khác",
+          },
+          {
+            id: "notif-1",
+            user_id_to: "student-1",
+            event_type: "assignment_assigned",
+            context_url: "/courses/course-1/assignments/assignment-1",
+            time_read: null,
+            created_at: new Date("2026-11-14T02:00:00.000Z"),
+            subject: "tiêu đề cũ",
+            fullMessage: "nội dung cũ",
           },
         ],
       },
@@ -230,13 +241,14 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
       actorId: "teacher-1",
     });
     expect(notify).not.toHaveBeenCalled();
+    expect(updateCalls.count).toBe(1);
     expect(rows.notifications).toContainEqual({
       id: "notif-1",
       user_id_to: "student-1",
       event_type: "assignment_assigned",
       context_url: "/courses/course-1/assignments/assignment-1",
       time_read: null,
-      created_at: "2026-11-14T02:00:00.000Z",
+      created_at: new Date("2026-11-14T02:00:00.000Z"),
       subject: "platform.assignmentAssignedSubject",
       fullMessage: "nội dung cũ",
       full_message: longBody,
@@ -255,7 +267,7 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
   });
 
   it("giao bài tập cập nhật nội dung khi chỉ tiêu đề đổi mà nội dung giữ nguyên", async () => {
-    const { service, notify, rows } = build(
+    const { service, notify, rows, updateCalls } = build(
       true,
       {
         notifications: [
@@ -265,6 +277,7 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
             event_type: "assignment_assigned",
             context_url: "/courses/course-1/assignments/assignment-1",
             time_read: null,
+            created_at: "2026-11-14T02:00:00.000Z",
             subject: "tiêu đề cũ",
             fullMessage: longBody,
           },
@@ -278,12 +291,14 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
       actorId: "teacher-1",
     });
     expect(notify).not.toHaveBeenCalled();
+    expect(updateCalls.count).toBe(1);
     expect(rows.notifications).toContainEqual({
       id: "notif-1",
       user_id_to: "student-1",
       event_type: "assignment_assigned",
       context_url: "/courses/course-1/assignments/assignment-1",
       time_read: null,
+      created_at: "2026-11-14T02:00:00.000Z",
       subject: "platform.assignmentAssignedSubject",
       fullMessage: longBody,
       full_message: longBody,
@@ -297,6 +312,7 @@ describe("Thông báo học viên khi giáo viên giao bài và công bố đề
     event_type: "assignment_assigned",
     context_url: "/courses/course-1/assignments/assignment-1",
     time_read: null,
+    created_at: "2026-11-14T02:00:00.000Z",
     subject: "platform.assignmentAssignedSubject",
     fullMessage: "platform.assignmentAssignedBody",
     ...overrides,
