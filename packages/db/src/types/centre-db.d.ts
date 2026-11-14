@@ -1260,6 +1260,7 @@ export interface Exams {
   shared_source_exam_id: string | null;
   shared_source_version_number: number | null;
   status: Generated<string>;
+  system_exam_fork_version_id: string | null;
   tenant_id: string | null;
   updated_at: Generated<Timestamp>;
   withdrawn_at: Timestamp | null;

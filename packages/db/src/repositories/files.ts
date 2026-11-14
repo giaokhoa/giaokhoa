@@ -109,6 +109,13 @@ export class FilesRepository {
     return this.db().transaction().execute(fn);
   }
 
+  async withContentLock<T>(storageDomain: string, contentHash: string, fn: (tx: CentreTx) => Promise<T>): Promise<T> {
+    return this.transaction(async (tx) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${`file:${storageDomain}/${contentHash}`}, 0))`.execute(tx);
+      return fn(tx);
+    });
+  }
+
   async insert(values: NewFile, db: RepoDb = this.db()): Promise<FileRow> {
     const rows = await db.insertInto('files').values(fileInsertValues(values)).returning(FILE_COLUMNS).execute();
     return rows[0]!;

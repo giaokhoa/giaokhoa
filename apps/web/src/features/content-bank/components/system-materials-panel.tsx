@@ -9,7 +9,9 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { usePermissions } from '#lib/permissions';
 import { ApiError } from '#lib/api';
 import { courseContentQueryOptions } from '#lib/course-content';
-import { materialSources, materialSubmissions, publishedMaterials, reviewMaterial, submitMaterial, attachPublishedMaterial } from '../api/system-materials';
+import { materialSources, materialSubmissions, publishedMaterials, reviewMaterial, submitMaterial, attachPublishedMaterial,
+  usedSystemMaterials, systemMaterialVersion, withdrawSystemMaterial, reviewPublishedMaterials } from '../api/system-materials';
+import { SystemSourceNotices } from '#components/system-source-notices';
 import { queryKeys } from '../queries/keys';
 
 const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm';
@@ -38,7 +40,9 @@ export function SystemMaterialsPanel() {
   const sources = useQuery({ queryKey: queryKeys.materialSources, queryFn: materialSources, enabled: canSubmit });
   const mine = useQuery({ queryKey: queryKeys.materialSubmissions('mine'), queryFn: () => materialSubmissions('mine'), enabled: canSubmit });
   const pending = useQuery({ queryKey: queryKeys.materialSubmissions('pending'), queryFn: () => materialSubmissions('pending'), enabled: canReview });
-  const published = useQuery({ queryKey: queryKeys.systemMaterials, queryFn: publishedMaterials, enabled: canUse });
+  const published = useQuery({ queryKey: queryKeys.systemMaterials,
+    queryFn: canUse ? publishedMaterials : reviewPublishedMaterials, enabled: canUse || canReview });
+  const used = useQuery({ queryKey: [...queryKeys.systemMaterials, 'used'], queryFn: usedSystemMaterials, enabled: canUse });
   const [sourceId, setSourceId] = useState('');
   const [reviewId, setReviewId] = useState('');
   const [reason, setReason] = useState('');
@@ -49,7 +53,15 @@ export function SystemMaterialsPanel() {
   const [playerPath, setPlayerPath] = useState('');
   const sections = useQuery({ ...courseContentQueryOptions(courseId), enabled: Boolean(courseId) });
   const selectedReview = pending.data?.find((row) => row.id === reviewId);
-  const selectedVersion = published.data?.find((row) => `${row.materialId}:${row.version}` === versionKey);
+  const pinnedVersion = used.data?.find((row) => `${row.materialId}:${row.version}` === versionKey);
+  const previouslyUsedVersion = useQuery({
+    queryKey: [...queryKeys.systemMaterials, 'version', versionKey],
+    queryFn: () => systemMaterialVersion(pinnedVersion!.materialId, pinnedVersion!.version),
+    enabled: canUse && Boolean(pinnedVersion) &&
+      !published.data?.some((row) => `${row.materialId}:${row.version}` === versionKey),
+  });
+  const selectedVersion = published.data?.find((row) => `${row.materialId}:${row.version}` === versionKey)
+    ?? previouslyUsedVersion.data;
 
   const action = useMutation({
     mutationFn: (run: () => Promise<unknown>) => run(),
@@ -68,6 +80,7 @@ export function SystemMaterialsPanel() {
       <p className="text-sm text-muted-foreground">{t('materialSystemHelp')}</p>
       {failed ? <p role="alert">{t('libraryLoadFailed')}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
+      {(canUse || canSubmit) ? <SystemSourceNotices resourceKind="material" /> : null}
       {canSubmit ? <section className="space-y-2" aria-label={t('materialSubmit')}>
         <select aria-label={t('materialSource')} className={SELECT_CLASS} value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
           <option value="">{t('materialSource')}</option>
@@ -95,10 +108,43 @@ export function SystemMaterialsPanel() {
           </div>
         </> : null}
       </section> : null}
+      {canReview ? <section className="space-y-2">
+        <h4 className="font-medium">{t('materialWithdraw')}</h4>
+        <Input aria-label={t('materialWithdrawReason')} placeholder={t('materialWithdrawReason')}
+          value={reason} onChange={(event) => setReason(event.target.value)} />
+        <ul className="space-y-2 text-sm">{(published.data ?? []).map((entry) =>
+          <li key={`${entry.materialId}:${entry.version}`} className="flex flex-wrap items-center gap-2">
+            <span>{entry.package.name} · v{entry.version}</span>
+            <Button size="sm" variant="outline" disabled={action.isPending || !reason.trim()}
+              onClick={() => action.mutate(async () => {
+                await withdrawSystemMaterial(entry.materialId, reason.trim());
+                setReason('');
+              })}>{t('materialWithdraw')}</Button>
+          </li>)}</ul>
+      </section> : null}
       {canUse ? <section className="space-y-2" aria-label={t('materialChooseVersion')}>
+        <h4 className="font-medium">{t('materialUsedTitle')}</h4>
+        <ul className="space-y-1 text-sm">{used.data?.map((row) =>
+          <li key={row.resourceId} className="rounded-md border p-2">
+            <p className="break-all">{row.materialId}</p>
+            <p>{t('materialUsedStatus', {
+              status: t(row.sourceStatus === 'withdrawn' ? 'materialSourceWithdrawn'
+                : row.sourceStatus === 'published' ? 'materialSourcePublished' : 'materialSourceUnavailable'),
+              version: row.version, latest: row.latestVersion ?? '—',
+            })}</p>
+            <Button size="sm" variant="outline" disabled={action.isPending}
+              onClick={() => setVersionKey(`${row.materialId}:${row.version}`)}>{t('materialChooseVersion')}</Button>
+            {row.sourceStatus === 'published' && row.latestVersion && row.latestVersion > row.version
+              ? <Button size="sm" variant="outline" disabled={action.isPending}
+                  onClick={() => setVersionKey(`${row.materialId}:${row.latestVersion}`)}>{t('materialUseNewVersion')}</Button> : null}
+          </li>)}</ul>
         <select aria-label={t('materialChooseVersion')} className={SELECT_CLASS} value={versionKey} onChange={(event) => setVersionKey(event.target.value)}>
           <option value="">{t('materialChooseVersion')}</option>
           {published.data?.map((row) => <option key={`${row.materialId}:${row.version}`} value={`${row.materialId}:${row.version}`}>{row.package.name} · {t('materialVersion', { version: row.version })} · {row.package.source.centreSlug}</option>)}
+          {used.data?.filter((row) => row.sourceStatus === 'withdrawn').map((row) =>
+            <option key={`used:${row.materialId}:${row.version}`} value={`${row.materialId}:${row.version}`}>
+              {row.materialId} · v{row.version} · {t('materialSourceWithdrawn')}
+            </option>)}
         </select>
         {selectedVersion ? <>
           <MaterialAttribution pkg={selectedVersion.package} />

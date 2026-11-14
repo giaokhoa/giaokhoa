@@ -1,8 +1,10 @@
 import type { INestApplication } from '@nestjs/common';
 import { existsSync } from 'node:fs';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import { FilesService } from '../../../src/modules/files/files.service';
+import { FilesRepository } from '@giaokhoa/db/repositories/files';
+import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
 import {
   adminToken, assignRole, createContextViaApi, createTestApp, createUserViaApi, http, login,
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
@@ -43,6 +45,57 @@ describe('Files: bất biến lưu trữ theo nội dung (integration)', () => {
     expect(await service.refcount(a.contentHash)).toBe(2);
     expect(existsSync(service.physicalKey(a.contentHash))).toBe(true);
     expect(service.physicalKey(a.contentHash)).toContain(`/${a.contentHash.slice(0, 2)}/${a.contentHash.slice(2, 4)}/`);
+  });
+
+  it('upload B đã ghi object nhưng chưa lưu metadata: rollback A chờ B, giữ được byte và bản ghi B cùng hash', async () => {
+    const service = app.get(FilesService);
+    const repo = app.get(FilesRepository);
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const payload = Buffer.from(`concurrent-content-${uuidv7()}`);
+    const original = await service.upload({
+      contextId: courseCtx, component: 'question', fileArea: 'question',
+      fileName: 'first-fork.png', data: payload,
+    });
+    const secondName = `second-fork-${uuidv7()}.png`;
+    let signalAfterPut!: () => void;
+    let allowInsert!: () => void;
+    const afterPut = new Promise<void>((resolve) => { signalAfterPut = resolve; });
+    const insertPermit = new Promise<void>((resolve) => { allowInsert = resolve; });
+    const insert = repo.insert.bind(repo);
+    const spy = vi.spyOn(repo, 'insert').mockImplementation(async (values, db) => {
+      if (values.fileName === secondName) {
+        signalAfterPut();
+        await insertPermit;
+      }
+      return insert(values, db);
+    });
+    let secondUpload: Promise<typeof original> | undefined;
+    let rollback: Promise<void> | undefined;
+    try {
+      secondUpload = service.upload({
+        contextId: courseCtx, component: 'question', fileArea: 'question',
+        fileName: secondName, data: payload,
+      });
+      await afterPut;
+      expect(await storage.exists(original.storageDomain, original.contentHash)).toBe(true);
+      let cleanupFinished = false;
+      rollback = service.discardUncommittedQuestionFile(original.id).then(() => {
+        cleanupFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(cleanupFinished).toBe(false);
+      allowInsert();
+      const second = await secondUpload;
+      await rollback;
+      expect(await repo.getById(original.id)).toBeUndefined();
+      expect((await repo.getById(second.id))?.contentHash).toBe(original.contentHash);
+      expect(await service.refcount(original.contentHash)).toBe(1);
+      expect(await storage.get(original.storageDomain, original.contentHash)).toEqual(payload);
+    } finally {
+      allowInsert();
+      await Promise.allSettled([secondUpload, rollback].filter((value) => value !== undefined));
+      spy.mockRestore();
+    }
   });
 
   it('xoá hết bản ghi: file vật lý còn khi còn một bản ghi, cleanupOrphan gỡ file khi refcount về 0', async () => {

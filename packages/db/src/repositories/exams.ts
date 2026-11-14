@@ -14,6 +14,7 @@ export interface ExamRow {
   pinRequestId: string | null;
   pinRequestCourseId: string | null;
   sharedExamVersionId: string | null;
+  systemExamForkVersionId: string | null;
   sharedSourceExamId: string | null;
   sharedSourceVersionNumber: number | null;
   sharedRequestedSectionId: string | null;
@@ -42,6 +43,7 @@ export interface NewExam {
   pinRequestId?: string | null;
   pinRequestCourseId?: string | null;
   sharedExamVersionId?: string | null;
+  systemExamForkVersionId?: string | null;
   sharedSourceExamId?: string | null;
   sharedSourceVersionNumber?: number | null;
   sharedRequestedSectionId?: string | null;
@@ -70,6 +72,7 @@ export const EXAM_COLUMNS = [
   'pin_request_id as pinRequestId',
   'pin_request_course_id as pinRequestCourseId',
   'shared_exam_version_id as sharedExamVersionId',
+  'system_exam_fork_version_id as systemExamForkVersionId',
   'shared_source_exam_id as sharedSourceExamId',
   'shared_source_version_number as sharedSourceVersionNumber',
   'shared_requested_section_id as sharedRequestedSectionId',
@@ -102,6 +105,7 @@ function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
   if (values.pinRequestId !== undefined) row.pin_request_id = values.pinRequestId;
   if (values.pinRequestCourseId !== undefined) row.pin_request_course_id = values.pinRequestCourseId;
   if (values.sharedExamVersionId !== undefined) row.shared_exam_version_id = values.sharedExamVersionId;
+  if (values.systemExamForkVersionId !== undefined) row.system_exam_fork_version_id = values.systemExamForkVersionId;
   if (values.sharedSourceExamId !== undefined) row.shared_source_exam_id = values.sharedSourceExamId;
   if (values.sharedSourceVersionNumber !== undefined) row.shared_source_version_number = values.sharedSourceVersionNumber;
   if (values.sharedRequestedSectionId !== undefined) row.shared_requested_section_id = values.sharedRequestedSectionId;

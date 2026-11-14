@@ -457,4 +457,40 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect((await pg.query('select id from context where context_level=70 order by id')).rows).toEqual(contextsBefore.rows);
   });
 
+
+  it('rút nguồn học liệu: chỉ B đã nhận được dùng lại đúng phiên bản, giữ player và phát cảnh báo', async () => {
+    const revoked = await identity.http(app).post(`${ROOT}/${materialId}/withdraw`)
+      .set(bearer(editor)).send({ reason: 'Nội dung không còn phù hợp' });
+    expect(revoked.status, JSON.stringify(revoked.body)).toBe(201);
+    const reviewer = await identity.http(app).get(`${ROOT}/published`).set(bearer(editor));
+    expect(reviewer.status).toBe(200);
+    expect(reviewer.body.some((item: { materialId: string }) => item.materialId === materialId)).toBe(false);
+    const discovery = await identity.http(app).get(ROOT).set(bearer(teacherB));
+    expect(discovery.status).toBe(200);
+    expect(discovery.body.some((item: { materialId: string }) => item.materialId === materialId)).toBe(false);
+    const used = await identity.http(app).get(`${ROOT}/used`).set(bearer(teacherB));
+    expect(used.status).toBe(200);
+    expect(used.body).toEqual(expect.arrayContaining([expect.objectContaining({
+      resourceId, materialId, version: 1, latestVersion: 2, sourceStatus: 'withdrawn',
+    })]));
+    expect((await identity.http(app).get(`${ROOT}/${materialId}/versions/1`)
+      .set(bearer(teacherB))).status).toBe(200);
+    expect((await identity.http(app).get(`${ROOT}/${materialId}/versions/2`)
+      .set(bearer(teacherB))).status).toBe(404);
+    const denied = await identity.http(app).post(`${ROOT}/use`).set(bearer(teacherB))
+      .send({ materialId, version: 2, courseId, sectionId });
+    expect(denied.status).toBe(404);
+    const reused = await identity.http(app).post(`${ROOT}/use`).set(bearer(teacherB))
+      .send({ materialId, version: 1, courseId, sectionId });
+    expect(reused.status, JSON.stringify(reused.body)).toBe(201);
+    const pinned = await pg.query('select system_material_id, system_material_version from resources where id=$1', [resourceId]);
+    expect(pinned.rows[0]).toMatchObject({ system_material_id: materialId, system_material_version: 1 });
+    const pending = await identity.http(app).get('/api/v1/system-bank/events/pending').set(bearer(managerB));
+    expect(pending.status, JSON.stringify(pending.body)).toBe(200);
+    const event = pending.body.find((item: { type: string }) => item.type === 'material_withdrawn');
+    expect(event?.resourceKey).toBe(materialId);
+    expect((await identity.http(app).post(`/api/v1/system-bank/events/${event.id}/acknowledge`)
+      .set(bearer(managerB)).send({})).status).toBe(201);
+  });
+
 });

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
 import { z } from 'zod';
 import type { Response } from 'express';
-import { rejectSystemExamSchema, submitSystemExamSchema, uuidIdSchema, type RejectSystemExam, type SubmitSystemExam } from '@giaokhoa/contracts';
+import { rejectSystemExamSchema, submitSystemExamSchema, withdrawSystemResourceSchema, uuidIdSchema, type RejectSystemExam, type SubmitSystemExam, type WithdrawSystemResource } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemSharedExamsService } from './system-shared-exams.service';
 
@@ -28,6 +28,16 @@ export class SystemSharedExamsController {
   @Get('mine')
   mine(@CurrentUser() actor: AuthenticatedUser) {
     return this.exams.listMine(actor.id);
+  }
+
+  @Get('used')
+  used(@CurrentUser() actor: AuthenticatedUser) {
+    return this.exams.listUsed(actor.id);
+  }
+
+  @Get('approved')
+  approved(@CurrentUser() actor: AuthenticatedUser) {
+    return this.exams.listApprovedForReview(actor.id);
   }
 
   @Get('pending')
@@ -57,6 +67,17 @@ export class SystemSharedExamsController {
   @Post(':id/approve')
   approve(@CurrentUser() actor: AuthenticatedUser, @Param('id', { schema: uuidIdSchema }) id: string) {
     return this.exams.approve(actor.id, id);
+  }
+
+  @Post(':id/fork')
+  fork(@CurrentUser() actor: AuthenticatedUser, @Param('id', { schema: uuidIdSchema }) id: string) {
+    return this.exams.fork(actor.id, id);
+  }
+
+  @Post(':id/withdraw')
+  withdraw(@CurrentUser() actor: AuthenticatedUser, @Param('id', { schema: uuidIdSchema }) id: string,
+    @Body({ schema: withdrawSystemResourceSchema }) body: WithdrawSystemResource) {
+    return this.exams.withdraw(actor.id, id, body.reason);
   }
 
   @Post(':id/reject')

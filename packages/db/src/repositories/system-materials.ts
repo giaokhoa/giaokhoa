@@ -19,6 +19,10 @@ export class SystemMaterialsRepository {
 
   async submit(actorId: string, pkg: SystemMaterialPackage, checksum: string): Promise<SystemMaterialSubmission> {
     return this.db().transaction().execute(async (tx) => {
+      const existing = await tx.selectFrom('system_materials').select('status')
+        .where('centre_slug', '=', pkg.source.centreSlug)
+        .where('source_content_id', '=', pkg.source.contentId).executeTakeFirst();
+      if (existing?.status === 'withdrawn') throw new Error('system_material.source_withdrawn');
       const inserted = await tx.insertInto('system_material_submissions').values({
         centre_slug: pkg.source.centreSlug, source_content_id: pkg.source.contentId,
         source_revision: checksum, checksum, status: 'pending', package: sql`${JSON.stringify(pkg)}::jsonb`, submitted_by: actorId,
@@ -56,11 +60,18 @@ export class SystemMaterialsRepository {
       }).onConflict((oc) => oc.columns(['centre_slug', 'source_content_id']).doNothing()).returning('id').executeTakeFirst()
         ?? await tx.selectFrom('system_materials').select('id').where('centre_slug', '=', row.centreSlug)
           .where('source_content_id', '=', row.sourceContentId).executeTakeFirstOrThrow();
+      const active = await tx.selectFrom('system_materials').select('status')
+        .where('id', '=', material.id).forUpdate().executeTakeFirstOrThrow();
+      if (active.status === 'withdrawn') throw new Error('system_material.source_withdrawn');
       const latest = await tx.selectFrom('system_material_versions').select('version')
         .where('material_id', '=', material.id).orderBy('version', 'desc').executeTakeFirst();
       const version = (latest?.version ?? 0) + 1;
       await tx.insertInto('system_material_versions').values({
         material_id: material.id, version, package: sql`${JSON.stringify(row.package)}::jsonb`, checksum: row.checksum,
+      }).execute();
+      await tx.insertInto('system_bank_events').values({
+        type: 'material_version_published', resource_kind: 'material', resource_key: material.id,
+        payload: sql`${JSON.stringify({ materialId: material.id, version, checksum: row.checksum })}::jsonb`,
       }).execute();
       return tx.updateTable('system_material_submissions').set({
         ...decision, status: 'approved', published_material_id: material.id, published_version: version,
@@ -68,10 +79,44 @@ export class SystemMaterialsRepository {
     });
   }
 
+  async status(materialId: string): Promise<'published' | 'withdrawn' | null> {
+    const row = await this.db().selectFrom('system_materials').select('status')
+      .where('id', '=', materialId).executeTakeFirst();
+    return (row?.status as 'published' | 'withdrawn' | undefined) ?? null;
+  }
+
+  async latestVersion(materialId: string): Promise<number | null> {
+    const row = await this.db().selectFrom('system_material_versions').select('version')
+      .where('material_id', '=', materialId).orderBy('version', 'desc').executeTakeFirst();
+    return row?.version ?? null;
+  }
+
+  async withdraw(materialId: string, reason: string): Promise<{ materialId: string; status: string } | null> {
+    return this.db().transaction().execute(async (tx) => {
+      const row = await tx.selectFrom('system_materials').select(['id', 'status'])
+        .where('id', '=', materialId).forUpdate().executeTakeFirst();
+      if (!row || row.status !== 'published') return null;
+      await tx.updateTable('system_materials').set({
+        status: 'withdrawn', withdrawn_at: new Date(), withdrawn_reason: reason,
+      }).where('id', '=', materialId).execute();
+      await tx.insertInto('system_bank_events').values({
+        type: 'material_withdrawn', resource_kind: 'material', resource_key: materialId,
+        payload: sql`${JSON.stringify({ materialId, reason })}::jsonb`,
+      }).execute();
+      return { materialId, status: 'withdrawn' };
+    });
+  }
+
   async discover(): Promise<SystemMaterialVersion[]> {
-    return this.db().selectFrom('system_material_versions').select([
-      'material_id as materialId', 'version', 'checksum', 'package',
-    ]).orderBy('created_at', 'desc').execute();
+    return this.db().selectFrom('system_material_versions')
+      .innerJoin('system_materials', 'system_materials.id', 'system_material_versions.material_id')
+      .select([
+        'system_material_versions.material_id as materialId',
+        'system_material_versions.version as version',
+        'system_material_versions.checksum as checksum',
+        'system_material_versions.package as package',
+      ]).where('system_materials.status', '=', 'published')
+      .orderBy('system_material_versions.created_at', 'desc').execute();
   }
 
   async version(materialId: string, version: number): Promise<SystemMaterialVersion | undefined> {

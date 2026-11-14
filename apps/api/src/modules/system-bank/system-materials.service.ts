@@ -96,7 +96,15 @@ export class SystemMaterialsService {
         sourceCitation: row.sourceCitation, license: row.license },
     });
     if (!parsed.success) this.invalid();
-    const submission = await this.repo.submit(actorId, parsed.data, checksumPackage(parsed.data));
+    let submission;
+    try {
+      submission = await this.repo.submit(actorId, parsed.data, checksumPackage(parsed.data));
+    } catch (error) {
+      if (error instanceof Error && error.message === 'system_material.source_withdrawn') {
+        throw new ConflictException({ code: 'system_material.source_withdrawn' });
+      }
+      throw error;
+    }
     if (submission.status === 'rejected') throw new ConflictException({ message: 'Change the source before resubmitting', code: 'system_bank.submission_rejected_requires_new_version' });
     return submission;
   }
@@ -121,7 +129,15 @@ export class SystemMaterialsService {
       const pkg = this.verified(row.package, row.checksum);
       if (pkg.file) await this.readFile(pkg);
     }
-    const reviewed = await this.repo.review(id, actorId, reason);
+    let reviewed;
+    try {
+      reviewed = await this.repo.review(id, actorId, reason);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'system_material.source_withdrawn') {
+        throw new ConflictException({ code: 'system_material.source_withdrawn' });
+      }
+      throw error;
+    }
     if (!reviewed || (reason ? reviewed.status !== 'rejected' : reviewed.status !== 'approved')) {
       throw new ConflictException({ message: 'Submission already reviewed', code: 'system_bank.submission_reviewed' });
     }
@@ -130,8 +146,29 @@ export class SystemMaterialsService {
 
   async discover(actorId: string) { await this.teacher(actorId); return this.repo.discover(); }
 
+  async publishedForReview(actorId: string) { await this.editor(actorId); return this.repo.discover(); }
+
+  async listUsed(actorId: string) {
+    await this.teacher(actorId);
+    const references = await this.references.list();
+    return Promise.all(references.map(async (reference) => ({
+      ...reference,
+      sourceStatus: (await this.repo.status(reference.materialId)) ?? 'unavailable',
+      latestVersion: await this.repo.latestVersion(reference.materialId),
+    })));
+  }
+
+  async withdraw(actorId: string, materialId: string, reason: string) {
+    await this.editor(actorId);
+    const result = await this.repo.withdraw(materialId, reason);
+    if (!result) throw new ConflictException({ code: 'system_material.not_published' });
+    return result;
+  }
+
   async versionForTeacher(actorId: string, materialId: string, version: number) {
     await this.teacher(actorId);
+    const status = await this.repo.status(materialId);
+    if (status === 'withdrawn' && !(await this.references.hasVersion(materialId, version))) this.notFound();
     return this.version(materialId, version);
   }
 
@@ -145,7 +182,7 @@ export class SystemMaterialsService {
     await this.teacher(actorId);
     await this.courses.getCourse(input.courseId);
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(input.courseId));
-    const row = await this.version(input.materialId, input.version);
+    const row = await this.versionForTeacher(actorId, input.materialId, input.version);
     const id = await this.references.insert(input.courseId, row.package.name, row);
     let createdCmId: string | undefined;
     try {

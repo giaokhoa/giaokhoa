@@ -80,7 +80,16 @@ export class SystemBankMediaService {
     return { data, mimeType: item.mimeType };
   }
 
-  async materialize(pkg: SystemBankPackage, targetContextId: string, actorId: string, localSource = false, immutable = false, preparationId?: string): Promise<SystemBankPackage> {
+  async discardMaterializedFiles(fileIds: string[]): Promise<void> {
+    for (const id of [...fileIds].reverse()) {
+      await this.files.discardUncommittedQuestionFile(id);
+    }
+  }
+
+  async materialize(
+    pkg: SystemBankPackage, targetContextId: string, actorId: string,
+    localSource = false, immutable = false, preparationId?: string, uploadedFileIds?: string[],
+  ): Promise<SystemBankPackage> {
     const result = structuredClone(pkg);
     const manifest = new Map((result.media ?? []).map((file) => [file.contentHash, file]));
     const copied = new Map<string, string>();
@@ -105,6 +114,7 @@ export class SystemBankMediaService {
         }
         const copy = await this.files.upload({ contextId: targetContextId, component: 'question',
           fileArea: immutable ? 'exam_snapshot' : 'question', itemId: preparationId, fileName: file.fileName, mimeType: file.mimeType!, data: bytes, userId: actorId });
+        uploadedFileIds?.push(copy.id);
         attrs.src = questionFileContentSrc(copy.id);
         continue;
       }
@@ -128,6 +138,7 @@ export class SystemBankMediaService {
           fileName: item.fileName, mimeType: item.mimeType, data: bytes, userId: actorId,
         });
         fileId = file.id;
+        uploadedFileIds?.push(file.id);
         copied.set(hash, file.id);
       }
       attrs.src = questionFileContentSrc(fileId);

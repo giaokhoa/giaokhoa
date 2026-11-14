@@ -169,6 +169,32 @@ export class SystemBankCentreRepository {
     return row ?? null;
   }
 
+  async listImports(): Promise<SystemQuestionImportRow[]> {
+    return this.db.selectFrom('system_question_imports')
+      .select(SYSTEM_QUESTION_IMPORT_COLUMNS)
+      .orderBy('imported_at', 'desc')
+      .execute();
+  }
+
+  async listImportsForTenant(tenantId: string, sourceQuestionId?: string): Promise<SystemQuestionImportRow[]> {
+    let query = this.db.selectFrom('system_question_imports')
+      .select(SYSTEM_QUESTION_IMPORT_COLUMNS)
+      .where('question_id', 'in', (eb) => eb.selectFrom('question_bank_entries')
+        .innerJoin('question_categories', 'question_categories.id', 'question_bank_entries.question_category_id')
+        .innerJoin('question_banks', 'question_banks.id', 'question_categories.bank_id')
+        .select('question_bank_entries.question_id')
+        .where('question_banks.tenant_id', '=', tenantId));
+    if (sourceQuestionId) query = query.where('source_question_id', '=', sourceQuestionId);
+    return query.orderBy('imported_at', 'desc').execute();
+  }
+
+  async listImportsBySource(sourceQuestionId: string): Promise<SystemQuestionImportRow[]> {
+    return this.db.selectFrom('system_question_imports')
+      .select(SYSTEM_QUESTION_IMPORT_COLUMNS)
+      .where('source_question_id', '=', sourceQuestionId)
+      .execute();
+  }
+
   async flipImportToDerived(questionId: string, tx?: SbCentreDb): Promise<void> {
     const handle = tx ?? this.db;
     await handle
@@ -208,6 +234,34 @@ export class SystemBankCentreRepository {
       .where('centre_slug', '=', centreSlug)
       .execute();
     return rows.map((row) => row.eventId);
+  }
+
+  async listMaterialReferences(): Promise<Array<{ materialId: string; version: number }>> {
+    const rows = await this.db.selectFrom('resources')
+      .select(['system_material_id as materialId', 'system_material_version as version'])
+      .where('system_material_id', 'is not', null).execute();
+    return rows.filter((row): row is { materialId: string; version: number } =>
+      row.materialId !== null && row.version !== null);
+  }
+
+  async listSharedExamVersionIds(): Promise<string[]> {
+    const [executions, forks] = await Promise.all([
+      this.db.selectFrom('exams').select('shared_exam_version_id as versionId')
+        .where('shared_exam_version_id', 'is not', null).execute(),
+      this.db.selectFrom('exams').select('system_exam_fork_version_id as versionId')
+        .where('system_exam_fork_version_id', 'is not', null).execute(),
+    ]);
+    return [...new Set([...executions, ...forks]
+      .map((row) => row.versionId).filter((id): id is string => id !== null))];
+  }
+
+  async hasSharedExamVersion(versionId: string): Promise<boolean> {
+    const row = await this.db.selectFrom('exams').select('id')
+      .where((eb) => eb.or([
+        eb('shared_exam_version_id', '=', versionId),
+        eb('system_exam_fork_version_id', '=', versionId),
+      ])).limit(1).executeTakeFirst();
+    return Boolean(row);
   }
 
   async getOutcomePackageInstall(scope?: string, tx?: SbCentreDb): Promise<OutcomePackageInstallRow | null> {

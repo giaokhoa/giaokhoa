@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { sql as kyselySql } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
@@ -49,6 +49,33 @@ export class SystemBankService {
     @Optional() private readonly spaceDb?: SpaceDatabaseService,
   ) {}
 
+  private readonly logger = new Logger(SystemBankService.name);
+
+  private async reconcileImporter(centreSlug: string, sourceQuestionId: string, importedBy: string | null): Promise<void> {
+    try {
+      await this.repo.recordImporter({ sourceQuestionId, centreSlug, importedBy });
+    } catch {
+      this.logger.warn(`system_bank.importer_reconciliation_pending: ${sourceQuestionId}`);
+    }
+  }
+
+  private async localImports(sourceQuestionId?: string) {
+    const tenantId = tenantAls.getStore()?.tenantId;
+    if (!tenantId) throw new BadRequestException({ code: 'system_bank.centre_context_required' });
+    return this.centreRepo.listImportsForTenant(tenantId, sourceQuestionId);
+  }
+
+  private async localImportedSourceIds(centreSlug: string): Promise<string[]> {
+    const imports = await this.localImports();
+    const sourceIds = [...new Set(imports.map((entry) => entry.sourceQuestionId))];
+    const recorded = new Set(await this.repo.listImportedQuestionIds(centreSlug));
+    await Promise.all(sourceIds.filter((id) => !recorded.has(id)).map(async (id) => {
+      const row = imports.find((entry) => entry.sourceQuestionId === id)!;
+      await this.reconcileImporter(centreSlug, id, row.importedBy);
+    }));
+    return [...new Set([...sourceIds, ...recorded])];
+  }
+
   get isConfigured(): boolean {
     return this.connection.isConfigured;
   }
@@ -69,11 +96,34 @@ export class SystemBankService {
         code: 'system_bank.question_not_found',
       });
     }
+    const question = await this.repo.getQuestion(questionId);
+    if (!question || question.status !== 'withdrawn') return;
+    const canManage = await this.evaluator.hasCapability(actorId, 'tenant:manage', systemId).catch(() => false);
+    if (canManage) return;
+    const centreSlug = await this.resolveCentreSlug();
+    const imported = await this.localImports(questionId);
+    if (imported.length === 0 && !(await this.repo.listImportedQuestionIds(centreSlug)).includes(questionId)) {
+      throw new NotFoundException({
+        message: `System question ${questionId} not found`,
+        code: 'system_bank.question_not_found',
+      });
+    }
+    if (imported.length > 0) await this.reconcileImporter(centreSlug, questionId, imported[0]!.importedBy);
   }
 
   private async assertEventViewer(actorId: string): Promise<void> {
     const systemId = (await this.contexts.ensureSystemContext()).id;
-    await this.evaluator.requireCapability(actorId, 'question:useall', systemId);
+    const tenantId = tenantAls.getStore()?.tenantId;
+    const centre = tenantId ? await this.contexts.getTenantContext(tenantId) : null;
+    const [questions, content, exams, manager] = await Promise.all([
+      this.evaluator.hasCapability(actorId, 'question:useall', systemId),
+      this.evaluator.hasCapabilityFromRealAssignmentAnywhere(actorId, 'contentbank:upload'),
+      this.evaluator.hasCapabilityFromRealAssignmentAnywhere(actorId, 'exam:use'),
+      centre ? this.evaluator.hasCapability(actorId, 'tenant:manage', centre.id) : false,
+    ]);
+    if (!questions && !content && !exams && !manager) {
+      await this.evaluator.requireCapability(actorId, 'question:useall', systemId);
+    }
   }
 
   private assertPackageForQtype(qtype: string, pkg: SystemBankPackage): void {
@@ -110,7 +160,14 @@ export class SystemBankService {
     }
     this.assertPackageForQtype(question.qtype, dto.package);
     const checksum = checksumPackage(dto.package);
-    return this.repo.createVersion(questionId, dto.package, checksum);
+    try {
+      return await this.repo.createVersion(questionId, dto.package, checksum);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'system_bank.question_withdrawn') {
+        throw new BadRequestException({ code: 'system_bank.question_withdrawn' });
+      }
+      throw error;
+    }
   }
 
   async withdrawQuestion(actorId: string, questionId: string, dto: WithdrawSystemBankQuestionDto) {
@@ -125,17 +182,12 @@ export class SystemBankService {
         code: 'system_bank.question_withdrawn',
       });
     }
-    const updated = await this.repo.markWithdrawn(questionId, { reason: dto.reason, by: actorId });
-    if (!updated) {
+    const result = await this.repo.markWithdrawn(questionId, { reason: dto.reason, by: actorId });
+    if (!result) {
       throw new NotFoundException({ message: `System question ${questionId} not found`, code: 'system_bank.question_not_found' });
     }
-    const event = await this.repo.recordEvent({
-      type: 'question_withdrawn',
-      sourceQuestionId: questionId,
-      payload: { reason: dto.reason, withdrawnBy: actorId, withdrawnAt: new Date().toISOString() },
-    });
     const notifiedCentres = await this.repo.listImporterSlugs(questionId);
-    return { question: updated, event, notifiedCentres };
+    return { ...result, notifiedCentres };
   }
 
   async getQuestion(actorId: string, questionId: string) {
@@ -147,8 +199,21 @@ export class SystemBankService {
     return question;
   }
 
+  private async visibleWithdrawnVersionNumbers(actorId: string, questionId: string): Promise<Set<number> | null> {
+    const source = await this.repo.getQuestion(questionId);
+    if (source?.status !== 'withdrawn') return null;
+    const systemId = (await this.contexts.ensureSystemContext()).id;
+    if (await this.evaluator.hasCapability(actorId, 'tenant:manage', systemId).catch(() => false)) return null;
+    const imports = await this.localImports(questionId);
+    return new Set(imports.map((row) => row.sourceVersionNumber));
+  }
+
   async getVersion(actorId: string, questionId: string, version: number) {
     await this.assertPackageViewer(actorId, questionId);
+    const allowed = await this.visibleWithdrawnVersionNumbers(actorId, questionId);
+    if (allowed && !allowed.has(version)) {
+      throw new NotFoundException({ code: 'system_bank.version_not_found' });
+    }
     const row = await this.repo.getVersionByNumber(questionId, version);
     if (!row) {
       throw new NotFoundException({
@@ -161,12 +226,18 @@ export class SystemBankService {
 
   async listVersions(actorId: string, questionId: string) {
     await this.getQuestion(actorId, questionId);
-    return this.repo.listVersions(questionId);
+    const allowed = await this.visibleWithdrawnVersionNumbers(actorId, questionId);
+    const versions = await this.repo.listVersions(questionId);
+    return allowed ? versions.filter((row) => allowed.has(row.version)) : versions;
   }
 
   async getLatestVersion(actorId: string, questionId: string) {
     await this.getQuestion(actorId, questionId);
-    const row = await this.repo.getLatestVersion(questionId);
+    const allowed = await this.visibleWithdrawnVersionNumbers(actorId, questionId);
+    const versions = allowed ? await this.repo.listVersions(questionId) : null;
+    const pinned = versions?.filter((row) => allowed!.has(row.version))
+      .sort((a, b) => b.version - a.version)[0];
+    const row = allowed ? pinned ?? null : await this.repo.getLatestVersion(questionId);
     if (!row) {
       throw new NotFoundException({
         message: `System question ${questionId} has no versions`,
@@ -231,12 +302,6 @@ export class SystemBankService {
         code: 'system_bank.question_not_found',
       });
     }
-    if (question.status !== 'published') {
-      throw new BadRequestException({
-        message: `System question ${dto.sourceQuestionId} is withdrawn and cannot be imported`,
-        code: 'system_bank.question_withdrawn',
-      });
-    }
     const version = dto.sourceVersionNumber !== undefined
       ? await this.repo.getVersionByNumber(dto.sourceQuestionId, dto.sourceVersionNumber)
       : await this.repo.getLatestVersion(dto.sourceQuestionId);
@@ -245,6 +310,15 @@ export class SystemBankService {
         message: `System question ${dto.sourceQuestionId} version ${dto.sourceVersionNumber ?? 'latest'} not found`,
         code: 'system_bank.version_not_found',
       });
+    }
+    if (question.status !== 'published') {
+      const previousImports = await this.localImports(dto.sourceQuestionId);
+      if (!previousImports.some((entry) => entry.sourceVersionId === version.id)) {
+        throw new BadRequestException({
+          message: `System question ${dto.sourceQuestionId} is withdrawn and cannot be imported`,
+          code: 'system_bank.question_withdrawn',
+        });
+      }
     }
     const pkg = version.package as SystemBankPackage;
     if (!verifyPackageChecksum(pkg, version.checksum)) {
@@ -284,76 +358,148 @@ export class SystemBankService {
       targetCategory = await this.banks.defaultCategoryOfBank(targetBank);
     }
     await this.evaluator.requireCapability(actorId, 'question:add', targetCategory.contextId);
-    const importPkg = this.media
-      ? await this.media.materialize(pkg, targetCategory.contextId, actorId)
-      : pkg;
-    await this.repo.recordImporter({
-      sourceQuestionId: dto.sourceQuestionId,
-      centreSlug,
-      importedBy: actorId,
-    });
-    const stimulusId = importPkg.stimulusContent
-      ? (await this.questions.createStimulus(actorId, {
-          categoryId: targetCategory.id,
-          content: importPkg.stimulusContent as RichTextInput,
-        })).id
-      : null;
-    const importOptions = importPkg.options ? { ...importPkg.options } : undefined;
-    if (importOptions) {
-      for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
-        if (importOptions[key] === null) delete importOptions[key];
+    const prior = (await this.localImports(dto.sourceQuestionId))
+      .filter((entry) => entry.sourceVersionId === version.id && entry.importedBy === actorId);
+    if (prior.length > 0 && !(await this.repo.listImportedQuestionIds(centreSlug)).includes(dto.sourceQuestionId)) {
+      for (const entry of prior) {
+        const existing = await this.questions.getQuestionForViewer(actorId, entry.questionId).catch(() => null);
+        if (existing?.entry.questionCategoryId !== targetCategory.id) continue;
+        await this.reconcileImporter(centreSlug, dto.sourceQuestionId, actorId);
+        return { question: existing, import: entry, source: { questionId: question.id, version: version.version } };
       }
     }
-    const content: QuestionContentInput = {
-      questionText: importPkg.questionText as RichTextInput,
-      generalFeedback: (importPkg.generalFeedback ?? undefined) as RichTextInput | undefined,
-      guidance: (importPkg.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
-      stimulusId,
-      answers: importPkg.answers.map((answer) => ({
-        text: answer.answer as RichTextInput,
-        correct: answer.isCorrect,
-        feedback: (answer.feedback ?? undefined) as RichTextInput | undefined,
-      })),
-      options: importOptions as QuestionContentInput['options'],
-      solution: importPkg.answerKey?.solution
-        ? (importPkg.answerKey.solution as QuestionContentInput['solution'])
-        : undefined,
-    };
-    const created = await this.questions.createQuestion(actorId, {
-      categoryId: targetCategory.id,
-      qtype: question.qtype,
-      ...content,
-    });
-    for (const outcome of importPkg.outcomes) {
-      await this.questions.attachOutcome(actorId, created.question.id, outcome.outcomeId, outcome.cognitiveLevel);
-    }
-    const importRow = await this.centreRepo.insertImportRow({
-      questionId: created.question.id,
-      sourceQuestionId: dto.sourceQuestionId,
-      sourceVersionId: version.id,
-      sourceVersionNumber: version.version,
-      packageChecksum: version.checksum,
-      importedVersionNumber: 1,
-      importedBy: actorId,
-      kind: 'pristine',
-    });
+    const uploadedFileIds: string[] = [];
+    const importRow = await (async () => {
+      try {
+        const importPkg = this.media
+          ? await this.media.materialize(pkg, targetCategory.contextId, actorId, false, false, undefined, uploadedFileIds)
+          : pkg;
+        const importOptions = importPkg.options ? { ...importPkg.options } : undefined;
+        if (importOptions) {
+          for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
+            if (importOptions[key] === null) delete importOptions[key];
+          }
+        }
+        const content: QuestionContentInput = {
+          questionText: importPkg.questionText as RichTextInput,
+          generalFeedback: (importPkg.generalFeedback ?? undefined) as RichTextInput | undefined,
+          guidance: (importPkg.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
+          answers: importPkg.answers.map((answer) => ({
+            text: answer.answer as RichTextInput,
+            correct: answer.isCorrect,
+            feedback: (answer.feedback ?? undefined) as RichTextInput | undefined,
+          })),
+          options: importOptions as QuestionContentInput['options'],
+          solution: importPkg.answerKey?.solution
+            ? (importPkg.answerKey.solution as QuestionContentInput['solution'])
+            : undefined,
+        };
+        return await this.questions.createQuestionCopies(
+          actorId, targetCategory.id,
+          [{
+            qtype: question.qtype,
+            stimulusContent: importPkg.stimulusContent as RichTextInput | null,
+            content,
+            outcomes: importPkg.outcomes,
+          }],
+          (tx, copies) => this.centreRepo.insertImportRow({
+            questionId: copies[0]!.questionId,
+            sourceQuestionId: dto.sourceQuestionId,
+            sourceVersionId: version.id,
+            sourceVersionNumber: version.version,
+            packageChecksum: version.checksum,
+            importedVersionNumber: 1,
+            importedBy: actorId,
+            kind: 'pristine',
+          }, tx),
+        );
+      } catch (error) {
+        await this.media?.discardMaterializedFiles(uploadedFileIds);
+        throw error;
+      }
+    })();
+    await this.reconcileImporter(centreSlug, dto.sourceQuestionId, actorId);
+    const created = await this.questions.getQuestion(importRow.questionId);
     return { question: created, import: importRow, source: { questionId: question.id, version: version.version } };
+  }
+
+  async listUsedQuestionVersions(actorId: string) {
+    await this.assertEventViewer(actorId);
+    await this.resolveCentreSlug();
+    const imports = await this.centreRepo.listImports();
+    const visible = await Promise.all(imports.map(async (entry) => {
+      try {
+        await this.questions.getQuestionForViewer(actorId, entry.questionId);
+      } catch {
+        return null;
+      }
+      const source = await this.repo.getQuestion(entry.sourceQuestionId);
+      const latest = await this.repo.getLatestVersion(entry.sourceQuestionId);
+      return {
+        ...entry,
+        sourceStatus: source?.status ?? 'unavailable',
+        latestVersionNumber: latest?.version ?? null,
+        hasNewVersion: latest !== null && latest.version > entry.sourceVersionNumber,
+      };
+    }));
+    return visible.filter((entry) => entry !== null);
+  }
+
+  async getUsedQuestionVersion(actorId: string, questionId: string) {
+    await this.questions.getQuestionForViewer(actorId, questionId);
+    const entry = await this.centreRepo.getImportRow(questionId);
+    if (!entry) {
+      throw new NotFoundException({ code: 'system_bank.import_not_found' });
+    }
+    const source = await this.repo.getQuestion(entry.sourceQuestionId);
+    const latest = await this.repo.getLatestVersion(entry.sourceQuestionId);
+    return {
+      ...entry,
+      sourceStatus: source?.status ?? 'unavailable',
+      latestVersionNumber: latest?.version ?? null,
+      hasNewVersion: latest !== null && latest.version > entry.sourceVersionNumber,
+    };
+  }
+
+  private async relevantEvents(centreSlug: string) {
+    const [questionIds, materials, examVersionIds, packages] = await Promise.all([
+      this.localImportedSourceIds(centreSlug),
+      this.centreRepo.listMaterialReferences(),
+      this.centreRepo.listSharedExamVersionIds(),
+      this.centreRepo.listOutcomePackageInstalls(),
+    ]);
+    const exams = await this.repo.listExamSourcesForVersions(examVersionIds);
+    const keys: Array<{ kind: 'exam' | 'material' | 'programme'; key: string }> = [
+      ...materials.map((material) => ({ kind: 'material' as const, key: material.materialId })),
+      ...exams.map((exam) => ({ kind: 'exam' as const, key: `${exam.centreSlug}/${exam.sourceExamId}` })),
+      ...packages.map((pkg) => ({ kind: 'programme' as const, key: pkg.scope })),
+    ];
+    const [questions, resources] = await Promise.all([
+      this.repo.listEventsForQuestions(questionIds),
+      this.repo.listResourceEvents(keys),
+    ]);
+    return [...questions, ...resources].sort((a, b) =>
+      a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
   }
 
   async listPendingEvents(actorId: string) {
     await this.assertEventViewer(actorId);
     const centreSlug = await this.resolveCentreSlug();
-    const questionIds = await this.repo.listImportedQuestionIds(centreSlug);
-    if (questionIds.length === 0) return [];
-    const events = await this.repo.listEventsForQuestions(questionIds);
-    if (events.length === 0) return [];
-    const received = new Set(await this.centreRepo.listEventReceiptEventIds(centreSlug));
+    const [events, receipts] = await Promise.all([
+      this.relevantEvents(centreSlug),
+      this.centreRepo.listEventReceiptEventIds(centreSlug),
+    ]);
+    const received = new Set(receipts);
     return events.filter((event) => !received.has(event.id));
   }
 
   async acknowledgeEvent(actorId: string, eventId: string) {
     await this.assertEventViewer(actorId);
     const centreSlug = await this.resolveCentreSlug();
+    const events = await this.relevantEvents(centreSlug);
+    if (!events.some((event) => event.id === eventId)) {
+      throw new NotFoundException({ code: 'system_bank.event_not_found' });
+    }
     return this.centreRepo.insertEventReceipt({ eventId, centreSlug });
   }
 
@@ -576,9 +722,18 @@ export class SystemBankService {
     }
   }
 
+  async withdrawOutcomePackage(actorId: string, version: string, reason: string) {
+    await this.assertProgrammeReviewer(actorId);
+    const result = await this.repo.withdrawPackage(version, actorId, reason);
+    if (!result) throw new ConflictException({ code: 'system_bank.package_not_published' });
+    return result;
+  }
+
   async getOutcomePackage(version: string) {
     const pkg = await this.repo.getPackageByVersion(version);
-    if (!pkg || pkg.status !== 'published') {
+    const installed = pkg?.status === 'withdrawn' && tenantAls.getStore()?.tenantId
+      ? await this.centreRepo.getOutcomePackageInstallByVersion(version) : null;
+    if (!pkg || (pkg.status !== 'published' && !installed)) {
       throw new NotFoundException({ message: `Outcome package ${version} not found`, code: 'system_bank.package_not_found' });
     }
     return { package: pkg, ...await this.repo.getPackageItems(pkg.id) };
@@ -587,7 +742,9 @@ export class SystemBankService {
   async installOutcomePackage(actorId: string, version: string) {
     const { centreContextId } = await this.assertCentrePackageManager(actorId);
     const pkg = await this.repo.getPackageByVersion(version);
-    if (!pkg || pkg.status !== 'published') {
+    const alreadyInstalled = pkg?.status === 'withdrawn'
+      ? await this.centreRepo.getOutcomePackageInstallByVersion(version) : null;
+    if (!pkg || (pkg.status !== 'published' && !alreadyInstalled)) {
       throw new NotFoundException({ message: `Outcome package ${version} not found`, code: 'system_bank.package_not_found' });
     }
     const items = await this.repo.getPackageItems(pkg.id);

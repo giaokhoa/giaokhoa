@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import { z } from 'zod';
 import type { Response } from 'express';
-import { rejectSystemBankSubmissionSchema, submitSystemMaterialSchema, useSystemMaterialSchema, uuidIdSchema, type UseSystemMaterial } from '@giaokhoa/contracts';
+import { rejectSystemBankSubmissionSchema, submitSystemMaterialSchema, useSystemMaterialSchema, withdrawSystemResourceSchema, uuidIdSchema, type UseSystemMaterial, type WithdrawSystemResource } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemMaterialsService } from './system-materials.service';
 
@@ -55,6 +55,22 @@ export class SystemMaterialsController {
 
   @Get()
   discover(@CurrentUser() actor: AuthenticatedUser) { return this.materials.discover(actor.id); }
+
+  @Get('published')
+  publishedForReview(@CurrentUser() actor: AuthenticatedUser) {
+    return this.materials.publishedForReview(actor.id);
+  }
+
+  @Get('used')
+  used(@CurrentUser() actor: AuthenticatedUser) {
+    return this.materials.listUsed(actor.id);
+  }
+
+  @Post(':id/withdraw')
+  withdraw(@CurrentUser() actor: AuthenticatedUser, @Param('id', { schema: uuidIdSchema }) id: string,
+    @Body({ schema: withdrawSystemResourceSchema }) input: WithdrawSystemResource) {
+    return this.materials.withdraw(actor.id, id, input.reason);
+  }
 
   @Post('use')
   use(@CurrentUser() actor: AuthenticatedUser, @Body({ schema: useSystemMaterialSchema }) dto: UseSystemMaterial) {
