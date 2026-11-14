@@ -27,7 +27,47 @@ export async function createTestApp(): Promise<INestApplication> {
   return app;
 }
 
-export function http(app: INestApplication) { return request(app.getHttpServer()); }
+const testTokenHosts = new WeakMap<INestApplication, Map<string, string>>();
+
+export function bindTestSpaceToken(app: INestApplication, token: string, host: string): void {
+  let hosts = testTokenHosts.get(app);
+  if (!hosts) {
+    hosts = new Map();
+    testTokenHosts.set(app, hosts);
+  }
+  hosts.set(token, host);
+}
+
+export function http(app: INestApplication) {
+  const client = request(app.getHttpServer());
+  const hosts = testTokenHosts.get(app);
+  if (!hosts?.size) return client;
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      const method = Reflect.get(target, property, receiver);
+      if (typeof method !== 'function' || !['get','post','put','patch','delete','head','options'].includes(String(property))) {
+        return typeof method === 'function' ? method.bind(target) : method;
+      }
+      return (...args: unknown[]) => {
+        const result = method.apply(target, args) as ReturnType<typeof client.get>;
+        const originalSet = result.set.bind(result);
+        let explicitHost = false;
+        result.set = ((field: string | Record<string, string>, value?: string) => {
+          const fields = typeof field === 'string' ? { [field]: value } : field;
+          for (const [name, content] of Object.entries(fields)) {
+            if (name.toLowerCase() === 'host') explicitHost = true;
+            if (!explicitHost && name.toLowerCase() === 'authorization' && content?.startsWith('Bearer ')) {
+              const host = hosts.get(content.slice(7));
+              if (host) originalSet('Host', host);
+            }
+          }
+          return typeof field === 'string' ? originalSet(field, value!) : originalSet(field);
+        }) as typeof result.set;
+        return result;
+      };
+    },
+  });
+}
 
 export async function login(app: INestApplication, username: string, password: string): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
   const res = await http(app).post('/api/v1/auth/token').send({ username, password });

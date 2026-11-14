@@ -6,10 +6,10 @@ import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
-import { ContextsService } from '../../../src/modules/access/contexts.service';
-import { RolesService } from '../../../src/modules/access/roles.service';
-import { tenantAls } from '../../../src/modules/tenants/tenant-als';
-import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
+
+
+
+import { DedicatedTestCentres, type DedicatedTestCentre } from '../../support/dedicated-test-centres';
 import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
 import { FileSigningService } from '../../../src/modules/files/file-signing.service';
@@ -25,7 +25,6 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const suffix = `${process.pid}_${Date.now()}`;
 const centreDb = `giaokhoa_test_material_${suffix}`;
 const bankDb = `giaokhoa_test_material_bank_${suffix}`;
-const controlPlaneDb = `giaokhoa_test_material_cp_${suffix}`;
 const originalUrl = process.env.DATABASE_URL!;
 const adminUrl = withDatabase(originalUrl, 'postgres');
 const oldStorageDir = process.env.FILE_STORAGE_DIR;
@@ -36,7 +35,10 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
   let app: INestApplication;
   let pg: Client;
   let bank: Client;
-  let controlPlane: Client;
+  let pgB: Client;
+  let dedicated: DedicatedTestCentres;
+  let dedicatedA: DedicatedTestCentre;
+  let dedicatedB: DedicatedTestCentre;
   let hostA: string;
   let hostB: string;
   let storageDir: string;
@@ -65,77 +67,51 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
   beforeAll(async () => {
     process.env.DATABASE_URL = await buildTestDatabase({ adminUrl, database: centreDb, store: 'centre' });
     process.env.SYSTEM_BANK_DATABASE_URL = await buildTestDatabase({ adminUrl, database: bankDb, store: 'system-bank' });
-    process.env.CONTROL_PLANE_DATABASE_URL = await buildTestDatabase({ adminUrl, database: controlPlaneDb, store: 'control-plane' });
+    dedicated = new DedicatedTestCentres();
+    await dedicated.provision([`materials-a-${randomUUID().slice(0, 8)}`, `materials-b-${randomUUID().slice(0, 8)}`]);
     storageDir = await mkdtemp(join(tmpdir(), 'giaokhoa-material-'));
     process.env.FILE_STORAGE_DIR = storageDir;
     identity = await import('../../support/identity-access-helpers');
     courseHelpers = await import('../../support/course-enrolment-helpers');
     app = await identity.createTestApp();
     admin = await identity.adminToken(app);
-    pg = new Client({ connectionString: process.env.DATABASE_URL });
+    [dedicatedA, dedicatedB] = await dedicated.activate(app);
+    pg = new Client({ connectionString: withDatabase(adminUrl, dedicatedA.space.databaseName) });
+    pgB = new Client({ connectionString: withDatabase(adminUrl, dedicatedB.space.databaseName) });
     bank = new Client({ connectionString: process.env.SYSTEM_BANK_DATABASE_URL });
-    controlPlane = new Client({ connectionString: process.env.CONTROL_PLANE_DATABASE_URL });
-    await pg.connect();
-    await bank.connect();
-    await controlPlane.connect();
-    const createTenant = () => seedLegacyCentreInShared({
-      name: identity.uniqueName('Trung tâm học liệu'), slug: identity.uniqueName('g16').toLowerCase(),
-    });
-    tenantA = await createTenant();
-    tenantB = await createTenant();
-    await tenantAls.run({ platform: true }, async () => {
-      const contexts = app.get(ContextsService);
-      await contexts.ensureTenantContext(tenantA);
-      await contexts.ensureTenantContext(tenantB);
-    });
-    const owners = await pg.query<{ id: string; slug: string }>('select id, slug from tenants where id = any($1::uuid[])', [[tenantA, tenantB]]);
-    const slugA = owners.rows.find((row) => row.id === tenantA)!.slug;
-    const slugB = owners.rows.find((row) => row.id === tenantB)!.slug;
-    hostA = `${slugA}.test.local`;
-    hostB = `${slugB}.test.local`;
-    for (const slug of [slugA, slugB]) {
-      await controlPlane.query(
-        `insert into space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, schema_version)
-         values ($1, $1, 'center', 'active', $2, 'shared', 'shared', 'v1')`,
-        [slug, centreDb],
-      );
-    }
+    await pg.connect(); await pgB.connect(); await bank.connect();
+    tenantA = dedicatedA.space.tenantId!;
+    tenantB = dedicatedB.space.tenantId!;
+    hostA = dedicatedA.host;
+    hostB = dedicatedB.host;
+    const ma = await dedicated.createUser(app, dedicatedA, 'materialsManagerA');
+    const mb = await dedicated.createUser(app, dedicatedB, 'materialsManagerB');
+    await dedicated.grantCentreManager(app, dedicatedA, ma.id);
+    await dedicated.grantCentreManager(app, dedicatedB, mb.id);
+    managerA = ma.token;
+    managerB = mb.token;
+    const ta = await dedicated.createUser(app, dedicatedA, 'materialsTeacherA');
+    const tb = await dedicated.createUser(app, dedicatedB, 'materialsTeacherB');
+    teacherA = ta.token;
+    teacherB = tb.token;
+    await dedicated.grantRole(app, dedicatedA, ta.id, 'editingteacher');
+    const sa = await dedicated.createUser(app, dedicatedA, 'materialsStudentA');
+    const sb = await dedicated.createUser(app, dedicatedB, 'materialsStudentB');
+    const ob = await dedicated.createUser(app, dedicatedB, 'materialsOutsideB');
+    studentA = sa.token; studentB = sb.token; outsideB = ob.token;
+    studentBId = sb.id; outsideBId = ob.id;
     const system = await identity.systemContextId(app, admin);
-    const editingRole = await identity.roleIdByShortname(app, admin, 'editingteacher');
-    const managerRole = await identity.roleIdByShortname(app, admin, 'manager');
-    const actors = await Promise.all(Array.from({ length: 8 }, () => identity.createUserViaApi(app, admin)));
-    const switchTo = async (index: number, tenantId: string) => {
-      const actor = actors[index]!;
-      await identity.seedTenantMembershipFixture(app, tenantId, actor.id);
-      const root = await identity.login(app, actor.username, identity.STRONG_PASSWORD);
-      const response = await identity.http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(bearer(root.accessToken));
-      expect(response.status, JSON.stringify(response.body)).toBe(201);
-      return response.body.accessToken as string;
-    };
-    for (const index of [0, 1]) {
-      const context = await tenantAls.run({ platform: true }, () => app.get(ContextsService).ensureTenantContext(index === 0 ? tenantA : tenantB));
-      await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(actors[index]!.id, managerRole, context.id));
-    }
-    await identity.assignRole(app, admin, actors[2]!.id, editingRole, system);
-    managerA = await switchTo(0, tenantA);
-    managerB = await switchTo(1, tenantB);
-    teacherA = await switchTo(2, tenantA);
-    teacherB = await switchTo(3, tenantB);
-    studentA = await switchTo(4, tenantA);
-    studentB = await switchTo(5, tenantB);
-    outsideB = await switchTo(6, tenantB);
-    studentBId = actors[5]!.id;
-    outsideBId = actors[6]!.id;
+    const editorActor = await identity.createUserViaApi(app, admin);
     const editorRole = await identity.createRoleViaApi(app, admin);
     await identity.setOverride(app, admin, editorRole, 'systembank:review', system, 1);
-    await identity.assignRole(app, admin, actors[7]!.id, editorRole, system);
-    editor = (await identity.login(app, actors[7]!.username, identity.STRONG_PASSWORD)).accessToken;
+    await identity.assignRole(app, admin, editorActor.id, editorRole, system);
+    editor = (await identity.login(app, editorActor.username, identity.STRONG_PASSWORD)).accessToken;
     const category = await courseHelpers.createCategory(app, managerB);
     const course = await courseHelpers.createCourse(app, managerB, category.id);
     courseId = course.id;
     sectionId = await courseHelpers.getFirstSectionId(app, managerB, courseId);
     const content = await identity.http(app).get(`/api/v1/courses/${courseId}/content`).set(bearer(managerB));
-    await tenantAls.run({ tenantId: tenantB }, () => app.get(RolesService).assignRole(actors[3]!.id, editingRole, content.body.contextId));
+    await dedicated.grantRole(app, dedicatedB, tb.id, 'editingteacher', content.body.contextId);
     const instance = await courseHelpers.createEnrolInstance(app, managerB, courseId);
     await courseHelpers.enrolUser(app, managerB, courseId, instance.id, studentBId);
     await courseHelpers.enrolUser(app, managerB, courseId, instance.id, outsideBId);
@@ -153,9 +129,9 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
       finally { await cluster.end(); }
     }
     await pg?.end();
+    await pgB?.end();
     await bank?.end();
-    await controlPlane?.end();
-    await dropTestDatabase(adminUrl, controlPlaneDb);
+    await dedicated?.cleanup();
     await dropTestDatabase(adminUrl, bankDb);
     await dropTestDatabase(adminUrl, centreDb);
     if (storageDir) await rm(storageDir, { recursive: true, force: true });
@@ -181,7 +157,7 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const fileId = upload.body.fileId as string;
     const signedFile = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(teacherA));
     expect(signedFile.status, JSON.stringify(signedFile.body)).toBe(201);
-    expect((await identity.http(app).get(signedFile.body.url)).body).toEqual(bytes);
+    expect((await identity.http(app).get(signedFile.body.url).set('Host', hostA)).body).toEqual(bytes);
     for (const path of [`/api/v1/files/${fileId}`, `/api/v1/files/${fileId}/content`]) {
       expect((await identity.http(app).get(path).set(bearer(managerB))).status).toBe(404);
     }
@@ -270,11 +246,11 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const signed = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`)
       .set(bearer(first.token)).set('Host', first.host);
     expect(signed.status, JSON.stringify(signed.body)).toBe(201);
-    const downloaded = await identity.http(app).get(signed.body.url).set('Host', first.host);
+    const downloaded = await identity.http(app).get(signed.body.url).set('Host', hostA).set('Host', first.host);
     expect(downloaded.status, JSON.stringify(downloaded.body)).toBe(200);
     expect(downloaded.body).toEqual(data);
-    expect((await identity.http(app).get(signed.body.url).set('Host', second.host)).status).toBe(404);
-    expect((await identity.http(app).get(signed.body.url)).status).toBe(404);
+    expect((await identity.http(app).get(signed.body.url).set('Host', hostA).set('Host', second.host)).status).toBe(404);
+    expect((await identity.http(app).get(signed.body.url).set('Host', hostA)).status).toBe(404);
     expect((await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(second.token)).set('Host', second.host)).status).toBe(404);
     expect((await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(second.token)).set('Host', second.host)).status).toBe(404);
   });
@@ -303,7 +279,7 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect(received.body).toEqual(data);
     const signed = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(teacherA));
     expect(signed.status, JSON.stringify(signed.body)).toBe(201);
-    const signedDownload = await identity.http(app).get(signed.body.url);
+    const signedDownload = await identity.http(app).get(signed.body.url).set('Host', hostA);
     expect(signedDownload.status, JSON.stringify(signedDownload.body)).toBe(200);
     expect(signedDownload.body).toEqual(data);
     const validUrl = signed.body.url as string;
@@ -311,10 +287,10 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const sig = parsed.searchParams.get('sig')!;
     const changedSig = `${sig.slice(0, -1)}${sig.endsWith('A') ? 'B' : 'A'}`;
     const urlWithSig = (newSig: string) => `${parsed.pathname}?sig=${encodeURIComponent(newSig)}`;
-    expect((await identity.http(app).get(`/api/v1/files/${fileId}/download`)).status).toBe(401);
-    expect((await identity.http(app).get(urlWithSig(changedSig))).status).toBe(401);
+    expect((await identity.http(app).get(`/api/v1/files/${fileId}/download`).set('Host', hostA)).status).toBe(401);
+    expect((await identity.http(app).get(urlWithSig(changedSig)).set('Host', hostA)).status).toBe(401);
     const wrongDomain = app.get(FileSigningService).sign(fileId, fileDomainForSpace('22222222-2222-7222-8222-222222222222'));
-    expect((await identity.http(app).get(urlWithSig(wrongDomain.token))).status).toBe(401);
+    expect((await identity.http(app).get(urlWithSig(wrongDomain.token)).set('Host', hostA)).status).toBe(401);
     const time = Date.now();
     const timeSpy = vi.spyOn(Date, 'now').mockReturnValue(time - 3_600_000);
     let expiredSigned: { status: number; body: { url: string } };
@@ -324,7 +300,7 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
       timeSpy.mockRestore();
     }
     expect(expiredSigned.status).toBe(201);
-    expect((await identity.http(app).get(expiredSigned.body.url)).status).toBe(401);
+    expect((await identity.http(app).get(expiredSigned.body.url).set('Host', hostA)).status).toBe(401);
     const other = await identity.http(app).post('/api/v1/contentbank').set(bearer(teacherA)).send({
       name: 'Học liệu USER khác A', originalAuthor: 'Tác giả A', sourceKind: 'self', license: 'CC BY',
     });
@@ -332,13 +308,14 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const otherUpload = await identity.http(app).post(`/api/v1/contentbank/${other.body.id}/file`).set(bearer(teacherA))
       .send({ fileName: 'khac.pdf', mimeType: 'application/pdf', contentBase64: data.toString('base64') });
     expect(otherUpload.status).toBe(201);
-    expect((await identity.http(app).get(validUrl.replace(fileId, otherUpload.body.fileId))).status).toBe(401);
+    expect((await identity.http(app).get(validUrl.replace(fileId, otherUpload.body.fileId)).set('Host', hostA)).status).toBe(401);
     expect((await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`).set(bearer(managerB))).status).toBe(404);
-    const signedAtLegacyHost = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`)
+    const signedAtDedicatedHost = await identity.http(app).post(`/api/v1/files/${fileId}/signed-url`)
       .set(bearer(teacherA)).set('Host', hostA);
-    expect(signedAtLegacyHost.status).toBe(401);
-    expect((await identity.http(app).get(validUrl).set('Host', hostA)).status).toBe(403);
-    expect((await identity.http(app).get(validUrl).set('Host', hostB)).status).toBe(403);
+    expect(signedAtDedicatedHost.status).toBe(201);
+    expect((await identity.http(app).get(validUrl).set('Host', hostA)).status).toBe(200);
+    expect((await identity.http(app).get(validUrl).set('Host', hostB)).status).toBe(404);
+    expect((await identity.http(app).get(validUrl)).status).toBe(404);
     expect((await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(managerB))).status).toBe(404);
     expect((await identity.http(app).get(`/api/v1/files/${fileId}`).set(bearer(managerB))).status).toBe(404);
   });
@@ -413,7 +390,7 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect(v2Media.status).toBe(200);
     expect(v2Media.body).toEqual(Buffer.from('%PDF-1.4\nBan moi'));
     expect((await identity.http(app).get(`${ROOT}/${materialId}/versions/1/media`).set(bearer(teacherB))).body).toEqual(bytes);
-    const receipt = await pg.query('select system_material_version from resources where id=$1', [resourceId]);
+    const receipt = await pgB.query('select system_material_version from resources where id=$1', [resourceId]);
     expect(receipt.rows[0].system_material_version).toBe(1);
     await expect(bank.query('update system_material_versions set checksum=$1 where material_id=$2', ['0'.repeat(64), materialId])).rejects.toThrow('system_material.version_immutable');
   });
@@ -473,28 +450,48 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
       expect((await pg.query('select id from resources')).rows).toEqual([]);
       await pg.query("select set_config('app.tenant_id', $1, false)", [tenantB]);
       expect((await pg.query('select id from content_bank_content')).rows).toEqual([]);
-      expect((await pg.query('select id from resources where id=$1', [resourceId])).rows).toEqual([{ id: resourceId }]);
+      expect((await pg.query('select id from resources where id=$1', [resourceId])).rows).toEqual([]);
     } finally {
       await pg.query('RESET ROLE');
       await pg.query(`DROP OWNED BY "${role}"`);
       await pg.query(`DROP ROLE "${role}"`);
     }
+    // The other centre is a physically separate database, not merely another RLS GUC.
+    const roleB = `${role}_b`;
+    await pgB.query(`CREATE ROLE "${roleB}" NOLOGIN NOBYPASSRLS`);
+    try {
+      await pgB.query(`GRANT USAGE ON SCHEMA public TO "${roleB}"`);
+      await pgB.query(`GRANT SELECT ON resources, content_bank_content, course TO "${roleB}"`);
+      await pgB.query(`SET ROLE "${roleB}"`);
+      await pgB.query("select set_config('app.platform', 'off', false)");
+      await pgB.query("select set_config('app.tenant_id', '', false)");
+      expect((await pgB.query('select id from resources')).rows).toEqual([]);
+      await pgB.query("select set_config('app.tenant_id', $1, false)", [tenantA]);
+      expect((await pgB.query('select id from resources')).rows).toEqual([]);
+      await pgB.query("select set_config('app.tenant_id', $1, false)", [tenantB]);
+      expect((await pgB.query('select id from resources where id=$1', [resourceId])).rows).toEqual([{ id: resourceId }]);
+      expect((await pgB.query('select id from content_bank_content')).rows).toEqual([]);
+    } finally {
+      await pgB.query('RESET ROLE');
+      await pgB.query(`DROP OWNED BY "${roleB}"`);
+      await pgB.query(`DROP ROLE "${roleB}"`);
+    }
   });
 
 
   it('tạo module xong nhưng gắn bản tiếp nhận lỗi thì dọn cả module, context và resource', async () => {
-    const before = await pg.query('select id from course_modules where course=$1 order by id', [courseId]);
-    const resourceBefore = await pg.query('select id from resources where course=$1 order by id', [courseId]);
-    const contextsBefore = await pg.query('select id from context where context_level=70 order by id');
+    const before = await pgB.query('select id from course_modules where course=$1 order by id', [courseId]);
+    const resourceBefore = await pgB.query('select id from resources where course=$1 order by id', [courseId]);
+    const contextsBefore = await pgB.query('select id from context where context_level=70 order by id');
     const failure = vi.spyOn(app.get(SystemMaterialReferencesRepository), 'attach')
       .mockRejectedValueOnce(new ConflictException('Simulated reference write conflict'));
     try {
       const result = await identity.http(app).post(`${ROOT}/use`).set(bearer(teacherB)).send({ materialId, version: 1, courseId, sectionId });
       expect(result.status).toBe(409);
     } finally { failure.mockRestore(); }
-    expect((await pg.query('select id from course_modules where course=$1 order by id', [courseId])).rows).toEqual(before.rows);
-    expect((await pg.query('select id from resources where course=$1 order by id', [courseId])).rows).toEqual(resourceBefore.rows);
-    expect((await pg.query('select id from context where context_level=70 order by id')).rows).toEqual(contextsBefore.rows);
+    expect((await pgB.query('select id from course_modules where course=$1 order by id', [courseId])).rows).toEqual(before.rows);
+    expect((await pgB.query('select id from resources where course=$1 order by id', [courseId])).rows).toEqual(resourceBefore.rows);
+    expect((await pgB.query('select id from context where context_level=70 order by id')).rows).toEqual(contextsBefore.rows);
   });
 
 
@@ -523,7 +520,7 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const reused = await identity.http(app).post(`${ROOT}/use`).set(bearer(teacherB))
       .send({ materialId, version: 1, courseId, sectionId });
     expect(reused.status, JSON.stringify(reused.body)).toBe(201);
-    const pinned = await pg.query('select system_material_id, system_material_version from resources where id=$1', [resourceId]);
+    const pinned = await pgB.query('select system_material_id, system_material_version from resources where id=$1', [resourceId]);
     expect(pinned.rows[0]).toMatchObject({ system_material_id: materialId, system_material_version: 1 });
     const pending = await identity.http(app).get('/api/v1/system-bank/events/pending').set(bearer(managerB));
     expect(pending.status, JSON.stringify(pending.body)).toBe(200);

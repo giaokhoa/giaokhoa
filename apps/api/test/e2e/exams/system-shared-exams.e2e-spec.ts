@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Client, type Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
-import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import { SYSTEM_FILE_DOMAIN, fileDomainForSpace } from '@giaokhoa/db';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 import { AppModule } from '../../../src/app.module';
@@ -21,16 +21,13 @@ import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modul
 import { UsersService } from '../../../src/modules/users/users.service';
 import { TenantsService } from '../../../src/modules/tenants/tenants.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
-import { tenantAls } from '../../../src/modules/tenants/tenant-als';
-import {
-  adminToken, assignRole, createUserViaApi, http, login, roleIdByShortname, seedTenantMembershipFixture,
-  STRONG_PASSWORD, systemContextId, uniqueName,
-} from '../../support/identity-access-helpers';
+
+import { adminToken, http, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 import {
   createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId,
 } from '../../support/course-enrolment-helpers';
 import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
-import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
+import { DedicatedTestCentres, type DedicatedTestCentre } from '../../support/dedicated-test-centres';
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -49,14 +46,16 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
   let app: INestApplication;
   let offlineApp: INestApplication | undefined;
   let centre: Client;
+  let centreB: Client;
+  let dedicated: DedicatedTestCentres;
+  let dedicatedA: DedicatedTestCentre;
+  let dedicatedB: DedicatedTestCentre;
   let bank: Client;
   let admin: string;
   let managerA: string;
   let managerB: string;
   let studentA: string;
   let studentB: string;
-  let tenantA: string;
-  let tenantB: string;
   let courseA: string;
   let courseB: string;
   let sectionA: string;
@@ -76,45 +75,34 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
   const centreName = `giaokhoa_test_shared_exam_centre_${suffix}`;
   const bankName = `giaokhoa_test_shared_exam_system_${suffix}`;
 
-  async function centreSession(user: { username: string }, tenantId: string) {
-    const original = await login(app, user.username, STRONG_PASSWORD);
-    const switched = await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(bearer(original.accessToken));
-    expect(switched.status, JSON.stringify(switched.body)).toBe(201);
-    return switched.body.accessToken as string;
-  }
-
   beforeAll(async () => {
     process.env.DATABASE_URL = await buildTestDatabase({ adminUrl, database: centreName, store: 'centre' });
     bankUrl = await buildTestDatabase({ adminUrl, database: bankName, store: 'system-bank' });
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
     storageDir = await mkdtemp(join(tmpdir(), 'giaokhoa-shared-exam-'));
     process.env.FILE_STORAGE_DIR = storageDir;
+    dedicated = new DedicatedTestCentres();
+    await dedicated.provision([`shared-exam-a-${suffix}`, `shared-exam-b-${suffix}`]);
     app = await testApp();
     admin = await adminToken(app);
-    centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
+    [dedicatedA, dedicatedB] = await dedicated.activate(app);
+    await dedicated.grantCentreManager(app, dedicatedA);
+    await dedicated.grantCentreManager(app, dedicatedB);
+    centre = new Client({ connectionString: withDatabase(adminUrl, dedicatedA.space.databaseName) });
+    centreB = new Client({ connectionString: withDatabase(adminUrl, dedicatedB.space.databaseName) });
+    await centre.connect(); await centreB.connect();
     bank = new Client({ connectionString: bankUrl }); await bank.connect();
-
-    tenantA = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm A'), slug: uniqueName('exam-a') });
-    tenantB = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm B'), slug: uniqueName('exam-b') });
-    await tenantAls.run({ platform: true }, async () => {
-      const contexts = app.get(ContextsService);
-      await contexts.ensureTenantContext(tenantA);
-      await contexts.ensureTenantContext(tenantB);
-    });
-    const [a, b, sa, sb] = await Promise.all(Array.from({ length: 4 }, () => createUserViaApi(app, admin)));
-    for (const user of [a, sa]) await seedTenantMembershipFixture(app, tenantA, user.id);
-    for (const user of [b, sb]) await seedTenantMembershipFixture(app, tenantB, user.id);
-    await assignRole(app, admin, a.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
-    const managerRole = await roleIdByShortname(app, admin, 'manager');
-    for (const [user, tenant] of [[a, tenantA], [b, tenantB]] as const) {
-      const context = await tenantAls.run({ platform: true }, () => app.get(ContextsService).ensureTenantContext(tenant));
-      await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(user.id, managerRole, context.id));
-    }
-    managerA = await centreSession(a, tenantA);
-    managerB = await centreSession(b, tenantB);
-    studentA = await centreSession(sa, tenantA);
-    studentB = await centreSession(sb, tenantB);
-
+    const ma = await dedicated.createUser(app, dedicatedA, 'exammanagerA');
+    const mb = await dedicated.createUser(app, dedicatedB, 'exammanagerB');
+    await dedicated.grantCentreManager(app, dedicatedA, ma.id);
+    await dedicated.grantCentreManager(app, dedicatedB, mb.id);
+    await dedicated.grantRole(app, dedicatedA, ma.id, 'teacher');
+    managerA = ma.token;
+    managerB = mb.token;
+    const sa = await dedicated.createUser(app, dedicatedA, 'examstudentA');
+    const sb = await dedicated.createUser(app, dedicatedB, 'examstudentB');
+    studentA = sa.token;
+    studentB = sb.token;
     const catA = await createCategory(app, managerA);
     const catB = await createCategory(app, managerB);
     courseA = (await createCourse(app, managerA, catA.id)).id;
@@ -143,7 +131,9 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     await offlineApp?.get<Pool>('SHARED_CENTRE_KYSELY').end();
     await app?.get<Pool>('SHARED_CENTRE_KYSELY').end();
     await centre?.end();
+    await centreB?.end();
     await bank?.end();
+    await dedicated?.cleanup();
     await dropTestDatabase(adminUrl, centreName);
     await dropTestDatabase(adminUrl, bankName);
     if (storageDir) await rm(storageDir, { recursive: true, force: true });
@@ -205,7 +195,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
 
 
     const internalA = (await centre.query('SELECT kind, bank_id FROM exams WHERE id = $1', [assignA.body.examId])).rows[0];
-    const internalB = (await centre.query('SELECT kind, bank_id FROM exams WHERE id = $1', [assignB.body.examId])).rows[0];
+    const internalB = (await centreB.query('SELECT kind, bank_id FROM exams WHERE id = $1', [assignB.body.examId])).rows[0];
     expect(internalA.kind).toBe('system_execution');
     expect(internalB.kind).toBe('system_execution');
     expect((await http(app).get(`/api/v1/exams/${assignB.body.examId}`).set(bearer(managerB))).status).toBe(404);
@@ -215,7 +205,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect((await bank.query("SELECT tablename FROM pg_tables WHERE tablename IN ('exam_attempts','grade_grades')")).rowCount).toBe(0);
 
     const snapA = (await centre.query('SELECT question_snapshots FROM exam_pins WHERE id = $1', [assignA.body.id])).rows[0];
-    const snapB = (await centre.query('SELECT question_snapshots FROM exam_pins WHERE id = $1', [assignB.body.id])).rows[0];
+    const snapB = (await centreB.query('SELECT question_snapshots FROM exam_pins WHERE id = $1', [assignB.body.id])).rows[0];
     expect(snapA.question_snapshots).toHaveLength(1);
     expect(snapB.question_snapshots).toHaveLength(1);
     expect(snapA.question_snapshots[0].checksum).toBe(snapB.question_snapshots[0].checksum);
@@ -243,6 +233,10 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
 
     delete process.env.SYSTEM_BANK_DATABASE_URL;
     offlineApp = await testApp();
+    dedicated.bindApp(offlineApp, [
+      { token: managerA, host: dedicatedA.host }, { token: studentA, host: dedicatedA.host },
+      { token: managerB, host: dedicatedB.host }, { token: studentB, host: dedicatedB.host },
+    ]);
     const startedA = await http(offlineApp).post(`/api/v1/exam-pins/${assignA.body.id}/attempts`).set(bearer(studentA)).send({});
     const startedB = await http(offlineApp).post(`/api/v1/exam-pins/${assignB.body.id}/attempts`).set(bearer(studentB)).send({});
     expect(startedA.status, JSON.stringify(startedA.body)).toBe(201);
@@ -274,11 +268,11 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       expect(finished.status, JSON.stringify(finished.body)).toBe(201);
       expect(finished.body.attempt.state).toBe('finished');
     }
-    const attempts = await centre.query('SELECT pin_id, user_id, sum_grades FROM exam_attempts WHERE pin_id = ANY($1::uuid[])',
-      [[assignA.body.id, assignB.body.id]]);
-    expect(attempts.rowCount).toBe(2);
-    expect(attempts.rows.map((r) => r.pin_id).sort()).toEqual([assignA.body.id, assignB.body.id].sort());
-    expect((await http(offlineApp).get(`/api/v1/quiz-attempts/${startedB.body.attempt.id}`).set(bearer(studentA))).status).toBe(403);
+    const attemptsA = await centre.query('SELECT pin_id, user_id, sum_grades FROM exam_attempts');
+    const attemptsB = await centreB.query('SELECT pin_id, user_id, sum_grades FROM exam_attempts');
+    expect(attemptsA.rows.map((r) => r.pin_id)).toEqual([assignA.body.id]);
+    expect(attemptsB.rows.map((r) => r.pin_id)).toEqual([assignB.body.id]);
+    expect((await http(offlineApp).get(`/api/v1/quiz-attempts/${startedB.body.attempt.id}`).set(bearer(studentA))).status).toBe(404);
     const ownerReview = await http(offlineApp).get(`/api/v1/quiz-attempts/${startedA.body.attempt.id}`).set(bearer(studentA));
     expect(ownerReview.status).toBe(200);
     expect(ownerReview.body.quiz).not.toHaveProperty('sharedSource');
@@ -355,20 +349,20 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     const failedPin = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`)
       .set(bearer(managerB)).send(body);
     expect(failedPin.status).toBeGreaterThanOrEqual(400);
-    expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(0);
+    expect((await centreB.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(0);
     await storage.put(SYSTEM_FILE_DOMAIN, key, bytes);
     const assigned = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`)
       .set(bearer(managerB)).send(body);
     expect(assigned.status, JSON.stringify(assigned.body)).toBe(201);
     const pinId = assigned.body.id as string;
-    const gradeItemId = (await centre.query('SELECT id FROM grade_items WHERE item_instance = $1',
+    const gradeItemId = (await centreB.query('SELECT id FROM grade_items WHERE item_instance = $1',
       [assigned.body.cmId])).rows[0].id as string;
     const manualGradeRelease = await http(app).put(`/api/v1/grade-items/${gradeItemId}/posting-policy`)
       .set(bearer(managerB)).send({ policy: 'manual' });
     expect(manualGradeRelease.status, JSON.stringify(manualGradeRelease.body)).toBe(200);
     expect((await http(app).post(`/api/v1/courses/${courseB}/exam-pins`)
       .set(bearer(managerB)).send(body)).body.id).toBe(pinId);
-    const snapshot = (await centre.query('SELECT question_snapshots FROM exam_pins WHERE id = $1', [pinId])).rows[0];
+    const snapshot = (await centreB.query('SELECT question_snapshots FROM exam_pins WHERE id = $1', [pinId])).rows[0];
     expect(snapshot.question_snapshots).toHaveLength(2);
     expect(JSON.stringify(snapshot.question_snapshots)).not.toContain('bank-media://');
 
@@ -389,7 +383,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(beforeSubmission.status).toBe(200);
     expect(beforeSubmission.body.questions[1].guidance).toBeNull();
     const imageNode = started.body.questions[1].questionText.content.find((n: { type: string }) => n.type === 'image');
-    const imageResponse = await http(offlineApp!).get(imageNode.attrs.src);
+    const imageResponse = await http(offlineApp!).get(imageNode.attrs.src).set('Host', dedicatedB.host);
     expect(imageResponse.status).toBe(200);
     expect(sha256Hex(imageResponse.body)).toBe(hash);
     for (const [index, response] of [started.body.questions[0].answers[0].id, 'Bài tự luận riêng B'].entries()) {
@@ -426,13 +420,13 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(afterPublication.status).toBe(200);
     expect(JSON.stringify(afterPublication.body.questions[1].guidance)).toContain('Rubric tự luận tuyệt mật');
     expect(JSON.stringify(afterPublication.body.questions[1].solution)).toContain('Lời giải được khóa');
-    expect((await centre.query('SELECT count(*)::int AS n FROM exam_attempts WHERE pin_id = $1', [pinId])).rows[0].n).toBe(1);
+    expect((await centreB.query('SELECT count(*)::int AS n FROM exam_attempts WHERE pin_id = $1', [pinId])).rows[0].n).toBe(1);
   }, 120_000);
 
   it('retry giữ một bản thực thi và một pin; sai nguồn hoặc section không thể tái dùng requestId', async () => {
     const requestId = randomUUID();
     const body = { sharedExamVersionId: publishedId, requestId, sectionId: sectionB, password: 'Mật khẩu kiểm tra retry #15' };
-    await centre.query(`CREATE FUNCTION reject_system_exam_pin() RETURNS trigger LANGUAGE plpgsql AS $$
+    await centreB.query(`CREATE FUNCTION reject_system_exam_pin() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'pin write interrupted'; END $$;
       CREATE TRIGGER reject_system_exam_pin BEFORE INSERT ON exam_pins
       FOR EACH ROW EXECUTE FUNCTION reject_system_exam_pin()`);
@@ -440,10 +434,10 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       const failed = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB)).send(body);
       expect(failed.status).toBe(500);
     } finally {
-      await centre.query('DROP TRIGGER reject_system_exam_pin ON exam_pins; DROP FUNCTION reject_system_exam_pin()');
+      await centreB.query('DROP TRIGGER reject_system_exam_pin ON exam_pins; DROP FUNCTION reject_system_exam_pin()');
     }
-    expect((await centre.query('SELECT count(*)::int AS n FROM exams WHERE pin_request_id = $1', [requestId])).rows[0].n).toBe(1);
-    const stored = (await centre.query('SELECT shared_request_checksum FROM exams WHERE pin_request_id = $1',
+    expect((await centreB.query('SELECT count(*)::int AS n FROM exams WHERE pin_request_id = $1', [requestId])).rows[0].n).toBe(1);
+    const stored = (await centreB.query('SELECT shared_request_checksum FROM exams WHERE pin_request_id = $1',
       [requestId])).rows[0].shared_request_checksum as string;
     expect(stored).toMatch(/^[a-f0-9]{64}$/);
     expect(stored).not.toContain('Mật khẩu kiểm tra retry #15');
@@ -451,7 +445,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       .send({ ...body, timeClose: '2026-12-15T12:00:00.000Z' });
     expect(changedDuringResume.status).toBe(409);
     expect(changedDuringResume.body.code).toBe('exam.pin_request_conflict');
-    expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(0);
+    expect((await centreB.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(0);
 
     const again = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB)).send(body);
     expect(again.status, JSON.stringify(again.body)).toBe(201);
@@ -480,7 +474,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       expect(conflict.body.code).toBe('exam.pin_request_conflict');
     }
 
-    expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(1);
+    expect((await centreB.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(1);
     const wrong = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
       .send({ ...body, sharedExamVersionId: randomUUID() });
     expect(wrong.status).toBe(409);
@@ -743,6 +737,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
 
   it('fork đề có ảnh lỗi ở slot thứ hai dọn metadata, object và rollback câu/đề/outbox', async () => {
     const forkApp = await testApp();
+    dedicated.bindApp(forkApp, [{ token: managerB, host: dedicatedB.host }]);
     try {
     const original = (await bank.query('SELECT * FROM system_exam_versions WHERE id = $1', [publishedId])).rows[0];
     const versionId = (await bank.query<{ id: string }>('SELECT uuidv7() AS id')).rows[0]!.id;
@@ -788,44 +783,44 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
         JSON.stringify(pkg), checksumPackage(pkg), original.submitted_by, original.reviewed_by],
     );
     const sharedId = inserted.rows[0]!.id;
-    const beforeQuestions = (await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
-    const beforePapers = (await centre.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count;
-    const beforeOutbox = (await centre.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count;
-    await centre.query('ALTER TABLE exam_slots ADD CONSTRAINT reject_second_fork_slot CHECK (position <> 2) NOT VALID');
+    const beforeQuestions = (await centreB.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
+    const beforePapers = (await centreB.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count;
+    const beforeOutbox = (await centreB.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count;
+    await centreB.query('ALTER TABLE exam_slots ADD CONSTRAINT reject_second_fork_slot CHECK (position <> 2) NOT VALID');
     try {
       const failed = await http(forkApp).post(`/api/v1/system-bank/exams/${sharedId}/fork`)
         .set(bearer(managerB)).send({});
       expect(failed.status, JSON.stringify(failed.body)).toBe(500);
-      expect((await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count).toBe(beforeQuestions);
-      expect((await centre.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count).toBe(beforePapers);
-      expect((await centre.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count).toBe(beforeOutbox);
-      expect((await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(0);
+      expect((await centreB.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count).toBe(beforeQuestions);
+      expect((await centreB.query<{ count: string }>('SELECT count(*) FROM exams')).rows[0]!.count).toBe(beforePapers);
+      expect((await centreB.query<{ count: string }>("SELECT count(*) FROM outbox_events WHERE aggregate IN ('question', 'stimulus')")).rows[0]!.count).toBe(beforeOutbox);
+      expect((await centreB.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(0);
       expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(false);
       expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash))).toBe(true);
     } finally {
-      await centre.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_second_fork_slot');
+      await centreB.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_second_fork_slot');
     }
     const succeeded = await http(forkApp).post(`/api/v1/system-bank/exams/${sharedId}/fork`)
       .set(bearer(managerB)).send({});
     expect(succeeded.status, JSON.stringify(succeeded.body)).toBe(201);
     expect(succeeded.body.questionIds).toHaveLength(2);
-    expect((await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(1);
-    expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(true);
-    const beforeReusedFile = (await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rows[0]!.id;
-    const beforeReusedQuestions = (await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
-    await centre.query('ALTER TABLE exam_slots ADD CONSTRAINT reject_shared_media_fork CHECK (position <> 2) NOT VALID');
+    expect((await centreB.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rowCount).toBe(1);
+    expect(await storage.exists(fileDomainForSpace(dedicatedB.space.spaceId), hash)).toBe(true);
+    const beforeReusedFile = (await centreB.query('SELECT id FROM files WHERE content_hash = $1', [hash])).rows[0]!.id;
+    const beforeReusedQuestions = (await centreB.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count;
+    await centreB.query('ALTER TABLE exam_slots ADD CONSTRAINT reject_shared_media_fork CHECK (position <> 2) NOT VALID');
     try {
       const failedAgain = await http(forkApp).post(`/api/v1/system-bank/exams/${sharedId}/fork`)
         .set(bearer(managerB)).send({});
       expect(failedAgain.status).toBe(500);
-      const remaining = await centre.query('SELECT id FROM files WHERE content_hash = $1', [hash]);
+      const remaining = await centreB.query('SELECT id FROM files WHERE content_hash = $1', [hash]);
       expect(remaining.rowCount).toBe(1);
       expect(remaining.rows[0]!.id).toBe(beforeReusedFile);
-      expect((await centre.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count)
+      expect((await centreB.query<{ count: string }>('SELECT count(*) FROM question')).rows[0]!.count)
         .toBe(beforeReusedQuestions);
-      expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(true);
+      expect(await storage.exists(fileDomainForSpace(dedicatedB.space.spaceId), hash)).toBe(true);
     } finally {
-      await centre.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_shared_media_fork');
+      await centreB.query('ALTER TABLE exam_slots DROP CONSTRAINT reject_shared_media_fork');
     }
     } finally {
       await forkApp.close();
@@ -835,6 +830,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
 
   it('rút đề nguồn: B dùng lại bản đã ghim, tạo bản riêng chỉnh sửa, không nhận phiên bản chưa ghim', async () => {
     const lifecycleApp = await testApp();
+    dedicated.bindApp(lifecycleApp, [{ token: managerB, host: dedicatedB.host }]);
     try {
     const version2 = await bank.query<{ id: string }>(
       'select id from system_exam_versions where source_exam_id=$1 and source_version_number=2 and status=$2',
@@ -891,7 +887,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(fork.body.sourceExamVersionId).toBe(publishedId);
     expect(fork.body.questionIds).toHaveLength(1);
     expect(fork.body.questionIds[0]).not.toBe(localQuestionId);
-    const local = await centre.query('select kind, system_exam_fork_version_id from exams where id=$1', [fork.body.paperId]);
+    const local = await centreB.query('select kind, system_exam_fork_version_id from exams where id=$1', [fork.body.paperId]);
     expect(local.rows[0]).toMatchObject({ kind: 'snapshot', system_exam_fork_version_id: publishedId });
     const edited = await http(lifecycleApp).patch(`/api/v1/exams/${fork.body.paperId}`)
       .set(bearer(managerB)).send({ name: 'Đề bản riêng B đã chỉnh sửa' });

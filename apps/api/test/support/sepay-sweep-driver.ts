@@ -34,7 +34,9 @@ function getSharedKysely(): CentreDb {
 
 function getSpaceDatabase(): SpaceDatabaseService {
   if (!spaceDatabase) {
-    spaceDatabase = new SpaceDatabaseService({ get: () => undefined } as unknown as ConfigService);
+    spaceDatabase = new SpaceDatabaseService({
+      get: (name: string) => name === 'CONTROL_PLANE_DATABASE_URL' ? process.env.CONTROL_PLANE_DATABASE_URL : undefined,
+    } as unknown as ConfigService);
     spaceDatabase.bindSharedKysely(getSharedKysely());
   }
   return spaceDatabase;
@@ -42,10 +44,10 @@ function getSpaceDatabase(): SpaceDatabaseService {
 
 function getScheduler(): SepayMatchingScheduler {
   if (!scheduler) {
-    const repo = new PaymentsRepository(getSharedKysely());
-    const writer = new OutboxWriterService(getSharedKysely());
-    const plans = new PlanEntitlementsService(repo);
     const spaceDatabase = getSpaceDatabase();
+    const repo = new PaymentsRepository(spaceDatabase.routedKysely);
+    const writer = new OutboxWriterService(spaceDatabase.routedKysely);
+    const plans = new PlanEntitlementsService(repo);
     const enrolOutbox = new WorkerEnrolOutboxService(spaceDatabase);
     const spaceScope = new WorkerPaymentSpaceScope(spaceDatabase);
     const matching = new SepayMatchingService(
@@ -56,7 +58,7 @@ function getScheduler(): SepayMatchingScheduler {
       plans,
       new WorkerPaymentSettlementService(repo, enrolOutbox, spaceScope),
     );
-    scheduler = new SepayMatchingScheduler(matching);
+    scheduler = new SepayMatchingScheduler(matching, spaceDatabase);
   }
   return scheduler;
 }
@@ -98,6 +100,7 @@ export async function closeSepaySweepDriver(): Promise<void> {
   cohortSync = null;
   cohortWatermark = '0';
   sharedKysely = null;
+  if (spaceDatabase) await spaceDatabase.onModuleDestroy();
   spaceDatabase = null;
   if (pool) {
     const closing = pool;

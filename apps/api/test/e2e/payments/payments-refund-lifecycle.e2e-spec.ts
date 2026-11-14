@@ -1,15 +1,12 @@
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Client } from 'pg';
+import { Client, type Pool } from 'pg';
 import { randomInt } from 'node:crypto';
-import {
-  ADMIN, assignRole, createRoleViaApi, createTestApp, createUserViaApi,
-  http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName, grantTenantManagerFixture,
-} from '../../support/identity-access-helpers';
+import { ADMIN, assignRole, createRoleViaApi, createTestApp, createUserViaApi, http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 import { TenantConfigService } from '../../../src/modules/tenants/tenant-config.service';
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
-import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
+import { DedicatedTestCentres } from '../../support/dedicated-test-centres';
 
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
 const runBankSuffix = randomInt(100000, 1000000).toString();
@@ -18,7 +15,7 @@ const SEPAY_XID = `xid-test-slice3-${runBankSuffix}`;
 const BANK_ACCOUNT = `113366${runBankSuffix}`;
 const CENTER_KEY = 'sk-test-sepay-center-5678';
 const CENTER_XID = `xid-ctr-${Date.now()}`;
-const CENTER_BANK = '113366660001';
+const CENTER_BANK = `113366${randomInt(100000, 1000000)}`;
 
 describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review theo chủ tiền', () => {
   let app: INestApplication;
@@ -82,21 +79,21 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
     };
   }
 
-  async function postIpn(body: Record<string, unknown>, key = SEPAY_KEY) {
-    const res = await http(app).post('/api/v1/payments/ipn/sepay')
-      .set('Authorization', `Apikey ${key}`)
-      .send(body);
+  async function postIpn(body: Record<string, unknown>, key = SEPAY_KEY, host?: string) {
+    const request = http(app).post('/api/v1/payments/ipn/sepay');
+    if (host) request.set('Host', host);
+    const res = await request.set('Authorization', `Apikey ${key}`).send(body);
     expect(res.status).toBeLessThan(300);
     expect(res.body.success).toBe(true);
     return res;
   }
 
-  async function waitPaymentStatus(id: string, want: string, timeoutMs = 12000): Promise<Record<string, unknown>> {
+  async function waitPaymentStatus(id: string, want: string, timeoutMs = 12000, token = admin): Promise<Record<string, unknown>> {
     const start = Date.now();
     let last: Record<string, unknown> = {};
     while (Date.now() - start < timeoutMs) {
       await driveSepaySweep();
-      const res = await http(app).get(`/api/v1/payments/${id}`).set('Authorization', `Bearer ${admin}`);
+      const res = await http(app).get(`/api/v1/payments/${id}`).set('Authorization', `Bearer ${token}`);
       last = res.body;
       if (last.status === want) return last;
       await new Promise((r) => setTimeout(r, 250));
@@ -364,37 +361,22 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
   });
 
   it('8. hàng đợi theo chủ tiền: trung tâm chỉ thấy khoản chờ của mình, tự xử lý và tự hoàn học phí; hai phía không chạm tiền của nhau', async () => {
-    const slug = `ctr-${uniqueName('c').toLowerCase()}`;
-    const tenantId = await seedLegacyCentreInShared({ slug, name: 'Trung tâm (spec lát 3)' });
-    await grantTenantManagerFixture(app, admin, tenantId);
-
-    const centerMgr = await createUserViaApi(app, admin);
-    const buyerUser = await createUserViaApi(app, admin);
-    const addMember = async (userId: string) => {
-      const res = await http(app).post(`/api/v1/tenants/${tenantId}/members`).set('Authorization', `Bearer ${admin}`).send({ userId });
-      expect(res.status).toBeLessThan(300);
-    };
-    await addMember(centerMgr.id);
-    await addMember(buyerUser.id);
-
-    const contexts = await http(app).get('/api/v1/access/contexts').set('Authorization', `Bearer ${admin}`);
-    const tenantCtx = (contexts.body as { id: string; contextLevel: number; instanceId: string }[])
-      .find((c) => c.contextLevel === 20 && c.instanceId === tenantId);
-    expect(tenantCtx).toBeTruthy();
-    const managerRole = await roleIdByShortname(app, admin, 'manager');
-    await assignRole(app, admin, centerMgr.id, managerRole, tenantCtx!.id);
-
-    const switchTo = async (token: string) => {
-      const res = await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set('Authorization', `Bearer ${token}`);
-      expect(res.status).toBeLessThan(300);
-      return (res.body as { accessToken: string }).accessToken;
-    };
-    const adminC = await switchTo(admin);
-    admin = (await login(app, ADMIN.username, ADMIN.password)).accessToken;
-    const mgrLogin = await login(app, centerMgr.username, STRONG_PASSWORD);
-    const mgrC = await switchTo(mgrLogin.accessToken);
-    const buyerLogin = await login(app, buyerUser.username, STRONG_PASSWORD);
-    const buyerC = await switchTo(buyerLogin.accessToken);
+    const dedicated = new DedicatedTestCentres();
+    await dedicated.provision([`refund-${uniqueName('ctr').toLowerCase()}`]);
+    const oldApp = app;
+    const centreApp = await createTestApp();
+    app = centreApp;
+    try {
+    const [centre] = await dedicated.activate(centreApp);
+    const tenantId = centre.space.tenantId!;
+    const adminC = centre.adminToken;
+    await dedicated.grantCentreManager(centreApp, centre);
+    const centerMgr = await dedicated.createUser(centreApp, centre, 'refundManager');
+    await dedicated.grantCentreManager(centreApp, centre, centerMgr.id);
+    const buyerUser = await dedicated.createUser(centreApp, centre, 'refundBuyer');
+    const mgrC = centerMgr.token;
+    const buyerC = buyerUser.token;
+    await closeSepaySweepDriver();
 
     const centerAccountId = await createSepayAccount(adminC, CENTER_XID, CENTER_KEY, CENTER_BANK);
     const { course, instance } = await createFeeCourse(adminC, centerAccountId);
@@ -402,12 +384,12 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
     const centerIpn = (paymentCode: string, amount: number) => postIpn(ipnBody({
       bank_account_xid: CENTER_XID, account_number: CENTER_BANK,
       content: `TT ${paymentCode}`, amount,
-    }), CENTER_KEY);
+    }), CENTER_KEY, centre.host);
 
     const p1 = await createFeePayment(buyerC, instance.id);
     expect(p1.tenantId).toBe(tenantId);
     await centerIpn(p1.paymentCode, 99000);
-    await waitPaymentStatus(p1.id, 'needs_review');
+    await waitPaymentStatus(p1.id, 'needs_review', 12000, buyerC);
     expect(await enrolmentActive(course.id, buyerC)).toBe(false);
 
     const platformMgr = await secondManager();
@@ -432,7 +414,7 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
 
     const p2 = await createFeePayment(buyerC, instance.id);
     await centerIpn(p2.paymentCode, 99000);
-    await waitPaymentStatus(p2.id, 'needs_review');
+    await waitPaymentStatus(p2.id, 'needs_review', 12000, buyerC);
     const rejectedRes = await http(app).post(`/api/v1/payments/${p2.id}/review`).set('Authorization', `Bearer ${mgrC}`)
       .send({ decision: 'rejected', reason: 'Sao kê không có khoản tiền này' });
     expect(rejectedRes.status).toBeLessThan(300);
@@ -442,7 +424,7 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
 
     const p3 = await createFeePayment(buyerC, instance.id);
     await centerIpn(p3.paymentCode, 100000);
-    await waitPaymentStatus(p3.id, 'succeeded');
+    await waitPaymentStatus(p3.id, 'succeeded', 12000, buyerC);
     const ownRefund = await createRefund(mgrC, p3.id, { amount: 30000, reason: 'Trung tâm hoàn học phí', externalTransactionId: `FT-CTR-${Date.now()}` });
     expect(ownRefund.status).toBeLessThan(300);
     expect(ownRefund.body.status).toBe('approved');
@@ -451,10 +433,22 @@ describe('Lát 3 #189: vòng đời hoàn tiền + hàng đợi needs_review the
     expect(ownSettled.body.status).toBe('settled');
 
     const cross1 = await createRefund(platformMgr.token, p3.id, { amount: 1000, reason: 'platform chạm học phí' });
-    expect(cross1.status).toBe(403);
+    expect(cross1.status).toBe(404); // Platform cannot even locate the centre's payment.
     const platformPayment = await manualSucceededPayment();
     const cross2 = await createRefund(mgrC, platformPayment.payment.id, { amount: 1000, reason: 'trung tâm chạm tiền platform' });
-    expect(cross2.status).toBe(403);
+    expect([403, 404]).toContain(cross2.status);
+    } finally {
+      await closeSepaySweepDriver();
+      await centreApp.close();
+      await centreApp.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      await dedicated.cleanup();
+      // Nest Passport strategies are process-global; a second test app replaces the
+      // running JWT strategy. Rebuild the platform app after the dedicated flow.
+      await oldApp.close();
+      await oldApp.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      app = await createTestApp();
+      admin = (await login(app, ADMIN.username, ADMIN.password)).accessToken;
+    }
   });
 
   it('9. quá hạn hàng đợi: reviewtargethours = 0 → khoản chờ bị đánh dấu overdue, chỉ cảnh báo chứ không tự xử lý', async () => {

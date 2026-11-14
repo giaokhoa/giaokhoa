@@ -4,31 +4,20 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  adminToken,
-  assignRole,
-  createTestApp,
-  createUserViaApi,
-  createRoleViaApi,
-  seedTenantMembershipFixture,
-  http,
-  login,
-  roleIdByShortname,
-  setOverride,
-  STRONG_PASSWORD,
-  systemContextId,
-  uniqueName,
-} from '../../support/identity-access-helpers';
+import { adminToken, assignRole, createTestApp, createUserViaApi, createRoleViaApi, http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
 import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
-import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+
 import { programmePackageChecksum } from '../../../src/modules/system-bank/programme-package-integrity';
-import { RolesService } from '../../../src/modules/access/roles.service';
-import { ContextsService } from '../../../src/modules/access/contexts.service';
+
+
 import { FilesService } from '../../../src/modules/files/files.service';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
-import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
+import { DedicatedTestCentres } from '../../support/dedicated-test-centres';
+import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
+import { fileDomainForSpace } from '@giaokhoa/db';
+import type { Pool } from 'pg';
 
 const BANK_DATABASE = 'giaokhoa_test_bank_585';
 const BANK_ROLE = 'giaokhoa_bank_test_585';
@@ -593,43 +582,32 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
   });
 
   it('issue #13: giáo viên soạn riêng; quản trị gửi, biên tập duyệt/từ chối; B nhập sau khi A xoá nguồn và media', async () => {
-    const tenantA = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm gửi G13'), slug: uniqueName('g13-a').toLowerCase() });
-    const tenantB = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm nhận G13'), slug: uniqueName('g13-b').toLowerCase() });
-    await tenantAls.run({ platform: true }, async () => {
-      const contexts = app.get(ContextsService);
-      await contexts.ensureTenantContext(tenantA);
-      await contexts.ensureTenantContext(tenantB);
-    });
-    const [managerA, teacherA, teacherB, editor, studentB] = await Promise.all(
-      Array.from({ length: 5 }, () => createUserViaApi(app, admin)),
-    );
+    const dedicated = new DedicatedTestCentres();
+    await dedicated.provision([`g13-a-${randomUUID().slice(0, 8)}`, `g13-b-${randomUUID().slice(0, 8)}`]);
+    const previousApp = app;
+    app = await createTestApp();
+    try {
+    admin = await adminToken(app);
+    const [spaceA, spaceB] = await dedicated.activate(app);
+    const tenantA = spaceA.space.tenantId!;
+    const managerA = await dedicated.createUser(app, spaceA, 'g13manager');
+    await dedicated.grantCentreManager(app, spaceA, managerA.id);
+    const teacherA = await dedicated.createUser(app, spaceA, 'g13teacherA');
+    const teacherB = await dedicated.createUser(app, spaceB, 'g13teacherB');
+    const studentB = await dedicated.createUser(app, spaceB, 'g13studentB');
+    await dedicated.grantRole(app, spaceA, teacherA.id, 'editingteacher');
+    await dedicated.grantRole(app, spaceB, teacherB.id, 'editingteacher');
+    await dedicated.grantRole(app, spaceB, studentB.id, 'student');
     const systemId = await systemContextId(app, admin);
-    const teacherRole = await roleIdByShortname(app, admin, 'editingteacher');
-    const managerRole = await roleIdByShortname(app, admin, 'manager');
-    const studentRole = await roleIdByShortname(app, admin, 'student');
-    await assignRole(app, admin, teacherA.id, teacherRole, systemId);
-    await assignRole(app, admin, teacherB.id, teacherRole, systemId);
-    await assignRole(app, admin, studentB.id, studentRole, systemId);
-    for (const id of [managerA.id, teacherA.id]) await seedTenantMembershipFixture(app, tenantA, id);
-    for (const id of [teacherB.id, studentB.id]) await seedTenantMembershipFixture(app, tenantB, id);
-    const contexts = app.get(ContextsService);
-    const managerContext = await tenantAls.run({ platform: true }, () => contexts.ensureTenantContext(tenantA));
-    await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(managerA.id, managerRole, managerContext.id));
-
+    const editor = await createUserViaApi(app, admin);
     const editorRole = await createRoleViaApi(app, admin);
     await setOverride(app, admin, editorRole, 'systembank:review', systemId, 1);
     await assignRole(app, admin, editor.id, editorRole, systemId);
 
-    const switchTo = async (user: { username: string }, tenantId: string): Promise<string> => {
-      const root = await login(app, user.username, STRONG_PASSWORD);
-      const res = await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(bearer(root.accessToken));
-      expect(res.status, JSON.stringify(res.body)).toBe(201);
-      return res.body.accessToken as string;
-    };
-    const managerToken = await switchTo(managerA, tenantA);
-    const teacherAToken = await switchTo(teacherA, tenantA);
-    const teacherBToken = await switchTo(teacherB, tenantB);
-    const studentToken = await switchTo(studentB, tenantB);
+    const managerToken = managerA.token;
+    const teacherAToken = teacherA.token;
+    const teacherBToken = teacherB.token;
+    const studentToken = studentB.token;
     const editorToken = (await login(app, editor.username, STRONG_PASSWORD)).accessToken;
 
     const banks = await http(app).get('/api/v1/question-banks').set(bearer(teacherAToken));
@@ -773,8 +751,9 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationKey)).toBe(true);
     const deletedImage = await http(app).delete(`/api/v1/files/${fileId}`).set(bearer(teacherAToken));
     expect([200, 204]).toContain(deletedImage.status);
-    await tenantAls.run({ tenantId: tenantA, userId: teacherA.id }, () =>
-      app.get(FilesService).cleanupOrphan(hash, SYSTEM_FILE_DOMAIN));
+    await app.get(SpaceDatabaseService).withSpaceKysely(spaceA.slug, () =>
+      app.get(FilesService).cleanupOrphan(hash, fileDomainForSpace(spaceA.space.spaceId)),
+      { tenantId: tenantA, userId: teacherA.id });
     expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationKey)).toBe(true);
     const preservedPreview = await http(app).get(reviewImagePath).set(bearer(editorToken));
     expect(preservedPreview.status).toBe(200);
@@ -869,6 +848,21 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
       expect(copiedType.body.question.qtype).toBe(payload.qtype);
       expect(copiedType.body.options).toEqual(createdType.body.options);
       expect(copiedType.body.answerKey).toEqual(createdType.body.answerKey);
+    }
+    } finally {
+      await app.close();
+      await app.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      await dedicated.cleanup();
+      // Creating a second Nest test app replaces the global Passport strategy.
+      // Reboot the original platform scope and renew only its test sessions.
+      await previousApp.close();
+      await previousApp.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      app = await createTestApp();
+      admin = await adminToken(app);
+      const usernameFor = async (id: string) =>
+        (await pg.query<{ username: string }>('SELECT username FROM users WHERE id=$1', [id])).rows[0]!.username;
+      teacher.token = (await login(app, await usernameFor(teacher.id), STRONG_PASSWORD)).accessToken;
+      student.token = (await login(app, await usernameFor(student.id), STRONG_PASSWORD)).accessToken;
     }
   }, 180_000);
 

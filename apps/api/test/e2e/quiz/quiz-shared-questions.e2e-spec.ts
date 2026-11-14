@@ -13,11 +13,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
-import { adminToken, assignRole, createUserViaApi, http, login, roleIdByShortname,
-  seedTenantMembershipFixture, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
+import { adminToken, http, STRONG_PASSWORD, uniqueName } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
-import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
+import { DedicatedTestCentres, type DedicatedTestCentre } from '../../support/dedicated-test-centres';
 import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { SystemBankConnection } from '../../../src/modules/system-bank/system-bank.connection';
@@ -25,7 +24,7 @@ import { UsersService } from '../../../src/modules/users/users.service';
 import { TenantsService } from '../../../src/modules/tenants/tenants.service';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
-import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 
@@ -51,6 +50,9 @@ const mcPackage = (): SystemBankPackage => ({ ...emptyPackage(), answers: ['Đú
 describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm', () => {
   let app: INestApplication;
   let offlineApp: INestApplication | undefined;
+  let dedicated: DedicatedTestCentres;
+  let dedicatedA: DedicatedTestCentre;
+  let dedicatedB: DedicatedTestCentre;
   let admin: string;
   let teacher: string;
   let manager: string;
@@ -63,7 +65,6 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
   let sectionId: string;
   let groupId: string;
   let tenantA: string;
-  let tenantB: string;
   let studentId: string;
   let examBankId: string;
   let localId: string;
@@ -76,48 +77,40 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
   const centreName = `giaokhoa_test_shared_centre_${suffix}`;
   const bankName = `giaokhoa_test_shared_bank_${suffix}`;
 
-  async function session(user: { username: string }, tenantId?: string) {
-    const token = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
-    if (!tenantId) return token;
-    const switched = await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(bearer(token));
-    expect(switched.status, JSON.stringify(switched.body)).toBe(201);
-    return switched.body.accessToken as string;
-  }
-
   beforeAll(async () => {
     process.env.DATABASE_URL = await buildTestDatabase({ adminUrl, database: centreName, store: 'centre' });
     bankUrl = await buildTestDatabase({ adminUrl, database: bankName, store: 'system-bank' });
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
     storageDir = await mkdtemp(join(tmpdir(), 'giaokhoa-shared-'));
     process.env.FILE_STORAGE_DIR = storageDir;
+    dedicated = new DedicatedTestCentres();
+    await dedicated.provision([`quiz-a-${suffix}`, `quiz-b-${suffix}`]);
     app = await createSnapshotTestApp();
     admin = await adminToken(app);
-    centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
-    bank = new Client({ connectionString: bankUrl }); await bank.connect();
-    tenantA = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm A'), slug: uniqueName('shared-a') });
-    tenantB = await seedLegacyCentreInShared({ name: uniqueName('Trung tâm B'), slug: uniqueName('shared-b') });
-    await tenantAls.run({ platform: true }, async () => {
-      const contexts = app.get(ContextsService);
-      await contexts.ensureTenantContext(tenantA);
-      await contexts.ensureTenantContext(tenantB);
-    });
-    const [m, t, s, o, f] = await Promise.all(Array.from({ length: 5 }, () => createUserViaApi(app, admin)));
+    [dedicatedA, dedicatedB] = await dedicated.activate(app);
+    centre = new Client({ connectionString: withDatabase(adminUrl, dedicatedA.space.databaseName) });
+    await centre.connect();
+    bank = new Client({ connectionString: bankUrl });
+    await bank.connect();
+    tenantA = dedicatedA.space.tenantId!;
+    const t = await dedicated.createUser(app, dedicatedA, 'quizteacher');
+    const s = await dedicated.createUser(app, dedicatedA, 'quizstudent');
+    const o = await dedicated.createUser(app, dedicatedA, 'quizoutsider');
+    const f = await dedicated.createUser(app, dedicatedB, 'quizforeign');
     studentId = s.id;
-    const systemId = await systemContextId(app, admin);
-    await assignRole(app, admin, t.id, await roleIdByShortname(app, admin, 'teacher'), systemId);
-    for (const u of [m, t, s, o]) await seedTenantMembershipFixture(app, tenantA, u.id);
-    await seedTenantMembershipFixture(app, tenantB, f.id);
-    const managerRole = await roleIdByShortname(app, admin, 'manager');
-    const tenantCtx = await tenantAls.run({ platform: true }, () => app.get(ContextsService).ensureTenantContext(tenantA));
-    await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(m.id, managerRole, tenantCtx.id));
-    manager = await session(m, tenantA); teacher = await session(t, tenantA);
-    student = await session(s, tenantA); outsider = await session(o, tenantA); foreign = await session(f, tenantB);
+    await dedicated.grantCentreManager(app, dedicatedA);
+    await dedicated.grantCentreManager(app, dedicatedB);
+    manager = dedicatedA.adminToken;
+    teacher = t.token;
+    student = s.token;
+    outsider = o.token;
+    foreign = f.token;
+    await dedicated.grantRole(app, dedicatedA, t.id, 'teacher');
     const category = await createCategory(app, manager);
     courseId = (await createCourse(app, manager, category.id)).id;
     sectionId = await getFirstSectionId(app, manager, courseId);
     const courseCtx = (await centre.query('SELECT id FROM context WHERE context_level = 50 AND instance_id = $1', [courseId])).rows[0];
-    const editingRole = await roleIdByShortname(app, admin, 'editingteacher');
-    await tenantAls.run({ tenantId: tenantA }, () => app.get(RolesService).assignRole(t.id, editingRole, courseCtx.id));
+    await dedicated.grantRole(app, dedicatedA, t.id, 'editingteacher', courseCtx.id);
     const instance = await createEnrolInstance(app, manager, courseId);
     await enrolUser(app, manager, courseId, instance.id, s.id);
     await enrolUser(app, manager, courseId, instance.id, o.id);
@@ -133,6 +126,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     await offlineApp?.get<Pool>('SHARED_CENTRE_KYSELY').end();
     await app?.get<Pool>('SHARED_CENTRE_KYSELY').end();
     await centre?.end(); await bank?.end();
+    await dedicated?.cleanup();
     await dropTestDatabase(adminUrl, centreName); await dropTestDatabase(adminUrl, bankName);
     if (storageDir) await rm(storageDir, { recursive: true, force: true });
     for (const [key, value] of Object.entries(originalEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
@@ -199,6 +193,11 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect(newer.status).toBe(201);
     delete process.env.SYSTEM_BANK_DATABASE_URL;
     offlineApp = await createSnapshotTestApp();
+    dedicated.bindApp(offlineApp, [
+      { token: manager, host: dedicatedA.host }, { token: teacher, host: dedicatedA.host },
+      { token: student, host: dedicatedA.host }, { token: outsider, host: dedicatedA.host },
+      { token: foreign, host: dedicatedB.host },
+    ]);
     expect(offlineApp.get(SystemBankConnection).isConfigured).toBe(false);
     for (const token of [outsider, foreign]) {
       const denied = await http(offlineApp).post(`/api/v1/exam-pins/${pinId}/attempts`).set(bearer(token)).send({});
@@ -211,7 +210,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect(JSON.stringify(started.body)).not.toContain('Lời giải bí mật');
     expect(started.body.questions[2].answers).toEqual([]);
     const imageNode = started.body.questions[0].questionText.content.find((n: { type: string }) => n.type === 'image');
-    const imageDownload = await http(offlineApp).get(imageNode.attrs.src);
+    const imageDownload = await http(offlineApp).get(imageNode.attrs.src).set('Host', dedicatedA.host);
     expect(imageDownload.status).toBe(200); expect(sha256Hex(imageDownload.body)).toBe(hash);
     expect(started.body.questions[0].stimulus.content).toMatchObject(doc('Ngữ liệu đã chụp'));
     const responses = [started.body.questions[0].answers[0].id, JSON.stringify({ s1: true, s2: true, s3: true, s4: true }), 'HaNoi', 'Bài tự luận của học sinh', started.body.questions[4].answers[0].id];
@@ -244,7 +243,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect(closedReview.status).toBe(200);
     const masked = await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(student));
     expect(masked.body.questions.every((q: { solution: unknown; manualComment: unknown }) => q.solution === null && q.manualComment === null)).toBe(true);
-    expect((await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(foreign))).status).toBe(403);
+    expect((await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(foreign))).status).toBe(404);
     expect((await centre.query('SELECT user_id FROM exam_attempts WHERE id = $1', [attemptId])).rows[0].user_id).toBe(studentId);
     expect((await bank.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('exam_attempts','question_attempts','grade_grades')")).rowCount).toBe(0);
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
@@ -395,14 +394,10 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
   }, 90_000);
 
   it('không cho dùng câu ready ở bank personal của đồng nghiệp, vẫn dùng được bank chung có quyền', async () => {
-    const colleague = await createUserViaApi(app, admin);
-    await seedTenantMembershipFixture(app, tenantA, colleague.id);
-    const systemId = await systemContextId(app, admin);
-    const editingteacher = await roleIdByShortname(app, admin, 'editingteacher');
-    await assignRole(app, admin, colleague.id, editingteacher, systemId);
-    const colleagueToken = await session(colleague, tenantA);
+    const colleague = await dedicated.createUser(app, dedicatedA, 'quizcolleague');
+    await dedicated.grantRole(app, dedicatedA, colleague.id, 'editingteacher');
+    const colleagueToken = colleague.token;
     const privateId = await createReadyQuestion(app, colleagueToken, 'Bí mật của giáo viên B');
-
     const forbiddenRead = await http(app).get(`/api/v1/questions/${privateId}`).set(bearer(teacher));
     expect(forbiddenRead.status).toBe(404);
     const deniedPaper = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`)
@@ -421,7 +416,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     const sharedBank = (listed.body as { scope: string; defaultCategoryId: string | null; contextId: string }[])
       .find((item) => item.scope === 'school');
     expect(sharedBank?.defaultCategoryId).toBeTruthy();
-    await assignRole(app, admin, colleague.id, await roleIdByShortname(app, admin, 'qbanklead'), sharedBank!.contextId);
+    await dedicated.grantRole(app, dedicatedA, colleague.id, 'qbanklead', sharedBank!.contextId);
     const sharedQuestion = await http(app).post('/api/v1/questions').set(bearer(colleagueToken)).send({
       categoryId: sharedBank!.defaultCategoryId, qtype: 'multichoice',
       questionText: 'Câu dùng chung có quyền của trường',
@@ -500,8 +495,8 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const questionId = created.body.question.id as string;
 
-    const teacherRole = await roleIdByShortname(app, admin, 'teacher');
-    await tenantAls.run({ tenantId: tenantA }, () =>
+    const teacherRole = await dedicated.roleId(app, dedicatedA, 'teacher');
+    await app.get(SpaceDatabaseService).withSpaceKysely(dedicatedA.slug, () =>
       app.get(RolesService).setCapabilityOverride(teacherRole, 'question:useall', sourceContext, -1000));
     const deniedRead = await http(app).get(`/api/v1/questions/${questionId}`).set(bearer(teacher));
     expect(deniedRead.status, JSON.stringify(deniedRead.body)).toBe(404);
@@ -636,7 +631,11 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       const pkg = mcPackage(); pkg.questionText = { type: 'doc', content: [...doc('Ảnh chuyển sang miền A').content,
         { type: 'image', attrs: { src: `bank-media://${hash}` } }] };
       pkg.media = [{ contentHash: hash, fileName: 'anh14.png', mimeType: 'image/png' }];
-      const source = await publish('multichoice', pkg);
+      const routedPlatformAdmin = await adminToken(routed);
+      const bankPublished = await http(routed).post('/api/v1/system-bank/questions')
+        .set(bearer(routedPlatformAdmin)).send({ qtype: 'multichoice', package: pkg });
+      expect(bankPublished.status, JSON.stringify(bankPublished.body)).toBe(201);
+      const source = bankPublished.body as { question: { id: string }; version: { id: string; checksum: string } };
       const pinned = await http(routed).post(`/api/v1/courses/${course.body.id}/exam-pins`).set('Host', hostA).set(bearer(tokenA))
         .send({ sectionId: courseContent.body.sections[0].id, requestId: randomUUID(), newExam: { name: 'Đề giao trực tiếp', totalScore: 1,
           slots: [{ questionId: source.question.id, sourceDomain: 'bank-system', sourceVersionNumber: 1 }] } });

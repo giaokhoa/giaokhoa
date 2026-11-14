@@ -236,18 +236,24 @@ export class TenantsService {
       throw new NotFoundException({ message: 'Tenant does not belong to the addressed centre', code: 'tenant.not_found' });
     }
     if (!row) return null;
+    if (!contextSlug && row.kind === 'platform' && row.slug === PLATFORM_TENANT_SLUG) {
+      return { slug: row.slug, dedicated: false };
+    }
     try {
       const target = await this.spaceDb.resolveTarget(row.slug);
-      return { slug: row.slug, dedicated: target.mode === 'dedicated' };
-    } catch (err) {
-      if (
-        !contextSlug &&
-        err instanceof SpaceRoutingError &&
-        (err.code === 'space_routing.space_not_found' || err.code === 'space_routing.not_configured')
-      ) {
-        return { slug: row.slug, dedicated: false };
+      if (target.mode !== 'dedicated') {
+        throw new ForbiddenException({ message: 'Learning tenant requires a dedicated database', code: 'centre.provision_required' });
       }
-      throw err;
+      return { slug: row.slug, dedicated: true };
+    } catch (error) {
+      if (error instanceof SpaceRoutingError &&
+          (error.code === 'space_routing.space_not_found' || error.code === 'space_routing.not_configured')) {
+        throw new ForbiddenException({
+          message: 'Learning tenant is not provisioned in its own database',
+          code: 'centre.provision_required',
+        });
+      }
+      throw error;
     }
   }
 
@@ -512,21 +518,8 @@ export class TenantsService {
     );
   }
 
-  private async resolveDefaultTenantInContext(userId: string): Promise<TenantRow> {
-    const zero = await this.platformTenant();
-    const memberships = (await this.repo.listMembershipsForUser(userId)).filter((m) => m.status === 'active');
-    const tenants: TenantRow[] = [];
-    for (const m of memberships) {
-      const tenant = await this.repo.getTenant(m.tenantId);
-      if (tenant && tenant.status === 'active') tenants.push(tenant);
-    }
-    if (tenants.length === 1) return tenants[0]!;
-    if (tenants.length > 1) {
-      if (await this.evaluator.isSiteAdmin(userId)) return zero;
-      const nonPlatform = tenants.find((t) => t.kind !== 'platform');
-      if (nonPlatform) return nonPlatform;
-    }
-    return zero;
+  private async resolveDefaultTenantInContext(_userId: string): Promise<TenantRow> {
+    return this.platformTenant();
   }
 
   async resolveSwitchTarget(userId: string, tenantId: string): Promise<TenantRow> {
@@ -537,16 +530,18 @@ export class TenantsService {
     );
   }
 
-  private async resolveSwitchTargetInContext(userId: string, tenantId: string): Promise<TenantRow> {
+  private async resolveSwitchTargetInContext(_userId: string, tenantId: string): Promise<TenantRow> {
     const tenant = await this.getTenant(tenantId);
     if (tenant.status !== 'active') {
       throw new ForbiddenException({ message: `Tenant ${tenant.slug} is ${tenant.status}`, code: 'tenant.not_active' });
     }
-    if (tenant.kind !== 'platform') {
-      const membership = await this.repo.getMembership(tenantId, userId);
-      if (!membership || membership.status !== 'active') {
-        throw new ForbiddenException({ message: 'User is not an active member of this tenant', code: 'tenant.not_member' });
-      }
+    const expectedPlatform = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG
+      ? PUBLIC_LEARNING_SLUG : PLATFORM_TENANT_SLUG;
+    if (tenant.kind !== 'platform' || tenant.slug !== expectedPlatform) {
+      throw new ForbiddenException({
+        message: 'Centre sessions must be created on their dedicated hostname',
+        code: 'auth.switch_tenant_not_in_space',
+      });
     }
     return tenant;
   }

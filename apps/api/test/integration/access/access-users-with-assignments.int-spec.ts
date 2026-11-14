@@ -207,19 +207,21 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
 
   it('tìm kiếm khớp theo họ, tên đầy đủ, email và tên đăng nhập; từ khoá không khớp trả rỗng', async () => {
     const marker = uniqueName('find568');
+    const firstName = `Tim568_${marker}`;
+    const lastName = `Kiem568_${marker}`;
     const user = await createUserViaApi(app, admin, {
       username: `${marker}user`,
-      firstName: 'Tim568',
-      lastName: 'Kiem568',
+      firstName,
+      lastName,
       email: `${marker}@example.com`,
     });
 
-    for (const term of ['Kiem568', 'Tim568 Kiem568', `${marker}@example.com`, `${marker}user`]) {
+    for (const term of [lastName, `${firstName} ${lastName}`, `${marker}@example.com`, `${marker}user`]) {
       const res = await list({ search: term });
       expect(res.status).toBe(200);
       expect(usersOf(res.body).map((u) => u.id)).toContain(user.id);
     }
-    const byFullName = await list({ search: 'Tim568 Kiem568' });
+    const byFullName = await list({ search: `${firstName} ${lastName}` });
     expect(usersOf(byFullName.body)).toHaveLength(1);
 
     const noMatch = await list({ search: `${marker}khongtontai` });

@@ -275,10 +275,10 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
       await grantTenantManagerFixture(app, platformAdmin, sharedTenant);
       const switched = await http(app).post(`/api/v1/auth/switch-tenant/${sharedTenant}`)
         .set(authed(platformAdmin));
-      expect(switched.status, JSON.stringify(switched.body)).toBe(201);
-      const centreToken = switched.body.accessToken as string;
+      expect(switched.status).toBe(403);
+      expect(switched.body.code).toBe('auth.switch_tenant_not_in_space');
       const issued = await http(app).post('/api/v1/support-grants')
-        .set('Host', `${sharedSlug}.test.local`).set(authed(centreToken))
+        .set('Host', `${sharedSlug}.test.local`).set(authed(platformAdmin))
         .send(draft(staffId, ['classes:read']));
       expect(issued.status).toBe(401);
       expect(issued.body).toMatchObject({ code: 'auth.unauthenticated' });
@@ -287,7 +287,7 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
         .set(authed(supportToken));
       expect(deniedAccess.status).toBe(403);
       const audit = await http(app).get('/api/v1/support-grants/audit')
-        .set('Host', `${sharedSlug}.test.local`).set(authed(centreToken));
+        .set('Host', `${sharedSlug}.test.local`).set(authed(platformAdmin));
       expect(audit.status).toBe(401);
       const count = await withClient(process.env.DATABASE_URL!, async (client) => {
         await client.query("SELECT set_config('app.platform', 'on', false)");

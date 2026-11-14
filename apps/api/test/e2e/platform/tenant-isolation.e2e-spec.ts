@@ -1,10 +1,14 @@
 import { INestApplication } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import type { Pool } from 'pg';
+import { withDatabase } from '@giaokhoa/db/test-support';
+import { DedicatedTestCentres, type DedicatedTestCentre } from '../../support/dedicated-test-centres';
 import { Client } from 'pg';
-import { TenantsService } from '../../../src/modules/tenants/tenants.service';
-import { RolesService } from '../../../src/modules/access/roles.service';
-import { ContextsService } from '../../../src/modules/access/contexts.service';
-import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
-import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+
+
+
+
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   STRONG_PASSWORD,
@@ -18,6 +22,13 @@ import {
 
 describe('Cô lập tenant (TENANT-0, #168)', () => {
   let app: INestApplication;
+  let dedicated: DedicatedTestCentres;
+  let spaceA: DedicatedTestCentre;
+  let spaceB: DedicatedTestCentre;
+  let teacherTokenB = '';
+  let teacherIdB = '';
+  let pgA: Client;
+  let pgB: Client;
   let adminZero = '';
   let adminA = '';
   let adminB = '';
@@ -45,59 +56,35 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   };
 
   beforeAll(async () => {
+    dedicated = new DedicatedTestCentres();
+    await dedicated.provision([
+      `tenant-a-${randomUUID().slice(0, 8)}`,
+      `tenant-b-${randomUUID().slice(0, 8)}`,
+    ]);
     app = await createTestApp();
-    const adminLogin = await login(app, 'admin', 'Admin123!');
-    adminZero = adminLogin.accessToken;
-    const adminId = adminLogin.userId;
+    adminZero = (await login(app, 'admin', 'Admin123!')).accessToken;
+    [spaceA, spaceB] = await dedicated.activate(app);
+    tenantA = spaceA.space.tenantId!;
+    tenantB = spaceB.space.tenantId!;
+    await dedicated.grantCentreManager(app, spaceA);
+    await dedicated.grantCentreManager(app, spaceB);
+    adminA = spaceA.adminToken;
+    adminB = spaceB.adminToken;
 
-    const slugA = `ta-${uniqueName('a').toLowerCase()}`;
-    const slugB = `tb-${uniqueName('b').toLowerCase()}`;
-    tenantA = await seedLegacyCentreInShared({ slug: slugA, name: 'Trường A (spec)' });
-    tenantB = await seedLegacyCentreInShared({ slug: slugB, name: 'Trường B (spec)' });
-    await tenantAls.run({ platform: true }, async () => {
-      const contexts = app.get(ContextsService);
-      await contexts.ensureTenantContext(tenantA);
-      await contexts.ensureTenantContext(tenantB);
-    });
-
-    const teacher = await createUserViaApi(app, adminZero);
+    const teacher = await dedicated.createUser(app, spaceA, 'tenantTeacherA');
+    const teacherB = await dedicated.createUser(app, spaceB, 'tenantTeacherB');
     teacherId = teacher.id;
     teacherUsername = teacher.username;
-    const memberAOnly = await createUserViaApi(app, adminZero);
+    teacherTokenA = teacher.token;
+    teacherTokenB = teacherB.token;
+    teacherIdB = teacherB.id;
+    const memberAOnly = await dedicated.createUser(app, spaceA, 'tenantOnlyA');
     memberAOnlyUsername = memberAOnly.username;
-    const memberAOnlyId = memberAOnly.id;
-    const guardianAUser = await createUserViaApi(app, adminZero);
-    const studentAUser = await createUserViaApi(app, adminZero);
-    const guardianBUser = await createUserViaApi(app, adminZero);
-    const studentBUser = await createUserViaApi(app, adminZero);
-
-    const allContexts = await must(await http(app).get('/api/v1/access/contexts').set(auth(adminZero)), 'list contexts') as { id: string; contextLevel: number; instanceId: string }[];
-    const tenantCtxA = allContexts.find((c) => c.contextLevel === 20 && c.instanceId === tenantA);
-    const tenantCtxB = allContexts.find((c) => c.contextLevel === 20 && c.instanceId === tenantB);
-    if (!tenantCtxA || !tenantCtxB) throw new Error('tenant contexts missing');
-    const managerRole = await roleIdByShortname(app, adminZero, 'manager');
-    const tenantsService = app.get(TenantsService, { strict: false });
-    const rolesService = app.get(RolesService, { strict: false });
-    await tenantAls.run({ platform: true }, async () => {
-      for (const tid of [tenantA, tenantB]) await tenantsService.ensureActiveMembership(tid, adminId);
-      for (const ctx of [tenantCtxA, tenantCtxB]) {
-        await rolesService.assignRole(adminId, managerRole, ctx.id);
-      }
-    });
-
-    const addMember = async (tenantId: string, userId: string) => {
-      await must(await http(app).post(`/api/v1/tenants/${tenantId}/members`).set(auth(adminZero)).send({ userId }), 'add member');
-    };
-    for (const uid of [teacherId, memberAOnlyId, guardianAUser.id, studentAUser.id]) await addMember(tenantA, uid);
-    for (const uid of [teacherId, guardianBUser.id, studentBUser.id]) await addMember(tenantB, uid);
-
-    const switchTo = async (token: string, tenantId: string): Promise<string> => {
-      const pair = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(auth(token)), 'switch tenant') as { accessToken: string };
-      return pair.accessToken;
-    };
-    adminA = await switchTo(adminZero, tenantA);
-    adminB = await switchTo(adminA, tenantB);
-    adminZero = (await login(app, 'admin', 'Admin123!')).accessToken;
+    const guardianAUser = await dedicated.createUser(app, spaceA, 'tenantGuardianA');
+    const studentAUser = await dedicated.createUser(app, spaceA, 'tenantStudentA');
+    const guardianBUser = await dedicated.createUser(app, spaceB, 'tenantGuardianB');
+    const studentBUser = await dedicated.createUser(app, spaceB, 'tenantStudentB');
+    await dedicated.grantCentreManager(app, spaceA, teacherId);
 
     const seedTenantContent = async (token: string, marker: string) => {
       const category = await must(await http(app).post('/api/v1/courses/categories').set(auth(token)).send({ name: `Danh mục ${marker}` }), 'create category') as { id: string };
@@ -112,15 +99,12 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     categoryA = inA.categoryId; courseA = inA.courseId;
     const inB = await seedTenantContent(adminB, 'B');
     categoryB = inB.categoryId; courseB = inB.courseId; cohortB = inB.cohortId;
-
-    const linkInA = await must(await http(app).post('/api/v1/guardian-links').set(auth(adminA)).send({
+    linkA = (await must(await http(app).post('/api/v1/guardian-links').set(auth(adminA)).send({
       guardianUserId: guardianAUser.id, studentUserId: studentAUser.id, relationship: 'cha',
-    }), 'create guardian link A') as { id: string };
-    linkA = linkInA.id;
-    const linkInB = await must(await http(app).post('/api/v1/guardian-links').set(auth(adminB)).send({
+    }), 'create guardian link A') as { id: string }).id;
+    linkB = (await must(await http(app).post('/api/v1/guardian-links').set(auth(adminB)).send({
       guardianUserId: guardianBUser.id, studentUserId: studentBUser.id, relationship: 'mẹ',
-    }), 'create guardian link B') as { id: string };
-    linkB = linkInB.id;
+    }), 'create guardian link B') as { id: string }).id;
 
     const schoolBankOf = async (token: string) => {
       const banks = await must(await http(app).get('/api/v1/question-banks').set(auth(token)), 'list banks') as { id: string; scope: string; tenantId: string | null }[];
@@ -130,18 +114,21 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     };
     bankSchoolA = (await schoolBankOf(adminA)).id;
     bankSchoolB = (await schoolBankOf(adminB)).id;
-
-    await must(await http(app).post('/api/v1/access/assignments').set(auth(adminZero)).send({
-      userId: teacherId, roleId: managerRole, contextId: tenantCtxA.id,
-    }), 'assign manager in tenant A');
-
-    const teacherLogin = await login(app, teacher.username, STRONG_PASSWORD);
-    teacherTokenA = teacherLogin.accessToken;
-    teacherRefreshA = teacherLogin.refreshToken;
+    const access = await http(app).post('/api/v1/auth/token').set('Host', spaceA.host)
+      .send({ username: teacherUsername, password: STRONG_PASSWORD });
+    expect(access.status).toBe(201);
+    teacherRefreshA = access.body.refreshToken as string;
+    const adminUrl = withDatabase(process.env.DATABASE_URL!, 'postgres');
+    pgA = new Client({ connectionString: withDatabase(adminUrl, spaceA.space.databaseName) });
+    pgB = new Client({ connectionString: withDatabase(adminUrl, spaceB.space.databaseName) });
+    await pgA.connect(); await pgB.connect();
   }, 180_000);
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
+    await app?.get<Pool>('SHARED_CENTRE_KYSELY').end();
+    await pgA?.end(); await pgB?.end();
+    await dedicated?.cleanup();
   });
 
   it('(6) trang chính tồn tại, không cho tạo trường mới trong kho chung', async () => {
@@ -177,9 +164,9 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(links.map((l) => l.id)).not.toContain(linkB);
     const revoke = await http(app).delete(`/api/v1/guardian-links/${linkB}`).set(auth(adminA));
     expect(revoke.status).toBe(404);
-    const memberToken = (await login(app, memberAOnlyUsername, STRONG_PASSWORD)).accessToken;
+    const memberToken = await dedicated.login(app, spaceA, memberAOnlyUsername);
     const usersB = await http(app).get(`/api/v1/tenants/${tenantB}/users`).set(auth(memberToken));
-    expect(usersB.status).toBe(403);
+    expect(usersB.status).toBe(404);
   });
 
   it('(2) cấu hình tenant A đổi không chạm B và platform', async () => {
@@ -209,127 +196,145 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(platformBank?.tenantId).toBeNull();
   });
 
-  it('(4) chuyển tenant trong phiên; vai manager ở A không lan sang B', async () => {
+  it('(4) không thể switch token giữa hai hostname dedicated; quyền manager A không lan sang B', async () => {
     const current = await must(await http(app).get('/api/v1/tenants/current').set(auth(teacherTokenA)), 'current tenant') as { id: string };
     expect(current.id).toBe(tenantA);
     const membersA = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(teacherTokenA));
     expect(membersA.status).toBe(200);
-    const pair = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantB}`).set(auth(teacherTokenA)), 'teacher switch to B') as { accessToken: string };
-    const currentB = await must(await http(app).get('/api/v1/tenants/current').set(auth(pair.accessToken)), 'current tenant B') as { id: string };
-    expect(currentB.id).toBe(tenantB);
-    const membersB = await http(app).get(`/api/v1/tenants/${tenantB}/members`).set(auth(pair.accessToken));
-    expect(membersB.status).toBe(403);
-    const staleCurrent = await must(await http(app).get('/api/v1/tenants/current').set(auth(teacherTokenA)), 'current with old token') as { id: string };
+    const rejected = await http(app).post(`/api/v1/auth/switch-tenant/${tenantB}`).set(auth(teacherTokenA));
+    expect([403, 404]).toContain(rejected.status);
+    expect((await http(app).get('/api/v1/tenants/current')
+      .set('Host', spaceB.host).set(auth(teacherTokenA))).status).toBe(401);
+    const unprivilegedB = await http(app).get(`/api/v1/tenants/${tenantB}/members`).set(auth(teacherTokenB));
+    expect(unprivilegedB.status).toBe(403);
+    expect((await http(app).get(`/api/v1/tenants/${tenantB}/members`).set(auth(adminB))).status).toBe(200);
+    const staleCurrent = await must(await http(app).get('/api/v1/tenants/current').set(auth(teacherTokenA)), 'original A session') as { id: string };
     expect(staleCurrent.id).toBe(tenantA);
     const staleRefresh = await http(app).post('/api/v1/auth/refresh').send({ refreshToken: teacherRefreshA });
     expect(staleRefresh.status).toBe(401);
   });
 
-  it('(5) RLS: phiên tenant đặt GUC chỉ thấy dữ liệu tenant đó dù không lọc', async () => {
-    const pg = new Client({ connectionString: process.env.DATABASE_URL });
-    await pg.connect();
-    const role = `tenant_spec_${Date.now().toString(36)}`;
+  it('(5) RLS fail-closed và cách ly vật lý: mỗi DB chỉ chứa course của chính nó', async () => {
+    const role = `tenant_spec_${randomUUID().slice(0, 8)}`;
+    await pgA.query(`CREATE ROLE ${role} NOLOGIN NOBYPASSRLS`);
     try {
-      await pg.query(`CREATE ROLE ${role} NOLOGIN`);
-      await pg.query(`GRANT SELECT ON course, course_categories TO ${role}`);
-      await pg.query('BEGIN');
-      await pg.query(`SET ROLE ${role}`);
-      await pg.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantA]);
-      const inA = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
-      expect(inA.rows.map((r) => r.id)).toEqual([courseA]);
-      const catsA = await pg.query<{ id: string }>('SELECT id FROM course_categories WHERE id = ANY($1)', [[categoryA, categoryB]]);
-      expect(catsA.rows.map((r) => r.id)).toEqual([categoryA]);
-      await pg.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantB]);
-      const inB = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
-      expect(inB.rows.map((r) => r.id)).toEqual([courseB]);
-      await pg.query(`SELECT set_config('app.platform', 'on', true)`);
-      const all = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
-      expect(all.rows.map((r) => r.id).sort()).toEqual([courseA, courseB].sort());
-      await pg.query('COMMIT');
+      for (const pg of [pgA, pgB]) await pg.query(`GRANT SELECT ON course, course_categories TO ${role}`);
+      for (const [pg, mine, other, tenant, wrongTenant] of [
+        [pgA, courseA, courseB, tenantA, tenantB],
+        [pgB, courseB, courseA, tenantB, tenantA],
+      ] as const) {
+        await pg.query('BEGIN');
+        try {
+          await pg.query(`SET ROLE ${role}`);
+          expect((await pg.query('SELECT id FROM course WHERE id = ANY($1)', [[mine, other]])).rows).toEqual([]);
+          await pg.query("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+          expect((await pg.query('SELECT id FROM course WHERE id = ANY($1)', [[mine, other]])).rows).toEqual([{ id: mine }]);
+          await pg.query("SELECT set_config('app.tenant_id', $1, true)", [wrongTenant]);
+          expect((await pg.query('SELECT id FROM course WHERE id = ANY($1)', [[mine, other]])).rows).toEqual([]);
+          await pg.query("SELECT set_config('app.platform', 'on', true)");
+          expect((await pg.query('SELECT id FROM course WHERE id = ANY($1)', [[mine, other]])).rows).toEqual([{ id: mine }]);
+        } finally {
+          await pg.query('ROLLBACK');
+          await pg.query('RESET ROLE');
+        }
+      }
     } finally {
-      await pg.query('ROLLBACK').catch(() => undefined);
-      await pg.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
-      await pg.end();
+      await pgA.query(`DROP OWNED BY ${role}`).catch(() => undefined);
+      await pgB.query(`DROP OWNED BY ${role}`).catch(() => undefined);
+      await pgA.query(`DROP ROLE IF EXISTS ${role}`);
     }
   });
 
-  it('(7) N2 (TENANT-1): site admin là thành viên nhưng KHÔNG có vai trong cây tenant → bị chặn như người thường', async () => {
+  it('(7) N2: vai site admin platform không cấp quyền cho tài khoản ở kho A', async () => {
     const support = await createUserViaApi(app, adminZero);
-    const contexts = await must(await http(app).get('/api/v1/access/contexts').set(auth(adminZero)), 'list contexts') as { id: string; contextLevel: number; instanceId: string | null }[];
+    const contexts = await must(await http(app).get('/api/v1/access/contexts').set(auth(adminZero)), 'list contexts') as { id: string; contextLevel: number }[];
     const systemCtx = contexts.find((c) => c.contextLevel === 10);
     if (!systemCtx) throw new Error('system context missing');
     const managerRole = await roleIdByShortname(app, adminZero, 'manager');
     await must(await http(app).post('/api/v1/access/assignments').set(auth(adminZero)).send({
       userId: support.id, roleId: managerRole, contextId: systemCtx.id,
-    }), 'assign support system manager');
-    await must(await http(app).post(`/api/v1/tenants/${tenantA}/members`).set(auth(adminZero)).send({ userId: support.id }), 'add support to tenant A');
-
-    const supportLogin = await login(app, support.username, STRONG_PASSWORD);
-    const pair = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantA}`).set(auth(supportLogin.accessToken)), 'support switch to A') as { accessToken: string };
-    const createCat = await http(app).post('/api/v1/courses/categories').set(auth(pair.accessToken)).send({ name: 'Danh mục N2 không được phép' });
+    }), 'assign support platform manager');
+    const platformToken = (await login(app, support.username, STRONG_PASSWORD)).accessToken;
+    expect((await http(app).get('/api/v1/tenants').set(auth(platformToken))).status).toBe(200);
+    const crossHost = await http(app).post('/api/v1/courses/categories').set('Host', spaceA.host)
+      .set(auth(platformToken)).send({ name: 'Không được cấp từ platform' });
+    expect(crossHost.status).toBe(401);
+    const centreRegular = await dedicated.createUser(app, spaceA, 'noManager');
+    const createCat = await http(app).post('/api/v1/courses/categories').set(auth(centreRegular.token))
+      .send({ name: 'Danh mục N2 không được phép' });
     expect(createCat.status).toBe(403);
-    const patchCat = await http(app).patch(`/api/v1/courses/categories/${categoryA}`).set(auth(pair.accessToken)).send({ name: 'Đổi tên trái phép' });
+    const patchCat = await http(app).patch(`/api/v1/courses/categories/${categoryA}`).set(auth(centreRegular.token))
+      .send({ name: 'Đổi tên trái phép' });
     expect(patchCat.status).toBe(403);
-    const tenants = await http(app).get('/api/v1/tenants').set(auth(supportLogin.accessToken));
-    expect(tenants.status).toBe(200);
-    const membersFromPlatform = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(supportLogin.accessToken));
-    expect(membersFromPlatform.status).toBe(403);
+    const membersFromPlatform = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(platformToken));
+    expect([403, 404]).toContain(membersFromPlatform.status);
   });
 
-  it('(8) fail-closed + N3 (TENANT-1): SQL thô không GUC hoặc GUC rỗng → 0 dòng, không lỗi; notifications cách ly theo GUC', async () => {
-    const pg = new Client({ connectionString: process.env.DATABASE_URL });
-    await pg.connect();
-    const marker = `tenant_spec_${Date.now().toString(36)}`;
-    await pg.query(
-      `insert into notifications (user_id_to, subject, full_message, small_message, component, event_type, tenant_id)
-       values ($1, $2, 'x', 'x', 'core_spec', 'tenant_spec', $3), ($1, $4, 'x', 'x', 'core_spec', 'tenant_spec', $5)`,
-      [teacherId, `${marker}-A`, tenantA, `${marker}-B`, tenantB],
-    );
-    const role = `tenant_spec_fc_${Date.now().toString(36)}`;
+  it('(8) N3: SQL không GUC, sai GUC hoặc GUC rỗng thấy 0 hàng ở cả A lẫn B', async () => {
+    const marker = `tenant_spec_${randomUUID().slice(0, 8)}`;
+    for (const [pg, userId, tenant, label] of [
+      [pgA, teacherId, tenantA, 'A'], [pgB, teacherIdB, tenantB, 'B'],
+    ] as const) {
+      await pg.query(
+        `INSERT INTO notifications (user_id_to, subject, full_message, small_message, component, event_type, tenant_id)
+         VALUES ($1, $2, 'x', 'x', 'core_spec', 'tenant_spec', $3)`,
+        [userId, `${marker}-${label}`, tenant],
+      );
+    }
+    const role = `tenant_spec_fc_${randomUUID().slice(0, 8)}`;
+    await pgA.query(`CREATE ROLE ${role} NOLOGIN NOBYPASSRLS`);
     try {
-      await pg.query(`CREATE ROLE ${role} NOLOGIN`);
-      await pg.query(`GRANT SELECT ON course, notifications TO ${role}`);
-      await pg.query('BEGIN');
-      await pg.query(`SET ROLE ${role}`);
-      const noGuc = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
-      expect(noGuc.rows).toEqual([]);
-      const noGucNotif = await pg.query<{ subject: string }>(
-        `SELECT subject FROM notifications WHERE event_type = 'tenant_spec' AND subject LIKE $1`, [`${marker}%`]);
-      expect(noGucNotif.rows).toEqual([]);
-      await pg.query(`SELECT set_config('app.tenant_id', '', true)`);
-      const emptyGuc = await pg.query<{ id: string }>('SELECT id FROM course WHERE id = ANY($1)', [[courseA, courseB]]);
-      expect(emptyGuc.rows).toEqual([]);
-      await pg.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantA]);
-      const notifA = await pg.query<{ subject: string }>(
-        `SELECT subject FROM notifications WHERE event_type = 'tenant_spec' AND subject LIKE $1`, [`${marker}%`]);
-      expect(notifA.rows.map((r) => r.subject)).toEqual([`${marker}-A`]);
-      await pg.query('COMMIT');
+      for (const pg of [pgA, pgB]) await pg.query(`GRANT SELECT ON course, notifications TO ${role}`);
+      for (const [pg, mine, tenant, wrongTenant, label] of [
+        [pgA, courseA, tenantA, tenantB, 'A'],
+        [pgB, courseB, tenantB, tenantA, 'B'],
+      ] as const) {
+        await pg.query('BEGIN');
+        try {
+          await pg.query(`SET ROLE ${role}`);
+          const courses = async () => (await pg.query('SELECT id FROM course WHERE id = $1', [mine])).rows;
+          const notifications = async () => (await pg.query<{subject: string}>(
+            "SELECT subject FROM notifications WHERE event_type = 'tenant_spec' AND subject LIKE $1", [`${marker}%`])).rows;
+          expect(await courses()).toEqual([]);
+          expect(await notifications()).toEqual([]);
+          await pg.query("SELECT set_config('app.tenant_id', '', true)");
+          expect(await courses()).toEqual([]);
+          await pg.query("SELECT set_config('app.tenant_id', $1, true)", [wrongTenant]);
+          expect(await courses()).toEqual([]);
+          expect(await notifications()).toEqual([]);
+          await pg.query("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+          expect(await courses()).toEqual([{ id: mine }]);
+          expect(await notifications()).toEqual([{ subject: `${marker}-${label}` }]);
+        } finally {
+          await pg.query('ROLLBACK');
+          await pg.query('RESET ROLE');
+        }
+      }
     } finally {
-      await pg.query('ROLLBACK').catch(() => undefined);
-      await pg.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
-      await pg.end();
+      await pgA.query(`DROP OWNED BY ${role}`).catch(() => undefined);
+      await pgB.query(`DROP OWNED BY ${role}`).catch(() => undefined);
+      await pgA.query(`DROP ROLE IF EXISTS ${role}`);
     }
   });
 
-  it('(9) notifications chéo tenant ở bề mặt API (TENANT-1): phiên A chỉ thấy thông báo của A, phiên B chỉ thấy của B', async () => {
-    const teacherLogin = await login(app, teacherUsername, STRONG_PASSWORD);
+  it('(9) notifications API A/B ở đúng hostname chỉ thấy thông báo của DB mình', async () => {
     const itemsIn = async (token: string) => {
-      const res = await must(await http(app).get('/api/v1/notifications/items?eventType=tenant_spec&limit=50').set(auth(token)), 'notification items') as { items: { subject: string }[] };
+      const res = await must(await http(app).get('/api/v1/notifications/items?eventType=tenant_spec&limit=50')
+        .set(auth(token)), 'notification items') as { items: { subject: string }[] };
       return res.items.map((i) => i.subject);
     };
-    const inA = await itemsIn(teacherLogin.accessToken);
-    expect(inA.some((s) => s.endsWith('-A'))).toBe(true);
-    expect(inA.some((s) => s.endsWith('-B'))).toBe(false);
-    const pairB = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantB}`).set(auth(teacherLogin.accessToken)), 'teacher switch to B') as { accessToken: string };
-    const inB = await itemsIn(pairB.accessToken);
-    expect(inB.some((s) => s.endsWith('-B'))).toBe(true);
-    expect(inB.some((s) => s.endsWith('-A'))).toBe(false);
+    const inA = await itemsIn(teacherTokenA);
+    expect(inA.some((value) => value.endsWith('-A'))).toBe(true);
+    expect(inA.some((value) => value.endsWith('-B'))).toBe(false);
+    const inB = await itemsIn(teacherTokenB);
+    expect(inB.some((value) => value.endsWith('-B'))).toBe(true);
+    expect(inB.some((value) => value.endsWith('-A'))).toBe(false);
   });
 
   it('(10) đáp ứng người dùng của tenant chỉ gồm đúng 7 trường hồ sơ, không chứa passwordHash', async () => {
     const expectedKeys = ['deleted', 'email', 'firstName', 'id', 'lastName', 'suspended', 'username'];
 
-    const list = await http(app).get(`/api/v1/tenants/${tenantA}/users`).set(auth(adminZero));
+    const list = await http(app).get(`/api/v1/tenants/${tenantA}/users`).set(auth(adminA));
     expect(list.status).toBe(200);
     const rows = list.body as Record<string, unknown>[];
     expect(rows.length).toBeGreaterThan(0);
@@ -344,7 +349,7 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(teacherRow?.deleted).toBe(false);
 
     const username = uniqueName('tuser');
-    const created = await http(app).post(`/api/v1/tenants/${tenantA}/users`).set(auth(adminZero)).send({
+    const created = await http(app).post(`/api/v1/tenants/${tenantA}/users`).set(auth(adminA)).send({
       username, email: `${username}@example.com`, password: STRONG_PASSWORD, firstName: 'Tenant', lastName: 'User',
     });
     expect(created.status).toBe(201);
@@ -357,7 +362,7 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(JSON.stringify(created.body)).not.toContain('passwordHash');
     expect(JSON.stringify(created.body)).not.toContain('password_hash');
 
-    const after = await must(await http(app).get(`/api/v1/tenants/${tenantA}/users`).set(auth(adminZero)), 'list tenant users after create') as Record<string, unknown>[];
+    const after = await must(await http(app).get(`/api/v1/tenants/${tenantA}/users`).set(auth(adminA)), 'list tenant users after create') as Record<string, unknown>[];
     const createdRow = after.find((r) => r.id === createdBody.id);
     expect(createdRow).toBeDefined();
     expect(Object.keys(createdRow!).sort()).toEqual(expectedKeys);
@@ -373,19 +378,19 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
       return false;
     };
     const surfaces: { name: string; body: unknown }[] = [];
-    const tokenRes = await http(app).post('/api/v1/auth/token').send({ username: teacherUsername, password: STRONG_PASSWORD });
+    const tokenRes = await http(app).post('/api/v1/auth/token').set('Host', spaceA.host).send({ username: teacherUsername, password: STRONG_PASSWORD });
     expect(tokenRes.status).toBe(201);
     surfaces.push({ name: 'POST /auth/token', body: tokenRes.body });
-    const me = await http(app).get('/api/v1/users/me').set(auth(adminZero));
+    const me = await http(app).get('/api/v1/users/me').set(auth(adminA));
     expect(me.status).toBe(200);
     surfaces.push({ name: 'GET /users/me', body: me.body });
-    const profile = await http(app).get(`/api/v1/users/${teacherId}`).set(auth(adminZero));
+    const profile = await http(app).get(`/api/v1/users/${teacherId}`).set(auth(adminA));
     expect(profile.status).toBe(200);
     surfaces.push({ name: 'GET /users/:id', body: profile.body });
-    const userList = await http(app).get('/api/v1/users').query({ page: 1, pageSize: 5 }).set(auth(adminZero));
+    const userList = await http(app).get('/api/v1/users').query({ page: 1, pageSize: 5 }).set(auth(adminA));
     expect(userList.status).toBe(200);
     surfaces.push({ name: 'GET /users', body: userList.body });
-    const members = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(adminZero));
+    const members = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(adminA));
     expect(members.status).toBe(200);
     surfaces.push({ name: 'GET /tenants/:tenantId/members', body: members.body });
     for (const surface of surfaces) {

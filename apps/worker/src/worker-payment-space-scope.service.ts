@@ -17,18 +17,31 @@ export class WorkerPaymentSpaceScope {
   }
 
   async runForTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+    const activeSlug = tenantAls.getStore()?.spaceSlug;
+    if (activeSlug) {
+      const tenant = await this.spaceDatabase.routedKysely.selectFrom('tenants')
+        .select('id').where('id', '=', tenantId).executeTakeFirst();
+      if (!tenant) {
+        throw new SharedDomainError('tenant.not_found', `Tenant ${tenantId} is not in the pinned space ${activeSlug}`);
+      }
+      return this.spaceDatabase.withSpaceKysely(activeSlug, async () => fn(), { tenantId });
+    }
     const slug = await this.slugForTenant(tenantId);
     let target: ResolvedSpaceConnection;
     try {
       target = await this.spaceDatabase.resolveTarget(slug);
     } catch (err) {
-      if (err instanceof SpaceRoutingError && err.code === 'space_routing.not_configured') {
+      if (err instanceof SpaceRoutingError && err.code === 'space_routing.not_configured'
+        && slug === 'trang-chinh') {
         return tenantAls.run({ platform: true }, async () => fn());
       }
       throw err;
     }
     if (target.mode === 'dedicated') {
       return this.spaceDatabase.withSpaceKysely(slug, async () => fn());
+    }
+    if (slug !== 'trang-chinh') {
+      throw new SpaceRoutingError('space_routing.shared_not_supported', `No shared payment scope for learning space ${slug}`);
     }
     return tenantAls.run({ platform: true }, async () => fn());
   }

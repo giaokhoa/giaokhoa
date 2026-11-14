@@ -41,3 +41,7 @@ Worker có concurrency được khai tường minh: `notification-dispatch=10`, 
 4. Để lại headroom cho migration, backup/restore và giám sát. Không lấy lần đo dev này làm chuẩn để cam kết tải hay cấu hình production.
 
 Các lệnh kiểm chứng ứng dụng và kết quả AC01–AC27 phải được ghi riêng trên **đúng head** của PR; số liệu ở trên chỉ đáp ứng phần đo điểm thời gian của AC26, **chưa** chứng minh AC26 toàn bộ hoặc AC27.
+
+### Cập nhật scheduler SePay sau review lần 5
+
+Nhịp worker SePay quét ledger trang-chinh riêng rồi fan-out theo registry cho các kho học tập active/dedicated. Theo code, mỗi scope quét batch tối đa **20** event, fan-out mặc định tối đa **3** scope chạy đồng thời nhờ SPACE_SWEEP_CONCURRENCY; timer interval **1 giây** không phải cam kết độ trễ khi có nhiều scope. Đây là số **cấu hình**, chưa phải kết quả đo throughput, peak connection hay RSS. AC26 tiếp tục **chưa đạt** cho tới khi đo thực cùng A/B/cong-cong, BullMQ, Redis và số replica triển khai.

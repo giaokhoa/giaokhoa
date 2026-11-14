@@ -64,6 +64,15 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
     if (isPublicLearningHost(req.headers?.host) && payload.aud !== 'platform' && payload.aud !== 'support' && !payload.centre_id) {
       throw new UnauthorizedException({ message: 'Public learning requires a store-bound session', code: 'auth.centre_mismatch' });
     }
+    if (!space && payload.aud !== 'platform' && payload.aud !== 'support' && payload.tid) {
+      const platform = await this.tenants.platformTenant();
+      if (payload.tid !== platform.id) {
+        throw new UnauthorizedException({
+          message: 'A centre token cannot be used at the platform hostname',
+          code: 'auth.centre_mismatch',
+        });
+      }
+    }
     if (payload.centre_id !== undefined && (!space || payload.centre_id !== space.spaceId)) {
       let rootIsPlatform = false;
       if (!space && payload.tid !== undefined) {

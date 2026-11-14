@@ -545,28 +545,27 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect(await countFamilies(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), dualBId)).toBe(0);
   });
 
-  it('kho chung cũ chỉ đọc tại địa chỉ gốc, không được dùng hostname trường như một đường chung', async () => {
+  it('trung tâm legacy không đăng ký dedicated: chặn membership, switch ở apex và token tại hostname', async () => {
     const member = await createUserViaApi(app, adminToken);
-    await must(
-      await http(app).post(`/api/v1/tenants/${sharedTenantId}/members`).set(auth(adminToken)).send({ userId: member.id }),
-      'add member to shared tenant',
-    );
+    const added = await http(app).post(`/api/v1/tenants/${sharedTenantId}/members`)
+      .set(auth(adminToken)).send({ userId: member.id });
+    expect(added.status).toBe(403);
+    expect((added.body as { code: string }).code).toBe('centre.provision_required');
     const memberApex = await login(app, member.username, STRONG_PASSWORD);
-    const switched = (await must(
-      await http(app).post(`/api/v1/auth/switch-tenant/${sharedTenantId}`).set(auth(memberApex.accessToken)),
-      'switch member to shared tenant',
-    )) as { accessToken: string };
-    const payload = decodeJwtPayload(switched.accessToken);
-    expect(payload['tid']).toBe(sharedTenantId);
-    expect(payload['centre_id']).toBeUndefined();
-    const atSubdomain = await http(app).get('/api/v1/users/me').set('Host', HOST_SHARED).set(auth(switched.accessToken));
+    const switched = await http(app).post(`/api/v1/auth/switch-tenant/${sharedTenantId}`)
+      .set(auth(memberApex.accessToken));
+    expect(switched.status).toBe(403);
+    expect((switched.body as { code: string }).code).toBe('auth.switch_tenant_not_in_space');
+    const apexPayload = decodeJwtPayload(memberApex.accessToken);
+    expect(apexPayload['tid']).toBe(mainTenantId);
+    expect(apexPayload['centre_id']).toBe(registryMainId);
+    const atSubdomain = await http(app).get('/api/v1/users/me').set('Host', HOST_SHARED)
+      .set(auth(memberApex.accessToken));
     expect(atSubdomain.status).toBe(401);
-    expect((atSubdomain.body as { code?: string }).code).toBe('auth.unauthenticated');
-    const atApex = await http(app).get('/api/v1/users/me').set(auth(switched.accessToken));
+    const atApex = await http(app).get('/api/v1/users/me').set(auth(memberApex.accessToken));
     expect(atApex.status).toBe(200);
-    expect((atApex.body as { id?: string }).id).toBe(member.id);
+    expect((atApex.body as { id: string }).id).toBe(member.id);
   });
-
 
   it('trung tâm kho riêng lệch cấu hình bí mật: tạo người dùng qua API thất bại và không sinh dòng nào ở kho chung', async () => {
     const badSlug = `trung-tam-lech-${RUN_SUFFIX}`;
