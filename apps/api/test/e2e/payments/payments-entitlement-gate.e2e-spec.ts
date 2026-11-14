@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -9,9 +9,10 @@ import { createCategory, createCourse, createEnrolInstance, grantActiveTeacherPl
 import { closeSepaySweepDriver, driveCohortSync, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
-const SEPAY_KEY = '<redacted>';
-const SEPAY_XID = 'xid-entitlement-gate-001';
-const BANK_ACCOUNT = '113366660001';
+const runBankSuffix = randomInt(100000, 1000000).toString();
+const SEPAY_KEY = `sk-test-entitlement-${runBankSuffix}`;
+const SEPAY_XID = `xid-entitlement-gate-${runBankSuffix}`;
+const BANK_ACCOUNT = `113366${runBankSuffix}`;
 const FEE_COST = 100000;
 const CLASS_FEE = 150000;
 
