@@ -67,10 +67,10 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
           { type: 'paragraph' },
           {
             type: CHOICE_LIST_NODE_TYPE,
-            content: Array.from({ length: MULTIPLE_CHOICE_COUNT }, (_, index) => ({
+            content: ['A', 'B', 'C', 'D'].map((label, index) => ({
               type: CHOICE_NODE_TYPE,
               attrs: index === 0 ? { id: 'kept-choice' } : {},
-              content: [{ type: 'paragraph' }],
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: `Phương án ${label}` }] }],
             })),
           },
         ],
@@ -80,10 +80,17 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       editor.commands.setContent(editor.getJSON());
       const json = editor.getJSON() as { content?: JSONContent[] };
       const list = (json.content ?? []).find((node) => node.type === CHOICE_LIST_NODE_TYPE);
-      const ids = (list?.content ?? []).map((choice) => choice.attrs?.id);
+      const choices = list?.content ?? [];
+      const ids = choices.map((choice) => choice.attrs?.id);
       expect(ids[0]).toBe('kept-choice');
-      expect(ids.every((id) => typeof id === 'string')).toBe(true);
+      expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
       expect(new Set(ids).size).toBe(MULTIPLE_CHOICE_COUNT);
+      expect(choices.map((choice) => choice?.content?.[0]?.content?.[0]?.text)).toEqual([
+        'Phương án A',
+        'Phương án B',
+        'Phương án C',
+        'Phương án D',
+      ]);
     } finally {
       editor.destroy();
       element.remove();
@@ -158,9 +165,9 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       const list = (json.content ?? []).find((node) => node.type === STATEMENT_LIST_NODE_TYPE);
       const statements = list?.content ?? [];
       const ids = statements.map((statement) => statement.attrs?.id);
+      expect(ids).toHaveLength(TRUE_FALSE_STATEMENT_COUNT);
       expect(ids[0]).toBe('kept-statement');
-      expect(ids.every((id) => typeof id === 'string')).toBe(true);
-      expect(ids.slice(1).every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+      expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
       expect(new Set(ids).size).toBe(TRUE_FALSE_STATEMENT_COUNT);
       expect(statements.map((statement) => statement?.content?.[0]?.content?.[0]?.text)).toEqual([
         'Mệnh đề a',

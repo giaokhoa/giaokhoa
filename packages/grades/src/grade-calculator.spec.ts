@@ -245,7 +245,7 @@ describe('GradeCalculator — sổ điểm chuẩn (tổng hợp điểm MoodleD
     expect(weights[extraCredit.itemId]).toBe(0);
   });
 
-  it('mean: hạng mục có khoảng điểm âm (min lớn hơn max) được chuẩn hoá về 0 nên điểm trung bình bằng min của danh mục', () => {
+  it('mean: mục điểm có khoảng điểm âm (min lớn hơn max) được chuẩn hoá về 0 nên điểm trung bình bằng min của danh mục', () => {
     resetIds();
     const r = calculateCategory({
       aggregation: 'mean', gradeMin: 0, gradeMax: 100,
@@ -253,6 +253,16 @@ describe('GradeCalculator — sổ điểm chuẩn (tổng hợp điểm MoodleD
     });
     expect(r.fraction).toBe(0);
     expect(r.finalGrade).toBe(0);
+  });
+
+  it('simpleweightedmean: mục điểm có khoảng điểm âm đóng góp trọng số 0 và chuẩn hoá 0 nên kết quả chỉ theo mục điểm còn lại (0×0 + 0,5×100)/100 = 50/100', () => {
+    resetIds();
+    const r = calculateCategory({
+      aggregation: 'simpleweightedmean', gradeMin: 0, gradeMax: 100,
+      items: [item({ grade: 15, gradeMin: 20, gradeMax: 10 }), item({ grade: 50 })],
+    });
+    expect(r.fraction).toBe(0.5);
+    expect(r.finalGrade).toBeCloseTo(50, 9);
   });
 
   it('chữ điểm ánh xạ theo ngưỡng phần trăm (ngưỡng cao nhất bằng hoặc dưới phần trăm)', () => {
