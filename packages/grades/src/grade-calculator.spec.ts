@@ -211,6 +211,27 @@ describe('GradeCalculator — sổ điểm chuẩn (tổng hợp điểm MoodleD
     expect(result.finalGrade).toBeNull();
   });
 
+  it('trung bình có trọng số toàn trọng số 0 thì không có điểm', () => {
+    resetIds();
+    const result = calculateCategory({
+      aggregation: 'weightedmean', gradeMin: 0, gradeMax: 100,
+      items: [item({ grade: 90, aggregationCoef: 0 }), item({ grade: 70, aggregationCoef: 0 })],
+    });
+    expect(result.finalGrade).toBeNull();
+  });
+
+  it('trung bình có trọng số đơn giản toàn khoảng điểm 0 thì không có điểm', () => {
+    resetIds();
+    const result = calculateCategory({
+      aggregation: 'simpleweightedmean', gradeMin: 0, gradeMax: 100,
+      items: [
+        item({ grade: 10, gradeMin: 10, gradeMax: 10 }),
+        item({ grade: 20, gradeMin: 20, gradeMax: 20 }),
+      ],
+    });
+    expect(result.finalGrade).toBeNull();
+  });
+
   it('trọng số tự nhiên bỏ qua khoảng điểm âm và phân bổ đều các mục không có khoảng điểm', () => {
     resetIds();
     const negativeRange = item({ grade: 15, gradeMin: 20, gradeMax: 10 });

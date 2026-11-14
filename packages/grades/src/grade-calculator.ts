@@ -59,7 +59,7 @@ function gradeRange(item: CalcItemInput): number {
 }
 
 function norm(item: CalcItemInput, adjusted: number): number {
-  const range = item.gradeMax - item.gradeMin;
+  const range = gradeRange(item);
   if (range <= 0) return 0;
   return (adjusted - item.gradeMin) / range;
 }

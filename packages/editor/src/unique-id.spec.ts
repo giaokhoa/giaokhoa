@@ -130,4 +130,39 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
       element.remove();
     }
   });
+
+  it('trueFalse: giữ nguyên id đã có và chỉ cấp id cho các mệnh đề còn thiếu', () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const editor = new Editor({
+      element,
+      extensions: trueFalseExtensions,
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph' },
+          {
+            type: STATEMENT_LIST_NODE_TYPE,
+            content: Array.from({ length: TRUE_FALSE_STATEMENT_COUNT }, (_, index) => ({
+              type: STATEMENT_NODE_TYPE,
+              attrs: index === 0 ? { id: 'kept-statement' } : {},
+              content: [{ type: 'paragraph' }],
+            })),
+          },
+        ],
+      },
+    });
+    try {
+      editor.commands.setContent(editor.getJSON());
+      const json = editor.getJSON() as { content?: JSONContent[] };
+      const list = (json.content ?? []).find((node) => node.type === STATEMENT_LIST_NODE_TYPE);
+      const ids = (list?.content ?? []).map((statement) => statement.attrs?.id);
+      expect(ids[0]).toBe('kept-statement');
+      expect(ids.every((id) => typeof id === 'string')).toBe(true);
+      expect(new Set(ids).size).toBe(TRUE_FALSE_STATEMENT_COUNT);
+    } finally {
+      editor.destroy();
+      element.remove();
+    }
+  });
 });
