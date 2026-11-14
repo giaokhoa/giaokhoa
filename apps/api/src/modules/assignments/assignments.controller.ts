@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
@@ -52,7 +52,10 @@ export class AssignmentsController {
 
   @Post(':id/submission/files')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: ASSIGN_UPLOAD_MAX_BYTES } }))
-  async uploadFile(@Param('id', { schema: uuidIdSchema }) id: string, @UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @CurrentUser() actor: AuthenticatedUser) {
+  async uploadFile(@Param('id', { schema: uuidIdSchema }) id: string, @UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string } | undefined, @CurrentUser() actor: AuthenticatedUser) {
+    if (!file) {
+      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'assign.file_required' });
+    }
     return this.assignments.uploadSubmissionFile(actor.id, id, {
       fileName: file.originalname, data: file.buffer, mimeType: file.mimetype,
     });

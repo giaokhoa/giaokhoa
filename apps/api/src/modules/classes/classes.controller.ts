@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Response } from 'express';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
@@ -48,8 +49,8 @@ export class ClassesController {
   }
 
   @Get('join-preview')
-  async joinPreview(@Query('code') code: string) {
-    return this.classes.previewJoin(code ?? '');
+  async joinPreview(@Query('code', { schema: z.string().trim().min(1) }) code: string) {
+    return this.classes.previewJoin(code);
   }
 
   @Post('join')

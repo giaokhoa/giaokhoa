@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { PlatformRoute } from '../../common/platform-route.decorator';
 import { SkipSpaceContext } from '../tenants/skip-space-context.decorator';
@@ -29,7 +30,7 @@ export class ControlPlaneController {
   }
 
   @Get('by-slug/:slug')
-  async bySlug(@Param('slug') slug: string, @CurrentUser() actor: AuthenticatedUser) {
+  async bySlug(@Param('slug', { schema: z.string().trim().min(1).max(63) }) slug: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.registry.getBySlug(actor.id, slug);
   }
 

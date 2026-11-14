@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Pa
 import { FileInterceptor } from '@nestjs/platform-express';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { clientIpOf } from '../../common/client-ip';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
@@ -36,13 +37,7 @@ export class ExamMatricesController {
     return this.quiz.createMatrix(actor.id, dto);
   }
   @Get('template')
-  async template(@Query('subjectId') subjectId: string | undefined, @Query('curriculumId') curriculumId: string | undefined, @Query('levelSet') levelSet: string | undefined, @Query('scopeNodeIds') scopeNodeIds: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
-    if (!subjectId || !uuidIdSchema.safeParse(subjectId).success || !curriculumId || !uuidIdSchema.safeParse(curriculumId).success) {
-      throw new BadRequestException({ message: 'subjectId and curriculumId query parameters must be uuids', code: 'quiz.matrix_import_query_invalid' });
-    }
-    if (levelSet !== undefined && levelSet !== 'three' && levelSet !== 'four') {
-      throw new BadRequestException({ message: 'levelSet must be three or four', code: 'quiz.matrix_import_query_invalid' });
-    }
+  async template(@Query('subjectId', { schema: uuidIdSchema }) subjectId: string, @Query('curriculumId', { schema: uuidIdSchema }) curriculumId: string, @Query('levelSet', { schema: z.enum(['three', 'four']).optional() }) levelSet: string | undefined, @Query('scopeNodeIds', { schema: z.string().trim().min(1).optional() }) scopeNodeIds: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     let scope: string[] | null = null;
     if (scopeNodeIds) {
       scope = scopeNodeIds.split(',').map((x) => x.trim()).filter((x) => x !== '');
@@ -83,12 +78,8 @@ export class ExamMatricesController {
     return this.quiz.getMatrix(actor.id, id);
   }
   @Get(':id/versions/:version')
-  async getVersion(@Param('id', { schema: uuidIdSchema }) id: string, @Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
-    const parsed = Number(version);
-    if (!Number.isInteger(parsed) || parsed < 1) {
-      throw new BadRequestException({ message: 'version must be a positive integer', code: 'quiz.matrix_version_invalid' });
-    }
-    return this.quiz.getMatrixVersion(actor.id, id, parsed);
+  async getVersion(@Param('id', { schema: uuidIdSchema }) id: string, @Param('version', { schema: z.coerce.number().int().positive() }) version: number, @CurrentUser() actor: AuthenticatedUser) {
+    return this.quiz.getMatrixVersion(actor.id, id, version);
   }
   @Get(':id/generated-exams')
   async generatedExams(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
@@ -132,17 +123,11 @@ export class ExamMatricesController {
     return this.exams.generateFromMatrix(actor.id, id, dto);
   }
   @Get(':id/specification')
-  async specification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId') pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
-    if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
-    }
+  async specification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId', { schema: uuidIdSchema.optional() }) pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.quiz.getMatrixSpecification(actor.id, id, pinId);
   }
   @Get(':id/specification/export')
-  async exportSpecification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('format') format: string | undefined, @Query('pinId') pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
-    if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
-    }
+  async exportSpecification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('format', { schema: z.string().trim().min(1).optional() }) format: string | undefined, @Query('pinId', { schema: uuidIdSchema.optional() }) pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     const { filename, contentType, buffer } = await this.quiz.exportMatrixSpecification(actor.id, id, format ?? 'xlsx', pinId);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

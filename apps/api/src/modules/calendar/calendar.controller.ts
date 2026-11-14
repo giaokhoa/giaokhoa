@@ -35,7 +35,7 @@ export class CalendarController {
   }
   @Get('exports')
   async exportMine(@Query('from', { schema: calendarDateQuerySchema }) from: string | undefined, @Query('to', { schema: calendarDateQuerySchema }) to: string | undefined,
-    @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @Query('format') format: string | undefined,
+    @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @Query('format', { schema: z.string().trim().min(1).optional() }) format: string | undefined,
     @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     if (format !== undefined && format !== 'ics') {
       throw new BadRequestException({ message: `Unsupported calendar export format: ${format}`, code: 'calendar.export_format_unsupported' });
@@ -62,7 +62,7 @@ export class CalendarController {
   }
   @Public()
   @Get('export/:filename')
-  async exportByToken(@Param('filename') fileName: string, @Query('from', { schema: calendarDateQuerySchema }) from: string | undefined,
+  async exportByToken(@Param('filename', { schema: z.string().trim().min(1) }) fileName: string, @Query('from', { schema: calendarDateQuerySchema }) from: string | undefined,
     @Query('to', { schema: calendarDateQuerySchema }) to: string | undefined, @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @Res() res: Response) {
     const token = fileName.endsWith('.ics') ? fileName.slice(0, -'.ics'.length) : fileName;
     this.sendIcs(res, await this.calendar.exportIcsByToken(token, { from, to, eventType }));

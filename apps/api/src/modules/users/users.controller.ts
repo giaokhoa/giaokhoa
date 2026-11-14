@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
 import { RequireCapability } from '../../common/require-capability.decorator';
@@ -84,7 +85,7 @@ export class UsersController {
     return { saved: true };
   }
   @Get(':id/preferences/:name')
-  async getPreference(@Param('id', { schema: uuidIdSchema }) id: string, @Param('name') name: string, @CurrentUser() actor: AuthenticatedUser) {
+  async getPreference(@Param('id', { schema: uuidIdSchema }) id: string, @Param('name', { schema: z.string().trim().min(1) }) name: string, @CurrentUser() actor: AuthenticatedUser) {
     await this.users.assertCanUpdateProfile(actor.id, id);
     return { name, value: (await this.users.getPreference(id, name)) ?? null };
   }

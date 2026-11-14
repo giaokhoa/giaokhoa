@@ -1,12 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, MaxFileSizeValidator, Param, ParseFilePipe, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { Public } from '../../common/public.decorator';
-import { FilesService, questionFileContentSrc } from './files.service';
+import { FilesService, QUESTION_IMAGE_MAX_BYTES, questionFileContentSrc } from './files.service';
 import { questionImageMetaServerSchema, uploadMetaServerSchema, type QuestionImageMetaDto, type UploadMetaDto } from './dto/files.dto';
+
+export const GENERIC_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 
 @ApiTags('files')
@@ -15,8 +18,8 @@ export class FilesController {
   constructor(private readonly files: FilesService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
-  async upload(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: uploadMetaServerSchema }) meta: UploadMetaDto, @CurrentUser() actor: AuthenticatedUser) {
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: GENERIC_UPLOAD_MAX_BYTES } }))
+  async upload(@UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: GENERIC_UPLOAD_MAX_BYTES })] })) file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: uploadMetaServerSchema }) meta: UploadMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.upload({
       contextId: meta.contextId, component: meta.component, fileArea: meta.fileArea,
@@ -27,8 +30,8 @@ export class FilesController {
   }
 
   @Post('question-image')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadQuestionImage(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: QUESTION_IMAGE_MAX_BYTES } }))
+  async uploadQuestionImage(@UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: QUESTION_IMAGE_MAX_BYTES })] })) file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.uploadQuestionImage({
       contextId: meta.contextId, fileArea: meta.fileArea, itemId: meta.itemId,
@@ -61,7 +64,7 @@ export class FilesController {
 
   @Public()
   @Get(':id/download')
-  async download(@Param('id', { schema: uuidIdSchema }) id: string, @Query('sig') sig: string | undefined, @Res() res: Response) {
+  async download(@Param('id', { schema: uuidIdSchema }) id: string, @Query('sig', { schema: z.string().trim().min(1).optional() }) sig: string | undefined, @Res() res: Response) {
     const { file, data } = await this.files.readSignedContent(id, sig);
     res.setHeader('Content-Type', file.mimeType ?? 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${file.fileName.replace(/"/g, '')}"`);

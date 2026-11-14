@@ -37,7 +37,7 @@ export class CurriculumController {
     return this.curriculum.createSubject(actor.id, dto);
   }
   @Get('subjects')
-  async listSubjects(@Query('contextId', { schema: uuidIdSchema.optional() }) contextId: string | undefined, @Query('forCourseId') forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listSubjects(@Query('contextId', { schema: uuidIdSchema.optional() }) contextId: string | undefined, @Query('forCourseId', { schema: uuidIdSchema.optional() }) forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.curriculum.listSubjects(actor.id, contextId, forCourseId);
   }
   @Get('subjects/:id')
@@ -60,7 +60,7 @@ export class CurriculumController {
     return this.curriculum.createCurriculum(actor.id, dto);
   }
   @Get('curricula')
-  async listCurricula(@Query('subjectId', { schema: uuidIdSchema }) subjectId: string, @Query('forCourseId') forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listCurricula(@Query('subjectId', { schema: uuidIdSchema }) subjectId: string, @Query('forCourseId', { schema: uuidIdSchema.optional() }) forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.curriculum.listCurricula(actor.id, subjectId, forCourseId);
   }
   @Get('curricula/:id')
@@ -68,7 +68,7 @@ export class CurriculumController {
     return this.curriculum.getCurriculum(actor.id, id);
   }
   @Get('curricula/:id/tree')
-  async getTree(@Param('id', { schema: uuidIdSchema }) id: string, @Query('forCourseId') forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async getTree(@Param('id', { schema: uuidIdSchema }) id: string, @Query('forCourseId', { schema: uuidIdSchema.optional() }) forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.curriculum.getTree(actor.id, id, forCourseId);
   }
   @Patch('curricula/:id')

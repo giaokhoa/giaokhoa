@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
 import { CoursesService, type CategoryDeleteMode } from './courses.service';
@@ -26,12 +27,8 @@ export class CoursesController {
     return this.courses.updateCategory(actor.id, id, dto);
   }
   @Delete('categories/:id')
-  async deleteCategory(@Param('id', { schema: uuidIdSchema }) id: string, @Query('mode') mode: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
-    const parsed = mode === undefined ? undefined : (mode as CategoryDeleteMode);
-    if (parsed !== undefined && parsed !== 'moveup' && parsed !== 'recursive') {
-      throw new ForbiddenException({ message: `Unknown category delete mode ${mode} (expected moveup|recursive)`, code: 'course.category_bad_mode' });
-    }
-    return this.courses.deleteCategory(actor.id, id, parsed);
+  async deleteCategory(@Param('id', { schema: uuidIdSchema }) id: string, @Query('mode', { schema: z.enum(['moveup', 'recursive']).optional() }) mode: CategoryDeleteMode | undefined, @CurrentUser() actor: AuthenticatedUser) {
+    return this.courses.deleteCategory(actor.id, id, mode);
   }
 
   @Post()
@@ -39,7 +36,7 @@ export class CoursesController {
     return this.courses.createCourse(actor.id, dto);
   }
   @Get()
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query('category') category?: string) {
+  async list(@CurrentUser() actor: AuthenticatedUser, @Query('category', { schema: uuidIdSchema.optional() }) category?: string) {
     return this.courses.listCoursesFor(actor.id, category || undefined);
   }
   @Get('templates')

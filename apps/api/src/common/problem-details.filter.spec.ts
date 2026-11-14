@@ -1,4 +1,4 @@
-import { ArgumentsHost, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { ProblemDetailsFilter } from './problem-details.filter';
 
@@ -44,6 +44,16 @@ describe('Khối ProblemDetailsFilter', () => {
     }));
     const body = json.mock.calls[0][0];
     expect(body.errors).toEqual([{ field: 'items.0.name', message: 'Không đúng định dạng' }]);
+  });
+
+  it('định dạng 413 thành problem+json với title Payload Too Large thay vì Error', () => {
+    const { status, json } = runFilter(new PayloadTooLargeException('File is too large'));
+    expect(status).toHaveBeenCalledWith(413);
+    const body = json.mock.calls[0][0];
+    expect(body).toMatchObject({
+      type: 'about:blank', title: 'Payload Too Large', status: 413,
+      detail: 'File is too large', code: 'http.payload_too_large', instance: '/api/v1/things/1',
+    });
   });
 
   it('giấu chi tiết nội bộ với lỗi chưa biết (500)', () => {

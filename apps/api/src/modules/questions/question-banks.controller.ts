@@ -40,7 +40,7 @@ export class QuestionBanksController {
     return this.banks.proposeContribution(actor.id, id, dto);
   }
   @Get(':id/contributions')
-  async listContributions(@Param('id', { schema: uuidIdSchema }) id: string, @Query('status') status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listContributions(@Param('id', { schema: uuidIdSchema }) id: string, @Query('status', { schema: z.string().trim().min(1).optional() }) status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.banks.listContributions(actor.id, id, status || undefined);
   }
   @Post(':id/contributions/:contributionId/approve')
@@ -64,7 +64,7 @@ export class QuestionBanksController {
   }
 
   @Get(':bankId/matrix-contributions')
-  async listMatrixContributions(@Param('bankId', { schema: uuidIdSchema }) bankId: string, @Query('status') status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listMatrixContributions(@Param('bankId', { schema: uuidIdSchema }) bankId: string, @Query('status', { schema: z.string().trim().min(1).optional() }) status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.matrixBanks.listContributions(actor.id, bankId, status);
   }
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
 import { createGuardianLinkSchema, guardianDigestPreferenceSchema, type CreateGuardianLinkDto, type GuardianDigestPreferenceDto } from './dto/guardians.dto';
@@ -19,7 +20,7 @@ export class GuardianLinksController {
   }
 
   @Get()
-  async list(@Query('guardianUserId') guardianUserId: string | undefined, @Query('studentUserId') studentUserId: string | undefined, @Query('status') status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async list(@Query('guardianUserId', { schema: uuidIdSchema.optional() }) guardianUserId: string | undefined, @Query('studentUserId', { schema: uuidIdSchema.optional() }) studentUserId: string | undefined, @Query('status', { schema: z.string().trim().min(1).optional() }) status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.guardians.listLinks(actor.id, { guardianUserId, studentUserId, status });
   }
 

@@ -165,6 +165,40 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     }
   });
 
+  it('tải lên thiếu part file trả 400 ProblemDetails thay vì 500', async () => {
+    const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile');
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.status).toBe(400);
+  });
+
+  it('tải ảnh câu hỏi thiếu part file trả 400 ProblemDetails thay vì 500', async () => {
+    const res = await http(app).post('/api/v1/files/question-image').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('fileArea', 'questiontext');
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.status).toBe(400);
+  });
+
+  it('tải file chung vượt trần 25 MB trả 413 ProblemDetails với title Payload Too Large', async () => {
+    const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile')
+      .attach('file', Buffer.alloc(25 * 1024 * 1024 + 1), 'qua-lon.bin');
+    expect(res.status).toBe(413);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body).toMatchObject({ title: 'Payload Too Large', status: 413, code: 'http.payload_too_large' });
+  });
+
+  it('tải ảnh câu hỏi vượt trần 8 MB trả 413 ProblemDetails thay vì 400 của service', async () => {
+    const res = await http(app).post('/api/v1/files/question-image').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('fileArea', 'questiontext')
+      .attach('file', Buffer.alloc(8 * 1024 * 1024 + 1), 'qua-lon.png');
+    expect(res.status).toBe(413);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body).toMatchObject({ title: 'Payload Too Large', status: 413, code: 'http.payload_too_large' });
+  });
+
   it('từ chối người lạ: request URL đã ký và luồng có rào trả 403 Problem Details; tải không ký trả 401', async () => {
     const file = await upload(uploaderToken, 'secret.txt', 'top-secret');
     const stranger = await createUserViaApi(app, admin);

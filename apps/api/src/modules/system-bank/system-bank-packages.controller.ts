@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { withdrawSystemResourceSchema, type WithdrawSystemResource } from '@giaokhoa/contracts';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemBankService } from './system-bank.service';
 import {
@@ -42,18 +43,18 @@ export class SystemBankPackagesController {
   }
 
   @Get('review/:version')
-  getForReview(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
+  getForReview(@Param('version', { schema: z.string().trim().min(1).max(50) }) version: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.bank.getOutcomePackageForReview(actor.id, version);
   }
 
   @Post(':version/approve')
-  approve(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
+  approve(@Param('version', { schema: z.string().trim().min(1).max(50) }) version: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.bank.reviewOutcomePackage(actor.id, version, true);
   }
 
   @Post(':version/reject')
   reject(
-    @Param('version') version: string,
+    @Param('version', { schema: z.string().trim().min(1).max(50) }) version: string,
     @Body({ schema: rejectSystemOutcomePackageSchema }) dto: RejectSystemOutcomePackageDto,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
@@ -61,18 +62,18 @@ export class SystemBankPackagesController {
   }
 
   @Post(':version/withdraw')
-  withdraw(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser,
+  withdraw(@Param('version', { schema: z.string().trim().min(1).max(50) }) version: string, @CurrentUser() actor: AuthenticatedUser,
     @Body({ schema: withdrawSystemResourceSchema }) input: WithdrawSystemResource) {
     return this.bank.withdrawOutcomePackage(actor.id, version, input.reason);
   }
 
   @Get(':version')
-  getPackage(@Param('version') version: string) {
+  getPackage(@Param('version', { schema: z.string().trim().min(1).max(50) }) version: string) {
     return this.bank.getOutcomePackage(version);
   }
 
   @Post(':version/install')
-  installPackage(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
+  installPackage(@Param('version', { schema: z.string().trim().min(1).max(50) }) version: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.bank.installOutcomePackage(actor.id, version);
   }
 }

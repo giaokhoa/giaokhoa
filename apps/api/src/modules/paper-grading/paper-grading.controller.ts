@@ -3,7 +3,8 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
-import { uuidIdSchema } from '@giaokhoa/contracts';
+import { PAPER_SCAN_STATUSES, uuidIdSchema } from '@giaokhoa/contracts';
+import { z } from 'zod';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import {
@@ -45,10 +46,10 @@ export class ExamBatchesController {
   @Get(':batchId/sheets')
   async sheets(
     @Param('batchId', { schema: uuidIdSchema }) batchId: string,
-    @Query('format') format: string | undefined,
-    @Query('studentId') studentId: string | undefined,
-    @Query('kind') kind: string | undefined,
-    @Query('copies') copies: string | undefined,
+    @Query('format', { schema: z.string().trim().min(1).optional() }) format: string | undefined,
+    @Query('studentId', { schema: uuidIdSchema.optional() }) studentId: string | undefined,
+    @Query('kind', { schema: z.string().trim().min(1).optional() }) kind: string | undefined,
+    @Query('copies', { schema: z.coerce.number().int().min(1).optional() }) copies: number | undefined,
     @CurrentUser() actor: AuthenticatedUser,
     @Res() res: Response,
   ) {
@@ -56,7 +57,7 @@ export class ExamBatchesController {
       throw new BadRequestException({ message: `Unsupported sheets format ${format}`, code: 'paper.sheets_format_unsupported' });
     }
     const { buffer, fileName } = await this.paper.sheetsPdf(actor.id, batchId, {
-      studentId, kind, copies: copies ? Number(copies) : undefined,
+      studentId, kind, copies,
     });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -96,7 +97,7 @@ export class ExamScansController {
   @Get()
   async list(
     @Query('pinId', { schema: uuidIdSchema }) pinId: string,
-    @Query('status') status: string | undefined,
+    @Query('status', { schema: z.enum(PAPER_SCAN_STATUSES).optional() }) status: string | undefined,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.paper.listScans(actor.id, pinId, status);
@@ -110,7 +111,7 @@ export class ExamScansController {
   @Get(':scanId/image/:kind')
   async image(
     @Param('scanId', { schema: uuidIdSchema }) scanId: string,
-    @Param('kind') kind: string,
+    @Param('kind', { schema: z.string().trim().min(1) }) kind: string,
     @CurrentUser() actor: AuthenticatedUser,
     @Res() res: Response,
   ) {
