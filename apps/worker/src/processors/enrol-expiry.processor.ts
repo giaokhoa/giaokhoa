@@ -41,7 +41,7 @@ export class EnrolExpiryProcessor extends ObservedWorkerHost {
           checkedAt: a.checkedAt,
           suspendedIds: [...a.suspendedIds, ...b.suspendedIds],
           warnedIds: [...a.warnedIds, ...b.warnedIds],
-        }));
+        }), { checkedAt: new Date().toISOString(), suspendedIds: [], warnedIds: [] });
   }
 
   private async tenantIdOfCourse(courseId: string): Promise<string | null> {

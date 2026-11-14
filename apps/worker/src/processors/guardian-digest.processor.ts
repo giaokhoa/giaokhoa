@@ -62,7 +62,7 @@ export class GuardianDigestProcessor extends ObservedWorkerHost {
       this.taskLog.run('guardian-digests', () => this.sweep(),
         (r) => `queued ${r.queued.length} guardian digest item(s)`), (a, b) => ({
           checkedAt: a.checkedAt, queued: [...a.queued, ...b.queued],
-        }));
+        }), { checkedAt: new Date().toISOString(), queued: [] });
   }
 
   private async sweep(): Promise<GuardianDigestSweepResult> {

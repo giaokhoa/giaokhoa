@@ -13,6 +13,10 @@ export interface SpaceRegistryEntry {
   schemaVersion: string | null;
 }
 
+export function isLearningSpace(space: Pick<SpaceRegistryEntry, 'kind' | 'slug'>): boolean {
+  return space.kind === 'center' || (space.kind === 'platform' && space.slug === 'cong-cong');
+}
+
 export type SpaceRegistryReader = (slug: string) => Promise<SpaceRegistryEntry | undefined>;
 
 export interface ResolvedSpaceConnection {

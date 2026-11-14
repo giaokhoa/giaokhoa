@@ -32,7 +32,7 @@ export class NotificationRetentionProcessor extends ObservedWorkerHost {
           readDeleted: a.readDeleted + b.readDeleted,
           unreadDeleted: a.unreadDeleted + b.unreadDeleted,
           dispatchLogDeleted: a.dispatchLogDeleted + b.dispatchLogDeleted,
-        }));
+        }), { readDeleted: 0, unreadDeleted: 0, dispatchLogDeleted: 0 });
   }
 
   async sweep(now: Date): Promise<NotificationRetentionResult> {

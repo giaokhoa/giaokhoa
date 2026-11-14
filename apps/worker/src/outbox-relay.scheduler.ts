@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
-import { SpaceRoutingError } from './db/routing/space-connection-resolver';
+import { isLearningSpace, SpaceRoutingError } from './db/routing/space-connection-resolver';
 import { mapWithConcurrencyLimit } from './db/routing/space-sweep';
 import { EventLogWriter } from './event-log-writer.service';
 import { TaskLogService } from './task-log.service';
@@ -103,7 +103,7 @@ export class OutboxRelayScheduler {
       );
       return { published: 0, failedSlugs: [], registryError: message };
     }
-    const dedicated = spaces.filter((space) => space.kind === 'center' && space.storageMode === 'dedicated' && space.status === 'active');
+    const dedicated = spaces.filter((space) => isLearningSpace(space) && space.storageMode === 'dedicated' && space.status === 'active');
     let published = 0;
     const failedSlugs: string[] = [];
     await mapWithConcurrencyLimit(dedicated, this.sweepConcurrency, async (space) => {

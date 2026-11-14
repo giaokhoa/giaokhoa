@@ -38,7 +38,8 @@ export class NotificationDigestProcessor extends ObservedWorkerHost {
       itemsSent: a.itemsSent + b.itemsSent,
       itemsSuppressedAdmin: a.itemsSuppressedAdmin + b.itemsSuppressedAdmin,
       itemsSuppressedPreference: a.itemsSuppressedPreference + b.itemsSuppressedPreference,
-    }));
+    }), { usersSent: 0, usersDeferred: 0, usersSkipped: 0, usersFailed: 0,
+      itemsSent: 0, itemsSuppressedAdmin: 0, itemsSuppressedPreference: 0 });
   }
 
   private async sweep(): Promise<NotificationDigestSweepResult> {

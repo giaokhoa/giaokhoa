@@ -87,3 +87,15 @@ Phần đã sửa trong lượt này:
 - Tên database và role ở test integration system bank của API có hậu tố ngẫu nhiên theo process; bỏ `DROP DATABASE ... WITH (FORCE)` trước và sau mỗi ca, yêu cầu đóng pool thật trước khi drop (lỗi connection tồn đọng phải hiện ra, không ép cắt kết nối). Test system bank mục tiêu **10/10 đạt**.
 
 **Chưa tuyên bố CI xanh hoặc AC25–AC27 hoàn tất.** HTTP E2E vẫn còn nhiều fixture tạo trường shared và AC liên miền/backup/restore/tải thực chưa đủ. Trạng thái trên commit cuối phải lấy từ CI GitHub Actions mới. Không merge/đóng issue nếu chưa đạt review độc lập.
+
+## Review độc lập lần 4 — công cộng bị bỏ sót khỏi job worker
+
+Đã đối chiếu [review lần 4](https://github.com/giaokhoa/giaokhoa/pull/62#issuecomment-6874331666) trên SHA `85a6ccb`: `verify-workspace`, `test-api`, `verify-stack` đã PASS, nhưng tất cả shard E2E vẫn FAIL; không hồi quy thành công các finding đã đóng. Phát hiện mới về `cong-cong` đúng: lệnh `provision-public` ghi `kind=platform`, còn bộ lọc worker cũ chỉ chọn `center`, làm mất quét outbox và job định kỳ của khu công cộng.
+
+Sửa bộ lọc dùng đúng hợp đồng registry `kind=center` **hoặc** `kind=platform` và `slug=cong-cong`, luôn yêu cầu active/dedicated; `trang-chinh` không được thực thi callback học tập. Worker trả giá trị rỗng đúng kiểu cho các processor khi registry chưa có kho học tập active, không phát sinh lỗi retry giả; lỗi control plane mất kết nối và kho shared legacy vẫn được từ chối. Job relay giữ cơ chế platform riêng và dùng `spaceSlug`/`spaceId` bất biến cho khu công cộng.
+
+Bằng chứng mục tiêu: worker unit routing/sweep/outbox **31/31**, integration PostgreSQL thật `space-job-routing.int-spec.ts` **6/6** (bao gồm outbox công cộng và nhịp `enrol-expiry` ở DB công cộng, không nhân đôi và không ghi nhầm platform/A/B). Fixture công cộng dùng đúng `kind=platform`, database và role riêng; không dựa trên `kind=public` không tồn tại trong contract.
+
+Bổ sung ổn định fixture worker: `guardian-digest-delivery`, `guardian-digest` và `notification-events-catchup` trước đây dựng UUID qua `Date.now() % 991/997`, có thể trùng qua lần chạy DB test khác; nay UUID gắn phần ngẫu nhiên riêng cho mỗi run nhưng ổn định trong run. Ba suite này chạy lại **16/16 PASS**. Lượt full worker integration **trước sửa fixture** đạt 178/179 với lỗi unique active guardian link; **sau sửa fixture chạy lại toàn bộ 34 file / 179 test PASS**. Toàn bộ worker unit **21 file / 140 test PASS**; lint/typecheck/build worker PASS. Đây là bằng chứng local, chưa thay cho CI head cuối.
+
+**Còn thiếu:** HTTP E2E legacy chưa di trú sang provision database/role riêng; thử nghiệm đồng thời/queue thực qua toàn bộ AC, số đo RSS/pool AC26 và các ca chốt AC01–AC27. Không đánh dấu hoàn tất khi CI trên commit cuối chưa đạt.

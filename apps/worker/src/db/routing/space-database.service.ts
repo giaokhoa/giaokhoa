@@ -9,6 +9,7 @@ import { TenantAwarePool } from '../tenant-pool';
 import {
   SpaceConnectionResolver,
   SpaceRoutingError,
+  isLearningSpace,
   type ResolvedSpaceConnection,
   type SpaceRegistryEntry,
 } from './space-connection-resolver';
@@ -202,15 +203,14 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   async sweepDedicatedSpaces<T>(
     sweep: () => Promise<T>,
     merge: (result: T, next: T) => T,
+    empty: T,
   ): Promise<T> {
     const registered = await this.listRegisteredSpaces();
     if (registered.some((space) => space.storageMode !== 'dedicated')) {
       throw new SpaceRoutingError('space_routing.shared_not_supported', 'Periodic sweep cannot run against a shared database');
     }
-    const dedicated = registered.filter((space) => space.kind === 'center' && space.status === 'active');
-    if (dedicated.length === 0) {
-      throw new SpaceRoutingError('space_routing.no_active_spaces', 'Periodic sweep requires an active dedicated space');
-    }
+    const dedicated = registered.filter((space) => isLearningSpace(space) && space.status === 'active');
+    if (dedicated.length === 0) return empty;
     const failed: string[] = [];
     const results: Array<T | undefined> = Array.from({ length: dedicated.length });
     await mapWithConcurrencyLimit(dedicated.map((space, index) => ({ space, index })), this.sweepConcurrency, async ({ space, index }) => {
