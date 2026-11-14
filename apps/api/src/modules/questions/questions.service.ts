@@ -16,7 +16,7 @@ export type {
 import {
   assertCategoryReadable, assertQuestionReadable, attemptNotFound, bankNotFound, canUseBank, categoryNotFound,
   questionCurriculumLinkNotFound, questionEntryMissing, questionNotFound, questionVersionMissing,
-  questionVersionNotFound, requireCategoryWritable, requireQuestionWritable, stimulusNotFound, usageNotFound,
+  questionVersionNotFound, questionVersionNotFoundForQuestion, requireCategoryWritable, requireQuestionWritable, stimulusNotFound, usageNotFound,
   type ServiceGuardDeps,
 } from '../../common/service-guards';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -1233,7 +1233,7 @@ export class QuestionsService {
     }
     const version = await this.repo.getVersion(toVersionId);
     if (!version || version.questionId !== attempt.questionId) {
-      throw questionVersionNotFound(toVersionId, attempt.questionId);
+      throw questionVersionNotFoundForQuestion(toVersionId, attempt.questionId);
     }
     if (version.status !== 'ready') {
       throw new BadRequestException({

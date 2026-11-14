@@ -141,12 +141,12 @@ function multichoiceInput(categoryId: string): Record<string, unknown> {
   };
 }
 
-function readableQuestion(service: QuestionsService, repo: ReturnType<typeof buildService>['repo']): void {
+function readableQuestion(repo: ReturnType<typeof buildService>['repo']): void {
   repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
   repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+  repo.getBankByContextId.mockResolvedValue(bankRow('bank-1') as never);
   repo.getEntryByQuestion.mockResolvedValue(entryRow('entry-1') as never);
   repo.getVersionByNumber.mockResolvedValue(versionRow('v-1') as never);
-  void service;
 }
 
 describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyên khi gom helper', () => {
@@ -230,7 +230,7 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
 
   it('người xem có quyền dùng ngân hàng thì getQuestionForViewer trả về câu hỏi', async () => {
     const { service, repo } = buildService();
-    readableQuestion(service, repo);
+    readableQuestion(repo);
     const view = await service.getQuestionForViewer(ACTOR, 'q-1');
     expect(view.question.id).toBe('q-1');
     expect(view.latestVersion.id).toBe('v-1');
@@ -404,7 +404,7 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
   });
 
   it('tạo bản sao câu hỏi khi learning outcome không tồn tại thì báo curriculum.outcome_not_found', async () => {
-    const { service, repo } = buildService();
+    const { service, repo, evaluator } = buildService();
     repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
     const error = await capture(service.createQuestionCopies(ACTOR, 'cat-1', [{
       qtype: 'multichoice',
@@ -420,6 +420,9 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     }] as never, async () => 'done'));
     expect(error).toBeInstanceOf(NotFoundException);
     expect(problem(error)).toEqual({ code: 'curriculum.outcome_not_found' });
+    expect(evaluator.requireCapability).toHaveBeenCalledWith(ACTOR, 'question:add', CTX);
+    expect(repo.transaction).not.toHaveBeenCalled();
+    expect(repo.insertQuestion).not.toHaveBeenCalled();
   });
 
   it('gắn môn học khi câu hỏi không tồn tại thì báo question.not_found', async () => {
@@ -511,5 +514,173 @@ describe('QuestionsService — cổng guard và mã lỗi not-found giữ nguyê
     const view = await service.getUsageForViewer(ACTOR, 'u-1');
     expect(view.usage.id).toBe('u-1');
     expect(view.attempts).toEqual([]);
+  });
+
+  it('câu hỏi không tồn tại thì getQuestionForViewer báo question.not_found', async () => {
+    const { service } = buildService();
+    const error = await capture(service.getQuestionForViewer(ACTOR, 'q-9'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-9 not found', code: 'question.not_found' });
+  });
+
+  it('câu hỏi tồn tại nhưng danh mục không tồn tại thì getQuestionForViewer báo question.not_found', async () => {
+    const { service, repo } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    const error = await capture(service.getQuestionForViewer(ACTOR, 'q-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+  });
+
+  it('quản trị viên xem câu hỏi trong ngân hàng cá nhân của người khác thì được phép xem', async () => {
+    const { service, repo, evaluator } = buildService();
+    readableQuestion(repo);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1', { scope: 'personal', ownerId: OTHER }) as never);
+    evaluator.isSiteAdmin.mockResolvedValue(true);
+    const view = await service.getQuestionForViewer(ACTOR, 'q-1');
+    expect(view.question.id).toBe('q-1');
+    expect(evaluator.isSiteAdmin).toHaveBeenCalledWith(ACTOR);
+  });
+
+  it('chủ ngân hàng cá nhân xem câu hỏi trong ngân hàng của chính mình thì được phép xem', async () => {
+    const { service, repo, evaluator } = buildService();
+    readableQuestion(repo);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1', { scope: 'personal', ownerId: ACTOR }) as never);
+    const view = await service.getQuestionForViewer(ACTOR, 'q-1');
+    expect(view.question.id).toBe('q-1');
+    expect(evaluator.isSiteAdmin).not.toHaveBeenCalled();
+  });
+
+  it('gắn môn học cho câu hỏi trong danh mục cá nhân của người khác thì báo question.not_found', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1', { bankId: 'bank-1' }) as never);
+    repo.getBankById.mockResolvedValue(bankRow('bank-1', { scope: 'personal', ownerId: OTHER }) as never);
+    const error = await capture(service.attachSubject(ACTOR, 'q-1', 'sub-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+    expect(evaluator.requireCapability).not.toHaveBeenCalled();
+    expect(repo.getSubjectRow).not.toHaveBeenCalled();
+  });
+
+  it('gắn môn học khi danh mục của câu hỏi không tồn tại thì báo question.category_not_found', async () => {
+    const { service, repo } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    const error = await capture(service.attachSubject(ACTOR, 'q-1', 'sub-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question category cat-1 not found', code: 'question.category_not_found' });
+  });
+
+  it('gắn learning outcome khi câu hỏi không tồn tại thì báo question.not_found', async () => {
+    const { service } = buildService();
+    const error = await capture(service.attachOutcome(ACTOR, 'q-9', 'o-1', 'remember'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-9 not found', code: 'question.not_found' });
+  });
+
+  it('gắn learning outcome thiếu capability question:editall thì lỗi capability thắng kiểm tra outcome', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    evaluator.requireCapability.mockRejectedValue(new ForbiddenException({ message: 'Capability denied', code: 'access.capability_denied' }));
+    const error = await capture(service.attachOutcome(ACTOR, 'q-1', 'o-1', 'remember'));
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(repo.getOutcomeChain).not.toHaveBeenCalled();
+  });
+
+  it('sửa câu hỏi trong danh mục cá nhân của người khác thì báo question.not_found', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getEntryByQuestion.mockResolvedValue(entryRow('entry-1') as never);
+    repo.getVersionByNumber.mockResolvedValue(versionRow('v-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1', { bankId: 'bank-1' }) as never);
+    repo.getBankById.mockResolvedValue(bankRow('bank-1', { scope: 'personal', ownerId: OTHER }) as never);
+    const error = await capture(service.updateQuestion(ACTOR, 'q-1', {} as never));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+    expect(evaluator.requireCapability).not.toHaveBeenCalled();
+    expect(repo.insertVersion).not.toHaveBeenCalled();
+  });
+
+  it('chấm lại attempt với phiên bản thuộc câu hỏi khác thì báo question.version_not_found kèm id câu hỏi', async () => {
+    const { service, repo } = buildService();
+    repo.getAttempt.mockResolvedValue({ id: 'att-1', questionUsageId: 'u-1', questionId: 'q-1', questionVersionId: 'v-1', state: 'gradedright', fraction: 1, maxMark: 1 } as never);
+    repo.getVersion.mockResolvedValue(versionRow('v-9', { questionId: 'q-2' }) as never);
+    const error = await capture(service.regradeAttemptWithVersion(ACTOR, 'att-1', 'v-9'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question version v-9 not found for question q-1', code: 'question.version_not_found' });
+  });
+
+  it('danh mục không tồn tại thì listQuestionsForViewer báo question.category_not_found', async () => {
+    const { service } = buildService();
+    const error = await capture(service.listQuestionsForViewer(ACTOR, 'cat-9'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question category cat-9 not found', code: 'question.category_not_found' });
+  });
+
+  it('người xem không có quyền dùng ngân hàng thì listQuestionsForViewer báo question.category_not_found', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.listQuestionsForViewer(ACTOR, 'cat-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question category cat-1 not found', code: 'question.category_not_found' });
+    expect(repo.listQuestionsInCategory).not.toHaveBeenCalled();
+  });
+
+  it('danh mục không tồn tại thì listStimuliForViewer báo question.category_not_found', async () => {
+    const { service } = buildService();
+    const error = await capture(service.listStimuliForViewer(ACTOR, 'cat-9'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question category cat-9 not found', code: 'question.category_not_found' });
+  });
+
+  it('người xem không có quyền dùng ngân hàng thì listStimuliForViewer báo question.category_not_found', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.listStimuliForViewer(ACTOR, 'cat-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question category cat-1 not found', code: 'question.category_not_found' });
+  });
+
+  it('câu hỏi tồn tại nhưng danh mục không tồn tại thì listVersionsForViewer báo question.not_found', async () => {
+    const { service, repo } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    const error = await capture(service.listVersionsForViewer(ACTOR, 'q-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+  });
+
+  it('người xem không có quyền dùng ngân hàng thì listVersionsForViewer báo question.not_found', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.listVersionsForViewer(ACTOR, 'q-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+    expect(repo.getEntryByQuestion).not.toHaveBeenCalled();
+  });
+
+  it('người xem có quyền dùng ngân hàng thì getCurriculumLinksForViewer trả về liên kết chương trình của câu hỏi', async () => {
+    const { service, repo } = buildService();
+    readableQuestion(repo);
+    const links = await service.getCurriculumLinksForViewer(ACTOR, 'q-1');
+    expect(links).toEqual({ questionId: 'q-1', subjectIds: [], outcomes: [] });
+  });
+
+  it('người xem không có quyền dùng ngân hàng thì getCurriculumLinksForViewer báo question.not_found', async () => {
+    const { service, repo, evaluator } = buildService();
+    repo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
+    repo.getCategory.mockResolvedValue(categoryRow('cat-1') as never);
+    repo.getBankByContextId.mockResolvedValue(bankRow('bank-1') as never);
+    evaluator.hasCapability.mockResolvedValue(false);
+    const error = await capture(service.getCurriculumLinksForViewer(ACTOR, 'q-1'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
+    expect(repo.listQuestionSubjectLinks).not.toHaveBeenCalled();
   });
 });
