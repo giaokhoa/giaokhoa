@@ -9,6 +9,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { enableTrustedProxy } from './common/client-ip';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
+import { CSRF_EXCLUSIONS } from './csrf-exclusions';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { mountBetterAuth } from './modules/auth/better-auth/better-auth.mount';
 import { BetterAuthService } from './modules/auth/better-auth/better-auth.service';
@@ -29,12 +30,7 @@ async function bootstrap(): Promise<void> {
     .filter(Boolean);
   app.enableCsrfProtection({
     trustedOrigins: corsOrigins,
-    exclude: [
-      { path: 'payments/ipn/sepay', method: RequestMethod.POST, version: '1' },
-      { path: 'payments/webhook', method: RequestMethod.POST, version: '1' },
-      { path: 'webservice/call', method: RequestMethod.POST, version: '1' },
-      { path: 'mcp', method: RequestMethod.POST },
-    ],
+    exclude: CSRF_EXCLUSIONS,
   });
   enableTrustedProxy(app);
   app.enableCors({ origin: corsOrigins, credentials: true });

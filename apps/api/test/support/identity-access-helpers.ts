@@ -12,6 +12,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { enableTrustedProxy } from '../../src/common/client-ip';
 import { ProblemDetailsFilter } from '../../src/common/problem-details.filter';
+import { CSRF_EXCLUSIONS } from '../../src/csrf-exclusions';
 import { REDIS_THROTTLER_KEY_PREFIX } from '../../src/common/redis-throttler.storage';
 import { SpaceDatabaseService } from '../../src/db/routing/space-database.service';
 import { BetterAuthService } from '../../src/modules/auth/better-auth/better-auth.service';
@@ -58,12 +59,7 @@ export async function createTestApp(options?: { controllers?: Array<Type<unknown
   app.enableCors({ origin: corsOrigins, credentials: true });
   app.enableCsrfProtection({
     trustedOrigins: corsOrigins,
-    exclude: [
-      { path: 'payments/ipn/sepay', method: RequestMethod.POST, version: '1' },
-      { path: 'payments/webhook', method: RequestMethod.POST, version: '1' },
-      { path: 'webservice/call', method: RequestMethod.POST, version: '1' },
-      { path: 'mcp', method: RequestMethod.POST },
-    ],
+    exclude: CSRF_EXCLUSIONS,
   });
   const betterAuth = app.get(BetterAuthService);
   if (betterAuth.auth) {

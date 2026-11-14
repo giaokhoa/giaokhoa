@@ -21,7 +21,7 @@ export class FilesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: GENERIC_UPLOAD_MAX_BYTES } }))
   async upload(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string } | undefined, @Body({ schema: uploadMetaServerSchema }) meta: UploadMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     if (!file) {
-      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'file_required' });
+      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'file.file_required' });
     }
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.upload({
@@ -36,7 +36,7 @@ export class FilesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: QUESTION_IMAGE_MAX_BYTES } }))
   async uploadQuestionImage(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string } | undefined, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     if (!file) {
-      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'file_required' });
+      throw new BadRequestException({ message: 'A file is required in the multipart field "file"', code: 'file.file_required' });
     }
     await this.files.assertCanUpload(meta.contextId, actor);
     const row = await this.files.uploadQuestionImage({

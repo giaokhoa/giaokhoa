@@ -267,13 +267,17 @@ describe('Cổng đọc ngân hàng câu hỏi (issue #55)', () => {
     expect(after.body.entry.latestVersion).toBe(2);
   });
 
-  it('tham số lọc sai định dạng trả 400 ProblemDetails thay vì danh sách rỗng', async () => {
+  it('tham số lọc cognitiveLevel sai định dạng trả 400 ProblemDetails thay vì danh sách rỗng', async () => {
     const badLevel = await http(app).get('/api/v1/questions?cognitiveLevel=khong-hop-le').set('Authorization', `Bearer ${teacher}`);
     expect(badLevel.status).toBe(400);
     expect(badLevel.headers['content-type']).toContain('application/problem+json');
     expect(badLevel.body.code).toBe('http.validation_failed');
+  });
+
+  it('tham số lọc subjectId sai định dạng trả 400 ProblemDetails thay vì danh sách rỗng', async () => {
     const badSubject = await http(app).get('/api/v1/questions?subjectId=not-a-uuid').set('Authorization', `Bearer ${teacher}`);
     expect(badSubject.status).toBe(400);
+    expect(badSubject.headers['content-type']).toContain('application/problem+json');
     expect(badSubject.body.code).toBe('http.validation_failed');
   });
 });

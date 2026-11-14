@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cacheRedisConfigFromUrl,
   databaseConnectionFromEnv,
+  parseTrustedOrigin,
   redisConnectionFromUrl,
   redisTlsFromUrl,
   validateEnv,
@@ -70,6 +71,68 @@ describe('Hàm validateEnv (fail-fast)', () => {
         DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://localhost:6379', JWT_SECRET: 'short',
       }),
     ).toThrow(/Invalid environment variables/);
+  });
+});
+
+describe('Hàm parseTrustedOrigin', () => {
+  it('chấp nhận origin http/https kèm cổng và chuẩn hoá về origin', () => {
+    expect(parseTrustedOrigin('http://localhost:5173')).toBe('http://localhost:5173');
+    expect(parseTrustedOrigin('https://app.example.com:8443')).toBe('https://app.example.com:8443');
+  });
+
+  it('cắt trailing slash rồi chấp nhận origin', () => {
+    expect(parseTrustedOrigin('https://app.example.com/')).toBe('https://app.example.com');
+    expect(parseTrustedOrigin('https://app.example.com///')).toBe('https://app.example.com');
+  });
+
+  it('từ chối wildcard', () => {
+    expect(parseTrustedOrigin('https://*.example.com')).toBeNull();
+    expect(parseTrustedOrigin('*')).toBeNull();
+  });
+
+  it('từ chối origin có path', () => {
+    expect(parseTrustedOrigin('https://app.example.com/app')).toBeNull();
+  });
+
+  it('từ chối origin có query hoặc fragment', () => {
+    expect(parseTrustedOrigin('https://app.example.com?x=1')).toBeNull();
+    expect(parseTrustedOrigin('https://app.example.com#frag')).toBeNull();
+  });
+
+  it('từ chối scheme lạ và chuỗi không phải URL', () => {
+    expect(parseTrustedOrigin('ftp://app.example.com')).toBeNull();
+    expect(parseTrustedOrigin('not-a-url')).toBeNull();
+  });
+
+  it('từ chối chuỗi rỗng hoặc chỉ khoảng trắng và origin kèm userinfo', () => {
+    expect(parseTrustedOrigin('')).toBeNull();
+    expect(parseTrustedOrigin('   ')).toBeNull();
+    expect(parseTrustedOrigin('https://user@app.example.com')).toBeNull();
+  });
+});
+
+describe('CORS_ORIGINS trong validateEnv', () => {
+  const base = {
+    DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
+    REDIS_URL: 'redis://localhost:6379',
+    JWT_SECRET: 'a-secret-with-16+chars',
+  };
+
+  it('lọc bỏ entry rỗng do trailing comma thay vì fail boot', () => {
+    expect(validateEnv({ ...base, CORS_ORIGINS: 'http://a.example,http://b.example,' }).CORS_ORIGINS)
+      .toBe('http://a.example,http://b.example');
+  });
+
+  it('cắt trailing slash của từng origin khi chuẩn hoá', () => {
+    expect(validateEnv({ ...base, CORS_ORIGINS: 'https://app.example.com/' }).CORS_ORIGINS)
+      .toBe('https://app.example.com');
+  });
+
+  it('vẫn từ chối entry sai thật và danh sách toàn entry rỗng', () => {
+    expect(() => validateEnv({ ...base, CORS_ORIGINS: 'http://a.example,not-a-url' }))
+      .toThrow(/Invalid environment variables/);
+    expect(() => validateEnv({ ...base, CORS_ORIGINS: ',' }))
+      .toThrow(/Invalid environment variables/);
   });
 });
 

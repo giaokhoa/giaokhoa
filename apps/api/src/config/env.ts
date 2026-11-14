@@ -84,10 +84,13 @@ export const envSchema = z.object({
   RATE_LIMIT_REGISTRATION_PER_MINUTE: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().positive().default(300),
   CORS_ORIGINS: z.string().min(1).default('http://localhost:5173')
-    .refine((raw) => raw.split(',').every((entry) => parseTrustedOrigin(entry) !== null), {
-      message: 'CORS_ORIGINS must be a comma-separated list of bare origins (scheme, host and optional port only, no path, query, wildcard or trailing slash)',
+    .refine((raw) => {
+      const entries = raw.split(',').filter((entry) => entry.trim() !== '');
+      return entries.length > 0 && entries.every((entry) => parseTrustedOrigin(entry) !== null);
+    }, {
+      message: 'CORS_ORIGINS must be a comma-separated list of bare origins (scheme, host and optional port only, no path, query or wildcard; a trailing slash is stripped)',
     })
-    .transform((raw) => raw.split(',').map((entry) => parseTrustedOrigin(entry) as string).join(',')),
+    .transform((raw) => raw.split(',').filter((entry) => entry.trim() !== '').map((entry) => parseTrustedOrigin(entry) as string).join(',')),
   WEB_DIST_DIR: z.string().optional(),
   FILE_STORAGE_DIR: z.string().min(1).default('./data/files'),
   FILE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().default(300),

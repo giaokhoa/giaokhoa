@@ -42,7 +42,7 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     return res.body;
   }
 
-  async function uploadExpecting(token: string, fileName: string, buffer: Buffer, status: number): Promise<{ status: number; body: { code?: string } }> {
+  async function uploadExpecting(token: string, fileName: string, buffer: Buffer, status: number): Promise<{ status: number; headers: Record<string, string | undefined>; body: { code?: string } }> {
     const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${token}`)
       .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile')
       .attach('file', buffer, fileName);
@@ -191,7 +191,7 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     expect(res.status).toBe(400);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.body.status).toBe(400);
-    expect(res.body.code).toBe('file_required');
+    expect(res.body.code).toBe('file.file_required');
   });
 
   it('tải ảnh câu hỏi thiếu part file trả 400 ProblemDetails thay vì 500', async () => {
@@ -200,21 +200,24 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     expect(res.status).toBe(400);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.body.status).toBe(400);
-    expect(res.body.code).toBe('file_required');
+    expect(res.body.code).toBe('file.file_required');
   });
 
   it('tải file chung có đuôi .png nhưng byte là chữ trả 400 file.type_mismatch', async () => {
     const res = await uploadExpecting(uploaderToken, 'gia.png', Buffer.from('day la chu, khong phai anh'), 400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.body.code).toBe('file.type_mismatch');
   });
 
   it('tải file .exe đổi tên .png trả 400 file.type_mismatch', async () => {
     const res = await uploadExpecting(uploaderToken, 'gia.png', EXE_BYTES, 400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.body.code).toBe('file.type_mismatch');
   });
 
   it('tải file .pdf chứa byte PNG trả 400 file.type_mismatch', async () => {
     const res = await uploadExpecting(uploaderToken, 'gia.pdf', PNG_BYTES, 400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
     expect(res.body.code).toBe('file.type_mismatch');
   });
 
