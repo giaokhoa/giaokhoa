@@ -154,6 +154,21 @@ export class NotificationEventsHandlerService {
     });
   }
 
+  private async notifyActiveStudents(
+    courseId: string,
+    actorId: string | null,
+    provider: string,
+    contextUrl: string,
+    subject: string,
+    body: string,
+  ): Promise<void> {
+    const studentIds = await this.listActiveEnrolledUserIds(courseId);
+    for (const studentId of studentIds) {
+      if (studentId === actorId) continue;
+      await this.notifyGrouped(studentId, provider, contextUrl, subject, body, courseId);
+    }
+  }
+
   private async handleAssignmentCreated(payload: Record<string, unknown>): Promise<void> {
     const assignmentId = typeof payload.assignmentId === 'string' ? payload.assignmentId : null;
     const courseId = typeof payload.courseId === 'string' ? payload.courseId : null;
@@ -163,18 +178,11 @@ export class NotificationEventsHandlerService {
     if (!info || !this.isVisibleToStudents(info)) return;
     const courseName = (await this.getCourseFullName(courseId)) ?? '';
     const contextUrl = `/courses/${courseId}/assignments/${assignmentId}`;
-    const studentIds = await this.listActiveEnrolledUserIds(courseId);
-    for (const studentId of studentIds) {
-      if (studentId === actorId) continue;
-      await this.notifyGrouped(
-        studentId,
-        'assignment_assigned',
-        contextUrl,
-        this.t('platform.assignmentAssignedSubject', { assignment: info.name }),
-        this.t('platform.assignmentAssignedBody', { assignment: info.name, course: courseName }),
-        courseId,
-      );
-    }
+    await this.notifyActiveStudents(
+      courseId, actorId, 'assignment_assigned', contextUrl,
+      this.t('platform.assignmentAssignedSubject', { assignment: info.name }),
+      this.t('platform.assignmentAssignedBody', { assignment: info.name, course: courseName }),
+    );
   }
 
   private async handleAssignmentSubmitted(payload: Record<string, unknown>): Promise<void> {
@@ -236,18 +244,11 @@ export class NotificationEventsHandlerService {
     if (!info || !this.isVisibleToStudents(info)) return;
     const courseName = (await this.getCourseFullName(courseId)) ?? '';
     const contextUrl = `/courses/${courseId}/exams/${pinId}`;
-    const studentIds = await this.listActiveEnrolledUserIds(courseId);
-    for (const studentId of studentIds) {
-      if (studentId === actorId) continue;
-      await this.notifyGrouped(
-        studentId,
-        'quiz_available',
-        contextUrl,
-        this.t('platform.quizAvailableSubject', { quiz: info.name }),
-        this.t('platform.quizAvailableBody', { quiz: info.name, course: courseName }),
-        courseId,
-      );
-    }
+    await this.notifyActiveStudents(
+      courseId, actorId, 'quiz_available', contextUrl,
+      this.t('platform.quizAvailableSubject', { quiz: info.name }),
+      this.t('platform.quizAvailableBody', { quiz: info.name, course: courseName }),
+    );
   }
 
   private async handleQuizAttemptFinished(payload: Record<string, unknown>): Promise<void> {
