@@ -105,14 +105,15 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
         join(__dirname, '../../../../../packages/db/migrations/system-bank', migrationDir, 'migration.sql'),
       );
     }
-    await applySqlFile(
-      clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD),
-      join(__dirname, '../../../../../packages/db/migrations/centre/20261025163710_baseline/migration.sql'),
-    );
-    await applySqlFile(
-      clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD),
-      join(__dirname, '../../../../../packages/db/migrations/centre/20261113160000_outcome_package_install_checksum/migration.sql'),
-    );
+    // The resource-event viewer reads pinned materials, shared exam forks and programme installs.
+    // Keep this fixture schema aligned with the complete centre migration chain.
+    const centreMigrationsRoot = join(__dirname, '../../../../../packages/db/migrations/centre');
+    for (const migrationDir of readdirSync(centreMigrationsRoot).filter((name) => name !== 'meta').sort()) {
+      await applySqlFile(
+        clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD),
+        join(centreMigrationsRoot, migrationDir, 'migration.sql'),
+      );
+    }
     bankPool = new Pool({ connectionString: clusterUrl(BANK_DATABASE, BANK_ROLE, BANK_PASSWORD) });
     centrePool = new Pool({ connectionString: clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD) });
     bankDb = createSystemBankKysely(bankPool);
@@ -132,7 +133,11 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       }),
     );
     const centreRepo = new SystemBankCentreRepository(centreKysely);
-    const evaluator = { requireCapability: async () => {}, hasCapability: async () => true };
+    const evaluator = {
+      requireCapability: async () => {},
+      hasCapability: async () => true,
+      hasCapabilityFromRealAssignmentAnywhere: async () => true,
+    };
     const contexts = {
       ensureSystemContext: async () => ({ id: SYSTEM_ID }),
       getTenantContext: async () => ({ id: SYSTEM_ID }),
@@ -240,8 +245,9 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
     const stillReadable = await service.getQuestion(ADMIN_ID, questionId);
     expect(stillReadable.status).toBe('withdrawn');
     const events = await bankDb.selectFrom('system_bank_events').selectAll().where('source_question_id', '=', questionId).execute();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.type).toBe('question_withdrawn');
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.type).sort()).toEqual(['question_version_published', 'question_withdrawn']);
+    expect(events.filter((event) => event.type === 'question_withdrawn')).toHaveLength(1);
     const oldVersion = await service.getVersion(ADMIN_ID, questionId, 1);
     expect(oldVersion.package).toMatchObject({ questionText: doc('Câu sẽ rút') });
   });

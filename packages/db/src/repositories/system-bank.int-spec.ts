@@ -126,17 +126,17 @@ describe('Repository kho ngân hàng hệ thống (issue #650)', () => {
     expect(await repo.listImportedQuestionIds('trung-tam-a')).toContain(question.id);
     expect(await repo.listImportedQuestionIds('trung-tam-c')).not.toContain(question.id);
 
-    const updated = await repo.markWithdrawn(question.id, { reason: 'Nội dung lỗi thời', by: ADMIN_ID });
-    expect(updated?.status).toBe('withdrawn');
-    const event = await repo.recordEvent({
-      type: 'question_withdrawn',
-      sourceQuestionId: question.id,
-      payload: { reason: 'Nội dung lỗi thời', withdrawnBy: ADMIN_ID },
-    });
-    expect(event.sourceQuestionId).toBe(question.id);
+    const withdrawn = await repo.markWithdrawn(question.id, { reason: 'Nội dung lỗi thời', by: ADMIN_ID });
+    expect(withdrawn?.question.status).toBe('withdrawn');
+    expect(withdrawn?.event.type).toBe('question_withdrawn');
+    expect(withdrawn?.event.sourceQuestionId).toBe(question.id);
     const events = await repo.listEventsForQuestions([question.id]);
-    expect(events.map((row) => row.id)).toContain(event.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.id).toBe(withdrawn?.event.id);
     expect(events[0]?.payload).toMatchObject({ reason: 'Nội dung lỗi thời' });
+    const retried = await repo.markWithdrawn(question.id, { reason: 'Gửi lại', by: ADMIN_ID });
+    expect(retried).toBeNull();
+    expect(await repo.listEventsForQuestions([question.id])).toHaveLength(1);
   });
 
   it('khám phá chỉ liệt kê câu đang phát hành kèm mọi phiên bản, câu đã rút không xuất hiện', async () => {
