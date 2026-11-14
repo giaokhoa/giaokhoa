@@ -2,6 +2,7 @@ import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateab
 import type { ExamQuestionSnapshot } from '../jsonb-types';
 import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 export type ExamsTx = CentreTx;
 export type ExamsDb = CentreDb | CentreTx;
@@ -102,60 +103,64 @@ function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
     bank_id: values.bankId,
     created_by: values.createdBy,
   };
-  if (values.pinRequestId !== undefined) row.pin_request_id = values.pinRequestId;
-  if (values.pinRequestCourseId !== undefined) row.pin_request_course_id = values.pinRequestCourseId;
-  if (values.sharedExamVersionId !== undefined) row.shared_exam_version_id = values.sharedExamVersionId;
-  if (values.systemExamForkVersionId !== undefined) row.system_exam_fork_version_id = values.systemExamForkVersionId;
-  if (values.sharedSourceExamId !== undefined) row.shared_source_exam_id = values.sharedSourceExamId;
-  if (values.sharedSourceVersionNumber !== undefined) row.shared_source_version_number = values.sharedSourceVersionNumber;
-  if (values.sharedRequestedSectionId !== undefined) row.shared_requested_section_id = values.sharedRequestedSectionId;
-  if (values.sharedRequestChecksum !== undefined) row.shared_request_checksum = values.sharedRequestChecksum;
-  if (values.copyCount !== undefined) row.copy_count = values.copyCount;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.derivedFromBankId !== undefined) row.derived_from_bank_id = values.derivedFromBankId;
-  if (values.derivedFromExamId !== undefined) row.derived_from_exam_id = values.derivedFromExamId;
-  if (values.derivedFromMatrixId !== undefined) row.derived_from_matrix_id = values.derivedFromMatrixId;
-  if (values.derivedFromVersionNumber !== undefined) row.derived_from_version_number = values.derivedFromVersionNumber;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.kind !== undefined) row.kind = values.kind;
-  if (values.latestVersion !== undefined) row.latest_version = values.latestVersion;
-  if (values.originalAuthorId !== undefined) row.original_author_id = values.originalAuthorId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
-  if (values.withdrawnAt !== undefined) row.withdrawn_at = values.withdrawnAt;
-  if (values.withdrawnBy !== undefined) row.withdrawn_by = values.withdrawnBy;
-  if (values.withdrawnReason !== undefined) row.withdrawn_reason = values.withdrawnReason;
+  applyDefined(row, values, [
+    ['pinRequestId', 'pin_request_id'],
+    ['pinRequestCourseId', 'pin_request_course_id'],
+    ['sharedExamVersionId', 'shared_exam_version_id'],
+    ['systemExamForkVersionId', 'system_exam_fork_version_id'],
+    ['sharedSourceExamId', 'shared_source_exam_id'],
+    ['sharedSourceVersionNumber', 'shared_source_version_number'],
+    ['sharedRequestedSectionId', 'shared_requested_section_id'],
+    ['sharedRequestChecksum', 'shared_request_checksum'],
+    ['copyCount', 'copy_count'],
+    ['createdAt', 'created_at'],
+    ['derivedFromBankId', 'derived_from_bank_id'],
+    ['derivedFromExamId', 'derived_from_exam_id'],
+    ['derivedFromMatrixId', 'derived_from_matrix_id'],
+    ['derivedFromVersionNumber', 'derived_from_version_number'],
+    ['id', 'id'],
+    ['kind', 'kind'],
+    ['latestVersion', 'latest_version'],
+    ['originalAuthorId', 'original_author_id'],
+    ['status', 'status'],
+    ['tenantId', 'tenant_id'],
+    ['updatedAt', 'updated_at'],
+    ['withdrawnAt', 'withdrawn_at'],
+    ['withdrawnBy', 'withdrawn_by'],
+    ['withdrawnReason', 'withdrawn_reason'],
+  ]);
   return row;
 }
 
 function examUpdateSet(patch: Partial<ExamRow>): Updateable<CentreDB['exams']> {
   const set: Updateable<CentreDB['exams']> = {};
-  if (patch.pinRequestId !== undefined) set.pin_request_id = patch.pinRequestId;
-  if (patch.pinRequestCourseId !== undefined) set.pin_request_course_id = patch.pinRequestCourseId;
-  if (patch.sharedExamVersionId !== undefined) set.shared_exam_version_id = patch.sharedExamVersionId;
-  if (patch.sharedSourceExamId !== undefined) set.shared_source_exam_id = patch.sharedSourceExamId;
-  if (patch.sharedSourceVersionNumber !== undefined) set.shared_source_version_number = patch.sharedSourceVersionNumber;
-  if (patch.sharedRequestedSectionId !== undefined) set.shared_requested_section_id = patch.sharedRequestedSectionId;
-  if (patch.sharedRequestChecksum !== undefined) set.shared_request_checksum = patch.sharedRequestChecksum;
-  if (patch.bankId !== undefined) set.bank_id = patch.bankId;
-  if (patch.copyCount !== undefined) set.copy_count = patch.copyCount;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.createdBy !== undefined) set.created_by = patch.createdBy;
-  if (patch.derivedFromBankId !== undefined) set.derived_from_bank_id = patch.derivedFromBankId;
-  if (patch.derivedFromExamId !== undefined) set.derived_from_exam_id = patch.derivedFromExamId;
-  if (patch.derivedFromMatrixId !== undefined) set.derived_from_matrix_id = patch.derivedFromMatrixId;
-  if (patch.derivedFromVersionNumber !== undefined) set.derived_from_version_number = patch.derivedFromVersionNumber;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.latestVersion !== undefined) set.latest_version = patch.latestVersion;
-  if (patch.originalAuthorId !== undefined) set.original_author_id = patch.originalAuthorId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
-  if (patch.withdrawnAt !== undefined) set.withdrawn_at = patch.withdrawnAt;
-  if (patch.withdrawnBy !== undefined) set.withdrawn_by = patch.withdrawnBy;
-  if (patch.withdrawnReason !== undefined) set.withdrawn_reason = patch.withdrawnReason;
+  applyDefined(set, patch, [
+    ['pinRequestId', 'pin_request_id'],
+    ['pinRequestCourseId', 'pin_request_course_id'],
+    ['sharedExamVersionId', 'shared_exam_version_id'],
+    ['sharedSourceExamId', 'shared_source_exam_id'],
+    ['sharedSourceVersionNumber', 'shared_source_version_number'],
+    ['sharedRequestedSectionId', 'shared_requested_section_id'],
+    ['sharedRequestChecksum', 'shared_request_checksum'],
+    ['bankId', 'bank_id'],
+    ['copyCount', 'copy_count'],
+    ['createdAt', 'created_at'],
+    ['createdBy', 'created_by'],
+    ['derivedFromBankId', 'derived_from_bank_id'],
+    ['derivedFromExamId', 'derived_from_exam_id'],
+    ['derivedFromMatrixId', 'derived_from_matrix_id'],
+    ['derivedFromVersionNumber', 'derived_from_version_number'],
+    ['id', 'id'],
+    ['kind', 'kind'],
+    ['latestVersion', 'latest_version'],
+    ['originalAuthorId', 'original_author_id'],
+    ['status', 'status'],
+    ['tenantId', 'tenant_id'],
+    ['updatedAt', 'updated_at'],
+    ['withdrawnAt', 'withdrawn_at'],
+    ['withdrawnBy', 'withdrawn_by'],
+    ['withdrawnReason', 'withdrawn_reason'],
+  ]);
   return set;
 }
 
@@ -220,17 +225,19 @@ function examVersionInsertValues(values: NewExamVersion): InsertObject<CentreDB,
     name: values.name,
     version: values.version,
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.durationMinutes !== undefined) row.duration_minutes = values.durationMinutes;
-  if (values.examKind !== undefined) row.exam_kind = values.examKind;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.matrixId !== undefined) row.matrix_id = values.matrixId;
-  if (values.matrixVersion !== undefined) row.matrix_version = values.matrixVersion;
-  if (values.matrixVersionId !== undefined) row.matrix_version_id = values.matrixVersionId;
-  if (values.subjectId !== undefined) row.subject_id = values.subjectId;
-  if (values.tfScale !== undefined) row.tf_scale = values.tfScale === null ? null : jsonbValue(values.tfScale);
-  if (values.totalScore !== undefined) row.total_score = values.totalScore;
+  applyDefined(row, values, [
+    ['createdAt', 'created_at'],
+    ['durationMinutes', 'duration_minutes'],
+    ['examKind', 'exam_kind'],
+    ['grade', 'grade'],
+    ['id', 'id'],
+    ['matrixId', 'matrix_id'],
+    ['matrixVersion', 'matrix_version'],
+    ['matrixVersionId', 'matrix_version_id'],
+    ['subjectId', 'subject_id'],
+    ['tfScale', 'tf_scale', (value) => (value === null ? null : jsonbValue(value))],
+    ['totalScore', 'total_score'],
+  ]);
   return row;
 }
 
@@ -288,16 +295,18 @@ function examSlotInsertValues(values: NewExamSlot): InsertObject<CentreDB, 'exam
     position: values.position,
     question_id: values.questionId,
   };
-  if (values.sourceDomain !== undefined) row.source_domain = values.sourceDomain;
-  if (values.sourceSnapshot !== undefined) row.source_snapshot = values.sourceSnapshot === null ? null : jsonbValue(values.sourceSnapshot);
-  if (values.clusterId !== undefined) row.cluster_id = values.clusterId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.matrixCellId !== undefined) row.matrix_cell_id = values.matrixCellId;
-  if (values.maxMark !== undefined) row.max_mark = values.maxMark;
-  if (values.pinnedVersionId !== undefined) row.pinned_version_id = values.pinnedVersionId;
-  if (values.pinnedVersionNumber !== undefined) row.pinned_version_number = values.pinnedVersionNumber;
-  if (values.section !== undefined) row.section = values.section;
+  applyDefined(row, values, [
+    ['sourceDomain', 'source_domain'],
+    ['sourceSnapshot', 'source_snapshot', (value) => (value === null ? null : jsonbValue(value))],
+    ['clusterId', 'cluster_id'],
+    ['createdAt', 'created_at'],
+    ['id', 'id'],
+    ['matrixCellId', 'matrix_cell_id'],
+    ['maxMark', 'max_mark'],
+    ['pinnedVersionId', 'pinned_version_id'],
+    ['pinnedVersionNumber', 'pinned_version_number'],
+    ['section', 'section'],
+  ]);
   return row;
 }
 
@@ -382,52 +391,56 @@ function examContributionInsertValues(values: NewExamContribution): InsertObject
     proposer_id: values.proposerId,
     target_bank_id: values.targetBankId,
   };
-  if (values.contentHash !== undefined) row.content_hash = values.contentHash;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.dossierExamVersionId !== undefined) row.dossier_exam_version_id = values.dossierExamVersionId;
-  if (values.dossierExamVersionNumber !== undefined) row.dossier_exam_version_number = values.dossierExamVersionNumber;
-  if (values.dossierMatrixId !== undefined) row.dossier_matrix_id = values.dossierMatrixId;
-  if (values.dossierMatrixVersion !== undefined) row.dossier_matrix_version = values.dossierMatrixVersion;
-  if (values.dossierMatrixVersionId !== undefined) row.dossier_matrix_version_id = values.dossierMatrixVersionId;
-  if (values.dossierSpecSnapshot !== undefined) row.dossier_spec_snapshot = values.dossierSpecSnapshot === null ? null : jsonbValue(values.dossierSpecSnapshot);
-  if (values.id !== undefined) row.id = values.id;
-  if (values.mode !== undefined) row.mode = values.mode;
-  if (values.nearDuplicateOf !== undefined) row.near_duplicate_of = values.nearDuplicateOf;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.rejectReason !== undefined) row.reject_reason = values.rejectReason;
-  if (values.resultExamId !== undefined) row.result_exam_id = values.resultExamId;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.sourceDossierId !== undefined) row.source_dossier_id = values.sourceDossierId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.targetExamId !== undefined) row.target_exam_id = values.targetExamId;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['contentHash', 'content_hash'],
+    ['createdAt', 'created_at'],
+    ['dossierExamVersionId', 'dossier_exam_version_id'],
+    ['dossierExamVersionNumber', 'dossier_exam_version_number'],
+    ['dossierMatrixId', 'dossier_matrix_id'],
+    ['dossierMatrixVersion', 'dossier_matrix_version'],
+    ['dossierMatrixVersionId', 'dossier_matrix_version_id'],
+    ['dossierSpecSnapshot', 'dossier_spec_snapshot', (value) => (value === null ? null : jsonbValue(value))],
+    ['id', 'id'],
+    ['mode', 'mode'],
+    ['nearDuplicateOf', 'near_duplicate_of'],
+    ['note', 'note'],
+    ['rejectReason', 'reject_reason'],
+    ['resultExamId', 'result_exam_id'],
+    ['reviewerId', 'reviewer_id'],
+    ['sourceDossierId', 'source_dossier_id'],
+    ['status', 'status'],
+    ['targetExamId', 'target_exam_id'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function examContributionUpdateSet(patch: Partial<ExamContributionRow>): UpdateObject<CentreDB, 'exam_contributions'> {
   const set: UpdateObject<CentreDB, 'exam_contributions'> = {};
-  if (patch.contentHash !== undefined) set.content_hash = patch.contentHash;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.dossierExamVersionId !== undefined) set.dossier_exam_version_id = patch.dossierExamVersionId;
-  if (patch.dossierExamVersionNumber !== undefined) set.dossier_exam_version_number = patch.dossierExamVersionNumber;
-  if (patch.dossierMatrixId !== undefined) set.dossier_matrix_id = patch.dossierMatrixId;
-  if (patch.dossierMatrixVersion !== undefined) set.dossier_matrix_version = patch.dossierMatrixVersion;
-  if (patch.dossierMatrixVersionId !== undefined) set.dossier_matrix_version_id = patch.dossierMatrixVersionId;
-  if (patch.dossierSpecSnapshot !== undefined) set.dossier_spec_snapshot = patch.dossierSpecSnapshot === null ? null : jsonbValue(patch.dossierSpecSnapshot);
-  if (patch.examId !== undefined) set.exam_id = patch.examId;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.mode !== undefined) set.mode = patch.mode;
-  if (patch.nearDuplicateOf !== undefined) set.near_duplicate_of = patch.nearDuplicateOf;
-  if (patch.note !== undefined) set.note = patch.note;
-  if (patch.proposerId !== undefined) set.proposer_id = patch.proposerId;
-  if (patch.rejectReason !== undefined) set.reject_reason = patch.rejectReason;
-  if (patch.resultExamId !== undefined) set.result_exam_id = patch.resultExamId;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.sourceDossierId !== undefined) set.source_dossier_id = patch.sourceDossierId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.targetBankId !== undefined) set.target_bank_id = patch.targetBankId;
-  if (patch.targetExamId !== undefined) set.target_exam_id = patch.targetExamId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['contentHash', 'content_hash'],
+    ['createdAt', 'created_at'],
+    ['dossierExamVersionId', 'dossier_exam_version_id'],
+    ['dossierExamVersionNumber', 'dossier_exam_version_number'],
+    ['dossierMatrixId', 'dossier_matrix_id'],
+    ['dossierMatrixVersion', 'dossier_matrix_version'],
+    ['dossierMatrixVersionId', 'dossier_matrix_version_id'],
+    ['dossierSpecSnapshot', 'dossier_spec_snapshot', (value) => (value === null ? null : jsonbValue(value))],
+    ['examId', 'exam_id'],
+    ['id', 'id'],
+    ['mode', 'mode'],
+    ['nearDuplicateOf', 'near_duplicate_of'],
+    ['note', 'note'],
+    ['proposerId', 'proposer_id'],
+    ['rejectReason', 'reject_reason'],
+    ['resultExamId', 'result_exam_id'],
+    ['reviewerId', 'reviewer_id'],
+    ['sourceDossierId', 'source_dossier_id'],
+    ['status', 'status'],
+    ['targetBankId', 'target_bank_id'],
+    ['targetExamId', 'target_exam_id'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -468,9 +481,11 @@ function examContributionReviewInsertValues(values: NewExamContributionReview): 
     level: values.level,
     reviewer_id: values.reviewerId,
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.reason !== undefined) row.reason = values.reason;
+  applyDefined(row, values, [
+    ['createdAt', 'created_at'],
+    ['id', 'id'],
+    ['reason', 'reason'],
+  ]);
   return row;
 }
 
@@ -534,38 +549,42 @@ function examDossierInsertValues(values: NewExamDossier): InsertObject<CentreDB,
     proposer_id: values.proposerId,
     target_bank_id: values.targetBankId,
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.examVersionId !== undefined) row.exam_version_id = values.examVersionId;
-  if (values.examVersionNumber !== undefined) row.exam_version_number = values.examVersionNumber;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.matrixId !== undefined) row.matrix_id = values.matrixId;
-  if (values.matrixVersion !== undefined) row.matrix_version = values.matrixVersion;
-  if (values.matrixVersionId !== undefined) row.matrix_version_id = values.matrixVersionId;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.resultExamId !== undefined) row.result_exam_id = values.resultExamId;
-  if (values.specSnapshot !== undefined) row.spec_snapshot = values.specSnapshot === null ? null : jsonbValue(values.specSnapshot);
-  if (values.status !== undefined) row.status = values.status;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['createdAt', 'created_at'],
+    ['examVersionId', 'exam_version_id'],
+    ['examVersionNumber', 'exam_version_number'],
+    ['id', 'id'],
+    ['matrixId', 'matrix_id'],
+    ['matrixVersion', 'matrix_version'],
+    ['matrixVersionId', 'matrix_version_id'],
+    ['note', 'note'],
+    ['resultExamId', 'result_exam_id'],
+    ['specSnapshot', 'spec_snapshot', (value) => (value === null ? null : jsonbValue(value))],
+    ['status', 'status'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function examDossierUpdateSet(patch: Partial<ExamDossierRow>): UpdateObject<CentreDB, 'exam_dossiers'> {
   const set: UpdateObject<CentreDB, 'exam_dossiers'> = {};
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.examId !== undefined) set.exam_id = patch.examId;
-  if (patch.examVersionId !== undefined) set.exam_version_id = patch.examVersionId;
-  if (patch.examVersionNumber !== undefined) set.exam_version_number = patch.examVersionNumber;
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.matrixId !== undefined) set.matrix_id = patch.matrixId;
-  if (patch.matrixVersion !== undefined) set.matrix_version = patch.matrixVersion;
-  if (patch.matrixVersionId !== undefined) set.matrix_version_id = patch.matrixVersionId;
-  if (patch.note !== undefined) set.note = patch.note;
-  if (patch.proposerId !== undefined) set.proposer_id = patch.proposerId;
-  if (patch.resultExamId !== undefined) set.result_exam_id = patch.resultExamId;
-  if (patch.specSnapshot !== undefined) set.spec_snapshot = patch.specSnapshot === null ? null : jsonbValue(patch.specSnapshot);
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.targetBankId !== undefined) set.target_bank_id = patch.targetBankId;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['createdAt', 'created_at'],
+    ['examId', 'exam_id'],
+    ['examVersionId', 'exam_version_id'],
+    ['examVersionNumber', 'exam_version_number'],
+    ['id', 'id'],
+    ['matrixId', 'matrix_id'],
+    ['matrixVersion', 'matrix_version'],
+    ['matrixVersionId', 'matrix_version_id'],
+    ['note', 'note'],
+    ['proposerId', 'proposer_id'],
+    ['resultExamId', 'result_exam_id'],
+    ['specSnapshot', 'spec_snapshot', (value) => (value === null ? null : jsonbValue(value))],
+    ['status', 'status'],
+    ['targetBankId', 'target_bank_id'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -606,9 +625,11 @@ function examDossierReviewInsertValues(values: NewExamDossierReview): Insertable
     level: values.level,
     reviewer_id: values.reviewerId,
   };
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.id !== undefined) row.id = values.id;
-  if (values.reason !== undefined) row.reason = values.reason;
+  applyDefined(row, values, [
+    ['createdAt', 'created_at'],
+    ['id', 'id'],
+    ['reason', 'reason'],
+  ]);
   return row;
 }
 export class ExamsRepository {

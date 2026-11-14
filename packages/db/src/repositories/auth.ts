@@ -1,5 +1,6 @@
 import { sql, type Insertable } from 'kysely';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
+import { applyDefined } from './mapping';
 
 export type AuthDb = CentreDb | CentreTx;
 
@@ -132,14 +133,16 @@ function refreshFamilyInsertValues(values: NewRefreshFamily): Insertable<CentreD
     current_token_hash: values.currentTokenHash,
     expires_at: values.expiresAt,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
-  if (values.ip !== undefined) row.ip = values.ip;
-  if (values.userAgent !== undefined) row.user_agent = values.userAgent;
-  if (values.previousTokenHash !== undefined) row.previous_token_hash = values.previousTokenHash;
-  if (values.revoked !== undefined) row.revoked = values.revoked;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.rotatedAt !== undefined) row.rotated_at = values.rotatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['tenantId', 'tenant_id'],
+    ['ip', 'ip'],
+    ['userAgent', 'user_agent'],
+    ['previousTokenHash', 'previous_token_hash'],
+    ['revoked', 'revoked'],
+    ['createdAt', 'created_at'],
+    ['rotatedAt', 'rotated_at'],
+  ]);
   return row;
 }
 
@@ -150,8 +153,10 @@ function oauthLinkInsertValues(values: NewOauthLink): Insertable<CentreDB['user_
     issuer_user_id: values.issuerUserId,
     email: values.email,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -160,10 +165,12 @@ function loginAttemptInsertValues(values: NewLoginAttempt): Insertable<CentreDB[
     username: values.username,
     success: values.success,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  if (values.ip !== undefined) row.ip = values.ip;
-  if (values.attemptedAt !== undefined) row.attempted_at = values.attemptedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['userId', 'user_id'],
+    ['ip', 'ip'],
+    ['attemptedAt', 'attempted_at'],
+  ]);
   return row;
 }
 

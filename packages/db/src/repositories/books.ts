@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 type RepoDb = CentreDb | CentreTx;
 
@@ -171,46 +172,52 @@ function jsonbValue(value: unknown): RawBuilder<JsonValue> {
 
 function bookInsertValues(values: NewBook): Insertable<CentreDB['books']> {
   const row: Insertable<CentreDB['books']> = { title: values.title };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.kind !== undefined) row.kind = values.kind;
-  if (values.subjectId !== undefined) row.subject_id = values.subjectId;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.series !== undefined) row.series = values.series;
-  if (values.author !== undefined) row.author = values.author;
-  if (values.publisher !== undefined) row.publisher = values.publisher;
-  if (values.publishedYear !== undefined) row.published_year = values.publishedYear;
-  if (values.isbn !== undefined) row.isbn = values.isbn;
-  if (values.attributionPublic !== undefined) row.attribution_public = values.attributionPublic;
-  if (values.position !== undefined) row.position = values.position;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['kind', 'kind'],
+    ['subjectId', 'subject_id'],
+    ['grade', 'grade'],
+    ['series', 'series'],
+    ['author', 'author'],
+    ['publisher', 'publisher'],
+    ['publishedYear', 'published_year'],
+    ['isbn', 'isbn'],
+    ['attributionPublic', 'attribution_public'],
+    ['position', 'position'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function bookNodeInsertValues(values: NewBookNode): Insertable<CentreDB['book_nodes']> {
   const row: Insertable<CentreDB['book_nodes']> = { book_id: values.bookId, title: values.title };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.parentId !== undefined) row.parent_id = values.parentId;
-  if (values.kind !== undefined) row.kind = values.kind;
-  if (values.volume !== undefined) row.volume = values.volume;
-  if (values.lessonNumber !== undefined) row.lesson_number = values.lessonNumber;
-  if (values.position !== undefined) row.position = values.position;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['parentId', 'parent_id'],
+    ['kind', 'kind'],
+    ['volume', 'volume'],
+    ['lessonNumber', 'lesson_number'],
+    ['position', 'position'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function bookNodeUpdateSet(patch: Partial<NewBookNode>): UpdateObject<CentreDB, 'book_nodes'> {
   const set: UpdateObject<CentreDB, 'book_nodes'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.bookId !== undefined) set.book_id = patch.bookId;
-  if (patch.parentId !== undefined) set.parent_id = patch.parentId;
-  if (patch.title !== undefined) set.title = patch.title;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.volume !== undefined) set.volume = patch.volume;
-  if (patch.lessonNumber !== undefined) set.lesson_number = patch.lessonNumber;
-  if (patch.position !== undefined) set.position = patch.position;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['bookId', 'book_id'],
+    ['parentId', 'parent_id'],
+    ['title', 'title'],
+    ['kind', 'kind'],
+    ['volume', 'volume'],
+    ['lessonNumber', 'lesson_number'],
+    ['position', 'position'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -219,10 +226,12 @@ function bookMappingInsertValues(values: NewBookMapping): Insertable<CentreDB['b
     book_node_id: values.bookNodeId,
     position: values.position,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.curriculumNodeId !== undefined) row.curriculum_node_id = values.curriculumNodeId;
-  if (values.learningOutcomeId !== undefined) row.learning_outcome_id = values.learningOutcomeId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['curriculumNodeId', 'curriculum_node_id'],
+    ['learningOutcomeId', 'learning_outcome_id'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -235,22 +244,26 @@ function bookRecordInsertValues(values: NewBookRecord): InsertObject<CentreDB, '
     content_hash: values.contentHash,
     source: jsonbValue(values.source),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function bookRecordUpdateSet(patch: Partial<NewBookRecord>): UpdateObject<CentreDB, 'book_records'> {
   const set: UpdateObject<CentreDB, 'book_records'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.datasetKey !== undefined) set.dataset_key = patch.datasetKey;
-  if (patch.recordId !== undefined) set.record_id = patch.recordId;
-  if (patch.bookId !== undefined) set.book_id = patch.bookId;
-  if (patch.nodeId !== undefined) set.node_id = patch.nodeId;
-  if (patch.contentHash !== undefined) set.content_hash = patch.contentHash;
-  if (patch.source !== undefined) set.source = jsonbValue(patch.source);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['datasetKey', 'dataset_key'],
+    ['recordId', 'record_id'],
+    ['bookId', 'book_id'],
+    ['nodeId', 'node_id'],
+    ['contentHash', 'content_hash'],
+    ['source', 'source', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

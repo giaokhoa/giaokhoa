@@ -1,5 +1,6 @@
 import type { Insertable, Updateable } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 export interface CentreIdentityRow {
   id: string;
@@ -75,9 +76,11 @@ export class CentreIdentityRepository {
       return rows[0]!;
     }
     const set: Updateable<CentreDB['centre_identity']> = { updated_at: new Date() };
-    if (patch.displayName !== undefined) set.display_name = patch.displayName;
-    if (patch.logoPath !== undefined) set.logo_path = patch.logoPath;
-    if (patch.brandColor !== undefined) set.brand_color = patch.brandColor;
+    applyDefined(set, patch, [
+      ['displayName', 'display_name'],
+      ['logoPath', 'logo_path'],
+      ['brandColor', 'brand_color'],
+    ]);
     const rows = await this.handle
       .updateTable('centre_identity')
       .set(set)

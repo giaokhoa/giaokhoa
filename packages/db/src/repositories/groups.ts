@@ -1,4 +1,5 @@
 import type { CentreDb, CentreTx } from '../client';
+import { pickDefined } from './mapping';
 
 
 export type GroupsDb = CentreDb | CentreTx;
@@ -132,57 +133,69 @@ const COHORT_MEMBER_COLUMNS = ['cohort_id as cohortId', 'user_id as userId', 'ti
 
 function groupInsertValues(v: NewGroup) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     course_id: v.courseId,
     name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
+    ...pickDefined(v, [
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+      ['enrolmentKey', 'enrolment_key'],
+    ]),
   };
 }
 
 function groupUpdateValues(v: Partial<NewGroup>) {
   return {
-    ...(v.courseId !== undefined ? { course_id: v.courseId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
+    ...pickDefined(v, [
+      ['courseId', 'course_id'],
+      ['name', 'name'],
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+      ['enrolmentKey', 'enrolment_key'],
+    ]),
   };
 }
 
 function groupingInsertValues(v: NewGrouping) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     course_id: v.courseId,
     name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
+    ...pickDefined(v, [
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+    ]),
   };
 }
 
 function cohortInsertValues(v: NewCohort) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     tenant_id: v.tenantId,
     name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
+    ...pickDefined(v, [
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+    ]),
     context_id: v.contextId,
-    ...(v.component !== undefined ? { component: v.component } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...pickDefined(v, [
+      ['component', 'component'],
+      ['visible', 'visible'],
+    ]),
   };
 }
 
 function cohortUpdateValues(v: Partial<NewCohort>) {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.contextId !== undefined ? { context_id: v.contextId } : {}),
-    ...(v.component !== undefined ? { component: v.component } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...pickDefined(v, [
+      ['tenantId', 'tenant_id'],
+      ['name', 'name'],
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+      ['contextId', 'context_id'],
+      ['component', 'component'],
+      ['visible', 'visible'],
+    ]),
   };
 }
 

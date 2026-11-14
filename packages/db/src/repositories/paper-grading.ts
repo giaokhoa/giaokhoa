@@ -1,6 +1,7 @@
 import { sql, type RawBuilder } from 'kysely';
 import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@giaokhoa/contracts';
 import type { CentreDb } from '../client';
+import { pickDefined } from './mapping';
 
 
 export interface PaperBatchRow {
@@ -98,61 +99,71 @@ function jsonbValue<T>(value: T): RawBuilder<T> {
 
 function batchInsertValues(v: NewPaperBatch) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     exam_pin_id: v.examPinId,
     variant_code: v.variantCode,
-    ...(v.examCode !== undefined ? { exam_code: v.examCode } : {}),
-    ...(v.codeDigits !== undefined ? { code_digits: v.codeDigits } : {}),
+    ...pickDefined(v, [
+      ['examCode', 'exam_code'],
+      ['codeDigits', 'code_digits'],
+    ]),
     layout: jsonbValue(v.layout),
     roster: jsonbValue(v.roster),
     created_by: v.createdBy,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function scanInsertValues(v: NewPaperScan) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     exam_pin_id: v.examPinId,
-    ...(v.batchId !== undefined ? { batch_id: v.batchId } : {}),
-    ...(v.sessionId !== undefined ? { session_id: v.sessionId } : {}),
+    ...pickDefined(v, [
+      ['batchId', 'batch_id'],
+      ['sessionId', 'session_id'],
+    ]),
     file_id: v.fileId,
-    ...(v.warpedFileId !== undefined ? { warped_file_id: v.warpedFileId } : {}),
+    ...pickDefined(v, [['warpedFileId', 'warped_file_id']]),
     uploaded_by: v.uploadedBy,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.identityCode !== undefined ? { identity_code: v.identityCode } : {}),
-    ...(v.identitySource !== undefined ? { identity_source: v.identitySource } : {}),
-    ...(v.studentId !== undefined ? { student_id: v.studentId } : {}),
-    ...(v.attemptId !== undefined ? { attempt_id: v.attemptId } : {}),
-    ...(v.variantCodeRead !== undefined ? { variant_code_read: v.variantCodeRead } : {}),
-    ...(v.quality !== undefined ? { quality: v.quality === null ? null : jsonbValue(v.quality) } : {}),
-    ...(v.readings !== undefined ? { readings: jsonbValue(v.readings) } : {}),
-    ...(v.expiresAt !== undefined ? { expires_at: v.expiresAt } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['status', 'status'],
+      ['identityCode', 'identity_code'],
+      ['identitySource', 'identity_source'],
+      ['studentId', 'student_id'],
+      ['attemptId', 'attempt_id'],
+      ['variantCodeRead', 'variant_code_read'],
+      ['quality', 'quality', (value) => (value === null ? null : jsonbValue(value))],
+      ['readings', 'readings', (value) => jsonbValue(value)],
+      ['expiresAt', 'expires_at'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function scanUpdateSet(patch: Partial<NewPaperScan>) {
   return {
-    ...(patch.id !== undefined ? { id: patch.id } : {}),
-    ...(patch.examPinId !== undefined ? { exam_pin_id: patch.examPinId } : {}),
-    ...(patch.batchId !== undefined ? { batch_id: patch.batchId } : {}),
-    ...(patch.sessionId !== undefined ? { session_id: patch.sessionId } : {}),
-    ...(patch.fileId !== undefined ? { file_id: patch.fileId } : {}),
-    ...(patch.warpedFileId !== undefined ? { warped_file_id: patch.warpedFileId } : {}),
-    ...(patch.uploadedBy !== undefined ? { uploaded_by: patch.uploadedBy } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.identityCode !== undefined ? { identity_code: patch.identityCode } : {}),
-    ...(patch.identitySource !== undefined ? { identity_source: patch.identitySource } : {}),
-    ...(patch.studentId !== undefined ? { student_id: patch.studentId } : {}),
-    ...(patch.attemptId !== undefined ? { attempt_id: patch.attemptId } : {}),
-    ...(patch.variantCodeRead !== undefined ? { variant_code_read: patch.variantCodeRead } : {}),
-    ...(patch.quality !== undefined ? { quality: patch.quality === null ? null : jsonbValue(patch.quality) } : {}),
-    ...(patch.readings !== undefined ? { readings: jsonbValue(patch.readings) } : {}),
-    ...(patch.expiresAt !== undefined ? { expires_at: patch.expiresAt } : {}),
-    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...pickDefined(patch, [
+      ['id', 'id'],
+      ['examPinId', 'exam_pin_id'],
+      ['batchId', 'batch_id'],
+      ['sessionId', 'session_id'],
+      ['fileId', 'file_id'],
+      ['warpedFileId', 'warped_file_id'],
+      ['uploadedBy', 'uploaded_by'],
+      ['status', 'status'],
+      ['identityCode', 'identity_code'],
+      ['identitySource', 'identity_source'],
+      ['studentId', 'student_id'],
+      ['attemptId', 'attempt_id'],
+      ['variantCodeRead', 'variant_code_read'],
+      ['quality', 'quality', (value) => (value === null ? null : jsonbValue(value))],
+      ['readings', 'readings', (value) => jsonbValue(value)],
+      ['expiresAt', 'expires_at'],
+      ['createdAt', 'created_at'],
+    ]),
     updated_at: new Date(),
   };
 }

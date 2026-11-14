@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type IntegrationsDb = CentreDb | CentreTx;
 
@@ -78,21 +79,25 @@ function serviceInsertValues(values: NewService): InsertObject<CentreDB, 'extern
     name: values.name,
     short_name: values.shortName,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.enabled !== undefined) row.enabled = values.enabled;
-  if (values.functions !== undefined) row.functions = jsonbValue(values.functions);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['enabled', 'enabled'],
+    ['functions', 'functions', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
 function serviceUpdateSet(patch: Partial<NewService>): UpdateObject<CentreDB, 'external_services'> {
   const set: UpdateObject<CentreDB, 'external_services'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.shortName !== undefined) set.short_name = patch.shortName;
-  if (patch.enabled !== undefined) set.enabled = patch.enabled;
-  if (patch.functions !== undefined) set.functions = jsonbValue(patch.functions);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['name', 'name'],
+    ['shortName', 'short_name'],
+    ['enabled', 'enabled'],
+    ['functions', 'functions', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -102,26 +107,30 @@ function tokenInsertValues(values: NewToken): Insertable<CentreDB['external_toke
     user_id: values.userId,
     service_id: values.serviceId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.validUntil !== undefined) row.valid_until = values.validUntil;
-  if (values.ipRestriction !== undefined) row.ip_restriction = values.ipRestriction;
-  if (values.revoked !== undefined) row.revoked = values.revoked;
-  if (values.lastAccess !== undefined) row.last_access = values.lastAccess;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['validUntil', 'valid_until'],
+    ['ipRestriction', 'ip_restriction'],
+    ['revoked', 'revoked'],
+    ['lastAccess', 'last_access'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
 function tokenUpdateSet(patch: Partial<NewToken>): UpdateObject<CentreDB, 'external_tokens'> {
   const set: UpdateObject<CentreDB, 'external_tokens'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.tokenHash !== undefined) set.token_hash = patch.tokenHash;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.serviceId !== undefined) set.service_id = patch.serviceId;
-  if (patch.validUntil !== undefined) set.valid_until = patch.validUntil;
-  if (patch.ipRestriction !== undefined) set.ip_restriction = patch.ipRestriction;
-  if (patch.revoked !== undefined) set.revoked = patch.revoked;
-  if (patch.lastAccess !== undefined) set.last_access = patch.lastAccess;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['tokenHash', 'token_hash'],
+    ['userId', 'user_id'],
+    ['serviceId', 'service_id'],
+    ['validUntil', 'valid_until'],
+    ['ipRestriction', 'ip_restriction'],
+    ['revoked', 'revoked'],
+    ['lastAccess', 'last_access'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

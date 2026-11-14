@@ -1,5 +1,6 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined, pickDefined } from './mapping';
 
 export type AssignmentsDb = CentreDb | CentreTx;
 
@@ -423,32 +424,36 @@ const COMMENT_BANK_COLUMNS = [
 
 function assignmentInsertValues(values: NewAssignment): Insertable<CentreDB['assignments']> {
   const row: Insertable<CentreDB['assignments']> = { course: values.course, name: values.name };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.cmId !== undefined) row.cm_id = values.cmId;
-  if (values.intro !== undefined) row.intro = values.intro;
-  if (values.dueDate !== undefined) row.due_date = values.dueDate;
-  if (values.maxFiles !== undefined) row.max_files = values.maxFiles;
-  if (values.acceptedFileTypes !== undefined) row.accepted_file_types = values.acceptedFileTypes;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.resultMode !== undefined) row.result_mode = values.resultMode;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['cmId', 'cm_id'],
+    ['intro', 'intro'],
+    ['dueDate', 'due_date'],
+    ['maxFiles', 'max_files'],
+    ['acceptedFileTypes', 'accepted_file_types'],
+    ['grade', 'grade'],
+    ['resultMode', 'result_mode'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function assignmentUpdateSet(patch: Partial<AssignmentRow>): Updateable<CentreDB['assignments']> {
   const set: Updateable<CentreDB['assignments']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.course !== undefined) set.course = patch.course;
-  if (patch.cmId !== undefined) set.cm_id = patch.cmId;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.intro !== undefined) set.intro = patch.intro;
-  if (patch.dueDate !== undefined) set.due_date = patch.dueDate;
-  if (patch.maxFiles !== undefined) set.max_files = patch.maxFiles;
-  if (patch.acceptedFileTypes !== undefined) set.accepted_file_types = patch.acceptedFileTypes;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.resultMode !== undefined) set.result_mode = patch.resultMode;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['course', 'course'],
+    ['cmId', 'cm_id'],
+    ['name', 'name'],
+    ['intro', 'intro'],
+    ['dueDate', 'due_date'],
+    ['maxFiles', 'max_files'],
+    ['acceptedFileTypes', 'accepted_file_types'],
+    ['grade', 'grade'],
+    ['resultMode', 'result_mode'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -457,24 +462,28 @@ function submissionInsertValues(values: NewSubmission): Insertable<CentreDB['ass
     assignment_id: values.assignmentId,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.attemptNumber !== undefined) row.attempt_number = values.attemptNumber;
-  if (values.submittedAt !== undefined) row.submitted_at = values.submittedAt;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['attemptNumber', 'attempt_number'],
+    ['submittedAt', 'submitted_at'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function submissionUpdateSet(patch: Partial<AssignSubmissionRow>): Updateable<CentreDB['assign_submissions']> {
   const set: Updateable<CentreDB['assign_submissions']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.assignmentId !== undefined) set.assignment_id = patch.assignmentId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.attemptNumber !== undefined) set.attempt_number = patch.attemptNumber;
-  if (patch.submittedAt !== undefined) set.submitted_at = patch.submittedAt;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['assignmentId', 'assignment_id'],
+    ['userId', 'user_id'],
+    ['status', 'status'],
+    ['attemptNumber', 'attempt_number'],
+    ['submittedAt', 'submitted_at'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -483,8 +492,10 @@ function submissionFileInsertValues(values: NewSubmissionFile): Insertable<Centr
     submission_id: values.submissionId,
     file_id: values.fileId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -495,38 +506,42 @@ function gradeInsertValues(values: NewGrade): Insertable<CentreDB['assign_grades
     grader_id: values.graderId,
     attempt_number: values.attemptNumber,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.level !== undefined) row.level = values.level;
-  if (values.feedback !== undefined) row.feedback = values.feedback;
-  if (values.feedbackProgress !== undefined) row.feedback_progress = values.feedbackProgress;
-  if (values.feedbackStrengths !== undefined) row.feedback_strengths = values.feedbackStrengths;
-  if (values.feedbackWeaknesses !== undefined) row.feedback_weaknesses = values.feedbackWeaknesses;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.releasedAt !== undefined) row.released_at = values.releasedAt;
-  if (values.releasedBy !== undefined) row.released_by = values.releasedBy;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['grade', 'grade'],
+    ['level', 'level'],
+    ['feedback', 'feedback'],
+    ['feedbackProgress', 'feedback_progress'],
+    ['feedbackStrengths', 'feedback_strengths'],
+    ['feedbackWeaknesses', 'feedback_weaknesses'],
+    ['status', 'status'],
+    ['releasedAt', 'released_at'],
+    ['releasedBy', 'released_by'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function gradeUpdateSet(patch: Partial<AssignGradeRow>): Updateable<CentreDB['assign_grades']> {
   const set: Updateable<CentreDB['assign_grades']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.assignmentId !== undefined) set.assignment_id = patch.assignmentId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.graderId !== undefined) set.grader_id = patch.graderId;
-  if (patch.attemptNumber !== undefined) set.attempt_number = patch.attemptNumber;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.level !== undefined) set.level = patch.level;
-  if (patch.feedback !== undefined) set.feedback = patch.feedback;
-  if (patch.feedbackProgress !== undefined) set.feedback_progress = patch.feedbackProgress;
-  if (patch.feedbackStrengths !== undefined) set.feedback_strengths = patch.feedbackStrengths;
-  if (patch.feedbackWeaknesses !== undefined) set.feedback_weaknesses = patch.feedbackWeaknesses;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.releasedAt !== undefined) set.released_at = patch.releasedAt;
-  if (patch.releasedBy !== undefined) set.released_by = patch.releasedBy;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['assignmentId', 'assignment_id'],
+    ['userId', 'user_id'],
+    ['graderId', 'grader_id'],
+    ['attemptNumber', 'attempt_number'],
+    ['grade', 'grade'],
+    ['level', 'level'],
+    ['feedback', 'feedback'],
+    ['feedbackProgress', 'feedback_progress'],
+    ['feedbackStrengths', 'feedback_strengths'],
+    ['feedbackWeaknesses', 'feedback_weaknesses'],
+    ['status', 'status'],
+    ['releasedAt', 'released_at'],
+    ['releasedBy', 'released_by'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -539,38 +554,44 @@ function annotationInsertValues(values: NewAnnotation): InsertObject<CentreDB, '
     kind: values.kind,
     author_id: values.authorId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.page !== undefined) row.page = values.page;
-  if (values.color !== undefined) row.color = values.color;
-  if (values.text !== undefined) row.text = values.text;
-  if (values.points !== undefined) row.points = values.points === null ? null : jsonbValue(values.points);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['page', 'page'],
+    ['color', 'color'],
+    ['text', 'text'],
+    ['points', 'points', (value) => (value === null ? null : jsonbValue(value))],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function annotationUpdateSet(patch: Partial<AssignAnnotationRow>): Updateable<CentreDB['assign_annotations']> {
   const set: Updateable<CentreDB['assign_annotations']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.submissionId !== undefined) set.submission_id = patch.submissionId;
-  if (patch.fileId !== undefined) set.file_id = patch.fileId;
-  if (patch.page !== undefined) set.page = patch.page;
-  if (patch.x !== undefined) set.x = patch.x;
-  if (patch.y !== undefined) set.y = patch.y;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.color !== undefined) set.color = patch.color;
-  if (patch.text !== undefined) set.text = patch.text;
-  if (patch.authorId !== undefined) set.author_id = patch.authorId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['submissionId', 'submission_id'],
+    ['fileId', 'file_id'],
+    ['page', 'page'],
+    ['x', 'x'],
+    ['y', 'y'],
+    ['kind', 'kind'],
+    ['color', 'color'],
+    ['text', 'text'],
+    ['authorId', 'author_id'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
 function rubricInsertValues(values: NewRubric): Insertable<CentreDB['assign_rubrics']> {
   const row: Insertable<CentreDB['assign_rubrics']> = { assignment_id: values.assignmentId };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.title !== undefined) row.title = values.title;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['title', 'title'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -579,14 +600,16 @@ function rubricCriterionInsertValues(values: NewRubricCriterion): Insertable<Cen
     rubric_id: values.rubricId,
     name: values.name,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.descriptionForStudent !== undefined) row.description_for_student = values.descriptionForStudent;
-  if (values.descriptionForGrader !== undefined) row.description_for_grader = values.descriptionForGrader;
-  if (values.mode !== undefined) row.mode = values.mode;
-  if (values.maxScore !== undefined) row.max_score = values.maxScore;
-  if (values.outcomeId !== undefined) row.outcome_id = values.outcomeId;
-  if (values.outcomeText !== undefined) row.outcome_text = values.outcomeText;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['descriptionForStudent', 'description_for_student'],
+    ['descriptionForGrader', 'description_for_grader'],
+    ['mode', 'mode'],
+    ['maxScore', 'max_score'],
+    ['outcomeId', 'outcome_id'],
+    ['outcomeText', 'outcome_text'],
+    ['sortOrder', 'sort_order'],
+  ]);
   return row;
 }
 
@@ -595,9 +618,11 @@ function rubricLevelInsertValues(values: NewRubricLevel): Insertable<CentreDB['a
     criterion_id: values.criterionId,
     label: values.label,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.score !== undefined) row.score = values.score;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['score', 'score'],
+    ['sortOrder', 'sort_order'],
+  ]);
   return row;
 }
 
@@ -606,12 +631,14 @@ function rubricEvaluationInsertValues(values: NewRubricEvaluation): Insertable<C
     grade_id: values.gradeId,
     criterion_id: values.criterionId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.levelId !== undefined) row.level_id = values.levelId;
-  if (values.score !== undefined) row.score = values.score;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['levelId', 'level_id'],
+    ['score', 'score'],
+    ['note', 'note'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -620,15 +647,17 @@ function gradeRevisionInsertValues(values: NewGradeRevision): Insertable<CentreD
     grade_id: values.gradeId,
     actor_id: values.actorId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.previousGrade !== undefined) row.previous_grade = values.previousGrade;
-  if (values.newGrade !== undefined) row.new_grade = values.newGrade;
-  if (values.previousLevel !== undefined) row.previous_level = values.previousLevel;
-  if (values.newLevel !== undefined) row.new_level = values.newLevel;
-  if (values.previousFeedback !== undefined) row.previous_feedback = values.previousFeedback;
-  if (values.newFeedback !== undefined) row.new_feedback = values.newFeedback;
-  if (values.reason !== undefined) row.reason = values.reason;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['previousGrade', 'previous_grade'],
+    ['newGrade', 'new_grade'],
+    ['previousLevel', 'previous_level'],
+    ['newLevel', 'new_level'],
+    ['previousFeedback', 'previous_feedback'],
+    ['newFeedback', 'new_feedback'],
+    ['reason', 'reason'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -638,8 +667,10 @@ function feedbackMessageInsertValues(values: NewFeedbackMessage): Insertable<Cen
     author_id: values.authorId,
     body: values.body,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -648,9 +679,11 @@ function commentBankInsertValues(values: NewCommentBankEntry): Insertable<Centre
     owner_id: values.ownerId,
     text: values.text,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.category !== undefined) row.category = values.category;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['category', 'category'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -873,9 +906,7 @@ export class AssignmentsRepository {
       .updateTable('assign_annotations')
       .set({
         ...annotationUpdateSet(patch),
-        ...(patch.points !== undefined
-          ? { points: patch.points === null ? null : jsonbValue(patch.points as { x: number; y: number }[]) }
-          : {}),
+        ...pickDefined(patch, [['points', 'points', (value) => (value === null ? null : jsonbValue(value as { x: number; y: number }[]))]]),
         updated_at: new Date(),
       })
       .where('id', '=', id)

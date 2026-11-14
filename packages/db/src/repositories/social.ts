@@ -1,5 +1,6 @@
 import type { Insertable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 type RepoDb = CentreDb | CentreTx;
 
@@ -222,12 +223,14 @@ const NOTE_COLUMNS = [
 
 function tagInsertValues(values: NewTag): Insertable<CentreDB['tag']> {
   const row: Insertable<CentreDB['tag']> = { name: values.name, raw_name: values.rawName };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  if (values.tagCollId !== undefined) row.tag_coll_id = values.tagCollId;
-  if (values.isStandard !== undefined) row.is_standard = values.isStandard;
-  if (values.flag !== undefined) row.flag = values.flag;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['userId', 'user_id'],
+    ['tagCollId', 'tag_coll_id'],
+    ['isStandard', 'is_standard'],
+    ['flag', 'flag'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -239,11 +242,13 @@ function tagInstanceInsertValues(values: NewTagInstance): Insertable<CentreDB['t
     item_id: values.itemId,
     context_id: values.contextId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.tiUserId !== undefined) row.ti_user_id = values.tiUserId;
-  if (values.ordering !== undefined) row.ordering = values.ordering;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['tiUserId', 'ti_user_id'],
+    ['ordering', 'ordering'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -256,10 +261,12 @@ function commentInsertValues(values: NewComment): Insertable<CentreDB['comments'
     content: values.content,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.format !== undefined) row.format = values.format;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.timeDeleted !== undefined) row.time_deleted = values.timeDeleted;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['format', 'format'],
+    ['createdAt', 'created_at'],
+    ['timeDeleted', 'time_deleted'],
+  ]);
   return row;
 }
 
@@ -273,23 +280,27 @@ function ratingInsertValues(values: NewRating): Insertable<CentreDB['rating']> {
     rating: values.rating,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function noteInsertValues(values: NewNote): Insertable<CentreDB['notes']> {
   const row: Insertable<CentreDB['notes']> = { user_id: values.userId, created_by: values.createdBy };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.content !== undefined) row.content = values.content;
-  if (values.format !== undefined) row.format = values.format;
-  if (values.publishState !== undefined) row.publish_state = values.publishState;
-  if (values.groupId !== undefined) row.group_id = values.groupId;
-  if (values.userModified !== undefined) row.user_modified = values.userModified;
-  if (values.created !== undefined) row.created = values.created;
-  if (values.lastModified !== undefined) row.last_modified = values.lastModified;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['courseId', 'course_id'],
+    ['content', 'content'],
+    ['format', 'format'],
+    ['publishState', 'publish_state'],
+    ['groupId', 'group_id'],
+    ['userModified', 'user_modified'],
+    ['created', 'created'],
+    ['lastModified', 'last_modified'],
+  ]);
   return row;
 }
 

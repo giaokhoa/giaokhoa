@@ -1,6 +1,7 @@
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type AnalyticsDb = CentreDb | CentreTx;
 
@@ -112,10 +113,12 @@ function modelInsertValues(values: NewModel): InsertObject<CentreDB, 'analytics_
     name: values.name,
     target: values.target,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.indicators !== undefined) row.indicators = jsonbValue(values.indicators);
-  if (values.enabled !== undefined) row.enabled = values.enabled;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['indicators', 'indicators', (value) => jsonbValue(value)],
+    ['enabled', 'enabled'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -125,11 +128,13 @@ function predictionInsertValues(values: NewPrediction): InsertObject<CentreDB, '
     user_id: values.userId,
     context_id: values.contextId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.score !== undefined) row.score = values.score;
-  if (values.data !== undefined) row.data = jsonbValue(values.data);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['courseId', 'course_id'],
+    ['score', 'score'],
+    ['data', 'data', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -140,12 +145,14 @@ function insightInsertValues(values: NewInsight): InsertObject<CentreDB, 'insigh
     recipient_id: values.recipientId,
     context_id: values.contextId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.predictionId !== undefined) row.prediction_id = values.predictionId;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.heading !== undefined) row.heading = values.heading;
-  if (values.data !== undefined) row.data = jsonbValue(values.data);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['predictionId', 'prediction_id'],
+    ['courseId', 'course_id'],
+    ['heading', 'heading'],
+    ['data', 'data', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 

@@ -1,5 +1,6 @@
 import type { InsertObject, UpdateObject } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 export interface PageRow {
   id: string;
@@ -143,23 +144,27 @@ function pageInsertValues(values: NewPage): InsertObject<CentreDB, 'pages'> {
     course: values.course,
     name: values.name,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.cmId !== undefined) row.cm_id = values.cmId;
-  if (values.content !== undefined) row.content = values.content;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['cmId', 'cm_id'],
+    ['content', 'content'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function pageUpdateSet(patch: Partial<NewPage>): UpdateObject<CentreDB, 'pages'> {
   const set: UpdateObject<CentreDB, 'pages'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.course !== undefined) set.course = patch.course;
-  if (patch.cmId !== undefined) set.cm_id = patch.cmId;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.content !== undefined) set.content = patch.content;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['course', 'course'],
+    ['cmId', 'cm_id'],
+    ['name', 'name'],
+    ['content', 'content'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -168,29 +173,33 @@ function resourceInsertValues(values: NewResource): InsertObject<CentreDB, 'reso
     course: values.course,
     name: values.name,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.cmId !== undefined) row.cm_id = values.cmId;
-  if (values.kind !== undefined) row.kind = values.kind;
-  if (values.fileId !== undefined) row.file_id = values.fileId;
-  if (values.url !== undefined) row.url = values.url;
-  if (values.transcript !== undefined) row.transcript = values.transcript;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['cmId', 'cm_id'],
+    ['kind', 'kind'],
+    ['fileId', 'file_id'],
+    ['url', 'url'],
+    ['transcript', 'transcript'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function resourceUpdateSet(patch: Partial<NewResource>): UpdateObject<CentreDB, 'resources'> {
   const set: UpdateObject<CentreDB, 'resources'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.course !== undefined) set.course = patch.course;
-  if (patch.cmId !== undefined) set.cm_id = patch.cmId;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.fileId !== undefined) set.file_id = patch.fileId;
-  if (patch.url !== undefined) set.url = patch.url;
-  if (patch.transcript !== undefined) set.transcript = patch.transcript;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['course', 'course'],
+    ['cmId', 'cm_id'],
+    ['name', 'name'],
+    ['kind', 'kind'],
+    ['fileId', 'file_id'],
+    ['url', 'url'],
+    ['transcript', 'transcript'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -200,10 +209,12 @@ function learningRecordInsertValues(values: NewLearningRecord): InsertObject<Cen
     course_id: values.courseId,
     cm_id: values.cmId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.cmName !== undefined) row.cm_name = values.cmName;
-  if (values.component !== undefined) row.component = values.component;
-  if (values.completedAt !== undefined) row.completed_at = values.completedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['cmName', 'cm_name'],
+    ['component', 'component'],
+    ['completedAt', 'completed_at'],
+  ]);
   return row;
 }
 

@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type CustomFieldsDb = CentreDb | CentreTx;
 
@@ -103,11 +104,13 @@ function categoryInsertValues(values: NewCategory): Insertable<CentreDB['custom_
     component: values.component,
     area: values.area,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.itemId !== undefined) row.item_id = values.itemId;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['itemId', 'item_id'],
+    ['sortOrder', 'sort_order'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -118,11 +121,13 @@ function fieldInsertValues(values: NewField): InsertObject<CentreDB, 'custom_fie
     name: values.name,
     type: values.type,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.configData !== undefined) row.config_data = jsonbValue(values.configData);
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['configData', 'config_data', (value) => jsonbValue(value)],
+    ['sortOrder', 'sort_order'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 

@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { EntryRow, QCategoryRow, QuestionBankRow, QuestionRow } from './questions';
+import { pickDefined } from './mapping';
 
 
 export type { QuestionBankRow } from './questions';
@@ -111,72 +112,84 @@ const QUESTION_WITH_ENTRY_COLUMNS = [
 
 function bankInsertValues(v: NewQuestionBank) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
+    ...pickDefined(v, [
+      ['id', 'id'],
+      ['tenantId', 'tenant_id'],
+    ]),
     name: v.name,
-    ...(v.bankKind !== undefined ? { bank_kind: v.bankKind } : {}),
+    ...pickDefined(v, [['bankKind', 'bank_kind']]),
     scope: v.scope,
-    ...(v.ownerId !== undefined ? { owner_id: v.ownerId } : {}),
-    ...(v.scopeRefId !== undefined ? { scope_ref_id: v.scopeRefId } : {}),
+    ...pickDefined(v, [
+      ['ownerId', 'owner_id'],
+      ['scopeRefId', 'scope_ref_id'],
+    ]),
     context_id: v.contextId,
-    ...(v.status !== undefined ? { status: v.status } : {}),
+    ...pickDefined(v, [['status', 'status']]),
     created_by: v.createdBy,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function contributionInsertValues(v: NewContribution) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     target_bank_id: v.targetBankId,
     question_id: v.questionId,
-    ...(v.targetQuestionId !== undefined ? { target_question_id: v.targetQuestionId } : {}),
+    ...pickDefined(v, [['targetQuestionId', 'target_question_id']]),
     proposer_id: v.proposerId,
-    ...(v.mode !== undefined ? { mode: v.mode } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.note !== undefined ? { note: v.note } : {}),
-    ...(v.contentHash !== undefined ? { content_hash: v.contentHash } : {}),
-    ...(v.nearDuplicateOf !== undefined ? { near_duplicate_of: v.nearDuplicateOf } : {}),
-    ...(v.reviewerId !== undefined ? { reviewer_id: v.reviewerId } : {}),
-    ...(v.rejectReason !== undefined ? { reject_reason: v.rejectReason } : {}),
-    ...(v.resultQuestionId !== undefined ? { result_question_id: v.resultQuestionId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['mode', 'mode'],
+      ['status', 'status'],
+      ['note', 'note'],
+      ['contentHash', 'content_hash'],
+      ['nearDuplicateOf', 'near_duplicate_of'],
+      ['reviewerId', 'reviewer_id'],
+      ['rejectReason', 'reject_reason'],
+      ['resultQuestionId', 'result_question_id'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function contributionUpdateSet(patch: Partial<ContributionRow>) {
   return {
-    ...(patch.id !== undefined ? { id: patch.id } : {}),
-    ...(patch.targetBankId !== undefined ? { target_bank_id: patch.targetBankId } : {}),
-    ...(patch.questionId !== undefined ? { question_id: patch.questionId } : {}),
-    ...(patch.targetQuestionId !== undefined ? { target_question_id: patch.targetQuestionId } : {}),
-    ...(patch.proposerId !== undefined ? { proposer_id: patch.proposerId } : {}),
-    ...(patch.mode !== undefined ? { mode: patch.mode } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.note !== undefined ? { note: patch.note } : {}),
-    ...(patch.contentHash !== undefined ? { content_hash: patch.contentHash } : {}),
-    ...(patch.nearDuplicateOf !== undefined ? { near_duplicate_of: patch.nearDuplicateOf } : {}),
-    ...(patch.reviewerId !== undefined ? { reviewer_id: patch.reviewerId } : {}),
-    ...(patch.rejectReason !== undefined ? { reject_reason: patch.rejectReason } : {}),
-    ...(patch.resultQuestionId !== undefined ? { result_question_id: patch.resultQuestionId } : {}),
-    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...pickDefined(patch, [
+      ['id', 'id'],
+      ['targetBankId', 'target_bank_id'],
+      ['questionId', 'question_id'],
+      ['targetQuestionId', 'target_question_id'],
+      ['proposerId', 'proposer_id'],
+      ['mode', 'mode'],
+      ['status', 'status'],
+      ['note', 'note'],
+      ['contentHash', 'content_hash'],
+      ['nearDuplicateOf', 'near_duplicate_of'],
+      ['reviewerId', 'reviewer_id'],
+      ['rejectReason', 'reject_reason'],
+      ['resultQuestionId', 'result_question_id'],
+      ['createdAt', 'created_at'],
+    ]),
     updated_at: new Date(),
   };
 }
 
 function entryUpdateSet(patch: Partial<EntryRow>) {
   return {
-    ...(patch.id !== undefined ? { id: patch.id } : {}),
-    ...(patch.questionCategoryId !== undefined ? { question_category_id: patch.questionCategoryId } : {}),
-    ...(patch.questionId !== undefined ? { question_id: patch.questionId } : {}),
-    ...(patch.latestVersion !== undefined ? { latest_version: patch.latestVersion } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.withdrawnReason !== undefined ? { withdrawn_reason: patch.withdrawnReason } : {}),
-    ...(patch.withdrawnBy !== undefined ? { withdrawn_by: patch.withdrawnBy } : {}),
-    ...(patch.withdrawnAt !== undefined ? { withdrawn_at: patch.withdrawnAt } : {}),
-    ...(patch.createdAt !== undefined ? { created_at: patch.createdAt } : {}),
+    ...pickDefined(patch, [
+      ['id', 'id'],
+      ['questionCategoryId', 'question_category_id'],
+      ['questionId', 'question_id'],
+      ['latestVersion', 'latest_version'],
+      ['status', 'status'],
+      ['withdrawnReason', 'withdrawn_reason'],
+      ['withdrawnBy', 'withdrawn_by'],
+      ['withdrawnAt', 'withdrawn_at'],
+      ['createdAt', 'created_at'],
+    ]),
     updated_at: new Date(),
   };
 }

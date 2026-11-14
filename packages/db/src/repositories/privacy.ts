@@ -1,6 +1,7 @@
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type PrivacyDb = CentreDb | CentreTx;
 
@@ -77,26 +78,30 @@ function privacyRequestInsertValues(values: NewPrivacyRequest): InsertObject<Cen
     type: values.type,
     requested_by: values.requestedBy,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.approvedBy !== undefined) row.approved_by = values.approvedBy;
-  if (values.result !== undefined) row.result = jsonbValue(values.result);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['approvedBy', 'approved_by'],
+    ['result', 'result', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function privacyRequestUpdateSet(patch: Partial<NewPrivacyRequest>): UpdateObject<CentreDB, 'privacy_requests'> {
   const set: UpdateObject<CentreDB, 'privacy_requests'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.type !== undefined) set.type = patch.type;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.requestedBy !== undefined) set.requested_by = patch.requestedBy;
-  if (patch.approvedBy !== undefined) set.approved_by = patch.approvedBy;
-  if (patch.result !== undefined) set.result = jsonbValue(patch.result);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['userId', 'user_id'],
+    ['type', 'type'],
+    ['status', 'status'],
+    ['requestedBy', 'requested_by'],
+    ['approvedBy', 'approved_by'],
+    ['result', 'result', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -104,11 +109,13 @@ function exportFileInsertValues(values: NewExportFile): InsertObject<CentreDB, '
   const row: InsertObject<CentreDB, 'privacy_export_files'> = {
     request_id: values.requestId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.fileId !== undefined) row.file_id = values.fileId;
-  if (values.subsystem !== undefined) row.subsystem = values.subsystem;
-  if (values.manifest !== undefined) row.manifest = jsonbValue(values.manifest);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['fileId', 'file_id'],
+    ['subsystem', 'subsystem'],
+    ['manifest', 'manifest', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 

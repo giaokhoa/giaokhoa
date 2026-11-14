@@ -1,5 +1,6 @@
 import type { Expression, Insertable, SqlBool, Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 export type GuardianDb = CentreDb | CentreTx;
 
@@ -56,29 +57,33 @@ function guardianLinkInsertValues(values: NewGuardianLink): Insertable<CentreDB[
     relationship: values.relationship,
     created_by: values.createdBy,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.revokedBy !== undefined) row.revoked_by = values.revokedBy;
-  if (values.revokedAt !== undefined) row.revoked_at = values.revokedAt;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['revokedBy', 'revoked_by'],
+    ['revokedAt', 'revoked_at'],
+    ['note', 'note'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function guardianLinkUpdateSet(patch: Partial<GuardianLinkRow>): Updateable<CentreDB['guardian_links']> {
   const set: Updateable<CentreDB['guardian_links']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
-  if (patch.guardianUserId !== undefined) set.guardian_user_id = patch.guardianUserId;
-  if (patch.studentUserId !== undefined) set.student_user_id = patch.studentUserId;
-  if (patch.relationship !== undefined) set.relationship = patch.relationship;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.createdBy !== undefined) set.created_by = patch.createdBy;
-  if (patch.revokedBy !== undefined) set.revoked_by = patch.revokedBy;
-  if (patch.revokedAt !== undefined) set.revoked_at = patch.revokedAt;
-  if (patch.note !== undefined) set.note = patch.note;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['tenantId', 'tenant_id'],
+    ['guardianUserId', 'guardian_user_id'],
+    ['studentUserId', 'student_user_id'],
+    ['relationship', 'relationship'],
+    ['status', 'status'],
+    ['createdBy', 'created_by'],
+    ['revokedBy', 'revoked_by'],
+    ['revokedAt', 'revoked_at'],
+    ['note', 'note'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

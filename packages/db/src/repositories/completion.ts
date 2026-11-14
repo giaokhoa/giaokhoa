@@ -1,5 +1,6 @@
 import type { Insertable, Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 export type CompletionDb = CentreDb | CentreTx;
 
@@ -134,11 +135,13 @@ function cmCompletionInsertValues(values: NewCmCompletion): Insertable<CentreDB[
     course_module_id: values.courseModuleId,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.completionState !== undefined) row.completion_state = values.completionState;
-  if (values.viewed !== undefined) row.viewed = values.viewed;
-  if (values.overrideBy !== undefined) row.override_by = values.overrideBy;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['completionState', 'completion_state'],
+    ['viewed', 'viewed'],
+    ['overrideBy', 'override_by'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -147,14 +150,16 @@ function criteriaInsertValues(values: NewCriteria): Insertable<CentreDB['course_
     course: values.course,
     criteria_type: values.criteriaType,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.moduleInstance !== undefined) row.module_instance = values.moduleInstance;
-  if (values.date !== undefined) row.date = values.date;
-  if (values.courseInstance !== undefined) row.course_instance = values.courseInstance;
-  if (values.enrolPeriodDays !== undefined) row.enrol_period_days = values.enrolPeriodDays;
-  if (values.roleId !== undefined) row.role_id = values.roleId;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['moduleInstance', 'module_instance'],
+    ['date', 'date'],
+    ['courseInstance', 'course_instance'],
+    ['enrolPeriodDays', 'enrol_period_days'],
+    ['roleId', 'role_id'],
+    ['sortOrder', 'sort_order'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -163,9 +168,11 @@ function critComplInsertValues(values: NewCritCompl): Insertable<CentreDB['cours
     criteria_id: values.criteriaId,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.markedBy !== undefined) row.marked_by = values.markedBy;
-  if (values.timeCompleted !== undefined) row.time_completed = values.timeCompleted;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['markedBy', 'marked_by'],
+    ['timeCompleted', 'time_completed'],
+  ]);
   return row;
 }
 
@@ -174,12 +181,14 @@ function courseCompletionInsertValues(values: NewCourseCompletion): Insertable<C
     user_id: values.userId,
     course: values.course,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.timeEnrolled !== undefined) row.time_enrolled = values.timeEnrolled;
-  if (values.timeStarted !== undefined) row.time_started = values.timeStarted;
-  if (values.timeCompleted !== undefined) row.time_completed = values.timeCompleted;
-  if (values.reAggregate !== undefined) row.re_aggregate = values.reAggregate;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['timeEnrolled', 'time_enrolled'],
+    ['timeStarted', 'time_started'],
+    ['timeCompleted', 'time_completed'],
+    ['reAggregate', 're_aggregate'],
+  ]);
   return row;
 }
 
@@ -206,9 +215,11 @@ export class CompletionRepository {
 
   async upsertCmCompletion(v: NewCmCompletion, db: CompletionDb = this.db()): Promise<CmCompletionRow> {
     const set: Updateable<CentreDB['course_modules_completion']> = { updated_at: new Date() };
-    if (v.completionState !== undefined) set.completion_state = v.completionState;
-    if (v.viewed !== undefined) set.viewed = v.viewed;
-    if (v.overrideBy !== undefined) set.override_by = v.overrideBy;
+    applyDefined(set, v, [
+      ['completionState', 'completion_state'],
+      ['viewed', 'viewed'],
+      ['overrideBy', 'override_by'],
+    ]);
     const rows = await db
       .insertInto('course_modules_completion')
       .values(cmCompletionInsertValues(v))
@@ -370,9 +381,11 @@ export class CompletionRepository {
 
   async upsertCourseCompletion(v: NewCourseCompletion, db: CompletionDb = this.db()): Promise<CourseCompletionRow> {
     const set: Updateable<CentreDB['course_completions']> = { re_aggregate: new Date() };
-    if (v.status !== undefined) set.status = v.status;
-    if (v.timeStarted !== undefined) set.time_started = v.timeStarted;
-    if (v.timeCompleted !== undefined) set.time_completed = v.timeCompleted;
+    applyDefined(set, v, [
+      ['status', 'status'],
+      ['timeStarted', 'time_started'],
+      ['timeCompleted', 'time_completed'],
+    ]);
     const rows = await db
       .insertInto('course_completions')
       .values(courseCompletionInsertValues(v))

@@ -1,5 +1,6 @@
 import type { Insertable, Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 type RepoDb = CentreDb | CentreTx;
 
@@ -140,50 +141,54 @@ function calendarEventInsertValues(values: NewCalendarEvent): Insertable<CentreD
     name: values.name,
     time_start: values.timeStart,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.eventType !== undefined) row.event_type = values.eventType;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.groupId !== undefined) row.group_id = values.groupId;
-  if (values.categoryId !== undefined) row.category_id = values.categoryId;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  if (values.contextId !== undefined) row.context_id = values.contextId;
-  if (values.subscriptionId !== undefined) row.subscription_id = values.subscriptionId;
-  if (values.uuid !== undefined) row.uuid = values.uuid;
-  if (values.repeatId !== undefined) row.repeat_id = values.repeatId;
-  if (values.rrule !== undefined) row.rrule = values.rrule;
-  if (values.isException !== undefined) row.is_exception = values.isException;
-  if (values.exceptionOf !== undefined) row.exception_of = values.exceptionOf;
-  if (values.timeDuration !== undefined) row.time_duration = values.timeDuration;
-  if (values.visible !== undefined) row.visible = values.visible;
-  if (values.location !== undefined) row.location = values.location;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['description', 'description'],
+    ['eventType', 'event_type'],
+    ['courseId', 'course_id'],
+    ['groupId', 'group_id'],
+    ['categoryId', 'category_id'],
+    ['userId', 'user_id'],
+    ['contextId', 'context_id'],
+    ['subscriptionId', 'subscription_id'],
+    ['uuid', 'uuid'],
+    ['repeatId', 'repeat_id'],
+    ['rrule', 'rrule'],
+    ['isException', 'is_exception'],
+    ['exceptionOf', 'exception_of'],
+    ['timeDuration', 'time_duration'],
+    ['visible', 'visible'],
+    ['location', 'location'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function calendarEventUpdateSet(patch: Partial<CalendarEventRow>): Updateable<CentreDB['calendar_events']> {
   const set: Updateable<CentreDB['calendar_events']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.eventType !== undefined) set.event_type = patch.eventType;
-  if (patch.courseId !== undefined) set.course_id = patch.courseId;
-  if (patch.groupId !== undefined) set.group_id = patch.groupId;
-  if (patch.categoryId !== undefined) set.category_id = patch.categoryId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.contextId !== undefined) set.context_id = patch.contextId;
-  if (patch.subscriptionId !== undefined) set.subscription_id = patch.subscriptionId;
-  if (patch.uuid !== undefined) set.uuid = patch.uuid;
-  if (patch.repeatId !== undefined) set.repeat_id = patch.repeatId;
-  if (patch.rrule !== undefined) set.rrule = patch.rrule;
-  if (patch.isException !== undefined) set.is_exception = patch.isException;
-  if (patch.exceptionOf !== undefined) set.exception_of = patch.exceptionOf;
-  if (patch.timeStart !== undefined) set.time_start = patch.timeStart;
-  if (patch.timeDuration !== undefined) set.time_duration = patch.timeDuration;
-  if (patch.visible !== undefined) set.visible = patch.visible;
-  if (patch.location !== undefined) set.location = patch.location;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['name', 'name'],
+    ['description', 'description'],
+    ['eventType', 'event_type'],
+    ['courseId', 'course_id'],
+    ['groupId', 'group_id'],
+    ['categoryId', 'category_id'],
+    ['userId', 'user_id'],
+    ['contextId', 'context_id'],
+    ['subscriptionId', 'subscription_id'],
+    ['uuid', 'uuid'],
+    ['repeatId', 'repeat_id'],
+    ['rrule', 'rrule'],
+    ['isException', 'is_exception'],
+    ['exceptionOf', 'exception_of'],
+    ['timeStart', 'time_start'],
+    ['timeDuration', 'time_duration'],
+    ['visible', 'visible'],
+    ['location', 'location'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -191,16 +196,18 @@ function calendarSubscriptionInsertValues(
   values: NewCalendarSubscription,
 ): Insertable<CentreDB['calendar_subscriptions']> {
   const row: Insertable<CentreDB['calendar_subscriptions']> = { name: values.name };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.url !== undefined) row.url = values.url;
-  if (values.icsData !== undefined) row.ics_data = values.icsData;
-  if (values.eventType !== undefined) row.event_type = values.eventType;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.categoryId !== undefined) row.category_id = values.categoryId;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  if (values.pollInterval !== undefined) row.poll_interval = values.pollInterval;
-  if (values.lastUpdated !== undefined) row.last_updated = values.lastUpdated;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['url', 'url'],
+    ['icsData', 'ics_data'],
+    ['eventType', 'event_type'],
+    ['courseId', 'course_id'],
+    ['categoryId', 'category_id'],
+    ['userId', 'user_id'],
+    ['pollInterval', 'poll_interval'],
+    ['lastUpdated', 'last_updated'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 

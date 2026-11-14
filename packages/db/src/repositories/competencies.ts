@@ -1,6 +1,7 @@
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type CompetenciesTx = CentreTx;
 type Db = CentreDb | CentreTx;
@@ -350,15 +351,17 @@ function frameworkInsertValues(values: NewFramework): InsertObject<CentreDB, 'co
     short_name: values.shortName,
     context_id: values.contextId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.idNumber !== undefined) row.id_number = values.idNumber;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.scaleConfiguration !== undefined) row.scale_configuration = jsonbValue<JsonValue>(values.scaleConfiguration as JsonValue);
-  if (values.taxonomies !== undefined) row.taxonomies = values.taxonomies;
-  if (values.visible !== undefined) row.visible = values.visible;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['idNumber', 'id_number'],
+    ['description', 'description'],
+    ['scaleConfiguration', 'scale_configuration', (value) => jsonbValue<JsonValue>(value as JsonValue)],
+    ['taxonomies', 'taxonomies'],
+    ['visible', 'visible'],
+    ['sortOrder', 'sort_order'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -367,36 +370,40 @@ function competencyInsertValues(values: NewCompetency): InsertObject<CentreDB, '
     framework_id: values.frameworkId,
     short_name: values.shortName,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.idNumber !== undefined) row.id_number = values.idNumber;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.parentId !== undefined) row.parent_id = values.parentId;
-  if (values.path !== undefined) row.path = values.path;
-  if (values.depth !== undefined) row.depth = values.depth;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.ruleType !== undefined) row.rule_type = values.ruleType;
-  if (values.ruleConfig !== undefined) row.rule_config = values.ruleConfig === null ? null : jsonbValue<JsonValue>(values.ruleConfig as JsonValue);
-  if (values.ruleOutcome !== undefined) row.rule_outcome = values.ruleOutcome;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['idNumber', 'id_number'],
+    ['description', 'description'],
+    ['parentId', 'parent_id'],
+    ['path', 'path'],
+    ['depth', 'depth'],
+    ['sortOrder', 'sort_order'],
+    ['ruleType', 'rule_type'],
+    ['ruleConfig', 'rule_config', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['ruleOutcome', 'rule_outcome'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function competencyUpdateSet(patch: Partial<CompetencyRow>): UpdateObject<CentreDB, 'competency'> {
   const set: UpdateObject<CentreDB, 'competency'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.frameworkId !== undefined) set.framework_id = patch.frameworkId;
-  if (patch.shortName !== undefined) set.short_name = patch.shortName;
-  if (patch.idNumber !== undefined) set.id_number = patch.idNumber;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.parentId !== undefined) set.parent_id = patch.parentId;
-  if (patch.path !== undefined) set.path = patch.path;
-  if (patch.depth !== undefined) set.depth = patch.depth;
-  if (patch.sortOrder !== undefined) set.sort_order = patch.sortOrder;
-  if (patch.ruleType !== undefined) set.rule_type = patch.ruleType;
-  if (patch.ruleConfig !== undefined) set.rule_config = patch.ruleConfig === null ? null : jsonbValue<JsonValue>(patch.ruleConfig as JsonValue);
-  if (patch.ruleOutcome !== undefined) set.rule_outcome = patch.ruleOutcome;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['frameworkId', 'framework_id'],
+    ['shortName', 'short_name'],
+    ['idNumber', 'id_number'],
+    ['description', 'description'],
+    ['parentId', 'parent_id'],
+    ['path', 'path'],
+    ['depth', 'depth'],
+    ['sortOrder', 'sort_order'],
+    ['ruleType', 'rule_type'],
+    ['ruleConfig', 'rule_config', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['ruleOutcome', 'rule_outcome'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -405,10 +412,12 @@ function courseLinkInsertValues(values: NewCourseLink): InsertObject<CentreDB, '
     course_id: values.courseId,
     competency_id: values.competencyId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.ruleOutcome !== undefined) row.rule_outcome = values.ruleOutcome;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['ruleOutcome', 'rule_outcome'],
+    ['sortOrder', 'sort_order'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -417,10 +426,12 @@ function moduleLinkInsertValues(values: NewModuleLink): InsertObject<CentreDB, '
     course_module_id: values.courseModuleId,
     competency_id: values.competencyId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.ruleOutcome !== undefined) row.rule_outcome = values.ruleOutcome;
-  if (values.sortOrder !== undefined) row.sort_order = values.sortOrder;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['ruleOutcome', 'rule_outcome'],
+    ['sortOrder', 'sort_order'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -429,13 +440,15 @@ function templateInsertValues(values: NewTemplate): InsertObject<CentreDB, 'comp
     short_name: values.shortName,
     context_id: values.contextId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.dueDate !== undefined) row.due_date = values.dueDate;
-  if (values.visible !== undefined) row.visible = values.visible;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['description', 'description'],
+    ['dueDate', 'due_date'],
+    ['visible', 'visible'],
+    ['status', 'status'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -444,28 +457,32 @@ function planInsertValues(values: NewPlan): InsertObject<CentreDB, 'learning_pla
     name: values.name,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.templateId !== undefined) row.template_id = values.templateId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.dueDate !== undefined) row.due_date = values.dueDate;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['description', 'description'],
+    ['templateId', 'template_id'],
+    ['status', 'status'],
+    ['dueDate', 'due_date'],
+    ['reviewerId', 'reviewer_id'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function planUpdateSet(patch: Partial<PlanRow>): UpdateObject<CentreDB, 'learning_plans'> {
   const set: UpdateObject<CentreDB, 'learning_plans'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.templateId !== undefined) set.template_id = patch.templateId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.dueDate !== undefined) set.due_date = patch.dueDate;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['name', 'name'],
+    ['description', 'description'],
+    ['userId', 'user_id'],
+    ['templateId', 'template_id'],
+    ['status', 'status'],
+    ['dueDate', 'due_date'],
+    ['reviewerId', 'reviewer_id'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -477,9 +494,11 @@ function planReviewInsertValues(values: NewPlanReview): InsertObject<CentreDB, '
     status_from: values.statusFrom,
     status_to: values.statusTo,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['note', 'note'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -488,30 +507,34 @@ function usercompInsertValues(values: NewUsercomp): InsertObject<CentreDB, 'comp
     user_id: values.userId,
     competency_id: values.competencyId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.planId !== undefined) row.plan_id = values.planId;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.proficiency !== undefined) row.proficiency = values.proficiency;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.reviewerId !== undefined) row.reviewer_id = values.reviewerId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['planId', 'plan_id'],
+    ['courseId', 'course_id'],
+    ['status', 'status'],
+    ['proficiency', 'proficiency'],
+    ['grade', 'grade'],
+    ['reviewerId', 'reviewer_id'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function usercompUpdateSet(patch: Partial<UsercompRow>): UpdateObject<CentreDB, 'competency_user_comp'> {
   const set: UpdateObject<CentreDB, 'competency_user_comp'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.competencyId !== undefined) set.competency_id = patch.competencyId;
-  if (patch.planId !== undefined) set.plan_id = patch.planId;
-  if (patch.courseId !== undefined) set.course_id = patch.courseId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.proficiency !== undefined) set.proficiency = patch.proficiency;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.reviewerId !== undefined) set.reviewer_id = patch.reviewerId;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['userId', 'user_id'],
+    ['competencyId', 'competency_id'],
+    ['planId', 'plan_id'],
+    ['courseId', 'course_id'],
+    ['status', 'status'],
+    ['proficiency', 'proficiency'],
+    ['grade', 'grade'],
+    ['reviewerId', 'reviewer_id'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -520,14 +543,16 @@ function evidenceInsertValues(values: NewEvidence): InsertObject<CentreDB, 'comp
     user_competency_id: values.userCompetencyId,
     action_user_id: values.actionUserId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.contextId !== undefined) row.context_id = values.contextId;
-  if (values.action !== undefined) row.action = values.action;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.url !== undefined) row.url = values.url;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.note !== undefined) row.note = values.note;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['contextId', 'context_id'],
+    ['action', 'action'],
+    ['description', 'description'],
+    ['url', 'url'],
+    ['grade', 'grade'],
+    ['note', 'note'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 

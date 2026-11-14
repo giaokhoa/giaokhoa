@@ -1,5 +1,6 @@
 import { sql, type Insertable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 type RepoDb = CentreDb | CentreTx;
 
@@ -86,15 +87,17 @@ function fileInsertValues(values: NewFile): Insertable<CentreDB['files']> {
     file_name: values.fileName,
     file_size: values.fileSize,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.itemId !== undefined) row.item_id = values.itemId;
-  if (values.filePath !== undefined) row.file_path = values.filePath;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  if (values.mimeType !== undefined) row.mime_type = values.mimeType;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.source !== undefined) row.source = values.source;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['itemId', 'item_id'],
+    ['filePath', 'file_path'],
+    ['userId', 'user_id'],
+    ['mimeType', 'mime_type'],
+    ['status', 'status'],
+    ['source', 'source'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 

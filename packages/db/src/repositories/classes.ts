@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { CourseRow } from './courses';
+import { pickDefined } from './mapping';
 
 
 export type ClassesDb = CentreDb | CentreTx;
@@ -144,58 +145,68 @@ function classInsertValues(v: NewClass) {
   return {
     tenant_id: v.tenantId,
     name: v.name,
-    ...(v.code !== undefined ? { code: v.code } : {}),
-    ...(v.schoolYear !== undefined ? { school_year: v.schoolYear } : {}),
+    ...pickDefined(v, [
+      ['code', 'code'],
+      ['schoolYear', 'school_year'],
+    ]),
     owner_id: v.ownerId,
     cohort_id: v.cohortId,
-    ...(v.allowSelfReport !== undefined ? { allow_self_report: v.allowSelfReport } : {}),
-    ...(v.joinCode !== undefined ? { join_code: v.joinCode } : {}),
-    ...(v.onLeave !== undefined ? { on_leave: v.onLeave } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
+    ...pickDefined(v, [
+      ['allowSelfReport', 'allow_self_report'],
+      ['joinCode', 'join_code'],
+      ['onLeave', 'on_leave'],
+      ['status', 'status'],
+      ['description', 'description'],
+    ]),
   };
 }
 
 function classUpdateValues(v: Partial<ClassRow>) {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.code !== undefined ? { code: v.code } : {}),
-    ...(v.schoolYear !== undefined ? { school_year: v.schoolYear } : {}),
-    ...(v.ownerId !== undefined ? { owner_id: v.ownerId } : {}),
-    ...(v.cohortId !== undefined ? { cohort_id: v.cohortId } : {}),
-    ...(v.allowSelfReport !== undefined ? { allow_self_report: v.allowSelfReport } : {}),
-    ...(v.joinCode !== undefined ? { join_code: v.joinCode } : {}),
-    ...(v.joinAutoApprove !== undefined ? { join_auto_approve: v.joinAutoApprove } : {}),
-    ...(v.onLeave !== undefined ? { on_leave: v.onLeave } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.feeCost !== undefined ? { fee_cost: v.feeCost } : {}),
-    ...(v.feeCurrency !== undefined ? { fee_currency: v.feeCurrency } : {}),
-    ...(v.feePaymentAccountId !== undefined ? { fee_payment_account_id: v.feePaymentAccountId } : {}),
+    ...pickDefined(v, [
+      ['tenantId', 'tenant_id'],
+      ['name', 'name'],
+      ['code', 'code'],
+      ['schoolYear', 'school_year'],
+      ['ownerId', 'owner_id'],
+      ['cohortId', 'cohort_id'],
+      ['allowSelfReport', 'allow_self_report'],
+      ['joinCode', 'join_code'],
+      ['joinAutoApprove', 'join_auto_approve'],
+      ['onLeave', 'on_leave'],
+      ['status', 'status'],
+      ['description', 'description'],
+      ['feeCost', 'fee_cost'],
+      ['feeCurrency', 'fee_currency'],
+      ['feePaymentAccountId', 'fee_payment_account_id'],
+    ]),
   };
 }
 
 function joinRequestInsertValues(v: NewClassJoinRequest) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     tenant_id: v.tenantId,
     class_id: v.classId,
     user_id: v.userId,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.decidedBy !== undefined ? { decided_by: v.decidedBy } : {}),
-    ...(v.decidedAt !== undefined ? { decided_at: v.decidedAt } : {}),
+    ...pickDefined(v, [
+      ['status', 'status'],
+      ['decidedBy', 'decided_by'],
+      ['decidedAt', 'decided_at'],
+    ]),
   };
 }
 
 function joinRequestUpdateValues(v: Partial<ClassJoinRequestRow>) {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.classId !== undefined ? { class_id: v.classId } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.decidedBy !== undefined ? { decided_by: v.decidedBy } : {}),
-    ...(v.decidedAt !== undefined ? { decided_at: v.decidedAt } : {}),
+    ...pickDefined(v, [
+      ['tenantId', 'tenant_id'],
+      ['classId', 'class_id'],
+      ['userId', 'user_id'],
+      ['status', 'status'],
+      ['decidedBy', 'decided_by'],
+      ['decidedAt', 'decided_at'],
+    ]),
   };
 }
 

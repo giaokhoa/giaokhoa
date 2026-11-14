@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type ReportsDb = CentreDb | CentreTx;
 
@@ -101,11 +102,13 @@ function reportInsertValues(values: NewReport): InsertObject<CentreDB, 'report_b
     data_source: values.dataSource,
     created_by: values.createdBy,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.columns !== undefined) row.columns = jsonbValue(values.columns);
-  if (values.filters !== undefined) row.filters = jsonbValue(values.filters);
-  if (values.contextId !== undefined) row.context_id = values.contextId;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['columns', 'columns', (value) => jsonbValue(value)],
+    ['filters', 'filters', (value) => jsonbValue(value)],
+    ['contextId', 'context_id'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -113,9 +116,11 @@ function audienceInsertValues(values: NewAudience): Insertable<CentreDB['report_
   const row: Insertable<CentreDB['report_builder_audience']> = {
     report_id: values.reportId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.userId !== undefined) row.user_id = values.userId;
-  if (values.role !== undefined) row.role = values.role;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['userId', 'user_id'],
+    ['role', 'role'],
+  ]);
   return row;
 }
 
@@ -124,25 +129,29 @@ function scheduleInsertValues(values: NewSchedule): InsertObject<CentreDB, 'repo
     report_id: values.reportId,
     created_by: values.createdBy,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.cron !== undefined) row.cron = values.cron;
-  if (values.enabled !== undefined) row.enabled = values.enabled;
-  if (values.lastRun !== undefined) row.last_run = values.lastRun;
-  if (values.lastResult !== undefined) row.last_result = jsonbValue(values.lastResult);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['cron', 'cron'],
+    ['enabled', 'enabled'],
+    ['lastRun', 'last_run'],
+    ['lastResult', 'last_result', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
 function scheduleUpdateSet(patch: Partial<NewSchedule>): UpdateObject<CentreDB, 'report_builder_schedule'> {
   const set: UpdateObject<CentreDB, 'report_builder_schedule'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.reportId !== undefined) set.report_id = patch.reportId;
-  if (patch.createdBy !== undefined) set.created_by = patch.createdBy;
-  if (patch.cron !== undefined) set.cron = patch.cron;
-  if (patch.enabled !== undefined) set.enabled = patch.enabled;
-  if (patch.lastRun !== undefined) set.last_run = patch.lastRun;
-  if (patch.lastResult !== undefined) set.last_result = jsonbValue(patch.lastResult);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['reportId', 'report_id'],
+    ['createdBy', 'created_by'],
+    ['cron', 'cron'],
+    ['enabled', 'enabled'],
+    ['lastRun', 'last_run'],
+    ['lastResult', 'last_result', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

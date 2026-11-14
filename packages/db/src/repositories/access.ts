@@ -8,6 +8,7 @@ import {
 } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 import type { UserListStatus } from '@giaokhoa/contracts';
 
 
@@ -188,19 +189,23 @@ function roleInsertValues(v: NewRole): Insertable<CentreDB['role']> {
     name: v.name,
     short_name: v.shortName,
   };
-  if (v.description !== undefined) row.description = v.description;
-  if (v.archetype !== undefined) row.archetype = v.archetype;
-  if (v.sortOrder !== undefined) row.sort_order = v.sortOrder;
+  applyDefined(row, v, [
+    ['description', 'description'],
+    ['archetype', 'archetype'],
+    ['sortOrder', 'sort_order'],
+  ]);
   return row;
 }
 
 function roleUpdateValues(v: Partial<NewRole>): Updateable<CentreDB['role']> {
   const set: Updateable<CentreDB['role']> = {};
-  if (v.name !== undefined) set.name = v.name;
-  if (v.shortName !== undefined) set.short_name = v.shortName;
-  if (v.description !== undefined) set.description = v.description;
-  if (v.archetype !== undefined) set.archetype = v.archetype;
-  if (v.sortOrder !== undefined) set.sort_order = v.sortOrder;
+  applyDefined(set, v, [
+    ['name', 'name'],
+    ['shortName', 'short_name'],
+    ['description', 'description'],
+    ['archetype', 'archetype'],
+    ['sortOrder', 'sort_order'],
+  ]);
   return set;
 }
 
@@ -210,9 +215,11 @@ function assignmentInsertValues(v: NewAssignment): Insertable<CentreDB['role_ass
     user_id: v.userId,
     context_id: v.contextId,
   };
-  if (v.modifierId !== undefined) row.modifier_id = v.modifierId;
-  if (v.component !== undefined) row.component = v.component;
-  if (v.itemId !== undefined) row.item_id = v.itemId;
+  applyDefined(row, v, [
+    ['modifierId', 'modifier_id'],
+    ['component', 'component'],
+    ['itemId', 'item_id'],
+  ]);
   return row;
 }
 

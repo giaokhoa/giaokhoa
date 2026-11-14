@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 type RepoDb = CentreDb | CentreTx;
 
@@ -169,43 +170,47 @@ function jsonbValue(value: unknown): RawBuilder<JsonValue> {
 
 function badgeInsertValues(values: NewBadge): Insertable<CentreDB['badge']> {
   const row: Insertable<CentreDB['badge']> = { name: values.name };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.type !== undefined) row.type = values.type;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.issuerName !== undefined) row.issuer_name = values.issuerName;
-  if (values.issuerUrl !== undefined) row.issuer_url = values.issuerUrl;
-  if (values.issuerContact !== undefined) row.issuer_contact = values.issuerContact;
-  if (values.expireDate !== undefined) row.expire_date = values.expireDate;
-  if (values.expirePeriod !== undefined) row.expire_period = values.expirePeriod;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.version !== undefined) row.version = values.version;
-  if (values.language !== undefined) row.language = values.language;
-  if (values.userCreated !== undefined) row.user_created = values.userCreated;
-  if (values.userModified !== undefined) row.user_modified = values.userModified;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['description', 'description'],
+    ['type', 'type'],
+    ['courseId', 'course_id'],
+    ['issuerName', 'issuer_name'],
+    ['issuerUrl', 'issuer_url'],
+    ['issuerContact', 'issuer_contact'],
+    ['expireDate', 'expire_date'],
+    ['expirePeriod', 'expire_period'],
+    ['status', 'status'],
+    ['version', 'version'],
+    ['language', 'language'],
+    ['userCreated', 'user_created'],
+    ['userModified', 'user_modified'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function badgeUpdateSet(patch: Partial<BadgeRow>): Updateable<CentreDB['badge']> {
   const set: Updateable<CentreDB['badge']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.type !== undefined) set.type = patch.type;
-  if (patch.courseId !== undefined) set.course_id = patch.courseId;
-  if (patch.issuerName !== undefined) set.issuer_name = patch.issuerName;
-  if (patch.issuerUrl !== undefined) set.issuer_url = patch.issuerUrl;
-  if (patch.issuerContact !== undefined) set.issuer_contact = patch.issuerContact;
-  if (patch.expireDate !== undefined) set.expire_date = patch.expireDate;
-  if (patch.expirePeriod !== undefined) set.expire_period = patch.expirePeriod;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.version !== undefined) set.version = patch.version;
-  if (patch.language !== undefined) set.language = patch.language;
-  if (patch.userCreated !== undefined) set.user_created = patch.userCreated;
-  if (patch.userModified !== undefined) set.user_modified = patch.userModified;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['name', 'name'],
+    ['description', 'description'],
+    ['type', 'type'],
+    ['courseId', 'course_id'],
+    ['issuerName', 'issuer_name'],
+    ['issuerUrl', 'issuer_url'],
+    ['issuerContact', 'issuer_contact'],
+    ['expireDate', 'expire_date'],
+    ['expirePeriod', 'expire_period'],
+    ['status', 'status'],
+    ['version', 'version'],
+    ['language', 'language'],
+    ['userCreated', 'user_created'],
+    ['userModified', 'user_modified'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -214,10 +219,12 @@ function criteriaInsertValues(values: NewCriteria): InsertObject<CentreDB, 'badg
     badge_id: values.badgeId,
     criteria_type: values.criteriaType,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.method !== undefined) row.method = values.method;
-  if (values.params !== undefined) row.params = jsonbValue(values.params);
-  if (values.description !== undefined) row.description = values.description;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['method', 'method'],
+    ['params', 'params', (value) => jsonbValue(value)],
+    ['description', 'description'],
+  ]);
   return row;
 }
 
@@ -227,32 +234,36 @@ function issuedInsertValues(values: NewIssued): InsertObject<CentreDB, 'badge_is
     user_id: values.userId,
     unique_hash: values.uniqueHash,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.snapshot !== undefined) row.snapshot = jsonbValue(values.snapshot);
-  if (values.evidence !== undefined) row.evidence = jsonbValue(values.evidence);
-  if (values.dateIssued !== undefined) row.date_issued = values.dateIssued;
-  if (values.dateExpire !== undefined) row.date_expire = values.dateExpire;
-  if (values.visible !== undefined) row.visible = values.visible;
-  if (values.revoked !== undefined) row.revoked = values.revoked;
-  if (values.revokedAt !== undefined) row.revoked_at = values.revokedAt;
-  if (values.issuerNotified !== undefined) row.issuer_notified = values.issuerNotified;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['snapshot', 'snapshot', (value) => jsonbValue(value)],
+    ['evidence', 'evidence', (value) => jsonbValue(value)],
+    ['dateIssued', 'date_issued'],
+    ['dateExpire', 'date_expire'],
+    ['visible', 'visible'],
+    ['revoked', 'revoked'],
+    ['revokedAt', 'revoked_at'],
+    ['issuerNotified', 'issuer_notified'],
+  ]);
   return row;
 }
 
 function issuedUpdateSet(patch: Partial<IssuedRow>): UpdateObject<CentreDB, 'badge_issued'> {
   const set: UpdateObject<CentreDB, 'badge_issued'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.badgeId !== undefined) set.badge_id = patch.badgeId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.uniqueHash !== undefined) set.unique_hash = patch.uniqueHash;
-  if (patch.snapshot !== undefined) set.snapshot = jsonbValue(patch.snapshot);
-  if (patch.evidence !== undefined) set.evidence = jsonbValue(patch.evidence);
-  if (patch.dateIssued !== undefined) set.date_issued = patch.dateIssued;
-  if (patch.dateExpire !== undefined) set.date_expire = patch.dateExpire;
-  if (patch.visible !== undefined) set.visible = patch.visible;
-  if (patch.revoked !== undefined) set.revoked = patch.revoked;
-  if (patch.revokedAt !== undefined) set.revoked_at = patch.revokedAt;
-  if (patch.issuerNotified !== undefined) set.issuer_notified = patch.issuerNotified;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['badgeId', 'badge_id'],
+    ['userId', 'user_id'],
+    ['uniqueHash', 'unique_hash'],
+    ['snapshot', 'snapshot', (value) => jsonbValue(value)],
+    ['evidence', 'evidence', (value) => jsonbValue(value)],
+    ['dateIssued', 'date_issued'],
+    ['dateExpire', 'date_expire'],
+    ['visible', 'visible'],
+    ['revoked', 'revoked'],
+    ['revokedAt', 'revoked_at'],
+    ['issuerNotified', 'issuer_notified'],
+  ]);
   return set;
 }
 
@@ -262,9 +273,11 @@ function manualAwardInsertValues(values: NewManualAward): Insertable<CentreDB['b
     recipient_id: values.recipientId,
     issuer_id: values.issuerId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.issuerRole !== undefined) row.issuer_role = values.issuerRole;
-  if (values.dateMet !== undefined) row.date_met = values.dateMet;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['issuerRole', 'issuer_role'],
+    ['dateMet', 'date_met'],
+  ]);
   return row;
 }
 

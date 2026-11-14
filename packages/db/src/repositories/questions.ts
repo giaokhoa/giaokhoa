@@ -3,6 +3,7 @@ import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
 import type { Json } from '../types/centre-db';
+import { pickDefined } from './mapping';
 
 
 export type QuestionsDb = CentreDb | CentreTx;
@@ -665,297 +666,333 @@ function jsonbField(value: unknown): RawBuilder<Json> | null | undefined {
 
 function qCategoryInsertValues(v: NewQCategory) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     name: v.name,
     context_id: v.contextId,
-    ...(v.bankId !== undefined ? { bank_id: v.bankId } : {}),
-    ...(v.info !== undefined ? { info: v.info } : {}),
-    ...(v.parent !== undefined ? { parent: v.parent } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.stamp !== undefined ? { stamp: v.stamp } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['bankId', 'bank_id'],
+      ['info', 'info'],
+      ['parent', 'parent'],
+      ['sortOrder', 'sort_order'],
+      ['stamp', 'stamp'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function questionInsertValues(v: NewQuestion) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     category: v.category,
     qtype: v.qtype,
-    ...(v.createdBy !== undefined ? { created_by: v.createdBy } : {}),
-    ...(v.modifiedBy !== undefined ? { modified_by: v.modifiedBy } : {}),
-    ...(v.derivedFromQuestionId !== undefined ? { derived_from_question_id: v.derivedFromQuestionId } : {}),
-    ...(v.derivedFromVersionId !== undefined ? { derived_from_version_id: v.derivedFromVersionId } : {}),
-    ...(v.derivedFromBankId !== undefined ? { derived_from_bank_id: v.derivedFromBankId } : {}),
-    ...(v.originalAuthorId !== undefined ? { original_author_id: v.originalAuthorId } : {}),
-    ...(v.sourceKind !== undefined ? { source_kind: v.sourceKind } : {}),
-    ...(v.sourceRef !== undefined ? { source_ref: v.sourceRef } : {}),
-    ...(v.idnumber !== undefined ? { idnumber: v.idnumber } : {}),
-    ...(v.copyCount !== undefined ? { copy_count: v.copyCount } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['createdBy', 'created_by'],
+      ['modifiedBy', 'modified_by'],
+      ['derivedFromQuestionId', 'derived_from_question_id'],
+      ['derivedFromVersionId', 'derived_from_version_id'],
+      ['derivedFromBankId', 'derived_from_bank_id'],
+      ['originalAuthorId', 'original_author_id'],
+      ['sourceKind', 'source_kind'],
+      ['sourceRef', 'source_ref'],
+      ['idnumber', 'idnumber'],
+      ['copyCount', 'copy_count'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function questionUpdateSet(patch: Partial<QuestionRow>) {
   return {
-    ...(patch.category !== undefined ? { category: patch.category } : {}),
-    ...(patch.qtype !== undefined ? { qtype: patch.qtype } : {}),
-    ...(patch.createdBy !== undefined ? { created_by: patch.createdBy } : {}),
-    ...(patch.modifiedBy !== undefined ? { modified_by: patch.modifiedBy } : {}),
-    ...(patch.derivedFromQuestionId !== undefined ? { derived_from_question_id: patch.derivedFromQuestionId } : {}),
-    ...(patch.derivedFromVersionId !== undefined ? { derived_from_version_id: patch.derivedFromVersionId } : {}),
-    ...(patch.derivedFromBankId !== undefined ? { derived_from_bank_id: patch.derivedFromBankId } : {}),
-    ...(patch.originalAuthorId !== undefined ? { original_author_id: patch.originalAuthorId } : {}),
-    ...(patch.sourceKind !== undefined ? { source_kind: patch.sourceKind } : {}),
-    ...(patch.sourceRef !== undefined ? { source_ref: patch.sourceRef } : {}),
-    ...(patch.idnumber !== undefined ? { idnumber: patch.idnumber } : {}),
-    ...(patch.copyCount !== undefined ? { copy_count: patch.copyCount } : {}),
+    ...pickDefined(patch, [
+      ['category', 'category'],
+      ['qtype', 'qtype'],
+      ['createdBy', 'created_by'],
+      ['modifiedBy', 'modified_by'],
+      ['derivedFromQuestionId', 'derived_from_question_id'],
+      ['derivedFromVersionId', 'derived_from_version_id'],
+      ['derivedFromBankId', 'derived_from_bank_id'],
+      ['originalAuthorId', 'original_author_id'],
+      ['sourceKind', 'source_kind'],
+      ['sourceRef', 'source_ref'],
+      ['idnumber', 'idnumber'],
+      ['copyCount', 'copy_count'],
+    ]),
     updated_at: new Date(),
   };
 }
 
 function entryInsertValues(v: NewEntry) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_category_id: v.questionCategoryId,
     question_id: v.questionId,
-    ...(v.latestVersion !== undefined ? { latest_version: v.latestVersion } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.withdrawnReason !== undefined ? { withdrawn_reason: v.withdrawnReason } : {}),
-    ...(v.withdrawnBy !== undefined ? { withdrawn_by: v.withdrawnBy } : {}),
-    ...(v.withdrawnAt !== undefined ? { withdrawn_at: v.withdrawnAt } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['latestVersion', 'latest_version'],
+      ['status', 'status'],
+      ['withdrawnReason', 'withdrawn_reason'],
+      ['withdrawnBy', 'withdrawn_by'],
+      ['withdrawnAt', 'withdrawn_at'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function entryUpdateSet(patch: Partial<EntryRow>) {
   return {
-    ...(patch.questionCategoryId !== undefined ? { question_category_id: patch.questionCategoryId } : {}),
-    ...(patch.questionId !== undefined ? { question_id: patch.questionId } : {}),
-    ...(patch.latestVersion !== undefined ? { latest_version: patch.latestVersion } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.withdrawnReason !== undefined ? { withdrawn_reason: patch.withdrawnReason } : {}),
-    ...(patch.withdrawnBy !== undefined ? { withdrawn_by: patch.withdrawnBy } : {}),
-    ...(patch.withdrawnAt !== undefined ? { withdrawn_at: patch.withdrawnAt } : {}),
+    ...pickDefined(patch, [
+      ['questionCategoryId', 'question_category_id'],
+      ['questionId', 'question_id'],
+      ['latestVersion', 'latest_version'],
+      ['status', 'status'],
+      ['withdrawnReason', 'withdrawn_reason'],
+      ['withdrawnBy', 'withdrawn_by'],
+      ['withdrawnAt', 'withdrawn_at'],
+    ]),
     updated_at: new Date(),
   };
 }
 
 function versionInsertValues(v: NewVersion) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_bank_entry_id: v.questionBankEntryId,
     question_id: v.questionId,
     version: v.version,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.questionText !== undefined ? { question_text: jsonbValue(v.questionText as Json) } : {}),
-    ...(v.generalFeedback !== undefined ? { general_feedback: jsonbField(v.generalFeedback) } : {}),
-    ...(v.defaultMark !== undefined ? { default_mark: v.defaultMark } : {}),
-    ...(v.penalty !== undefined ? { penalty: v.penalty } : {}),
-    ...(v.stimulusId !== undefined ? { stimulus_id: v.stimulusId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...pickDefined(v, [
+      ['status', 'status'],
+      ['questionText', 'question_text', (value) => jsonbValue(value as Json)],
+      ['generalFeedback', 'general_feedback', jsonbField],
+      ['defaultMark', 'default_mark'],
+      ['penalty', 'penalty'],
+      ['stimulusId', 'stimulus_id'],
+      ['createdAt', 'created_at'],
+    ]),
   };
 }
 
 function versionUpdateSet(patch: Partial<VersionRow>) {
   return {
-    ...(patch.questionBankEntryId !== undefined ? { question_bank_entry_id: patch.questionBankEntryId } : {}),
-    ...(patch.questionId !== undefined ? { question_id: patch.questionId } : {}),
-    ...(patch.version !== undefined ? { version: patch.version } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.questionText !== undefined ? { question_text: jsonbValue(patch.questionText as Json) } : {}),
-    ...(patch.generalFeedback !== undefined ? { general_feedback: jsonbField(patch.generalFeedback) } : {}),
-    ...(patch.defaultMark !== undefined ? { default_mark: patch.defaultMark } : {}),
-    ...(patch.penalty !== undefined ? { penalty: patch.penalty } : {}),
-    ...(patch.stimulusId !== undefined ? { stimulus_id: patch.stimulusId } : {}),
+    ...pickDefined(patch, [
+      ['questionBankEntryId', 'question_bank_entry_id'],
+      ['questionId', 'question_id'],
+      ['version', 'version'],
+      ['status', 'status'],
+      ['questionText', 'question_text', (value) => jsonbValue(value as Json)],
+      ['generalFeedback', 'general_feedback', jsonbField],
+      ['defaultMark', 'default_mark'],
+      ['penalty', 'penalty'],
+      ['stimulusId', 'stimulus_id'],
+    ]),
   };
 }
 
 function stimulusInsertValues(v: NewStimulus) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     category_id: v.categoryId,
-    ...(v.createdBy !== undefined ? { created_by: v.createdBy } : {}),
+    ...pickDefined(v, [['createdBy', 'created_by']]),
     content: jsonbValue(v.content as Json),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function stimulusUpdateSet(patch: Partial<StimulusRow>) {
   return {
-    ...(patch.categoryId !== undefined ? { category_id: patch.categoryId } : {}),
-    ...(patch.createdBy !== undefined ? { created_by: patch.createdBy } : {}),
-    ...(patch.content !== undefined ? { content: jsonbValue(patch.content as Json) } : {}),
+    ...pickDefined(patch, [
+      ['categoryId', 'category_id'],
+      ['createdBy', 'created_by'],
+      ['content', 'content', (value) => jsonbValue(value as Json)],
+    ]),
     updated_at: new Date(),
   };
 }
 
 function answerInsertValues(v: NewAnswer) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_version_id: v.questionVersionId,
     answer: jsonbValue(v.answer as Json),
-    ...(v.isCorrect !== undefined ? { is_correct: v.isCorrect } : {}),
-    ...(v.feedback !== undefined ? { feedback: jsonbField(v.feedback) } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
+    ...pickDefined(v, [
+      ['isCorrect', 'is_correct'],
+      ['feedback', 'feedback', jsonbField],
+      ['sortOrder', 'sort_order'],
+    ]),
   };
 }
 
 function answerKeyInsertValues(v: NewAnswerKey) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_version_id: v.questionVersionId,
-    ...(v.guidance !== undefined ? { guidance: jsonbField(v.guidance) } : {}),
-    ...(v.solution !== undefined ? { solution: jsonbField(v.solution) } : {}),
+    ...pickDefined(v, [
+      ['guidance', 'guidance', jsonbField],
+      ['solution', 'solution', jsonbField],
+    ]),
   };
 }
 
 function multichoiceOptionsInsertValues(v: NewMultichoiceOptions) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_version_id: v.questionVersionId,
-    ...(v.shuffleAnswers !== undefined ? { shuffle_answers: v.shuffleAnswers } : {}),
-    ...(v.answerNumbering !== undefined ? { answer_numbering: v.answerNumbering } : {}),
-    ...(v.correctFeedback !== undefined ? { correct_feedback: jsonbField(v.correctFeedback) } : {}),
-    ...(v.incorrectFeedback !== undefined ? { incorrect_feedback: jsonbField(v.incorrectFeedback) } : {}),
-    ...(v.showStandardInstruction !== undefined ? { show_standard_instruction: v.showStandardInstruction } : {}),
+    ...pickDefined(v, [
+      ['shuffleAnswers', 'shuffle_answers'],
+      ['answerNumbering', 'answer_numbering'],
+      ['correctFeedback', 'correct_feedback', jsonbField],
+      ['incorrectFeedback', 'incorrect_feedback', jsonbField],
+      ['showStandardInstruction', 'show_standard_instruction'],
+    ]),
   };
 }
 
 function truefalseOptionsInsertValues(v: NewTruefalseOptions) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_version_id: v.questionVersionId,
     true_answer: v.trueAnswer,
     false_answer: v.falseAnswer,
-    ...(v.showStandardInstruction !== undefined ? { show_standard_instruction: v.showStandardInstruction } : {}),
+    ...pickDefined(v, [['showStandardInstruction', 'show_standard_instruction']]),
   };
 }
 
 function shortanswerOptionsInsertValues(v: NewShortanswerOptions) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_version_id: v.questionVersionId,
-    ...(v.useCase !== undefined ? { use_case: v.useCase } : {}),
-    ...(v.numericAnswer !== undefined ? { numeric_answer: v.numericAnswer } : {}),
-    ...(v.numericMaxLength !== undefined ? { numeric_max_length: v.numericMaxLength } : {}),
-    ...(v.numericAllowSign !== undefined ? { numeric_allow_sign: v.numericAllowSign } : {}),
-    ...(v.numericAllowDecimal !== undefined ? { numeric_allow_decimal: v.numericAllowDecimal } : {}),
+    ...pickDefined(v, [
+      ['useCase', 'use_case'],
+      ['numericAnswer', 'numeric_answer'],
+      ['numericMaxLength', 'numeric_max_length'],
+      ['numericAllowSign', 'numeric_allow_sign'],
+      ['numericAllowDecimal', 'numeric_allow_decimal'],
+    ]),
   };
 }
 
 function essayOptionsInsertValues(v: NewEssayOptions) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_version_id: v.questionVersionId,
-    ...(v.responseFormat !== undefined ? { response_format: v.responseFormat } : {}),
-    ...(v.responseRequired !== undefined ? { response_required: v.responseRequired } : {}),
-    ...(v.responseFieldLines !== undefined ? { response_field_lines: v.responseFieldLines } : {}),
-    ...(v.minWordLimit !== undefined ? { min_word_limit: v.minWordLimit } : {}),
-    ...(v.maxWordLimit !== undefined ? { max_word_limit: v.maxWordLimit } : {}),
-    ...(v.graderInfo !== undefined ? { grader_info: jsonbField(v.graderInfo) } : {}),
-    ...(v.responseTemplate !== undefined ? { response_template: jsonbField(v.responseTemplate) } : {}),
+    ...pickDefined(v, [
+      ['responseFormat', 'response_format'],
+      ['responseRequired', 'response_required'],
+      ['responseFieldLines', 'response_field_lines'],
+      ['minWordLimit', 'min_word_limit'],
+      ['maxWordLimit', 'max_word_limit'],
+      ['graderInfo', 'grader_info', jsonbField],
+      ['responseTemplate', 'response_template', jsonbField],
+    ]),
   };
 }
 
 function usageInsertValues(v: NewUsage) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     component: v.component,
-    ...(v.instanceId !== undefined ? { instance_id: v.instanceId } : {}),
-    ...(v.owningContextId !== undefined ? { owning_context_id: v.owningContextId } : {}),
-    ...(v.preferredBehaviour !== undefined ? { preferred_behaviour: v.preferredBehaviour } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['instanceId', 'instance_id'],
+      ['owningContextId', 'owning_context_id'],
+      ['preferredBehaviour', 'preferred_behaviour'],
+      ['userId', 'user_id'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function attemptInsertValues(v: NewAttempt) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_usage_id: v.questionUsageId,
-    ...(v.contentSnapshot !== undefined ? { content_snapshot: jsonbValue(v.contentSnapshot) } : {}),
+    ...pickDefined(v, [['contentSnapshot', 'content_snapshot', (value) => jsonbValue(value)]]),
     slot: v.slot,
-    ...(v.behaviour !== undefined ? { behaviour: v.behaviour } : {}),
+    ...pickDefined(v, [['behaviour', 'behaviour']]),
     question_id: v.questionId,
-    ...(v.questionVersionId !== undefined ? { question_version_id: v.questionVersionId } : {}),
-    ...(v.variant !== undefined ? { variant: v.variant } : {}),
-    ...(v.maxMark !== undefined ? { max_mark: v.maxMark } : {}),
-    ...(v.minFraction !== undefined ? { min_fraction: v.minFraction } : {}),
-    ...(v.maxFraction !== undefined ? { max_fraction: v.maxFraction } : {}),
-    ...(v.flagged !== undefined ? { flagged: v.flagged } : {}),
-    ...(v.questionSummary !== undefined ? { question_summary: v.questionSummary } : {}),
-    ...(v.responseSummary !== undefined ? { response_summary: v.responseSummary } : {}),
-    ...(v.rightAnswer !== undefined ? { right_answer: v.rightAnswer } : {}),
-    ...(v.state !== undefined ? { state: v.state } : {}),
-    ...(v.fraction !== undefined ? { fraction: v.fraction } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
-    ...(v.updatedAt !== undefined ? { updated_at: v.updatedAt } : {}),
+    ...pickDefined(v, [
+      ['questionVersionId', 'question_version_id'],
+      ['variant', 'variant'],
+      ['maxMark', 'max_mark'],
+      ['minFraction', 'min_fraction'],
+      ['maxFraction', 'max_fraction'],
+      ['flagged', 'flagged'],
+      ['questionSummary', 'question_summary'],
+      ['responseSummary', 'response_summary'],
+      ['rightAnswer', 'right_answer'],
+      ['state', 'state'],
+      ['fraction', 'fraction'],
+      ['userId', 'user_id'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+    ]),
   };
 }
 
 function attemptUpdateSet(patch: Partial<AttemptRow>) {
   return {
-    ...(patch.behaviour !== undefined ? { behaviour: patch.behaviour } : {}),
-    ...(patch.questionVersionId !== undefined ? { question_version_id: patch.questionVersionId } : {}),
-    ...(patch.variant !== undefined ? { variant: patch.variant } : {}),
-    ...(patch.maxMark !== undefined ? { max_mark: patch.maxMark } : {}),
-    ...(patch.minFraction !== undefined ? { min_fraction: patch.minFraction } : {}),
-    ...(patch.maxFraction !== undefined ? { max_fraction: patch.maxFraction } : {}),
-    ...(patch.flagged !== undefined ? { flagged: patch.flagged } : {}),
-    ...(patch.questionSummary !== undefined ? { question_summary: patch.questionSummary } : {}),
-    ...(patch.responseSummary !== undefined ? { response_summary: patch.responseSummary } : {}),
-    ...(patch.rightAnswer !== undefined ? { right_answer: patch.rightAnswer } : {}),
-    ...(patch.state !== undefined ? { state: patch.state } : {}),
-    ...(patch.fraction !== undefined ? { fraction: patch.fraction } : {}),
-    ...(patch.userId !== undefined ? { user_id: patch.userId } : {}),
+    ...pickDefined(patch, [
+      ['behaviour', 'behaviour'],
+      ['questionVersionId', 'question_version_id'],
+      ['variant', 'variant'],
+      ['maxMark', 'max_mark'],
+      ['minFraction', 'min_fraction'],
+      ['maxFraction', 'max_fraction'],
+      ['flagged', 'flagged'],
+      ['questionSummary', 'question_summary'],
+      ['responseSummary', 'response_summary'],
+      ['rightAnswer', 'right_answer'],
+      ['state', 'state'],
+      ['fraction', 'fraction'],
+      ['userId', 'user_id'],
+    ]),
     updated_at: new Date(),
   };
 }
 
 function stepInsertValues(v: NewStep) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_attempt_id: v.questionAttemptId,
     sequence_number: v.sequenceNumber,
     state: v.state,
-    ...(v.fraction !== undefined ? { fraction: v.fraction } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...pickDefined(v, [
+      ['fraction', 'fraction'],
+      ['userId', 'user_id'],
+      ['createdAt', 'created_at'],
+    ]),
   };
 }
 
 function stepDataInsertValues(v: NewStepData) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     attempt_step_id: v.attemptStepId,
     name: v.name,
-    ...(v.value !== undefined ? { value: v.value } : {}),
+    ...pickDefined(v, [['value', 'value']]),
   };
 }
 
 function questionSubjectLinkInsertValues(v: NewQuestionSubjectLink) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_id: v.questionId,
     subject_id: v.subjectId,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...pickDefined(v, [['createdAt', 'created_at']]),
   };
 }
 
 function questionOutcomeLinkInsertValues(v: NewQuestionOutcomeLink) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     question_id: v.questionId,
     learning_outcome_id: v.learningOutcomeId,
     cognitive_level: v.cognitiveLevel,
-    ...(v.createdAt !== undefined ? { created_at: v.createdAt } : {}),
+    ...pickDefined(v, [['createdAt', 'created_at']]),
   };
 }
 

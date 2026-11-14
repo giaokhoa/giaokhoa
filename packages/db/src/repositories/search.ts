@@ -1,5 +1,6 @@
 import { sql, type Insertable, type Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 export type SearchDb = CentreDb | CentreTx;
 
@@ -42,11 +43,13 @@ function searchDocInsertValues(values: NewSearchDoc): Insertable<CentreDB['searc
     item_id: values.itemId,
     context_id: values.contextId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.title !== undefined) row.title = values.title;
-  if (values.content !== undefined) row.content = values.content;
-  if (values.ownerId !== undefined) row.owner_id = values.ownerId;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['title', 'title'],
+    ['content', 'content'],
+    ['ownerId', 'owner_id'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -63,8 +66,10 @@ export class SearchRepository {
       owner_id: v.ownerId ?? null,
       updated_at: new Date(),
     };
-    if (v.title !== undefined) conflictSet.title = v.title;
-    if (v.content !== undefined) conflictSet.content = v.content;
+    applyDefined(conflictSet, v, [
+      ['title', 'title'],
+      ['content', 'content'],
+    ]);
     const rows = await db
       .insertInto('search_documents')
       .values(searchDocInsertValues(v))

@@ -1,6 +1,7 @@
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export interface ContentRow {
   id: string;
@@ -182,84 +183,88 @@ function contentInsertValues(values: NewContent): InsertObject<CentreDB, 'conten
     context_id: values.contextId,
     creator_id: values.creatorId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
-  if (values.contentType !== undefined) row.content_type = values.contentType;
-  if (values.visibility !== undefined) row.visibility = values.visibility;
-  if (values.fileId !== undefined) row.file_id = values.fileId;
-  if (values.configData !== undefined) row.config_data = values.configData === null ? null : jsonbValue<JsonValue>(values.configData as JsonValue);
-  if (values.resourceType !== undefined) row.resource_type = values.resourceType;
-  if (values.scope !== undefined) row.scope = values.scope;
-  if (values.spaceId !== undefined) row.space_id = values.spaceId;
-  if (values.subjectId !== undefined) row.subject_id = values.subjectId;
-  if (values.grade !== undefined) row.grade = values.grade;
-  if (values.level !== undefined) row.level = values.level;
-  if (values.curriculumNodeId !== undefined) row.curriculum_node_id = values.curriculumNodeId;
-  if (values.outcomeIds !== undefined) row.outcome_ids = values.outcomeIds === null ? null : jsonbValue<JsonValue>(values.outcomeIds as JsonValue);
-  if (values.questionCategoryId !== undefined) row.question_category_id = values.questionCategoryId;
-  if (values.externalUrl !== undefined) row.external_url = values.externalUrl;
-  if (values.description !== undefined) row.description = values.description;
-  if (values.keywords !== undefined) row.keywords = values.keywords === null ? null : jsonbValue<JsonValue>(values.keywords as JsonValue);
-  if (values.targetAudience !== undefined) row.target_audience = values.targetAudience;
-  if (values.lessonPosition !== undefined) row.lesson_position = values.lessonPosition;
-  if (values.techFormat !== undefined) row.tech_format = values.techFormat;
-  if (values.sizeBytes !== undefined) row.size_bytes = values.sizeBytes;
-  if (values.durationSeconds !== undefined) row.duration_seconds = values.durationSeconds;
-  if (values.language !== undefined) row.language = values.language;
-  if (values.originalAuthor !== undefined) row.original_author = values.originalAuthor;
-  if (values.sourceKind !== undefined) row.source_kind = values.sourceKind;
-  if (values.sourceCitation !== undefined) row.source_citation = values.sourceCitation;
-  if (values.license !== undefined) row.license = values.license;
-  if (values.derivedFromId !== undefined) row.derived_from_id = values.derivedFromId;
-  if (values.reviewStatus !== undefined) row.review_status = values.reviewStatus;
-  if (values.reviewedBy !== undefined) row.reviewed_by = values.reviewedBy;
-  if (values.reviewedAt !== undefined) row.reviewed_at = values.reviewedAt;
-  if (values.reviewNote !== undefined) row.review_note = values.reviewNote;
-  if (values.reviewChecklist !== undefined) row.review_checklist = values.reviewChecklist === null ? null : jsonbValue<JsonValue>(values.reviewChecklist as JsonValue);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['tenantId', 'tenant_id'],
+    ['contentType', 'content_type'],
+    ['visibility', 'visibility'],
+    ['fileId', 'file_id'],
+    ['configData', 'config_data', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['resourceType', 'resource_type'],
+    ['scope', 'scope'],
+    ['spaceId', 'space_id'],
+    ['subjectId', 'subject_id'],
+    ['grade', 'grade'],
+    ['level', 'level'],
+    ['curriculumNodeId', 'curriculum_node_id'],
+    ['outcomeIds', 'outcome_ids', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['questionCategoryId', 'question_category_id'],
+    ['externalUrl', 'external_url'],
+    ['description', 'description'],
+    ['keywords', 'keywords', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['targetAudience', 'target_audience'],
+    ['lessonPosition', 'lesson_position'],
+    ['techFormat', 'tech_format'],
+    ['sizeBytes', 'size_bytes'],
+    ['durationSeconds', 'duration_seconds'],
+    ['language', 'language'],
+    ['originalAuthor', 'original_author'],
+    ['sourceKind', 'source_kind'],
+    ['sourceCitation', 'source_citation'],
+    ['license', 'license'],
+    ['derivedFromId', 'derived_from_id'],
+    ['reviewStatus', 'review_status'],
+    ['reviewedBy', 'reviewed_by'],
+    ['reviewedAt', 'reviewed_at'],
+    ['reviewNote', 'review_note'],
+    ['reviewChecklist', 'review_checklist', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function contentUpdateSet(patch: Partial<ContentRow>): UpdateObject<CentreDB, 'content_bank_content'> {
   const set: UpdateObject<CentreDB, 'content_bank_content'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.contentType !== undefined) set.content_type = patch.contentType;
-  if (patch.contextId !== undefined) set.context_id = patch.contextId;
-  if (patch.creatorId !== undefined) set.creator_id = patch.creatorId;
-  if (patch.visibility !== undefined) set.visibility = patch.visibility;
-  if (patch.fileId !== undefined) set.file_id = patch.fileId;
-  if (patch.configData !== undefined) set.config_data = patch.configData === null ? null : jsonbValue<JsonValue>(patch.configData as JsonValue);
-  if (patch.resourceType !== undefined) set.resource_type = patch.resourceType;
-  if (patch.scope !== undefined) set.scope = patch.scope;
-  if (patch.spaceId !== undefined) set.space_id = patch.spaceId;
-  if (patch.subjectId !== undefined) set.subject_id = patch.subjectId;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.level !== undefined) set.level = patch.level;
-  if (patch.curriculumNodeId !== undefined) set.curriculum_node_id = patch.curriculumNodeId;
-  if (patch.outcomeIds !== undefined) set.outcome_ids = patch.outcomeIds === null ? null : jsonbValue<JsonValue>(patch.outcomeIds as JsonValue);
-  if (patch.questionCategoryId !== undefined) set.question_category_id = patch.questionCategoryId;
-  if (patch.externalUrl !== undefined) set.external_url = patch.externalUrl;
-  if (patch.description !== undefined) set.description = patch.description;
-  if (patch.keywords !== undefined) set.keywords = patch.keywords === null ? null : jsonbValue<JsonValue>(patch.keywords as JsonValue);
-  if (patch.targetAudience !== undefined) set.target_audience = patch.targetAudience;
-  if (patch.lessonPosition !== undefined) set.lesson_position = patch.lessonPosition;
-  if (patch.techFormat !== undefined) set.tech_format = patch.techFormat;
-  if (patch.sizeBytes !== undefined) set.size_bytes = patch.sizeBytes;
-  if (patch.durationSeconds !== undefined) set.duration_seconds = patch.durationSeconds;
-  if (patch.language !== undefined) set.language = patch.language;
-  if (patch.originalAuthor !== undefined) set.original_author = patch.originalAuthor;
-  if (patch.sourceKind !== undefined) set.source_kind = patch.sourceKind;
-  if (patch.sourceCitation !== undefined) set.source_citation = patch.sourceCitation;
-  if (patch.license !== undefined) set.license = patch.license;
-  if (patch.derivedFromId !== undefined) set.derived_from_id = patch.derivedFromId;
-  if (patch.reviewStatus !== undefined) set.review_status = patch.reviewStatus;
-  if (patch.reviewedBy !== undefined) set.reviewed_by = patch.reviewedBy;
-  if (patch.reviewedAt !== undefined) set.reviewed_at = patch.reviewedAt;
-  if (patch.reviewNote !== undefined) set.review_note = patch.reviewNote;
-  if (patch.reviewChecklist !== undefined) set.review_checklist = patch.reviewChecklist === null ? null : jsonbValue<JsonValue>(patch.reviewChecklist as JsonValue);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['name', 'name'],
+    ['contentType', 'content_type'],
+    ['contextId', 'context_id'],
+    ['creatorId', 'creator_id'],
+    ['visibility', 'visibility'],
+    ['fileId', 'file_id'],
+    ['configData', 'config_data', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['resourceType', 'resource_type'],
+    ['scope', 'scope'],
+    ['spaceId', 'space_id'],
+    ['subjectId', 'subject_id'],
+    ['grade', 'grade'],
+    ['level', 'level'],
+    ['curriculumNodeId', 'curriculum_node_id'],
+    ['outcomeIds', 'outcome_ids', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['questionCategoryId', 'question_category_id'],
+    ['externalUrl', 'external_url'],
+    ['description', 'description'],
+    ['keywords', 'keywords', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['targetAudience', 'target_audience'],
+    ['lessonPosition', 'lesson_position'],
+    ['techFormat', 'tech_format'],
+    ['sizeBytes', 'size_bytes'],
+    ['durationSeconds', 'duration_seconds'],
+    ['language', 'language'],
+    ['originalAuthor', 'original_author'],
+    ['sourceKind', 'source_kind'],
+    ['sourceCitation', 'source_citation'],
+    ['license', 'license'],
+    ['derivedFromId', 'derived_from_id'],
+    ['reviewStatus', 'review_status'],
+    ['reviewedBy', 'reviewed_by'],
+    ['reviewedAt', 'reviewed_at'],
+    ['reviewNote', 'review_note'],
+    ['reviewChecklist', 'review_checklist', (value) => (value === null ? null : jsonbValue<JsonValue>(value as JsonValue))],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

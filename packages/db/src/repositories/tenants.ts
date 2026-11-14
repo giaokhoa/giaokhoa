@@ -1,6 +1,7 @@
 import { sql, type Insertable, type RawBuilder, type Updateable } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
 import type { Json } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export interface TenantRow {
   id: string;
@@ -91,22 +92,26 @@ function tenantInsertValues(values: NewTenant): Insertable<CentreDB['tenants']> 
     name: values.name,
     kind: values.kind,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.plan !== undefined) row.plan = values.plan;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['plan', 'plan'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function tenantUpdateSet(patch: Partial<TenantRow>): Updateable<CentreDB['tenants']> {
   const set: Updateable<CentreDB['tenants']> = {};
-  if (patch.slug !== undefined) set.slug = patch.slug;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.plan !== undefined) set.plan = patch.plan;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['slug', 'slug'],
+    ['name', 'name'],
+    ['kind', 'kind'],
+    ['status', 'status'],
+    ['plan', 'plan'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -115,20 +120,24 @@ function membershipInsertValues(values: NewTenantMembership): Insertable<CentreD
     tenant_id: values.tenantId,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.joinedAt !== undefined) row.joined_at = values.joinedAt;
-  if (values.endedAt !== undefined) row.ended_at = values.endedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['joinedAt', 'joined_at'],
+    ['endedAt', 'ended_at'],
+  ]);
   return row;
 }
 
 function membershipUpdateSet(patch: Partial<TenantMembershipRow>): Updateable<CentreDB['tenant_memberships']> {
   const set: Updateable<CentreDB['tenant_memberships']> = {};
-  if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.joinedAt !== undefined) set.joined_at = patch.joinedAt;
-  if (patch.endedAt !== undefined) set.ended_at = patch.endedAt;
+  applyDefined(set, patch, [
+    ['tenantId', 'tenant_id'],
+    ['userId', 'user_id'],
+    ['status', 'status'],
+    ['joinedAt', 'joined_at'],
+    ['endedAt', 'ended_at'],
+  ]);
   return set;
 }
 

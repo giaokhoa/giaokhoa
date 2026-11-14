@@ -1,4 +1,5 @@
 import type { CentreDb, CentreTx } from '../client';
+import { pickDefined } from './mapping';
 
 
 export type EnrolDb = CentreDb | CentreTx;
@@ -111,69 +112,77 @@ const USER_ENROLMENT_COLUMNS = [
 
 function enrolInsertValues(v: NewEnrolInstance) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     course_id: v.courseId,
     enrol: v.enrol,
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.roleId !== undefined ? { role_id: v.roleId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.enrolPeriod !== undefined ? { enrol_period: v.enrolPeriod } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
-    ...(v.customInt1 !== undefined ? { custom_int1: v.customInt1 } : {}),
-    ...(v.customInt2 !== undefined ? { custom_int2: v.customInt2 } : {}),
-    ...(v.customText1 !== undefined ? { custom_text1: v.customText1 } : {}),
-    ...(v.cost !== undefined ? { cost: v.cost } : {}),
-    ...(v.currency !== undefined ? { currency: v.currency } : {}),
-    ...(v.paymentAccountId !== undefined ? { payment_account_id: v.paymentAccountId } : {}),
-    ...(v.sendWelcomeMessage !== undefined ? { send_welcome_message: v.sendWelcomeMessage } : {}),
-    ...(v.welcomeMessage !== undefined ? { welcome_message: v.welcomeMessage } : {}),
+    ...pickDefined(v, [
+      ['name', 'name'],
+      ['roleId', 'role_id'],
+      ['status', 'status'],
+      ['enrolPeriod', 'enrol_period'],
+      ['timeStart', 'time_start'],
+      ['timeEnd', 'time_end'],
+      ['enrolmentKey', 'enrolment_key'],
+      ['customInt1', 'custom_int1'],
+      ['customInt2', 'custom_int2'],
+      ['customText1', 'custom_text1'],
+      ['cost', 'cost'],
+      ['currency', 'currency'],
+      ['paymentAccountId', 'payment_account_id'],
+      ['sendWelcomeMessage', 'send_welcome_message'],
+      ['welcomeMessage', 'welcome_message'],
+    ]),
   };
 }
 
 function enrolUpdateValues(v: Partial<NewEnrolInstance>) {
   return {
-    ...(v.courseId !== undefined ? { course_id: v.courseId } : {}),
-    ...(v.enrol !== undefined ? { enrol: v.enrol } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.roleId !== undefined ? { role_id: v.roleId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.enrolPeriod !== undefined ? { enrol_period: v.enrolPeriod } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.enrolmentKey !== undefined ? { enrolment_key: v.enrolmentKey } : {}),
-    ...(v.customInt1 !== undefined ? { custom_int1: v.customInt1 } : {}),
-    ...(v.customInt2 !== undefined ? { custom_int2: v.customInt2 } : {}),
-    ...(v.customText1 !== undefined ? { custom_text1: v.customText1 } : {}),
-    ...(v.cost !== undefined ? { cost: v.cost } : {}),
-    ...(v.currency !== undefined ? { currency: v.currency } : {}),
-    ...(v.paymentAccountId !== undefined ? { payment_account_id: v.paymentAccountId } : {}),
-    ...(v.sendWelcomeMessage !== undefined ? { send_welcome_message: v.sendWelcomeMessage } : {}),
-    ...(v.welcomeMessage !== undefined ? { welcome_message: v.welcomeMessage } : {}),
+    ...pickDefined(v, [
+      ['courseId', 'course_id'],
+      ['enrol', 'enrol'],
+      ['name', 'name'],
+      ['roleId', 'role_id'],
+      ['status', 'status'],
+      ['enrolPeriod', 'enrol_period'],
+      ['timeStart', 'time_start'],
+      ['timeEnd', 'time_end'],
+      ['enrolmentKey', 'enrolment_key'],
+      ['customInt1', 'custom_int1'],
+      ['customInt2', 'custom_int2'],
+      ['customText1', 'custom_text1'],
+      ['cost', 'cost'],
+      ['currency', 'currency'],
+      ['paymentAccountId', 'payment_account_id'],
+      ['sendWelcomeMessage', 'send_welcome_message'],
+      ['welcomeMessage', 'welcome_message'],
+    ]),
   };
 }
 
 function userEnrolmentInsertValues(v: NewUserEnrolment) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     enrol_id: v.enrolId,
     user_id: v.userId,
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.modifierId !== undefined ? { modifier_id: v.modifierId } : {}),
+    ...pickDefined(v, [
+      ['status', 'status'],
+      ['timeStart', 'time_start'],
+      ['timeEnd', 'time_end'],
+      ['modifierId', 'modifier_id'],
+    ]),
   };
 }
 
 function userEnrolmentUpdateValues(v: Partial<NewUserEnrolment>) {
   return {
-    ...(v.enrolId !== undefined ? { enrol_id: v.enrolId } : {}),
-    ...(v.userId !== undefined ? { user_id: v.userId } : {}),
-    ...(v.status !== undefined ? { status: v.status } : {}),
-    ...(v.timeStart !== undefined ? { time_start: v.timeStart } : {}),
-    ...(v.timeEnd !== undefined ? { time_end: v.timeEnd } : {}),
-    ...(v.modifierId !== undefined ? { modifier_id: v.modifierId } : {}),
+    ...pickDefined(v, [
+      ['enrolId', 'enrol_id'],
+      ['userId', 'user_id'],
+      ['status', 'status'],
+      ['timeStart', 'time_start'],
+      ['timeEnd', 'time_end'],
+      ['modifierId', 'modifier_id'],
+    ]),
   };
 }
 

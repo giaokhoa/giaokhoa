@@ -1,6 +1,7 @@
 import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { Json } from '../types/centre-db';
+import { pickDefined } from './mapping';
 
 
 export type CoursesDb = CentreDb | CentreTx;
@@ -376,198 +377,214 @@ function jsonbField(value: unknown): RawBuilder<Json> | null | undefined {
 
 function categoryInsertValues(v: NewCategory) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     tenant_id: v.tenantId,
     name: v.name,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.parent !== undefined ? { parent: v.parent } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.path !== undefined ? { path: v.path } : {}),
-    ...(v.depth !== undefined ? { depth: v.depth } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...pickDefined(v, [
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+      ['parent', 'parent'],
+      ['sortOrder', 'sort_order'],
+      ['path', 'path'],
+      ['depth', 'depth'],
+      ['visible', 'visible'],
+    ]),
   };
 }
 
 function categoryUpdateValues(v: Partial<NewCategory>) {
   return {
-    ...(v.tenantId !== undefined ? { tenant_id: v.tenantId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.description !== undefined ? { description: v.description } : {}),
-    ...(v.parent !== undefined ? { parent: v.parent } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.path !== undefined ? { path: v.path } : {}),
-    ...(v.depth !== undefined ? { depth: v.depth } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
+    ...pickDefined(v, [
+      ['tenantId', 'tenant_id'],
+      ['name', 'name'],
+      ['idNumber', 'id_number'],
+      ['description', 'description'],
+      ['parent', 'parent'],
+      ['sortOrder', 'sort_order'],
+      ['path', 'path'],
+      ['depth', 'depth'],
+      ['visible', 'visible'],
+    ]),
   };
 }
 
 function courseInsertValues(v: NewCourse) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     tenant_id: v.tenantId,
     category: v.category,
-    ...(v.classId !== undefined ? { class_id: v.classId } : {}),
+    ...pickDefined(v, [['classId', 'class_id']]),
     full_name: v.fullName,
     short_name: v.shortName,
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.format !== undefined ? { format: v.format } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.startDate !== undefined ? { start_date: v.startDate } : {}),
-    ...(v.endDate !== undefined ? { end_date: v.endDate } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
-    ...(v.groupModeForce !== undefined ? { group_mode_force: v.groupModeForce } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.subjectId !== undefined ? { subject_id: v.subjectId } : {}),
-    ...(v.grade !== undefined ? { grade: v.grade } : {}),
-    ...(v.isTemplate !== undefined ? { is_template: v.isTemplate } : {}),
+    ...pickDefined(v, [
+      ['idNumber', 'id_number'],
+      ['summary', 'summary'],
+      ['format', 'format'],
+      ['visible', 'visible'],
+      ['startDate', 'start_date'],
+      ['endDate', 'end_date'],
+      ['groupMode', 'group_mode'],
+      ['groupModeForce', 'group_mode_force'],
+      ['sortOrder', 'sort_order'],
+      ['subjectId', 'subject_id'],
+      ['grade', 'grade'],
+      ['isTemplate', 'is_template'],
+    ]),
   };
 }
 
 function courseUpdateValues(v: Partial<NewCourse>) {
   return {
-    ...(v.category !== undefined ? { category: v.category } : {}),
-    ...(v.classId !== undefined ? { class_id: v.classId } : {}),
-    ...(v.fullName !== undefined ? { full_name: v.fullName } : {}),
-    ...(v.shortName !== undefined ? { short_name: v.shortName } : {}),
-    ...(v.idNumber !== undefined ? { id_number: v.idNumber } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.format !== undefined ? { format: v.format } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.startDate !== undefined ? { start_date: v.startDate } : {}),
-    ...(v.endDate !== undefined ? { end_date: v.endDate } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
-    ...(v.groupModeForce !== undefined ? { group_mode_force: v.groupModeForce } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
-    ...(v.subjectId !== undefined ? { subject_id: v.subjectId } : {}),
-    ...(v.grade !== undefined ? { grade: v.grade } : {}),
-    ...(v.isTemplate !== undefined ? { is_template: v.isTemplate } : {}),
+    ...pickDefined(v, [
+      ['category', 'category'],
+      ['classId', 'class_id'],
+      ['fullName', 'full_name'],
+      ['shortName', 'short_name'],
+      ['idNumber', 'id_number'],
+      ['summary', 'summary'],
+      ['format', 'format'],
+      ['visible', 'visible'],
+      ['startDate', 'start_date'],
+      ['endDate', 'end_date'],
+      ['groupMode', 'group_mode'],
+      ['groupModeForce', 'group_mode_force'],
+      ['sortOrder', 'sort_order'],
+      ['subjectId', 'subject_id'],
+      ['grade', 'grade'],
+      ['isTemplate', 'is_template'],
+    ]),
   };
 }
 
 function sectionInsertValues(v: NewSection) {
-  const availability = jsonbField(v.availability);
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     course: v.course,
-    ...(v.section !== undefined ? { section: v.section } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(availability !== undefined ? { availability } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
+    ...pickDefined(v, [
+      ['section', 'section'],
+      ['name', 'name'],
+      ['summary', 'summary'],
+      ['visible', 'visible'],
+      ['availability', 'availability', jsonbField],
+      ['openAt', 'open_at'],
+    ]),
   };
 }
 
 function sectionUpdateValues(v: Partial<NewSection>) {
-  const availability = jsonbField(v.availability);
   return {
-    ...(v.course !== undefined ? { course: v.course } : {}),
-    ...(v.section !== undefined ? { section: v.section } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.summary !== undefined ? { summary: v.summary } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(availability !== undefined ? { availability } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
+    ...pickDefined(v, [
+      ['course', 'course'],
+      ['section', 'section'],
+      ['name', 'name'],
+      ['summary', 'summary'],
+      ['visible', 'visible'],
+      ['availability', 'availability', jsonbField],
+      ['openAt', 'open_at'],
+    ]),
   };
 }
 
 function cmInsertValues(v: NewCm) {
-  const availability = jsonbField(v.availability);
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     course: v.course,
     section: v.section,
     component: v.component,
-    ...(v.instanceId !== undefined ? { instance_id: v.instanceId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.added !== undefined ? { added: v.added } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
-    ...(availability !== undefined ? { availability } : {}),
-    ...(v.completion !== undefined ? { completion: v.completion } : {}),
-    ...(v.completionView !== undefined ? { completion_view: v.completionView } : {}),
-    ...(v.completionUseGrade !== undefined ? { completion_use_grade: v.completionUseGrade } : {}),
-    ...(v.completionManual !== undefined ? { completion_manual: v.completionManual } : {}),
-    ...(v.completionExpected !== undefined ? { completion_expected: v.completionExpected } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
-    ...(v.deletionInProgress !== undefined ? { deletion_in_progress: v.deletionInProgress } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
+    ...pickDefined(v, [
+      ['instanceId', 'instance_id'],
+      ['name', 'name'],
+      ['added', 'added'],
+      ['visible', 'visible'],
+      ['groupMode', 'group_mode'],
+      ['availability', 'availability', jsonbField],
+      ['completion', 'completion'],
+      ['completionView', 'completion_view'],
+      ['completionUseGrade', 'completion_use_grade'],
+      ['completionManual', 'completion_manual'],
+      ['completionExpected', 'completion_expected'],
+      ['openAt', 'open_at'],
+      ['deletionInProgress', 'deletion_in_progress'],
+      ['sortOrder', 'sort_order'],
+    ]),
   };
 }
 
 function cmUpdateValues(v: Partial<NewCm>) {
-  const availability = jsonbField(v.availability);
   return {
-    ...(v.course !== undefined ? { course: v.course } : {}),
-    ...(v.section !== undefined ? { section: v.section } : {}),
-    ...(v.component !== undefined ? { component: v.component } : {}),
-    ...(v.instanceId !== undefined ? { instance_id: v.instanceId } : {}),
-    ...(v.name !== undefined ? { name: v.name } : {}),
-    ...(v.added !== undefined ? { added: v.added } : {}),
-    ...(v.visible !== undefined ? { visible: v.visible } : {}),
-    ...(v.groupMode !== undefined ? { group_mode: v.groupMode } : {}),
-    ...(availability !== undefined ? { availability } : {}),
-    ...(v.completion !== undefined ? { completion: v.completion } : {}),
-    ...(v.completionView !== undefined ? { completion_view: v.completionView } : {}),
-    ...(v.completionUseGrade !== undefined ? { completion_use_grade: v.completionUseGrade } : {}),
-    ...(v.completionManual !== undefined ? { completion_manual: v.completionManual } : {}),
-    ...(v.completionExpected !== undefined ? { completion_expected: v.completionExpected } : {}),
-    ...(v.openAt !== undefined ? { open_at: v.openAt } : {}),
-    ...(v.deletionInProgress !== undefined ? { deletion_in_progress: v.deletionInProgress } : {}),
-    ...(v.sortOrder !== undefined ? { sort_order: v.sortOrder } : {}),
+    ...pickDefined(v, [
+      ['course', 'course'],
+      ['section', 'section'],
+      ['component', 'component'],
+      ['instanceId', 'instance_id'],
+      ['name', 'name'],
+      ['added', 'added'],
+      ['visible', 'visible'],
+      ['groupMode', 'group_mode'],
+      ['availability', 'availability', jsonbField],
+      ['completion', 'completion'],
+      ['completionView', 'completion_view'],
+      ['completionUseGrade', 'completion_use_grade'],
+      ['completionManual', 'completion_manual'],
+      ['completionExpected', 'completion_expected'],
+      ['openAt', 'open_at'],
+      ['deletionInProgress', 'deletion_in_progress'],
+      ['sortOrder', 'sort_order'],
+    ]),
   };
 }
 
 function sectionAnchorInsertValues(v: NewSectionAnchor) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     section_id: v.sectionId,
-    ...(v.curriculumId !== undefined ? { curriculum_id: v.curriculumId } : {}),
-    ...(v.nodeId !== undefined ? { node_id: v.nodeId } : {}),
+    ...pickDefined(v, [
+      ['curriculumId', 'curriculum_id'],
+      ['nodeId', 'node_id'],
+    ]),
     node_title: v.nodeTitle,
   };
 }
 
 function sectionAnchorOutcomeInsertValues(v: NewSectionAnchorOutcome) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     anchor_id: v.anchorId,
-    ...(v.outcomeId !== undefined ? { outcome_id: v.outcomeId } : {}),
+    ...pickDefined(v, [['outcomeId', 'outcome_id']]),
     content: v.content,
-    ...(v.position !== undefined ? { position: v.position } : {}),
+    ...pickDefined(v, [['position', 'position']]),
   };
 }
 
 function sectionBookAnchorInsertValues(v: NewSectionBookAnchor) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     section_id: v.sectionId,
-    ...(v.bookId !== undefined ? { book_id: v.bookId } : {}),
-    ...(v.bookNodeId !== undefined ? { book_node_id: v.bookNodeId } : {}),
+    ...pickDefined(v, [
+      ['bookId', 'book_id'],
+      ['bookNodeId', 'book_node_id'],
+    ]),
     node_title: v.nodeTitle,
   };
 }
 
 function sectionBookItemInsertValues(v: NewSectionBookItem) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     anchor_id: v.anchorId,
-    ...(v.bookNodeId !== undefined ? { book_node_id: v.bookNodeId } : {}),
+    ...pickDefined(v, [['bookNodeId', 'book_node_id']]),
     title: v.title,
-    ...(v.position !== undefined ? { position: v.position } : {}),
+    ...pickDefined(v, [['position', 'position']]),
   };
 }
 
 function sectionBookItemOutcomeInsertValues(v: NewSectionBookItemOutcome) {
   return {
-    ...(v.id !== undefined ? { id: v.id } : {}),
+    ...pickDefined(v, [['id', 'id']]),
     item_id: v.itemId,
-    ...(v.outcomeId !== undefined ? { outcome_id: v.outcomeId } : {}),
+    ...pickDefined(v, [['outcomeId', 'outcome_id']]),
     content: v.content,
-    ...(v.position !== undefined ? { position: v.position } : {}),
+    ...pickDefined(v, [['position', 'position']]),
   };
 }
 

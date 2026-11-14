@@ -1,6 +1,7 @@
 import { sql, type ExpressionBuilder, type Insertable, type Updateable } from 'kysely';
 import type { UserListSortBy, UserListStatus } from '@giaokhoa/contracts';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
+import { applyDefined } from './mapping';
 
 export interface UserRow {
   id: string;
@@ -69,37 +70,41 @@ function userInsertValues(values: NewUser): Insertable<CentreDB['users']> {
     username: values.username,
     email: values.email,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.emailVerified !== undefined) row.email_verified = values.emailVerified;
-  if (values.image !== undefined) row.image = values.image;
-  if (values.passwordHash !== undefined) row.password_hash = values.passwordHash;
-  if (values.firstName !== undefined) row.first_name = values.firstName;
-  if (values.lastName !== undefined) row.last_name = values.lastName;
-  if (values.suspended !== undefined) row.suspended = values.suspended;
-  if (values.deleted !== undefined) row.deleted = values.deleted;
-  if (values.forcePasswordChange !== undefined) row.force_password_change = values.forcePasswordChange;
-  if (values.isGuest !== undefined) row.is_guest = values.isGuest;
-  if (values.lastLogin !== undefined) row.last_login = values.lastLogin;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['emailVerified', 'email_verified'],
+    ['image', 'image'],
+    ['passwordHash', 'password_hash'],
+    ['firstName', 'first_name'],
+    ['lastName', 'last_name'],
+    ['suspended', 'suspended'],
+    ['deleted', 'deleted'],
+    ['forcePasswordChange', 'force_password_change'],
+    ['isGuest', 'is_guest'],
+    ['lastLogin', 'last_login'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function userUpdateSet(patch: UserPatch): Updateable<CentreDB['users']> {
   const set: Updateable<CentreDB['users']> = {};
-  if (patch.username !== undefined) set.username = patch.username;
-  if (patch.email !== undefined) set.email = patch.email;
-  if (patch.emailVerified !== undefined) set.email_verified = patch.emailVerified;
-  if (patch.image !== undefined) set.image = patch.image;
-  if (patch.passwordHash !== undefined) set.password_hash = patch.passwordHash;
-  if (patch.firstName !== undefined) set.first_name = patch.firstName;
-  if (patch.lastName !== undefined) set.last_name = patch.lastName;
-  if (patch.suspended !== undefined) set.suspended = patch.suspended;
-  if (patch.deleted !== undefined) set.deleted = patch.deleted;
-  if (patch.forcePasswordChange !== undefined) set.force_password_change = patch.forcePasswordChange;
-  if (patch.isGuest !== undefined) set.is_guest = patch.isGuest;
-  if (patch.lastLogin !== undefined) set.last_login = patch.lastLogin;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['username', 'username'],
+    ['email', 'email'],
+    ['emailVerified', 'email_verified'],
+    ['image', 'image'],
+    ['passwordHash', 'password_hash'],
+    ['firstName', 'first_name'],
+    ['lastName', 'last_name'],
+    ['suspended', 'suspended'],
+    ['deleted', 'deleted'],
+    ['forcePasswordChange', 'force_password_change'],
+    ['isGuest', 'is_guest'],
+    ['lastLogin', 'last_login'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

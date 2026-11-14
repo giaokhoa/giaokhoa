@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
 import type { ControlPlaneDb, ControlPlaneTx, ControlPlaneDB } from '../client';
 import type { SchemaMigrationStep, SpaceRegistrySnapshot } from '../jsonb-types';
+import { applyDefined } from './mapping';
 
 export type CpTx = ControlPlaneTx;
 export type CpDb = ControlPlaneDb | ControlPlaneTx;
@@ -177,30 +178,34 @@ function spaceRegistryInsertValues(values: NewSpaceRegistration): Insertable<Con
     storage_mode: values.storageMode,
     connection_role_ref: values.connectionRoleRef,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.secretRef !== undefined) row.secret_ref = values.secretRef;
-  if (values.schemaVersion !== undefined) row.schema_version = values.schemaVersion;
-  if (values.plan !== undefined) row.plan = values.plan;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['secretRef', 'secret_ref'],
+    ['schemaVersion', 'schema_version'],
+    ['plan', 'plan'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function spaceRegistryUpdateSet(patch: Partial<NewSpaceRegistration>): Updateable<ControlPlaneDB['space_registry']> {
   const set: Updateable<ControlPlaneDB['space_registry']> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.slug !== undefined) set.slug = patch.slug;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.databaseName !== undefined) set.database_name = patch.databaseName;
-  if (patch.storageMode !== undefined) set.storage_mode = patch.storageMode;
-  if (patch.connectionRoleRef !== undefined) set.connection_role_ref = patch.connectionRoleRef;
-  if (patch.secretRef !== undefined) set.secret_ref = patch.secretRef;
-  if (patch.schemaVersion !== undefined) set.schema_version = patch.schemaVersion;
-  if (patch.plan !== undefined) set.plan = patch.plan;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['slug', 'slug'],
+    ['name', 'name'],
+    ['kind', 'kind'],
+    ['status', 'status'],
+    ['databaseName', 'database_name'],
+    ['storageMode', 'storage_mode'],
+    ['connectionRoleRef', 'connection_role_ref'],
+    ['secretRef', 'secret_ref'],
+    ['schemaVersion', 'schema_version'],
+    ['plan', 'plan'],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 
@@ -329,18 +334,22 @@ export class ControlPlaneRepository {
     db: CpDb = this.db(),
   ): Promise<SpaceSchemaRegistryRow> {
     const insert: Insertable<ControlPlaneDB['space_schema_registry']> = { space_id: values.spaceId };
-    if (values.currentVersion !== undefined) insert.current_version = values.currentVersion;
-    if (values.lastBackupStatus !== undefined) insert.last_backup_status = values.lastBackupStatus;
-    if (values.lastBackupAt !== undefined) insert.last_backup_at = values.lastBackupAt;
-    if (values.lastRestoreStatus !== undefined) insert.last_restore_status = values.lastRestoreStatus;
-    if (values.lastRestoreAt !== undefined) insert.last_restore_at = values.lastRestoreAt;
-    if (values.updatedAt !== undefined) insert.updated_at = values.updatedAt;
+    applyDefined(insert, values, [
+      ['currentVersion', 'current_version'],
+      ['lastBackupStatus', 'last_backup_status'],
+      ['lastBackupAt', 'last_backup_at'],
+      ['lastRestoreStatus', 'last_restore_status'],
+      ['lastRestoreAt', 'last_restore_at'],
+      ['updatedAt', 'updated_at'],
+    ]);
     const updateSet: Updateable<ControlPlaneDB['space_schema_registry']> = { updated_at: new Date() };
-    if (values.currentVersion !== undefined) updateSet.current_version = values.currentVersion;
-    if (values.lastBackupStatus !== undefined) updateSet.last_backup_status = values.lastBackupStatus;
-    if (values.lastBackupAt !== undefined) updateSet.last_backup_at = values.lastBackupAt;
-    if (values.lastRestoreStatus !== undefined) updateSet.last_restore_status = values.lastRestoreStatus;
-    if (values.lastRestoreAt !== undefined) updateSet.last_restore_at = values.lastRestoreAt;
+    applyDefined(updateSet, values, [
+      ['currentVersion', 'current_version'],
+      ['lastBackupStatus', 'last_backup_status'],
+      ['lastBackupAt', 'last_backup_at'],
+      ['lastRestoreStatus', 'last_restore_status'],
+      ['lastRestoreAt', 'last_restore_at'],
+    ]);
     const rows = await db
       .insertInto('space_schema_registry')
       .values(insert)
@@ -364,12 +373,14 @@ export class ControlPlaneRepository {
       run_id: values.runId,
       status: values.status,
     };
-    if (values.id !== undefined) insert.id = values.id;
-    if (values.fromVersion !== undefined) insert.from_version = values.fromVersion;
-    if (values.toVersion !== undefined) insert.to_version = values.toVersion;
-    if (values.steps !== undefined) insert.steps = jsonbValue(values.steps);
-    if (values.startedAt !== undefined) insert.started_at = values.startedAt;
-    if (values.finishedAt !== undefined) insert.finished_at = values.finishedAt;
+    applyDefined(insert, values, [
+      ['id', 'id'],
+      ['fromVersion', 'from_version'],
+      ['toVersion', 'to_version'],
+      ['steps', 'steps', (value) => jsonbValue(value)],
+      ['startedAt', 'started_at'],
+      ['finishedAt', 'finished_at'],
+    ]);
     const rows = await db
       .insertInto('space_schema_migration_runs')
       .values(insert)

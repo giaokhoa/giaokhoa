@@ -1,6 +1,7 @@
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type BackupDb = CentreDb | CentreTx;
 
@@ -112,35 +113,39 @@ function jobInsertValues(values: NewJob): InsertObject<CentreDB, 'backup_jobs'> 
     type: values.type,
     user_id: values.userId,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.scope !== undefined) row.scope = values.scope;
-  if (values.courseId !== undefined) row.course_id = values.courseId;
-  if (values.targetCourseId !== undefined) row.target_course_id = values.targetCourseId;
-  if (values.mode !== undefined) row.mode = values.mode;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.anonymize !== undefined) row.anonymize = values.anonymize;
-  if (values.archive !== undefined) row.archive = jsonbValue(values.archive);
-  if (values.error !== undefined) row.error = values.error;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.timeFinished !== undefined) row.time_finished = values.timeFinished;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['scope', 'scope'],
+    ['courseId', 'course_id'],
+    ['targetCourseId', 'target_course_id'],
+    ['mode', 'mode'],
+    ['status', 'status'],
+    ['anonymize', 'anonymize'],
+    ['archive', 'archive', (value) => jsonbValue(value)],
+    ['error', 'error'],
+    ['createdAt', 'created_at'],
+    ['timeFinished', 'time_finished'],
+  ]);
   return row;
 }
 
 function jobUpdateSet(patch: Partial<NewJob>): UpdateObject<CentreDB, 'backup_jobs'> {
   const set: UpdateObject<CentreDB, 'backup_jobs'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.type !== undefined) set.type = patch.type;
-  if (patch.scope !== undefined) set.scope = patch.scope;
-  if (patch.courseId !== undefined) set.course_id = patch.courseId;
-  if (patch.targetCourseId !== undefined) set.target_course_id = patch.targetCourseId;
-  if (patch.mode !== undefined) set.mode = patch.mode;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.anonymize !== undefined) set.anonymize = patch.anonymize;
-  if (patch.userId !== undefined) set.user_id = patch.userId;
-  if (patch.archive !== undefined) set.archive = jsonbValue(patch.archive);
-  if (patch.error !== undefined) set.error = patch.error;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.timeFinished !== undefined) set.time_finished = patch.timeFinished;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['type', 'type'],
+    ['scope', 'scope'],
+    ['courseId', 'course_id'],
+    ['targetCourseId', 'target_course_id'],
+    ['mode', 'mode'],
+    ['status', 'status'],
+    ['anonymize', 'anonymize'],
+    ['userId', 'user_id'],
+    ['archive', 'archive', (value) => jsonbValue(value)],
+    ['error', 'error'],
+    ['createdAt', 'created_at'],
+    ['timeFinished', 'time_finished'],
+  ]);
   return set;
 }
 
@@ -149,21 +154,25 @@ function stepInsertValues(values: NewStep): InsertObject<CentreDB, 'backup_job_s
     job_id: values.jobId,
     name: values.name,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.status !== undefined) row.status = values.status;
-  if (values.detail !== undefined) row.detail = jsonbValue(values.detail);
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['status', 'status'],
+    ['detail', 'detail', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
 function stepUpdateSet(patch: Partial<NewStep>): UpdateObject<CentreDB, 'backup_job_steps'> {
   const set: UpdateObject<CentreDB, 'backup_job_steps'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.jobId !== undefined) set.job_id = patch.jobId;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.detail !== undefined) set.detail = jsonbValue(patch.detail);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['jobId', 'job_id'],
+    ['name', 'name'],
+    ['status', 'status'],
+    ['detail', 'detail', (value) => jsonbValue(value)],
+    ['createdAt', 'created_at'],
+  ]);
   return set;
 }
 

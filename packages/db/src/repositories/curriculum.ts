@@ -2,6 +2,7 @@ import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kyse
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
 import type { JsonValue } from '../types/centre-db';
+import { applyDefined } from './mapping';
 
 export type CurriculumTx = CentreTx;
 type Db = CentreDb | CentreTx;
@@ -190,22 +191,26 @@ function subjectInsertValues(values: NewSubject): InsertObject<CentreDB, 'subjec
     name: values.name,
     slug: values.slug,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.position !== undefined) row.position = values.position;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['position', 'position'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function subjectUpdateSet(patch: Partial<NewSubject>): UpdateObject<CentreDB, 'subjects'> {
   const set: UpdateObject<CentreDB, 'subjects'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.contextId !== undefined) set.context_id = patch.contextId;
-  if (patch.name !== undefined) set.name = patch.name;
-  if (patch.slug !== undefined) set.slug = patch.slug;
-  if (patch.position !== undefined) set.position = patch.position;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['contextId', 'context_id'],
+    ['name', 'name'],
+    ['slug', 'slug'],
+    ['position', 'position'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -214,19 +219,23 @@ function curriculumInsertValues(values: NewCurriculum): InsertObject<CentreDB, '
     subject_id: values.subjectId,
     grade: values.grade,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function curriculumUpdateSet(patch: Partial<NewCurriculum>): UpdateObject<CentreDB, 'curricula'> {
   const set: UpdateObject<CentreDB, 'curricula'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.subjectId !== undefined) set.subject_id = patch.subjectId;
-  if (patch.grade !== undefined) set.grade = patch.grade;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['subjectId', 'subject_id'],
+    ['grade', 'grade'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -235,29 +244,33 @@ function curriculumNodeInsertValues(values: NewCurriculumNode): InsertObject<Cen
     curriculum_id: values.curriculumId,
     title: values.title,
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.parentId !== undefined) row.parent_id = values.parentId;
-  if (values.kind !== undefined) row.kind = values.kind;
-  if (values.position !== undefined) row.position = values.position;
-  if (values.durationPeriods !== undefined) row.duration_periods = values.durationPeriods;
-  if (values.durationPercent !== undefined) row.duration_percent = values.durationPercent;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['parentId', 'parent_id'],
+    ['kind', 'kind'],
+    ['position', 'position'],
+    ['durationPeriods', 'duration_periods'],
+    ['durationPercent', 'duration_percent'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function curriculumNodeUpdateSet(patch: Partial<NewCurriculumNode>): UpdateObject<CentreDB, 'curriculum_nodes'> {
   const set: UpdateObject<CentreDB, 'curriculum_nodes'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.curriculumId !== undefined) set.curriculum_id = patch.curriculumId;
-  if (patch.parentId !== undefined) set.parent_id = patch.parentId;
-  if (patch.title !== undefined) set.title = patch.title;
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.position !== undefined) set.position = patch.position;
-  if (patch.durationPeriods !== undefined) set.duration_periods = patch.durationPeriods;
-  if (patch.durationPercent !== undefined) set.duration_percent = patch.durationPercent;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['curriculumId', 'curriculum_id'],
+    ['parentId', 'parent_id'],
+    ['title', 'title'],
+    ['kind', 'kind'],
+    ['position', 'position'],
+    ['durationPeriods', 'duration_periods'],
+    ['durationPercent', 'duration_percent'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -266,31 +279,35 @@ function learningOutcomeInsertValues(values: NewLearningOutcome): InsertObject<C
     node_id: values.nodeId,
     content: jsonbValue(values.content),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
-  if (values.position !== undefined) row.position = values.position;
-  if (values.sourceKind !== undefined) row.source_kind = values.sourceKind;
-  if (values.sourceRef !== undefined) row.source_ref = values.sourceRef;
-  if (values.derivedFromId !== undefined) row.derived_from_id = values.derivedFromId;
-  if (values.retiredAt !== undefined) row.retired_at = values.retiredAt;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['tenantId', 'tenant_id'],
+    ['position', 'position'],
+    ['sourceKind', 'source_kind'],
+    ['sourceRef', 'source_ref'],
+    ['derivedFromId', 'derived_from_id'],
+    ['retiredAt', 'retired_at'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function learningOutcomeUpdateSet(patch: Partial<NewLearningOutcome>): UpdateObject<CentreDB, 'learning_outcomes'> {
   const set: UpdateObject<CentreDB, 'learning_outcomes'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.tenantId !== undefined) set.tenant_id = patch.tenantId;
-  if (patch.nodeId !== undefined) set.node_id = patch.nodeId;
-  if (patch.content !== undefined) set.content = jsonbValue(patch.content);
-  if (patch.position !== undefined) set.position = patch.position;
-  if (patch.sourceKind !== undefined) set.source_kind = patch.sourceKind;
-  if (patch.sourceRef !== undefined) set.source_ref = patch.sourceRef;
-  if (patch.derivedFromId !== undefined) set.derived_from_id = patch.derivedFromId;
-  if (patch.retiredAt !== undefined) set.retired_at = patch.retiredAt;
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['tenantId', 'tenant_id'],
+    ['nodeId', 'node_id'],
+    ['content', 'content', (value) => jsonbValue(value)],
+    ['position', 'position'],
+    ['sourceKind', 'source_kind'],
+    ['sourceRef', 'source_ref'],
+    ['derivedFromId', 'derived_from_id'],
+    ['retiredAt', 'retired_at'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 
@@ -304,24 +321,28 @@ function programRecordInsertValues(values: NewProgramRecord): InsertObject<Centr
     content_hash: values.contentHash,
     source: jsonbValue<JsonValue>(values.source as JsonValue),
   };
-  if (values.id !== undefined) row.id = values.id;
-  if (values.createdAt !== undefined) row.created_at = values.createdAt;
-  if (values.updatedAt !== undefined) row.updated_at = values.updatedAt;
+  applyDefined(row, values, [
+    ['id', 'id'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
 function programRecordUpdateSet(patch: Partial<NewProgramRecord>): UpdateObject<CentreDB, 'curriculum_program_records'> {
   const set: UpdateObject<CentreDB, 'curriculum_program_records'> = {};
-  if (patch.id !== undefined) set.id = patch.id;
-  if (patch.datasetKey !== undefined) set.dataset_key = patch.datasetKey;
-  if (patch.recordId !== undefined) set.record_id = patch.recordId;
-  if (patch.subjectId !== undefined) set.subject_id = patch.subjectId;
-  if (patch.curriculumId !== undefined) set.curriculum_id = patch.curriculumId;
-  if (patch.nodeId !== undefined) set.node_id = patch.nodeId;
-  if (patch.contentHash !== undefined) set.content_hash = patch.contentHash;
-  if (patch.source !== undefined) set.source = jsonbValue<JsonValue>(patch.source as JsonValue);
-  if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
-  if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
+  applyDefined(set, patch, [
+    ['id', 'id'],
+    ['datasetKey', 'dataset_key'],
+    ['recordId', 'record_id'],
+    ['subjectId', 'subject_id'],
+    ['curriculumId', 'curriculum_id'],
+    ['nodeId', 'node_id'],
+    ['contentHash', 'content_hash'],
+    ['source', 'source', (value) => jsonbValue<JsonValue>(value as JsonValue)],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return set;
 }
 

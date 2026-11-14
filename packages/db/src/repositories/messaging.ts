@@ -6,6 +6,7 @@ import {
   type SqlBool,
 } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
+import { applyDefined } from './mapping';
 
 
 export type MessagingDb = CentreDb | CentreTx;
@@ -403,19 +404,21 @@ const COURSE_GROUP_COLUMNS = [
 
 function conversationInsertValues(v: NewConversation): Insertable<CentreDB['message_conversations']> {
   const row: Insertable<CentreDB['message_conversations']> = {};
-  if (v.id !== undefined) row.id = v.id;
-  if (v.type !== undefined) row.type = v.type;
-  if (v.name !== undefined) row.name = v.name;
-  if (v.component !== undefined) row.component = v.component;
-  if (v.itemType !== undefined) row.item_type = v.itemType;
-  if (v.itemId !== undefined) row.item_id = v.itemId;
-  if (v.contextId !== undefined) row.context_id = v.contextId;
-  if (v.enabled !== undefined) row.enabled = v.enabled;
-  if (v.createdBy !== undefined) row.created_by = v.createdBy;
-  if (v.tenantId !== undefined) row.tenant_id = v.tenantId;
-  if (v.lastMessageSeq !== undefined) row.last_message_seq = v.lastMessageSeq;
-  if (v.createdAt !== undefined) row.created_at = v.createdAt;
-  if (v.updatedAt !== undefined) row.updated_at = v.updatedAt;
+  applyDefined(row, v, [
+    ['id', 'id'],
+    ['type', 'type'],
+    ['name', 'name'],
+    ['component', 'component'],
+    ['itemType', 'item_type'],
+    ['itemId', 'item_id'],
+    ['contextId', 'context_id'],
+    ['enabled', 'enabled'],
+    ['createdBy', 'created_by'],
+    ['tenantId', 'tenant_id'],
+    ['lastMessageSeq', 'last_message_seq'],
+    ['createdAt', 'created_at'],
+    ['updatedAt', 'updated_at'],
+  ]);
   return row;
 }
 
@@ -425,17 +428,19 @@ function messageInsertValues(v: NewMessage): Insertable<CentreDB['message']> {
     user_id_from: v.userIdFrom,
     seq: v.seq,
   };
-  if (v.id !== undefined) row.id = v.id;
-  if (v.subject !== undefined) row.subject = v.subject;
-  if (v.fullMessage !== undefined) row.full_message = v.fullMessage;
-  if (v.smallMessage !== undefined) row.small_message = v.smallMessage;
-  if (v.clientMessageId !== undefined) row.client_message_id = v.clientMessageId;
-  if (v.replyToMessageId !== undefined) row.reply_to_message_id = v.replyToMessageId;
-  if (v.deletedAt !== undefined) row.deleted_at = v.deletedAt;
-  if (v.deletedBy !== undefined) row.deleted_by = v.deletedBy;
-  if (v.recalledAt !== undefined) row.recalled_at = v.recalledAt;
-  if (v.recalledBy !== undefined) row.recalled_by = v.recalledBy;
-  if (v.createdAt !== undefined) row.created_at = v.createdAt;
+  applyDefined(row, v, [
+    ['id', 'id'],
+    ['subject', 'subject'],
+    ['fullMessage', 'full_message'],
+    ['smallMessage', 'small_message'],
+    ['clientMessageId', 'client_message_id'],
+    ['replyToMessageId', 'reply_to_message_id'],
+    ['deletedAt', 'deleted_at'],
+    ['deletedBy', 'deleted_by'],
+    ['recalledAt', 'recalled_at'],
+    ['recalledBy', 'recalled_by'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -443,18 +448,20 @@ function notificationInsertValues(v: NewNotification): Insertable<CentreDB['noti
   const row: Insertable<CentreDB['notifications']> = {
     user_id_to: v.userIdTo,
   };
-  if (v.id !== undefined) row.id = v.id;
-  if (v.userIdFrom !== undefined) row.user_id_from = v.userIdFrom;
-  if (v.tenantId !== undefined) row.tenant_id = v.tenantId;
-  if (v.subject !== undefined) row.subject = v.subject;
-  if (v.fullMessage !== undefined) row.full_message = v.fullMessage;
-  if (v.smallMessage !== undefined) row.small_message = v.smallMessage;
-  if (v.component !== undefined) row.component = v.component;
-  if (v.eventType !== undefined) row.event_type = v.eventType;
-  if (v.contextUrl !== undefined) row.context_url = v.contextUrl;
-  if (v.contextUrlName !== undefined) row.context_url_name = v.contextUrlName;
-  if (v.createdAt !== undefined) row.created_at = v.createdAt;
-  if (v.timeRead !== undefined) row.time_read = v.timeRead;
+  applyDefined(row, v, [
+    ['id', 'id'],
+    ['userIdFrom', 'user_id_from'],
+    ['tenantId', 'tenant_id'],
+    ['subject', 'subject'],
+    ['fullMessage', 'full_message'],
+    ['smallMessage', 'small_message'],
+    ['component', 'component'],
+    ['eventType', 'event_type'],
+    ['contextUrl', 'context_url'],
+    ['contextUrlName', 'context_url_name'],
+    ['createdAt', 'created_at'],
+    ['timeRead', 'time_read'],
+  ]);
   return row;
 }
 
@@ -463,12 +470,14 @@ function reportInsertValues(v: NewReport): Insertable<CentreDB['message_conversa
     conversation_id: v.conversationId,
     reporter_id: v.reporterId,
   };
-  if (v.id !== undefined) row.id = v.id;
-  if (v.reason !== undefined) row.reason = v.reason;
-  if (v.status !== undefined) row.status = v.status;
-  if (v.resolvedBy !== undefined) row.resolved_by = v.resolvedBy;
-  if (v.resolvedAt !== undefined) row.resolved_at = v.resolvedAt;
-  if (v.createdAt !== undefined) row.created_at = v.createdAt;
+  applyDefined(row, v, [
+    ['id', 'id'],
+    ['reason', 'reason'],
+    ['status', 'status'],
+    ['resolvedBy', 'resolved_by'],
+    ['resolvedAt', 'resolved_at'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
@@ -479,12 +488,14 @@ function dispatchLogInsertValues(v: NewDispatchLog): Insertable<CentreDB['notifi
     channel: v.channel,
     status: v.status,
   };
-  if (v.id !== undefined) row.id = v.id;
-  if (v.notificationId !== undefined) row.notification_id = v.notificationId;
-  if (v.tenantId !== undefined) row.tenant_id = v.tenantId;
-  if (v.subject !== undefined) row.subject = v.subject;
-  if (v.dedupeKey !== undefined) row.dedupe_key = v.dedupeKey;
-  if (v.createdAt !== undefined) row.created_at = v.createdAt;
+  applyDefined(row, v, [
+    ['id', 'id'],
+    ['notificationId', 'notification_id'],
+    ['tenantId', 'tenant_id'],
+    ['subject', 'subject'],
+    ['dedupeKey', 'dedupe_key'],
+    ['createdAt', 'created_at'],
+  ]);
   return row;
 }
 
