@@ -7,6 +7,8 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     fileParallelism: false,
+    globalSetup: ['./test/support/file-storage-global-setup.ts'],
+    setupFiles: ['./test/support/file-storage-setup.ts'],
     env: {
       DATABASE_URL: process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api',
       REDIS_URL: 'redis://localhost:6379',
