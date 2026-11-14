@@ -2,6 +2,8 @@ import { INestApplication } from '@nestjs/common';
 import { Client } from 'pg';
 import { TenantsService } from '../../../src/modules/tenants/tenants.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
+import { ContextsService } from '../../../src/modules/access/contexts.service';
+import { seedLegacyCentreInShared } from '../../support/pre-migration-tenant.fixture';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -50,10 +52,13 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
 
     const slugA = `ta-${uniqueName('a').toLowerCase()}`;
     const slugB = `tb-${uniqueName('b').toLowerCase()}`;
-    const createdA = await must(await http(app).post('/api/v1/tenants').set(auth(adminZero)).send({ name: 'Trường A (spec)', slug: slugA, kind: 'school' }), 'create tenant A') as { id: string };
-    const createdB = await must(await http(app).post('/api/v1/tenants').set(auth(adminZero)).send({ name: 'Trường B (spec)', slug: slugB, kind: 'school' }), 'create tenant B') as { id: string };
-    tenantA = createdA.id;
-    tenantB = createdB.id;
+    tenantA = await seedLegacyCentreInShared({ slug: slugA, name: 'Trường A (spec)' });
+    tenantB = await seedLegacyCentreInShared({ slug: slugB, name: 'Trường B (spec)' });
+    await tenantAls.run({ platform: true }, async () => {
+      const contexts = app.get(ContextsService);
+      await contexts.ensureTenantContext(tenantA);
+      await contexts.ensureTenantContext(tenantB);
+    });
 
     const teacher = await createUserViaApi(app, adminZero);
     teacherId = teacher.id;
@@ -139,11 +144,17 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     await app.close();
   });
 
-  it('(6) seed: có tenant-zero + tenant mặc định, admin là thành viên cả hai', async () => {
+  it('(6) trang chính tồn tại, không cho tạo trường mới trong kho chung', async () => {
     const tenants = await must(await http(app).get('/api/v1/tenants').set(auth(adminZero)), 'list tenants') as { slug: string }[];
     const slugs = tenants.map((t) => t.slug);
     expect(slugs).toContain('trang-chinh');
-    expect(slugs).toContain('truong-mac-dinh');
+    const deniedSlug = uniqueName('shared-forbidden').toLowerCase();
+    const denied = await http(app).post('/api/v1/tenants').set(auth(adminZero))
+      .send({ slug: deniedSlug, name: 'Trường không được tạo mới', kind: 'school' });
+    expect(denied.status).toBe(400);
+    expect((denied.body as { code?: string }).code).toBe('centre.provision_required');
+    const afterwards = await must(await http(app).get('/api/v1/tenants').set(auth(adminZero)), 'list tenants after denied create') as { slug: string }[];
+    expect(afterwards.map((t) => t.slug)).not.toContain(deniedSlug);
     const mine = await must(await http(app).get('/api/v1/auth/tenants').set(auth(adminZero)), 'my tenants') as { slug: string }[];
     const mineSlugs = mine.map((t) => t.slug);
     expect(mineSlugs).toEqual(['trang-chinh']);
