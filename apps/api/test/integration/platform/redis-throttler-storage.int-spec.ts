@@ -5,14 +5,18 @@ import { RedisThrottlerStorage } from '../../../src/common/redis-throttler.stora
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
 
+function makeStorage(): RedisThrottlerStorage {
+  const config = {
+    getOrThrow: () => process.env.REDIS_URL ?? 'redis://localhost:6379',
+  } as unknown as ConfigService;
+  return new RedisThrottlerStorage(config);
+}
+
 describe('Storage throttler Redis dùng chung cho mọi replica', () => {
   let storage: RedisThrottlerStorage;
 
   beforeAll(() => {
-    const config = {
-      getOrThrow: () => process.env.REDIS_URL ?? 'redis://localhost:6379',
-    } as unknown as ConfigService;
-    storage = new RedisThrottlerStorage(config);
+    storage = makeStorage();
   });
 
   afterAll(async () => {
@@ -56,5 +60,26 @@ describe('Storage throttler Redis dùng chung cho mọi replica', () => {
     expect(other.isBlocked).toBe(false);
     const blocked = await storage.increment(key, 5000, 1, 5000, 'int-test-a');
     expect(blocked.isBlocked).toBe(true);
+  });
+
+  it('hai replica đếm chung qua Redis: lượt trúng cộng dồn và block nhìn thấy từ replica còn lại', async () => {
+    const replica = makeStorage();
+    try {
+      const key = randomUUID();
+      const first = await storage.increment(key, 5000, 2, 5000, 'int-test-shared');
+      expect(first.totalHits).toBe(1);
+      expect(first.isBlocked).toBe(false);
+      const second = await replica.increment(key, 5000, 2, 5000, 'int-test-shared');
+      expect(second.totalHits).toBe(2);
+      expect(second.isBlocked).toBe(false);
+      const third = await storage.increment(key, 5000, 2, 5000, 'int-test-shared');
+      expect(third.totalHits).toBe(3);
+      expect(third.isBlocked).toBe(true);
+      const seen = await replica.increment(key, 5000, 2, 5000, 'int-test-shared');
+      expect(seen.totalHits).toBe(3);
+      expect(seen.isBlocked).toBe(true);
+    } finally {
+      await replica.onModuleDestroy();
+    }
   });
 });

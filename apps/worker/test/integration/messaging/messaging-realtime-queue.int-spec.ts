@@ -207,7 +207,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     const runtime = context.get(MessagingRealtimeRuntime);
     await runtime.distribution.distributeReadReceipt({ conversationId: convId, userId: b, lastReadSeq: 1 });
 
-    await waitUntil(() => eventsOf('wiring-a', 'message.read').length === 1, 10000, 'A nhận message.read từ runtime của Nest');
+    await waitUntil(() => eventsOf('wiring-a', 'message.read').length === 1, 10000, 'A did not receive message.read from the Nest runtime');
     expect(eventsOf('wiring-a', 'message.read')[0]!.payload).toEqual({ conversationId: convId, userId: b, lastReadSeq: 1 });
   });
 

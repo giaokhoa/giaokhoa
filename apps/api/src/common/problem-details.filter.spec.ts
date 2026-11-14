@@ -1,4 +1,4 @@
-import { ArgumentsHost, BadRequestException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, HttpException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { ProblemDetailsFilter } from './problem-details.filter';
 
@@ -53,6 +53,26 @@ describe('Khối ProblemDetailsFilter', () => {
     expect(body).toMatchObject({
       type: 'about:blank', title: 'Payload Too Large', status: 413,
       detail: 'File is too large', code: 'http.payload_too_large', instance: '/api/v1/things/1',
+    });
+  });
+
+  it.each([
+    [402, 'Payment Required', 'http.payment_required'],
+    [408, 'Request Timeout', 'http.request_timeout'],
+    [423, 'Locked', 'http.locked'],
+    [425, 'Too Early', 'http.too_early'],
+    [429, 'Too Many Requests', 'http.too_many_requests'],
+    [431, 'Request Header Fields Too Large', 'http.request_header_fields_too_large'],
+    [451, 'Unavailable For Legal Reasons', 'http.unavailable_for_legal_reasons'],
+    [501, 'Not Implemented', 'http.not_implemented'],
+    [507, 'Insufficient Storage', 'http.insufficient_storage'],
+    [511, 'Network Authentication Required', 'http.network_authentication_required'],
+  ] as const)('định dạng mã %s thành problem+json với title %s thay vì Error', (status, title, code) => {
+    const { status: statusFn, json } = runFilter(new HttpException('boom', status));
+    expect(statusFn).toHaveBeenCalledWith(status);
+    const body = json.mock.calls[0][0];
+    expect(body).toMatchObject({
+      type: 'about:blank', title, status, detail: 'boom', code, instance: '/api/v1/things/1',
     });
   });
 

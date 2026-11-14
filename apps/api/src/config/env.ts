@@ -2,6 +2,23 @@ import { readFileSync } from 'node:fs';
 import type { PoolConfig } from 'pg';
 import { z } from 'zod';
 
+export function parseTrustedOrigin(entry: string): string | null {
+  const trimmed = entry.trim().replace(/\/+$/, '');
+  if (trimmed.length === 0 || trimmed.includes('*')) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  if (
+    parsed.username !== '' || parsed.password !== '' || parsed.hostname === ''
+    || parsed.pathname !== '/' || parsed.search !== '' || parsed.hash !== ''
+  ) return null;
+  return parsed.origin;
+}
+
 export const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   CONTROL_PLANE_DATABASE_URL: z.string().min(1).optional(),
@@ -66,7 +83,11 @@ export const envSchema = z.object({
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(3000),
   RATE_LIMIT_REGISTRATION_PER_MINUTE: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().positive().default(300),
-  CORS_ORIGINS: z.string().min(1).default('http://localhost:5173'),
+  CORS_ORIGINS: z.string().min(1).default('http://localhost:5173')
+    .refine((raw) => raw.split(',').every((entry) => parseTrustedOrigin(entry) !== null), {
+      message: 'CORS_ORIGINS must be a comma-separated list of bare origins (scheme, host and optional port only, no path, query, wildcard or trailing slash)',
+    })
+    .transform((raw) => raw.split(',').map((entry) => parseTrustedOrigin(entry) as string).join(',')),
   WEB_DIST_DIR: z.string().optional(),
   FILE_STORAGE_DIR: z.string().min(1).default('./data/files'),
   FILE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().default(300),

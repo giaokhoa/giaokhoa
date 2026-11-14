@@ -11,6 +11,9 @@
     "model_not_found": "Không tìm thấy model phân tích",
     "provider_not_found": "Không tìm thấy provider phân tích đã đăng ký"
   },
+  "assign": {
+    "file_required": "Cần đính kèm file trong trường multipart \"file\""
+  },
   "auth": {
     "account_inactive": "Tài khoản chưa được kích hoạt",
     "account_suspended": "Tài khoản đã bị tạm khoá (suspended)",
@@ -152,11 +155,13 @@
     "user_not_enrolled": "Người dùng chưa ghi danh khoá này"
   },
   "file": {
+    "file_required": "Cần đính kèm file trong trường multipart \"file\"",
     "invalid_filename": "Tên file không hợp lệ",
     "not_found": "Không tìm thấy file",
     "signature_invalid": "Chữ ký truy cập file không hợp lệ hoặc đã hết hạn",
     "signature_missing": "Thiếu chữ ký truy cập file",
-    "snapshot_locked": "Không được xoá media thuộc bản chụp thi"
+    "snapshot_locked": "Không được xoá media thuộc bản chụp thi",
+    "type_mismatch": "Loại file không khớp với nội dung file"
   },
   "grades": {
     "bad_aggregation": "Phương thức tổng hợp điểm không hợp lệ",
