@@ -13,6 +13,12 @@ export { SUPPORTED_QTYPES } from './application/question-content-normalizer';
 export type {
   QuestionAnswerInput, QuestionOptionsInput, QuestionContentInput, SupportedQtype,
 } from './application/question-content-normalizer';
+import {
+  assertCategoryReadable, assertQuestionReadable, attemptNotFound, bankNotFound, canUseBank, categoryNotFound,
+  questionCurriculumLinkNotFound, questionEntryMissing, questionNotFound, questionVersionMissing,
+  questionVersionNotFound, requireCategoryWritable, requireQuestionWritable, stimulusNotFound, usageNotFound,
+  type ServiceGuardDeps,
+} from '../../common/service-guards';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -20,7 +26,7 @@ import { FilesService } from '../files/files.service';
 import { BEHAVIOURS, canTransition, gradeAnswer, gradedStateForFraction, usageState, type GradingData, type GradeOutcome, type QuestionState } from './domain/question-engine';
 import {
   QuestionsRepository, type AnswerKeyRow, type AnswerRow, type AttemptRow, type EntryRow, type EssayOptionsRow,
-  type MultichoiceOptionsRow, type QCategoryRow, type QuestionRow, type QuestionsTx,
+  type MultichoiceOptionsRow, type QCategoryRow, type QuestionBankRow, type QuestionRow, type QuestionsTx,
   type ShortanswerOptionsRow, type StepRow, type StimulusRow, type UsageRow, type VersionRow,
 } from '@giaokhoa/db/repositories/questions';
 
@@ -58,75 +64,25 @@ function isUniqueViolation(err: unknown): boolean {
 
 @Injectable()
 export class QuestionsService {
+  private readonly guardDeps: ServiceGuardDeps<QCategoryRow, QuestionRow, QuestionBankRow>;
+
   constructor(
     private readonly repo: QuestionsRepository,
     private readonly contexts: ContextsService,
     private readonly evaluator: PermissionEvaluator,
     private readonly outbox: OutboxService,
     private readonly files: FilesService,
-  ) {}
-
-  private async requireCap(actorId: string, capability: string, contextId: string): Promise<void> {
-    await this.evaluator.requireCapability(actorId, capability, contextId);
+  ) {
+    this.guardDeps = {
+      getCategory: (id) => this.repo.getCategory(id),
+      getQuestion: (id) => this.repo.getQuestion(id),
+      getBankById: (id) => this.repo.getBankById(id),
+      getBankByContextId: (contextId) => this.repo.getBankByContextId(contextId),
+      requireCapability: (actorId, capability, contextId) => this.evaluator.requireCapability(actorId, capability, contextId),
+      hasCapability: (actorId, capability, contextId) => this.evaluator.hasCapability(actorId, capability, contextId),
+      isSiteAdmin: (actorId) => this.evaluator.isSiteAdmin(actorId),
+    };
   }
-
-  private async canUseBank(actorId: string, contextId: string): Promise<boolean> {
-    const bank = await this.repo.getBankByContextId(contextId).catch(() => undefined);
-    if (bank && bank.scope === 'personal' && bank.ownerId !== actorId) {
-      const isAdmin = await this.evaluator.isSiteAdmin(actorId).catch(() => false);
-      if (!isAdmin) return false;
-    }
-    return this.evaluator.hasCapability(actorId, 'question:useall', contextId).catch(() => false);
-  }
-
-
-  private async bankOfCategory(category: QCategoryRow): Promise<{ scope: string; ownerId: string | null } | undefined> {
-    if (category.bankId) {
-      const byId = await this.repo.getBankById(category.bankId).catch(() => undefined);
-      if (byId) return byId;
-    }
-    return this.repo.getBankByContextId(category.contextId).catch(() => undefined);
-  }
-
-  private async assertCategoryNotForeignPersonal(
-    actorId: string,
-    category: QCategoryRow,
-    notFound: () => NotFoundException,
-  ): Promise<void> {
-    const bank = await this.bankOfCategory(category);
-    if (!bank || bank.scope !== 'personal' || bank.ownerId === actorId) return;
-    const isAdmin = await this.evaluator.isSiteAdmin(actorId).catch(() => false);
-    if (!isAdmin) throw notFound();
-  }
-
-  private categoryNotFound(id: string): NotFoundException {
-    return new NotFoundException({ message: `Question category ${id} not found`, code: 'question.category_not_found' });
-  }
-  private questionNotFound(id: string): NotFoundException {
-    return new NotFoundException({ message: `Question ${id} not found`, code: 'question.not_found' });
-  }
-  private stimulusNotFound(id: string): NotFoundException {
-    return new NotFoundException({ message: `Stimulus ${id} not found`, code: 'stimulus.not_found' });
-  }
-  private usageNotFound(id: string): NotFoundException {
-    return new NotFoundException({ message: `Question usage ${id} not found`, code: 'question.usage_not_found' });
-  }
-
-  private async assertQuestionReadable(actorId: string, questionId: string): Promise<QuestionRow> {
-    const q = await this.repo.getQuestion(questionId);
-    if (!q) throw this.questionNotFound(questionId);
-    const category = await this.repo.getCategory(q.category);
-    if (!category || !(await this.canUseBank(actorId, category.contextId))) throw this.questionNotFound(questionId);
-    return q;
-  }
-
-  private async assertCategoryReadable(actorId: string, categoryId: string): Promise<QCategoryRow> {
-    const category = await this.repo.getCategory(categoryId);
-    if (!category) throw this.categoryNotFound(categoryId);
-    if (!(await this.canUseBank(actorId, category.contextId))) throw this.categoryNotFound(categoryId);
-    return category;
-  }
-
 
   async createCategory(actorId: string, input: { name: string; contextId: string; info?: string; parent?: string; bankId?: string }): Promise<QCategoryRow> {
     const ctx = await this.contexts.getContext(input.contextId).catch(() => undefined);
@@ -139,15 +95,15 @@ export class QuestionsService {
     let attachedBank: Awaited<ReturnType<QuestionsRepository['getBankById']>>;
     if (input.bankId !== undefined) {
       attachedBank = await this.repo.getBankById(input.bankId);
-      if (!attachedBank) throw new NotFoundException({ message: `Question bank ${input.bankId} not found`, code: 'question.bank_not_found' });
+      if (!attachedBank) throw bankNotFound(input.bankId);
     }
     for (const candidate of [attachedBank, await this.repo.getBankByContextId(ctx.id).catch(() => undefined)]) {
       if (candidate && candidate.scope === 'personal' && candidate.ownerId !== actorId
         && !(await this.evaluator.isSiteAdmin(actorId).catch(() => false))) {
-        throw new NotFoundException({ message: `Question bank ${candidate.id} not found`, code: 'question.bank_not_found' });
+        throw bankNotFound(candidate.id);
       }
     }
-    await this.requireCap(actorId, 'question:managecategory', ctx.id);
+    await this.evaluator.requireCapability(actorId, 'question:managecategory', ctx.id);
     if (attachedBank) {
       if (attachedBank.contextId !== ctx.id) {
         throw new BadRequestException({ message: 'A category attached to a bank must live in the bank context', code: 'question.category_bank_context_mismatch' });
@@ -162,13 +118,13 @@ export class QuestionsService {
   async listCategories(contextId?: string): Promise<QCategoryRow[]> { return this.repo.listCategories(contextId); }
   async getCategory(id: string): Promise<QCategoryRow> {
     const row = await this.repo.getCategory(id);
-    if (!row) throw new NotFoundException({ message: `Question category ${id} not found`, code: 'question.category_not_found' });
+    if (!row) throw categoryNotFound(id);
     return row;
   }
 
   async listCategoriesForViewer(actorId: string, contextId?: string): Promise<QCategoryRow[]> {
     if (contextId !== undefined) {
-      if (!(await this.canUseBank(actorId, contextId))) throw this.categoryNotFound(contextId);
+      if (!(await canUseBank(this.guardDeps, actorId, contextId))) throw categoryNotFound(contextId);
       return this.repo.listCategories(contextId);
     }
     const rows = await this.repo.listCategories();
@@ -177,7 +133,7 @@ export class QuestionsService {
     for (const row of rows) {
       let ok = allowedByContext.get(row.contextId);
       if (ok === undefined) {
-        ok = await this.canUseBank(actorId, row.contextId);
+        ok = await canUseBank(this.guardDeps, actorId, row.contextId);
         allowedByContext.set(row.contextId, ok);
       }
       if (ok) out.push(row);
@@ -186,15 +142,13 @@ export class QuestionsService {
   }
 
   async listQuestionsForViewer(actorId: string, categoryId: string): Promise<QuestionView[]> {
-    await this.assertCategoryReadable(actorId, categoryId);
+    await assertCategoryReadable(this.guardDeps, actorId, categoryId);
     return this.listQuestions(categoryId);
   }
 
 
   async createStimulus(actorId: string, input: { categoryId: string; content: RichTextInput }): Promise<StimulusRow> {
-    const category = await this.getCategory(input.categoryId);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.categoryNotFound(input.categoryId));
-    await this.requireCap(actorId, 'question:add', category.contextId);
+    const category = await requireCategoryWritable(this.guardDeps, actorId, input.categoryId, 'question:add', () => categoryNotFound(input.categoryId));
     const row = await this.repo.insertStimulus({
       categoryId: category.id, createdBy: actorId, content: toRichTextDocument(input.content) as never,
     });
@@ -203,21 +157,21 @@ export class QuestionsService {
   }
   async getStimulus(id: string): Promise<StimulusRow> {
     const row = await this.repo.getStimulus(id);
-    if (!row) throw new NotFoundException({ message: `Stimulus ${id} not found`, code: 'stimulus.not_found' });
+    if (!row) throw stimulusNotFound(id);
     return row;
   }
   async listStimuli(categoryId: string): Promise<StimulusRow[]> { return this.repo.listStimuliInCategory(categoryId); }
 
   async listStimuliForViewer(actorId: string, categoryId: string): Promise<StimulusRow[]> {
-    await this.assertCategoryReadable(actorId, categoryId);
+    await assertCategoryReadable(this.guardDeps, actorId, categoryId);
     return this.repo.listStimuliInCategory(categoryId);
   }
 
   async getStimulusForViewer(actorId: string, id: string): Promise<StimulusRow> {
     const row = await this.repo.getStimulus(id);
-    if (!row) throw this.stimulusNotFound(id);
+    if (!row) throw stimulusNotFound(id);
     const category = await this.repo.getCategory(row.categoryId);
-    if (!category || !(await this.canUseBank(actorId, category.contextId))) throw this.stimulusNotFound(id);
+    if (!category || !(await canUseBank(this.guardDeps, actorId, category.contextId))) throw stimulusNotFound(id);
     return row;
   }
 
@@ -232,9 +186,7 @@ export class QuestionsService {
   }
   async updateStimulus(actorId: string, id: string, input: { content: RichTextInput }): Promise<StimulusRow> {
     const stimulus = await this.getStimulus(id);
-    const category = await this.getCategory(stimulus.categoryId);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.stimulusNotFound(id));
-    await this.requireCap(actorId, 'question:editall', category.contextId);
+    await requireCategoryWritable(this.guardDeps, actorId, stimulus.categoryId, 'question:editall', () => stimulusNotFound(id));
     await this.requireStimulusMutable(stimulus);
     await this.repo.updateStimulus(id, { content: toRichTextDocument(input.content) as never });
     await this.outbox.enqueueStandalone({ aggregate: 'stimulus', type: 'stimulus_updated', payload: { stimulusId: id } });
@@ -242,9 +194,7 @@ export class QuestionsService {
   }
   async deleteStimulus(actorId: string, id: string): Promise<void> {
     const stimulus = await this.getStimulus(id);
-    const category = await this.getCategory(stimulus.categoryId);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.stimulusNotFound(id));
-    await this.requireCap(actorId, 'question:editall', category.contextId);
+    await requireCategoryWritable(this.guardDeps, actorId, stimulus.categoryId, 'question:editall', () => stimulusNotFound(id));
     await this.requireStimulusMutable(stimulus);
     await this.repo.deleteStimulus(id);
     await this.outbox.enqueueStandalone({ aggregate: 'stimulus', type: 'stimulus_deleted', payload: { stimulusId: id } });
@@ -388,8 +338,8 @@ export class QuestionsService {
     const versionByEntry = new Map(versions.map((v) => [v.questionBankEntryId, v]));
     for (const q of rows) {
       const entry = entryByQuestion.get(q.id);
-      if (!entry) throw new NotFoundException({ message: `Question ${q.id} has no bank entry`, code: 'question.entry_missing' });
-      if (!versionByEntry.has(entry.id)) throw new NotFoundException({ message: `Question ${q.id} latest version missing`, code: 'question.version_missing' });
+      if (!entry) throw questionEntryMissing(q.id);
+      if (!versionByEntry.has(entry.id)) throw questionVersionMissing(q.id);
     }
     const versionIds = versions.map((v) => v.id);
     const answers = await this.repo.listAnswersByVersions(versionIds);
@@ -473,9 +423,7 @@ export class QuestionsService {
     categoryId: string; qtype: string;
     sourceKind?: string; sourceRef?: string;
   } & QuestionContentInput): Promise<QuestionView> {
-    const category = await this.getCategory(input.categoryId);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.categoryNotFound(input.categoryId));
-    await this.requireCap(actorId, 'question:add', category.contextId);
+    const category = await requireCategoryWritable(this.guardDeps, actorId, input.categoryId, 'question:add', () => categoryNotFound(input.categoryId));
     assertSupportedQtype(input.qtype);
     const content = normaliseQuestionContent(input.qtype, input);
     const stimulus = input.stimulusId ? await this.resolveStimulus(input.stimulusId, category.id) : null;
@@ -498,9 +446,7 @@ export class QuestionsService {
     }>,
     finish: (tx: QuestionsTx, copies: Array<{ questionId: string; versionId: string }>) => Promise<T>,
   ): Promise<T> {
-    const category = await this.getCategory(categoryId);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.categoryNotFound(categoryId));
-    await this.requireCap(actorId, 'question:add', category.contextId);
+    const category = await requireCategoryWritable(this.guardDeps, actorId, categoryId, 'question:add', () => categoryNotFound(categoryId));
     const prepared = items.map((item) => {
       assertSupportedQtype(item.qtype);
       return { ...item, normalised: normaliseQuestionContent(item.qtype, item.content) };
@@ -551,9 +497,7 @@ export class QuestionsService {
       } & QuestionContentInput)[];
     },
   ): Promise<{ stimulus: StimulusRow; questions: QuestionView[] }> {
-    const category = await this.getCategory(input.categoryId);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.categoryNotFound(input.categoryId));
-    await this.requireCap(actorId, 'question:add', category.contextId);
+    const category = await requireCategoryWritable(this.guardDeps, actorId, input.categoryId, 'question:add', () => categoryNotFound(input.categoryId));
     const prepared = input.questions.map((question) => {
       assertSupportedQtype(question.qtype);
       return { question, content: normaliseQuestionContent(question.qtype, question) };
@@ -578,11 +522,11 @@ export class QuestionsService {
 
   async getQuestion(id: string): Promise<QuestionView> {
     const q = await this.repo.getQuestion(id);
-    if (!q) throw new NotFoundException({ message: `Question ${id} not found`, code: 'question.not_found' });
+    if (!q) throw questionNotFound(id);
     const entry = await this.repo.getEntryByQuestion(id);
-    if (!entry) throw new NotFoundException({ message: `Question ${id} has no bank entry`, code: 'question.entry_missing' });
+    if (!entry) throw questionEntryMissing(id);
     const latest = await this.repo.getVersionByNumber(entry.id, entry.latestVersion);
-    if (!latest) throw new NotFoundException({ message: `Question ${id} latest version missing`, code: 'question.version_missing' });
+    if (!latest) throw questionVersionMissing(id);
     return this.assembleView(q, entry, latest);
   }
   async listQuestions(categoryId: string): Promise<QuestionView[]> {
@@ -591,12 +535,12 @@ export class QuestionsService {
   }
   async listVersions(questionId: string): Promise<VersionRow[]> {
     const entry = await this.repo.getEntryByQuestion(questionId);
-    if (!entry) throw new NotFoundException({ message: `Question ${questionId} has no bank entry`, code: 'question.entry_missing' });
+    if (!entry) throw questionEntryMissing(questionId);
     return this.repo.listVersions(entry.id);
   }
 
   async getQuestionForViewer(actorId: string, id: string): Promise<QuestionView> {
-    await this.assertQuestionReadable(actorId, id);
+    await assertQuestionReadable(this.guardDeps, actorId, id);
     const view = await this.getQuestion(id);
     return this.resolveQuestionImages(view);
   }
@@ -628,7 +572,7 @@ export class QuestionsService {
   }
 
   async listVersionsForViewer(actorId: string, questionId: string): Promise<VersionRow[]> {
-    await this.assertQuestionReadable(actorId, questionId);
+    await assertQuestionReadable(this.guardDeps, actorId, questionId);
     return this.listVersions(questionId);
   }
   async getAttemptContent(attempt: AttemptRow) {
@@ -651,10 +595,10 @@ export class QuestionsService {
 
   async getVersionContent(questionId: string, versionId: string): Promise<{ version: VersionRow; answers: AnswerRow[]; answerKey: { guidance: unknown; solution: unknown }; options: Record<string, unknown> | null }> {
     const q = await this.repo.getQuestion(questionId);
-    if (!q) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!q) throw questionNotFound(questionId);
     const version = await this.repo.getVersion(versionId);
     if (!version || version.questionId !== questionId) {
-      throw new NotFoundException({ message: `Question version ${versionId} not found`, code: 'question.version_missing' });
+      throw questionVersionNotFound(versionId);
     }
     const answers = await this.repo.listAnswers(version.id);
     const answerKey = await this.answerKeyOf(version.id);
@@ -664,9 +608,7 @@ export class QuestionsService {
 
   async updateQuestion(actorId: string, questionId: string, input: QuestionContentInput): Promise<QuestionView> {
     const { question: q, entry, latestVersion } = await this.getQuestion(questionId);
-    const category = await this.getCategory(q.category);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.questionNotFound(questionId));
-    await this.requireCap(actorId, 'question:editall', category.contextId);
+    const category = await requireCategoryWritable(this.guardDeps, actorId, q.category, 'question:editall', () => questionNotFound(questionId));
     assertSupportedQtype(q.qtype);
     const hasNewContent = input.answers !== undefined || input.options !== undefined
       || (q.qtype === 'truefalse' && (input.questionText !== undefined || input.solution !== undefined));
@@ -732,23 +674,14 @@ export class QuestionsService {
   }
 
 
-  private async questionForEdit(actorId: string, questionId: string): Promise<QuestionRow> {
-    const q = await this.repo.getQuestion(questionId);
-    if (!q) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
-    const category = await this.getCategory(q.category);
-    await this.assertCategoryNotForeignPersonal(actorId, category, () => this.questionNotFound(questionId));
-    await this.requireCap(actorId, 'question:editall', category.contextId);
-    return q;
-  }
-
   async getCurriculumLinksForViewer(actorId: string, questionId: string): Promise<QuestionCurriculumLinksView> {
-    await this.assertQuestionReadable(actorId, questionId);
+    await assertQuestionReadable(this.guardDeps, actorId, questionId);
     return this.getCurriculumLinks(questionId);
   }
 
   async getCurriculumLinks(questionId: string): Promise<QuestionCurriculumLinksView> {
     const q = await this.repo.getQuestion(questionId);
-    if (!q) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!q) throw questionNotFound(questionId);
     const subjectLinks = await this.repo.listQuestionSubjectLinks(questionId);
     const outcomeLinks = await this.repo.listQuestionOutcomeLinks(questionId);
     return {
@@ -759,7 +692,7 @@ export class QuestionsService {
   }
 
   async attachSubject(actorId: string, questionId: string, subjectId: string): Promise<QuestionCurriculumLinksView> {
-    await this.questionForEdit(actorId, questionId);
+    await requireQuestionWritable(this.guardDeps, actorId, questionId, 'question:editall');
     const subject = await this.repo.getSubjectRow(subjectId);
     if (!subject) throw new NotFoundException({ message: `Subject ${subjectId} not found`, code: 'curriculum.subject_not_found' });
     if (await this.repo.getQuestionSubjectLink(questionId, subjectId)) {
@@ -777,15 +710,15 @@ export class QuestionsService {
   }
 
   async detachSubject(actorId: string, questionId: string, subjectId: string): Promise<QuestionCurriculumLinksView> {
-    await this.questionForEdit(actorId, questionId);
+    await requireQuestionWritable(this.guardDeps, actorId, questionId, 'question:editall');
     if (!(await this.repo.deleteQuestionSubjectLink(questionId, subjectId))) {
-      throw new NotFoundException({ message: 'Question is not linked to this subject', code: 'question.subject_link_not_found' });
+      throw questionCurriculumLinkNotFound('subject');
     }
     return this.getCurriculumLinks(questionId);
   }
 
   async attachOutcome(actorId: string, questionId: string, outcomeId: string, cognitiveLevel: string): Promise<QuestionCurriculumLinksView> {
-    await this.questionForEdit(actorId, questionId);
+    await requireQuestionWritable(this.guardDeps, actorId, questionId, 'question:editall');
     const chain = await this.repo.getOutcomeChain(outcomeId);
     if (!chain) throw new NotFoundException({ message: `Learning outcome ${outcomeId} not found`, code: 'curriculum.outcome_not_found' });
     if (await this.repo.getQuestionOutcomeLink(questionId, outcomeId)) {
@@ -803,18 +736,18 @@ export class QuestionsService {
   }
 
   async updateOutcomeLink(actorId: string, questionId: string, outcomeId: string, cognitiveLevel: string): Promise<QuestionCurriculumLinksView> {
-    await this.questionForEdit(actorId, questionId);
+    await requireQuestionWritable(this.guardDeps, actorId, questionId, 'question:editall');
     if (!(await this.repo.getQuestionOutcomeLink(questionId, outcomeId))) {
-      throw new NotFoundException({ message: 'Question is not linked to this learning outcome', code: 'question.outcome_link_not_found' });
+      throw questionCurriculumLinkNotFound('outcome');
     }
     await this.repo.updateQuestionOutcomeLink(questionId, outcomeId, cognitiveLevel);
     return this.getCurriculumLinks(questionId);
   }
 
   async detachOutcome(actorId: string, questionId: string, outcomeId: string): Promise<QuestionCurriculumLinksView> {
-    await this.questionForEdit(actorId, questionId);
+    await requireQuestionWritable(this.guardDeps, actorId, questionId, 'question:editall');
     if (!(await this.repo.deleteQuestionOutcomeLink(questionId, outcomeId))) {
-      throw new NotFoundException({ message: 'Question is not linked to this learning outcome', code: 'question.outcome_link_not_found' });
+      throw questionCurriculumLinkNotFound('outcome');
     }
     return this.getCurriculumLinks(questionId);
   }
@@ -858,7 +791,7 @@ export class QuestionsService {
       let ok = readableByCategory.get(q.category);
       if (ok === undefined) {
         const category = await this.repo.getCategory(q.category);
-        ok = category !== undefined && (await this.canUseBank(actorId, category.contextId));
+        ok = category !== undefined && (await canUseBank(this.guardDeps, actorId, category.contextId));
         readableByCategory.set(q.category, ok);
       }
       if (ok) included.push(q);
@@ -935,33 +868,33 @@ export class QuestionsService {
     const allowedByContext = new Map<string, boolean>();
     for (const questionId of questionIds) {
       const q = await this.repo.getQuestion(questionId);
-      if (!q) throw this.questionNotFound(questionId);
+      if (!q) throw questionNotFound(questionId);
       const category = await this.repo.getCategory(q.category);
-      if (!category) throw this.questionNotFound(questionId);
+      if (!category) throw questionNotFound(questionId);
       let ok = allowedByContext.get(category.contextId);
       if (ok === undefined) {
-        ok = await this.canUseBank(actorId, category.contextId);
+        ok = await canUseBank(this.guardDeps, actorId, category.contextId);
         allowedByContext.set(category.contextId, ok);
       }
-      if (!ok) throw this.questionNotFound(questionId);
+      if (!ok) throw questionNotFound(questionId);
     }
   }
 
   async getUsageForViewer(actorId: string, id: string): Promise<UsageView> {
     const usage = await this.repo.getUsage(id);
-    if (!usage) throw this.usageNotFound(id);
+    if (!usage) throw usageNotFound(id);
     if (usage.userId !== actorId) {
       const system = await this.contexts.ensureSystemContext();
-      if (!(await this.canUseBank(actorId, system.id))) throw this.usageNotFound(id);
+      if (!(await canUseBank(this.guardDeps, actorId, system.id))) throw usageNotFound(id);
     }
-    if (await this.repo.usageHasSnapshots(id)) throw this.usageNotFound(id);
+    if (await this.repo.usageHasSnapshots(id)) throw usageNotFound(id);
     return this.getUsage(id);
   }
 
   async getUsage(id: string): Promise<UsageView> {
     const usages = await this.getUsages([id]);
     const view = usages.get(id);
-    if (!view) throw new NotFoundException({ message: `Question usage ${id} not found`, code: 'question.usage_not_found' });
+    if (!view) throw usageNotFound(id);
     return view;
   }
 
@@ -1025,7 +958,7 @@ export class QuestionsService {
   }
   async getAttempt(id: string): Promise<AttemptRow> {
     const row = await this.repo.getAttempt(id);
-    if (!row) throw new NotFoundException({ message: `Question attempt ${id} not found`, code: 'question.attempt_not_found' });
+    if (!row) throw attemptNotFound(id);
     return row;
   }
 
@@ -1093,13 +1026,13 @@ export class QuestionsService {
   private async requireOwnedUsage(userId: string, usageId: string): Promise<void> {
     const usage = await this.repo.getUsage(usageId);
     if (!usage || usage.userId !== userId) {
-      throw new NotFoundException({ message: `Question usage ${usageId} not found`, code: 'question.usage_not_found' });
+      throw usageNotFound(usageId);
     }
   }
   private async requireOwnedAttempt(userId: string, attempt: AttemptRow): Promise<void> {
     const usage = await this.repo.getUsage(attempt.questionUsageId);
     if (!usage || usage.userId !== userId) {
-      throw new NotFoundException({ message: `Question attempt ${attempt.id} not found`, code: 'question.attempt_not_found' });
+      throw attemptNotFound(attempt.id);
     }
   }
 
@@ -1119,11 +1052,11 @@ export class QuestionsService {
   async assertAttemptManipulableViaHttp(actorId: string, usageId: string, attemptId: string): Promise<void> {
     const attempt = await this.repo.getAttempt(attemptId);
     if (!attempt || attempt.questionUsageId !== usageId) {
-      throw new NotFoundException({ message: `Question attempt ${attemptId} not found`, code: 'question.attempt_not_found' });
+      throw attemptNotFound(attemptId);
     }
     const usage = await this.repo.getUsage(usageId);
     if (!usage || usage.userId !== actorId) {
-      throw new NotFoundException({ message: `Question attempt ${attemptId} not found`, code: 'question.attempt_not_found' });
+      throw attemptNotFound(attemptId);
     }
     await this.requireNotLockedByQuizAttempt(usageId);
   }
@@ -1138,7 +1071,7 @@ export class QuestionsService {
       const versions = await this.repo.listVersions(entry.id);
       const ready = versions.filter((v) => v.status === 'ready');
       const chosen = ready.length ? ready[ready.length - 1]! : (entry.status === 'draft' ? undefined : versions[versions.length - 1]);
-      if (!chosen) throw new NotFoundException({ message: `Question ${attempt.questionId} latest version missing`, code: 'question.version_missing' });
+      if (!chosen) throw questionVersionMissing(attempt.questionId);
       pinnedVersionId = chosen.id;
     }
     await this.repo.updateAttempt(attempt.id, { state: 'todo', questionVersionId: pinnedVersionId, userId: userId });
@@ -1300,7 +1233,7 @@ export class QuestionsService {
     }
     const version = await this.repo.getVersion(toVersionId);
     if (!version || version.questionId !== attempt.questionId) {
-      throw new NotFoundException({ message: `Question version ${toVersionId} not found for question ${attempt.questionId}`, code: 'question.version_not_found' });
+      throw questionVersionNotFound(toVersionId, attempt.questionId);
     }
     if (version.status !== 'ready') {
       throw new BadRequestException({
