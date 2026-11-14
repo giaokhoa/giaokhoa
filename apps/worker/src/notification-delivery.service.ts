@@ -253,7 +253,7 @@ export class NotificationDeliveryService implements OnModuleDestroy {
   async notify(userId: string, providerName: string, input: {
     subject: string; body: string; contextUrl?: string; fromUserId?: string;
     externalSubject?: string; externalBody?: string; tenantId?: string | null;
-    courseId?: string | null;
+    courseId?: string | null; eventId?: string;
   }): Promise<{ notificationId: string | null; channels: Record<string, string>; skipped?: string }> {
     const provider = WORKER_PROVIDERS[providerName];
     if (!provider) return { notificationId: null, channels: {}, skipped: 'unknown-provider' };
@@ -289,8 +289,9 @@ export class NotificationDeliveryService implements OnModuleDestroy {
         channels['email'] = 'skipped-preference';
       } else {
         const external = this.resolveExternalContent(providerName, emailLaw, input);
-        const emailContentHash = createHash('sha256').update(JSON.stringify([external.subject, external.body])).digest('hex');
-        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${notificationId ?? emailContentHash}`;
+        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body])).digest('hex');
+        const eventKey = notificationId ?? (input.eventId ? `event-${input.eventId}` : `content-${inAppContentHash}`);
+        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${eventKey}`;
         await this.dispatchQueue.add('dispatch', {
           userId, provider: providerName, channel: 'email', tenantId,
           emailFrequency: frequency, subject: external.subject, body: external.body,

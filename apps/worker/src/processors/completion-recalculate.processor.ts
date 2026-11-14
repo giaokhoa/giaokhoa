@@ -1,4 +1,5 @@
 import { InjectQueue, Processor } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job, Queue } from 'bullmq';
@@ -16,6 +17,8 @@ const ENROL_WITHDRAWN = 2;
 
 
 export class CompletionRecalculateProcessor extends ObservedWorkerHost {
+  private readonly logger = new Logger(CompletionRecalculateProcessor.name);
+
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly jobRunner: SpaceJobRunner,
@@ -197,7 +200,9 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
 
         await this.recalcQueue.add('recalculate', { courseId: dependentId,
           spaceSlug: job.data.spaceSlug, spaceId: job.data.spaceId, tenantId: job.data.tenantId },
-          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}`, attempts: 3 }).catch(() => undefined);
+          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}`, attempts: 3, removeOnComplete: true }).catch((error: unknown) => {
+          this.logger.error(`Failed to enqueue completion recalculation for dependent course ${dependentId}: ${error instanceof Error ? error.message : 'unknown error'}`);
+        });
       }
     }
     return { courseId, users: userIds.size, completedUsers };

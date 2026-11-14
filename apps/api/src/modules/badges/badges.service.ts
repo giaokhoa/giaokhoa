@@ -70,7 +70,7 @@ export class BadgesService implements OnModuleInit {
     await this.awardQueue.add('evaluate', { userId, trigger, ...backgroundJobContext() }, {
 
 
-      jobId: backgroundJobId(`badge-award-${userId}-${trigger}-${randomUUID()}`),
+      jobId: backgroundJobId(`badge-award-${userId}-${trigger}`),
       attempts: 3, removeOnComplete: true,
     }).catch(() => undefined);
   }

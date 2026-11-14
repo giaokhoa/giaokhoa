@@ -63,6 +63,7 @@ export class NotificationEventsHandlerService {
       contextUrl: `/courses/${item.courseId}/grades`,
       courseId: item.courseId,
       tenantId: await this.resolveCourseTenantId(payload, item.courseId, userId),
+      eventId: `grade-${itemId}-${finalGrade}`,
     });
   }
 

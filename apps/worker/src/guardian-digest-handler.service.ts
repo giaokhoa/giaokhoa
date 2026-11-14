@@ -77,6 +77,7 @@ export class GuardianDigestHandlerService {
       externalSubject: this.t('platform.guardianDigestExternalSubject'),
       externalBody: this.t('platform.guardianDigestExternalBody'),
       tenantId: link.tenantId,
+      eventId: payload.digestId,
     });
     await this.sendZaloNotice({ guardianUserId: guardianId, studentUserId: studentId, kind: payload.kind, deepLink })
       .catch((error: Error) => this.logger.warn(`Seam Zalo (log-only) lỗi: ${error.message}`));
@@ -120,6 +121,7 @@ export class GuardianDigestHandlerService {
       externalSubject: this.t('platform.guardianOverdueAlertExternalSubject'),
       externalBody: this.t('platform.guardianOverdueAlertExternalBody'),
       tenantId: link.tenantId,
+      eventId: `${payload.digestId}-${payload.cmId}`,
     });
     await this.sendZaloNotice({ guardianUserId: guardianId, studentUserId: studentId, kind: 'overdue_alert', deepLink })
       .catch((error: Error) => this.logger.warn(`Seam Zalo (log-only) lỗi: ${error.message}`));

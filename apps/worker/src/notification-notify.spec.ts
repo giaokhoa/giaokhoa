@@ -129,7 +129,7 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     expect(insertedOutbox).toHaveLength(0);
   });
 
-  it('popup tắt theo tuỳ chọn v2: vẫn xếp job email với notificationId null và dedupeKey ổn định từ hash nội dung email', async () => {
+  it('popup tắt theo tuỳ chọn v2: vẫn xếp job email với notificationId null và dedupeKey ổn định từ hash nội dung trong app', async () => {
     const first = buildNotify({
       user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
     });
@@ -138,8 +138,8 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     expect(firstResult.channels).toEqual({ popup: 'skipped-preference', email: 'queued' });
     const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
     expect(firstJobData.notificationId).toBeNull();
-    const contentHash = createHash('sha256').update(JSON.stringify([DIGEST_INPUT.externalSubject, DIGEST_INPUT.externalBody])).digest('hex');
-    expect(firstJobData.dedupeKey).toBe(`tenant-1-dispatch-guardian_digest-user-guardian-email-${contentHash}`);
+    const contentHash = createHash('sha256').update(JSON.stringify([DIGEST_INPUT.subject, DIGEST_INPUT.body])).digest('hex');
+    expect(firstJobData.dedupeKey).toBe(`tenant-1-dispatch-guardian_digest-user-guardian-email-content-${contentHash}`);
     const second = buildNotify({
       user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
     });
@@ -147,6 +147,54 @@ describe('NotificationDeliveryService.notify — bề mặt phát trọn phía w
     const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
     expect(secondJobData.dedupeKey).toBe(firstJobData.dedupeKey);
     expect(sqlPayloadOf(first.insertedOutbox[0]?.payload)).toMatchObject({ notificationId: null });
+  });
+
+  it('popup tắt, digest chu kỳ 2 có digestId khác: vẫn xếp job email vì dedupeKey mang định danh lần phát', async () => {
+    const first = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await first.delivery.notify('user-guardian', 'guardian_digest', { ...DIGEST_INPUT, eventId: 'digest-1' });
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(firstJobData.dedupeKey).toBe('tenant-1-dispatch-guardian_digest-user-guardian-email-event-digest-1');
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'guardian_digest', { ...DIGEST_INPUT, eventId: 'digest-2' });
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).toBe('tenant-1-dispatch-guardian_digest-user-guardian-email-event-digest-2');
+    expect(secondJobData.dedupeKey).not.toBe(firstJobData.dedupeKey);
+  });
+
+  it('popup tắt, cùng một lần phát gọi lại (cùng eventId): dedupeKey không đổi nên lần phát lại không gửi trùng', async () => {
+    const first = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await first.delivery.notify('user-guardian', 'guardian_digest', { ...DIGEST_INPUT, eventId: 'digest-1' });
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'guardian_digest', { ...DIGEST_INPUT, eventId: 'digest-1' });
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).toBe(firstJobData.dedupeKey);
+  });
+
+  it('popup tắt, không có eventId nhưng nội dung trong app khác: dedupeKey khác nên lần phát khác không bị nuốt', async () => {
+    const first = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await first.delivery.notify('user-guardian', 'guardian_digest', DIGEST_INPUT);
+    const [, firstJobData] = first.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    const second = buildNotify({
+      user: ACTIVE_USER, preferenceReads: ['0', undefined, undefined, undefined],
+    });
+    await second.delivery.notify('user-guardian', 'guardian_digest', {
+      ...DIGEST_INPUT,
+      subject: 'Tổng hợp tuần về việc học của con Bình',
+      body: `Kết quả mới đã công bố: 2. ${'y'.repeat(240)}`,
+    });
+    const [, secondJobData] = second.queue.add.mock.calls[0]! as unknown as [string, Record<string, unknown>];
+    expect(secondJobData.dedupeKey).not.toBe(firstJobData.dedupeKey);
   });
 
   it('thiếu cặp nội dung ngoài tối thiểu hoá ở môi trường test: ném lỗi messaging.external_minimization_required như phía API', async () => {

@@ -1,7 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { Queue } from 'bullmq';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
 import { ContextsService } from '../access/contexts.service';
@@ -287,7 +287,7 @@ export class CalendarService {
 
 
 
-    await this.importQueue.add('import', { subscriptionId, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscriptionId}-${randomUUID()}`), attempts: 3 });
+    await this.importQueue.add('import', { subscriptionId, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscriptionId}`), attempts: 3, removeOnComplete: true });
     return { queued: true, subscriptionId };
   }
 }

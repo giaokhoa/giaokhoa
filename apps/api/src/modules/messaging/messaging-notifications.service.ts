@@ -2,7 +2,7 @@ import { backgroundJobContext, backgroundJobId } from '../../db/routing/backgrou
 import { BadRequestException, ForbiddenException, Logger, NotFoundException, type MessageEvent } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Observable } from 'rxjs';
 import type { NotificationGroup, NotificationGroupPage, NotificationItem, NotificationItemPage } from '@giaokhoa/contracts';
 import type { ListNotificationGroupsQueryDto, ListNotificationItemsQueryDto, ReadNotificationGroupDto } from './dto/messaging.dto';
@@ -253,6 +253,7 @@ export class MessagingNotificationsService {
     forceExternalMinimized?: boolean;
     courseId?: string;
     tenantId?: string | null;
+    eventId?: string;
   }): Promise<NotifyResult> {
     const provider = providerByName(providerName);
     if (!provider) return { provider: providerName, userId, notificationId: null, channels: {}, skipped: 'unknown-provider' };
@@ -324,7 +325,9 @@ export class MessagingNotificationsService {
         : await this.isChannelEnabled(userId, providerName, channel, state);
       if (channelEnabled) {
         externalContent ??= this.resolveExternalContent(provider, userId, input);
-        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-${channel}-${notificationId ?? randomUUID()}`;
+        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body])).digest('hex');
+        const eventKey = notificationId ?? (input.eventId ? `event-${input.eventId}` : `content-${inAppContentHash}`);
+        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-${channel}-${eventKey}`;
         await this.dispatchQueue.add('dispatch', {
           userId, provider: providerName, channel, tenantId,
           spaceSlug: backgroundJobContext().spaceSlug,
