@@ -1,16 +1,37 @@
-import { createServer, type Server, type Socket } from 'node:net';
+import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import type { ConfigService } from '@nestjs/config';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
 
-const DEAD_REDIS_URL = 'redis://localhost:6399';
 const TIMEOUT_MESSAGE = 'Redis throttler storage did not become ready in time';
 
-function makeStorage(url = DEAD_REDIS_URL): RedisThrottlerStorage {
+async function getFreePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, () => {
+      server.removeListener('error', reject);
+      resolve();
+    });
+  });
+  const { port } = server.address() as AddressInfo;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
+}
+
+function redisUrl(port: number): string {
+  return `redis://localhost:${port}`;
+}
+
+function makeStorage(url: string): RedisThrottlerStorage {
   const config = {
     getOrThrow: () => url,
   } as unknown as ConfigService;
   return new RedisThrottlerStorage(config);
+}
+
+async function makeDeadStorage(): Promise<RedisThrottlerStorage> {
+  return makeStorage(redisUrl(await getFreePort()));
 }
 
 function sleep(ms: number): Promise<void> {
@@ -85,7 +106,7 @@ function replyFor(command: string[]): string {
     const payload = 'redis_version:7.0.0\r\nredis_mode:standalone\r\nloading:0\r\n';
     return `$${Buffer.byteLength(payload)}\r\n${payload}\r\n`;
   }
-  if (name === 'eval') return '-ERR unknown command\r\n';
+  if (name === 'eval') return '*4\r\n:1\r\n:60\r\n:0\r\n:0\r\n';
   return '+OK\r\n';
 }
 
@@ -102,13 +123,9 @@ async function waitForRedisStatus(
   }
 }
 
-async function waitForRedisReady(storage: RedisThrottlerStorage, timeoutMs = 15_000): Promise<void> {
-  await waitForRedisStatus(storage, 'ready', timeoutMs);
-}
-
 describe('Storage throttler Redis khi Redis chưa sẵn sàng', () => {
   it('Redis không trả lời thì increment lỗi sau thời gian chờ giới hạn thay vì treo vô hạn', async () => {
-    const storage = makeStorage();
+    const storage = await makeDeadStorage();
     try {
       const startedAt = Date.now();
       await expect(storage.increment('khoa', 5000, 3, 5000, 'unit-test')).rejects.toThrow(
@@ -121,7 +138,7 @@ describe('Storage throttler Redis khi Redis chưa sẵn sàng', () => {
   });
 
   it('increment gọi trong lúc đang chờ và sau lần chờ đầu lỗi nhanh thay vì chờ đủ thời gian chờ', async () => {
-    const storage = makeStorage();
+    const storage = await makeDeadStorage();
     try {
       const first = storage.increment('khoa', 5000, 3, 5000, 'unit-test');
       await sleep(4000);
@@ -142,7 +159,7 @@ describe('Storage throttler Redis khi Redis chưa sẵn sàng', () => {
   });
 
   it('Redis đã đóng thì increment lỗi ngay với lỗi Redis đã đóng', async () => {
-    const storage = makeStorage();
+    const storage = await makeDeadStorage();
     try {
       redisClientOf(storage).disconnect();
       await waitForRedisStatus(storage, 'end', 5000);
@@ -156,8 +173,40 @@ describe('Storage throttler Redis khi Redis chưa sẵn sàng', () => {
     }
   });
 
-  it('Redis hồi phục sau lần chờ đầu thì increment không còn lỗi chờ quá hạn', async () => {
-    const storage = makeStorage();
+  it('increment đang chờ mà Redis đóng giữa chừng thì lỗi ngay với lỗi Redis đã đóng', async () => {
+    const port = await getFreePort();
+    const sockets = new Set<Socket>();
+    const silentRedis: Server = createServer((socket) => {
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+      socket.on('data', () => undefined);
+      socket.on('end', () => socket.destroy());
+    });
+    await new Promise<void>((resolve, reject) => {
+      silentRedis.once('error', reject);
+      silentRedis.listen(port, () => {
+        silentRedis.removeListener('error', reject);
+        resolve();
+      });
+    });
+    const storage = makeStorage(redisUrl(port));
+    try {
+      const startedAt = Date.now();
+      const pending = storage.increment('khoa', 5000, 3, 5000, 'unit-test');
+      await waitForRedisStatus(storage, 'connect', 5000);
+      redisClientOf(storage).disconnect();
+      await expect(pending).rejects.toThrow('Redis throttler storage is closed');
+      expect(Date.now() - startedAt).toBeLessThan(3000);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => silentRedis.close(() => resolve()));
+      await storage.onModuleDestroy();
+    }
+  });
+
+  it('Redis hồi phục sau lần chờ đầu thì increment thành công thay vì lỗi chờ quá hạn', async () => {
+    const port = await getFreePort();
+    const storage = makeStorage(redisUrl(port));
     const sockets = new Set<Socket>();
     const fakeRedis: Server = createServer((socket) => {
       sockets.add(socket);
@@ -174,17 +223,21 @@ describe('Storage throttler Redis khi Redis chưa sẵn sàng', () => {
       await expect(storage.increment('khoa', 5000, 3, 5000, 'unit-test')).rejects.toThrow(
         TIMEOUT_MESSAGE,
       );
-      await new Promise<void>((resolve) => fakeRedis.listen(6399, resolve));
-      await waitForRedisReady(storage);
+      await new Promise<void>((resolve, reject) => {
+        fakeRedis.once('error', reject);
+        fakeRedis.listen(port, () => {
+          fakeRedis.removeListener('error', reject);
+          resolve();
+        });
+      });
+      await waitForRedisStatus(storage, 'ready');
       const startedAt = Date.now();
-      let failure: unknown;
-      try {
-        await storage.increment('khoa', 5000, 3, 5000, 'unit-test');
-      } catch (error) {
-        failure = error;
-      }
-      expect(failure).toBeInstanceOf(Error);
-      expect((failure as Error).message).not.toContain(TIMEOUT_MESSAGE);
+      await expect(storage.increment('khoa', 5000, 3, 5000, 'unit-test')).resolves.toEqual({
+        totalHits: 1,
+        timeToExpire: 1,
+        isBlocked: false,
+        timeToBlockExpire: 0,
+      });
       expect(Date.now() - startedAt).toBeLessThan(2000);
     } finally {
       for (const socket of sockets) socket.destroy();

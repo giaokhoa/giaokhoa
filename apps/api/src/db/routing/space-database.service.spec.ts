@@ -73,7 +73,7 @@ describe('Handle Kysely định tuyến theo không gian khi chưa bind handle c
 });
 
 describe('Nest biên dịch và đóng module dùng handle định tuyến khi chưa bind handle chung', () => {
-  it('factory trả về handle định tuyến được await và module đóng không ném lỗi khi chưa bind', async () => {
+  it('factory trả về handle định tuyến được await và module khởi tạo rồi đóng không ném lỗi khi chưa bind', async () => {
     const config = { get: () => undefined } as unknown as ConfigService;
     const controlPlane = {} as unknown as ControlPlaneConnection;
     const service = new SpaceDatabaseService(config, controlPlane);
@@ -81,6 +81,7 @@ describe('Nest biên dịch và đóng module dùng handle định tuyến khi c
       providers: [{ provide: KYSELY_CENTRE, useFactory: () => service.routedKysely }],
     }).compile();
     try {
+      await module.init();
       expect(module.get(KYSELY_CENTRE)).toBe(service.routedKysely);
       expect(await module.get(KYSELY_CENTRE)).toBe(service.routedKysely);
       await module.close();
