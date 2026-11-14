@@ -20,6 +20,9 @@ import {
   type QuestionSubjectLinkRow, type QuestionsTx, type VersionRow,
 } from '@giaokhoa/db/repositories/questions';
 import { QuestionsService, type QuestionView, type SupportedQtype } from './questions.service';
+import {
+  bankNotFound, questionEntryMissing, questionNotFound, questionVersionMissing,
+} from '../../common/service-guards';
 import { QuestionBanksRepository, BANK_KINDS, type BankKind, type ContributionRow, type QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
 
 export const QBANK_MEMBER_ROLE = 'qbankmember';
@@ -339,7 +342,7 @@ export class QuestionBanksService {
 
   async getBankOrThrow(id: string): Promise<QuestionBankRow> {
     const bank = await this.repo.getBank(id);
-    if (!bank) throw new NotFoundException({ message: `Question bank ${id} not found`, code: 'question.bank_not_found' });
+    if (!bank) throw bankNotFound(id);
     return bank;
   }
 
@@ -351,7 +354,7 @@ export class QuestionBanksService {
 
   private async assertNotForeignPersonalBank(actorId: string, bank: QuestionBankRow): Promise<void> {
     if (await this.isForeignPersonalBank(actorId, bank)) {
-      throw new NotFoundException({ message: `Question bank ${bank.id} not found`, code: 'question.bank_not_found' });
+      throw bankNotFound(bank.id);
     }
   }
 
@@ -391,27 +394,26 @@ export class QuestionBanksService {
   }
 
   async assertCanUseQuestionInExam(actorId: string, questionId: string): Promise<void> {
-    const notFound = () => new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
     const question = await this.questionsRepo.getQuestion(questionId);
     const category = question ? await this.questionsRepo.getCategory(question.category) : undefined;
-    if (!category) throw notFound();
+    if (!category) throw questionNotFound(questionId);
 
     const bank = category.bankId
       ? await this.repo.getBank(category.bankId)
       : (await this.questionsRepo.getBankByContextId(category.contextId))
         ?? await this.findBankForCategory(category);
-    if (category.bankId && !bank) throw notFound();
+    if (category.bankId && !bank) throw questionNotFound(questionId);
 
     if (bank) {
       try {
         await this.assertCanUseBank(actorId, bank);
       } catch (error) {
-        if (error instanceof NotFoundException || error instanceof ForbiddenException) throw notFound();
+        if (error instanceof NotFoundException || error instanceof ForbiddenException) throw questionNotFound(questionId);
         throw error;
       }
     }
     if (!(await this.evaluator.hasCapability(actorId, 'question:useall', category.contextId).catch(() => false))) {
-      throw notFound();
+      throw questionNotFound(questionId);
     }
   }
 
@@ -489,7 +491,7 @@ export class QuestionBanksService {
   async getBank(actorId: string, bankId: string): Promise<BankView> {
     const bank = await this.getBankOrThrow(bankId);
     if (this.bankTenantHidden(bank)) {
-      throw new NotFoundException({ message: `Question bank ${bankId} not found`, code: 'question.bank_not_found' });
+      throw bankNotFound(bankId);
     }
     await this.assertNotForeignPersonalBank(actorId, bank);
     await this.assertCanUseBankForKind(actorId, bank);
@@ -687,7 +689,7 @@ export class QuestionBanksService {
 
   async getAttribution(questionId: string): Promise<AttributionView> {
     const q = await this.questionsRepo.getQuestion(questionId);
-    if (!q) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!q) throw questionNotFound(questionId);
     const names = await this.repo.getUserDisplayNames([q.originalAuthorId ?? '', q.createdBy ?? '']);
     let derivedFromVersionNumber: number | null = null;
     if (q.derivedFromVersionId) {
@@ -721,16 +723,16 @@ export class QuestionBanksService {
 
   private async assertQuestionReadableByViewer(actorId: string, questionId: string): Promise<void> {
     const q = await this.questionsRepo.getQuestion(questionId);
-    if (!q) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!q) throw questionNotFound(questionId);
     const category = await this.questionsRepo.getCategory(q.category);
-    if (!category) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!category) throw questionNotFound(questionId);
     const bank = await this.findBankForCategory(category);
     if (bank) await this.syncMembership(bank);
     if (bank && (await this.isForeignPersonalBank(actorId, bank))) {
-      throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+      throw questionNotFound(questionId);
     }
     const canUse = await this.evaluator.hasCapability(actorId, 'question:useall', category.contextId).catch(() => false);
-    if (!canUse) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!canUse) throw questionNotFound(questionId);
   }
 
   async listContainingExams(actorId: string, questionId: string) {
@@ -870,7 +872,7 @@ export class QuestionBanksService {
 
   private async assertCanGovernQuestion(actorId: string, questionId: string): Promise<{ q: QuestionRow; category: QCategoryRow; bank: QuestionBankRow | null }> {
     const q = await this.questionsRepo.getQuestion(questionId);
-    if (!q) throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    if (!q) throw questionNotFound(questionId);
     const category = await this.questions.getCategory(q.category);
     const bank = await this.findBankForCategory(category);
     if (bank) await this.syncMembership(bank);
@@ -892,7 +894,7 @@ export class QuestionBanksService {
   async withdrawQuestion(actorId: string, questionId: string, reason: string): Promise<{ questionId: string; status: string; affectedPinIds: string[] }> {
     const { q, bank } = await this.assertCanGovernQuestion(actorId, questionId);
     const entry = await this.questionsRepo.getEntryByQuestion(questionId);
-    if (!entry) throw new NotFoundException({ message: `Question ${questionId} has no bank entry`, code: 'question.entry_missing' });
+    if (!entry) throw questionEntryMissing(questionId);
     if (entry.status === 'hidden') {
       throw new ConflictException({ message: 'Question is already withdrawn', code: 'question.already_withdrawn' });
     }
@@ -910,7 +912,7 @@ export class QuestionBanksService {
   async restoreQuestion(actorId: string, questionId: string): Promise<{ questionId: string; status: string }> {
     await this.assertCanGovernQuestion(actorId, questionId);
     const entry = await this.questionsRepo.getEntryByQuestion(questionId);
-    if (!entry) throw new NotFoundException({ message: `Question ${questionId} has no bank entry`, code: 'question.entry_missing' });
+    if (!entry) throw questionEntryMissing(questionId);
     if (entry.status !== 'hidden') {
       throw new ConflictException({ message: 'Question is not withdrawn', code: 'question.not_withdrawn' });
     }
@@ -1009,7 +1011,7 @@ export class QuestionBanksService {
   async setQuestionStatus(questionId: string, status: 'draft' | 'ready'): Promise<void> {
     const entry = await this.questionsRepo.getEntryByQuestion(questionId);
     if (!entry) {
-      throw new NotFoundException({ message: `Question ${questionId} has no bank entry`, code: 'question.entry_missing' });
+      throw questionEntryMissing(questionId);
     }
     if (status === 'ready') await this.assertReadyContent(questionId, entry.latestVersion);
     await this.questionsRepo.updateEntry(entry.id, { status });
@@ -1020,12 +1022,12 @@ export class QuestionBanksService {
   private async assertReadyContent(questionId: string, latestVersion: number): Promise<void> {
     const q = await this.questionsRepo.getQuestion(questionId);
     if (!q) {
-      throw new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+      throw questionNotFound(questionId);
     }
     const entry = await this.questionsRepo.getEntryByQuestion(questionId);
     const version = entry ? await this.questionsRepo.getVersionByNumber(entry.id, latestVersion) : undefined;
     if (!version) {
-      throw new NotFoundException({ message: `Question ${questionId} latest version missing`, code: 'question.version_missing' });
+      throw questionVersionMissing(questionId);
     }
     const answers = await this.questionsRepo.listAnswers(version.id);
     const correctCount = answers.filter((a) => a.isCorrect).length;
@@ -1054,7 +1056,7 @@ export class QuestionBanksService {
     await this.assertCanGovernQuestion(actorId, questionId);
     const entry = await this.questionsRepo.getEntryByQuestion(questionId);
     if (!entry) {
-      throw new NotFoundException({ message: `Question ${questionId} has no bank entry`, code: 'question.entry_missing' });
+      throw questionEntryMissing(questionId);
     }
     if (entry.status === 'hidden') {
       throw new ConflictException({ message: 'Question is withdrawn; restore it before changing its publish status', code: 'question.status_withdrawn' });
@@ -1081,7 +1083,7 @@ export class QuestionBanksService {
     const sourceCategory = await this.questionsRepo.getCategory(source.question.category);
     const sourceBank = sourceCategory ? await this.findBankForCategory(sourceCategory) : null;
     if (sourceBank && (await this.isForeignPersonalBank(actorId, sourceBank))) {
-      throw new NotFoundException({ message: `Question ${input.questionId} not found`, code: 'question.not_found' });
+      throw questionNotFound(input.questionId);
     }
     const shareCtx = sourceBank?.contextId ?? sourceCategory?.contextId;
     if (shareCtx) {
