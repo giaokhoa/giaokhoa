@@ -35,6 +35,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { formatWithOptions } from '#utils/date-format';
+import { useComposerActions } from '../utils/composer-actions';
 import { getPersonProfile, getSharedFiles, QUICK_REPLY_SHAPE_SAMPLES } from '../api/person-profile-adapter';
 import { messagingPersonProfileQueryOptions } from '../queries/messaging';
 import type { ConversationStatePatch, ConversationView, MessageQuoteView, MessageSearchResultView, MessageView, PersonSummary, ScrollerHandle } from '../types/types';
@@ -191,100 +192,32 @@ export function ChatPanel({
   }, [noteNoticeFor]);
   const memberProfile = useMemberProfile();
   const lastBubbleTapRef = useRef<{ messageId: string; at: number; x: number; y: number } | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const replaceDraftRange = (start: number, end: number, inserted: string, selectStart: number, selectEnd: number) => {
-    if (!active) return;
-    const nextDraft = `${draft.slice(0, start)}${inserted}${draft.slice(end)}`;
-    setDrafts((prev) => ({ ...prev, [active.id]: nextDraft }));
-    onNoteTyping();
-    requestAnimationFrame(() => {
-      const el = composerRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(selectStart, selectEnd);
-    });
-  };
-
-  const applyBold = () => {
-    const el = composerRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? draft.length;
-    const end = el.selectionEnd ?? draft.length;
-    const selected = draft.slice(start, end);
-    const isWrapped = selected.startsWith('**') && selected.endsWith('**') && selected.length > 4;
-    const inserted = isWrapped ? selected.slice(2, -2) : `**${selected}**`;
-    replaceDraftRange(start, end, inserted, start, start + inserted.length);
-  };
-
-  const insertLink = () => {
-    const el = composerRef.current;
-    const raw = window.prompt(t('insertLinkPrompt'));
-    if (raw === null) return;
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-    const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    const start = el?.selectionStart ?? draft.length;
-    const end = el?.selectionEnd ?? draft.length;
-    const selected = draft.slice(start, end);
-    const inserted = selected ? `[${selected}](${url})` : `[${url}](${url})`;
-    replaceDraftRange(start, end, inserted, start, start + inserted.length);
-  };
-
-  const insertEmojiAtCursor = (emoji: string) => {
-    const el = composerRef.current;
-    const start = el?.selectionStart ?? draft.length;
-    const end = el?.selectionEnd ?? start;
-    replaceDraftRange(start, end, emoji, start + emoji.length, start + emoji.length);
-    setEmojiOpen(false);
-  };
-
-  const noteComposerRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const replaceNoteDraftRange = (start: number, end: number, inserted: string, selectStart: number, selectEnd: number) => {
-    if (!active) return;
-    const nextDraft = `${noteDraft.slice(0, start)}${inserted}${noteDraft.slice(end)}`;
-    setNoteDrafts((prev) => ({ ...prev, [active.id]: nextDraft }));
-    requestAnimationFrame(() => {
-      const el = noteComposerRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(selectStart, selectEnd);
-    });
-  };
-
-  const applyNoteBold = () => {
-    const el = noteComposerRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? noteDraft.length;
-    const end = el.selectionEnd ?? noteDraft.length;
-    const selected = noteDraft.slice(start, end);
-    const isWrapped = selected.startsWith('**') && selected.endsWith('**') && selected.length > 4;
-    const inserted = isWrapped ? selected.slice(2, -2) : `**${selected}**`;
-    replaceNoteDraftRange(start, end, inserted, start, start + inserted.length);
-  };
-
-  const insertNoteLink = () => {
-    const el = noteComposerRef.current;
-    const raw = window.prompt(t('insertLinkPrompt'));
-    if (raw === null) return;
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-    const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    const start = el?.selectionStart ?? noteDraft.length;
-    const end = el?.selectionEnd ?? noteDraft.length;
-    const selected = noteDraft.slice(start, end);
-    const inserted = selected ? `[${selected}](${url})` : `[${url}](${url})`;
-    replaceNoteDraftRange(start, end, inserted, start, start + inserted.length);
-  };
-
-  const insertNoteEmojiAtCursor = (emoji: string) => {
-    const el = noteComposerRef.current;
-    const start = el?.selectionStart ?? noteDraft.length;
-    const end = el?.selectionEnd ?? start;
-    replaceNoteDraftRange(start, end, emoji, start + emoji.length, start + emoji.length);
-    setNoteEmojiOpen(false);
-  };
+  const { composerRef, applyBold, insertLink, insertEmojiAtCursor } = useComposerActions({
+    draft,
+    conversationId: active?.id,
+    onReplace: (nextDraft) => {
+      if (!active) return;
+      setDrafts((previous) => ({ ...previous, [active.id]: nextDraft }));
+      onNoteTyping();
+    },
+    onEmojiInserted: () => setEmojiOpen(false),
+    promptForLink: () => window.prompt(t('insertLinkPrompt')),
+  });
+  const {
+    composerRef: noteComposerRef,
+    applyBold: applyNoteBold,
+    insertLink: insertNoteLink,
+    insertEmojiAtCursor: insertNoteEmojiAtCursor,
+  } = useComposerActions({
+    draft: noteDraft,
+    conversationId: active?.id,
+    onReplace: (nextDraft) => {
+      if (!active) return;
+      setNoteDrafts((previous) => ({ ...previous, [active.id]: nextDraft }));
+    },
+    onEmojiInserted: () => setNoteEmojiOpen(false),
+    promptForLink: () => window.prompt(t('insertLinkPrompt')),
+  });
 
   const panelPartnerId = active && active.type !== 2
     ? active.members.find((memberId) => memberId !== myId)
