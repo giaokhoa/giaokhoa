@@ -34,10 +34,10 @@ Luật phụ thuộc: `web` dùng `@giaokhoa/contracts`, `@giaokhoa/editor` và 
 ### Triển khai khu học tập công cộng (issue #8)
 
 Khi triển khai **mới**, khu học tập công cộng sử dụng database và
-role riêng, độc lập với các trung tâm và kho ngân hàng hệ thống. Xem
-[quy trình cấp phát kho, đăng ký và cô lập phiên](docs/public-learning.md)
-trước khi bật `PUBLIC_LEARNING_ENABLED`; mặc định công tắc tắt để
-không thay đổi dữ liệu dùng chung hiện hữu.
+role riêng, độc lập với các trung tâm và kho ngân hàng hệ thống.
+Trước khi bật `PUBLIC_LEARNING_ENABLED`, kiểm tra luồng cấp phát
+trong `apps/api/src/modules/tenants/` và cấu hình cô lập phiên;
+mặc định công tắc tắt để không thay đổi dữ liệu dùng chung hiện hữu.
 
 ## Phát triển trong Dev Container
 
@@ -67,11 +67,6 @@ repository, migration và test-support) trỏ tới declaration trong
 `rootDir` của app. Package `enrol` dùng bản declaration repository
 tương tự. Khi typecheck sau checkout sạch, build các workspace phụ
 thuộc trước bằng `pnpm exec turbo run typecheck`.
-
-Theo quy định không comment trong code/config, mọi `tsconfig*.json`
-được kiểm tra bằng `node scripts/verify-tsconfig-no-comments.mjs`.
-Workflow CI chạy phép kiểm này trước các tác vụ lint và build;
-directive kỹ thuật có hiệu lực trong các file khác vẫn giữ nguyên.
 
 ## Chạy ứng dụng
 
@@ -109,10 +104,10 @@ Toàn bộ stack production chạy tự host bằng Docker Compose trên máy ch
 - `Dockerfile` ở gốc repo build cả ba ứng dụng từ monorepo (pnpm + turbo) và đóng gói bằng `pnpm deploy --prod` thành ba target runtime `api`, `worker`, `web`.
 - Topology một-origin: chỉ `gateway` (Caddy) publish cổng 8080, có thể đổi bằng `WEB_PORT`. `Caddyfile` chuyển `/api`, `/socket.io`, `/mcp` và OAuth metadata tới API, các request còn lại tới `@react-router/serve` của service `web`. Caddy giữ Host gốc, cookie và WebSocket/SSE; CSP gắn vào HTML. Web chạy SSR động, không prerender `/`/`/login` để loader luôn nhận cookie của request.
 
-Trước khi triển khai qua Cloudflare Tunnel/ingress, sử dụng checklist
-[kiểm tra cấu hình production](docs/operations/compose-production.md):
-IP/CIDR proxy tin cậy, kết nối TLS/CA, ngân sách pool, Redis persistence,
-volume và bảo vệ truy cập trực tiếp cổng 8080. Không dùng toàn dải Docker
+Trước khi triển khai qua Cloudflare Tunnel/ingress, kiểm tra
+`compose.yaml`, `Caddyfile` và cấu hình production: IP/CIDR proxy tin cậy,
+kết nối TLS/CA, ngân sách pool, Redis persistence, volume và bảo vệ
+truy cập trực tiếp cổng 8080. Không dùng toàn dải Docker
 bridge làm `GIAOKHOA_TRUSTED_PROXY_CIDRS`.
 
 Dựng stack trên máy trống:
