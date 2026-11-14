@@ -106,7 +106,7 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
     await pg.connect();
     await pg.query('DELETE FROM outbox_events WHERE published_at IS NULL');
     const connection = redisConnectionFromUrl(process.env.REDIS_URL ?? '');
-    measureQueues = queueNames.map((name) => new Queue(name, { connection }));
+    measureQueues = queueNames.map((name) => new Queue(name, { connection, prefix: 'giaokhoa' }));
     adminRedis = new Redis(process.env.REDIS_URL ?? '');
   });
 
@@ -176,7 +176,7 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
     const baseline = await waitingCounts();
     await flushWorkerRelay();
     const rowId = await insertRow('messaging', 'message_sent');
-    await adminRedis.acl('SETUSER', 'default', 'resetkeys', '~bull:messaging-realtime:*');
+    await adminRedis.acl('SETUSER', 'default', 'resetkeys', '~giaokhoa:messaging-realtime:*');
     let flushError: unknown = null;
     try {
       await flushWorkerRelay();

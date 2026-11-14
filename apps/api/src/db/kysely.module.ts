@@ -3,8 +3,10 @@ import {
   Injectable,
   Module,
   type DynamicModule,
+  type ModuleMetadata,
   type OnApplicationShutdown,
   type Provider,
+  type Type,
 } from '@nestjs/common';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import {
@@ -16,6 +18,8 @@ import type { Pool } from 'pg';
 import { KYSELY_CENTRE, KYSELY_CONTROL_PLANE, KYSELY_SYSTEM_BANK } from './inject-kysely';
 
 const KYSELY_INSTANCES = 'KYSELY_INSTANCES';
+
+const KYSELY_MODULE_OPTIONS = 'KYSELY_MODULE_OPTIONS';
 
 type DestroyableKysely = { destroy(): Promise<void> };
 
@@ -35,6 +39,18 @@ export interface KyselyModuleOptions {
   centre?: Pool;
   controlPlane?: Pool;
   systemBank?: Pool;
+}
+
+export interface KyselyModuleBorrowedOptions {
+  centre?: CentreDb | null;
+  controlPlane?: ControlPlaneDb | null;
+  systemBank?: SystemBankDb | null;
+}
+
+export interface KyselyModuleAsyncOptions {
+  imports?: ModuleMetadata['imports'];
+  inject?: Array<string | symbol | Type<unknown>>;
+  useFactory: (...args: never[]) => KyselyModuleBorrowedOptions | Promise<KyselyModuleBorrowedOptions>;
 }
 
 @Module({})
@@ -69,6 +85,36 @@ export class KyselyModule {
       module: KyselyModule,
       providers,
       exports: exportsList,
+    };
+  }
+
+  static forRootAsync(options: KyselyModuleAsyncOptions): DynamicModule {
+    return {
+      module: KyselyModule,
+      imports: options.imports ?? [],
+      providers: [
+        {
+          provide: KYSELY_MODULE_OPTIONS,
+          useFactory: options.useFactory,
+          inject: options.inject ?? [],
+        },
+        {
+          provide: KYSELY_CENTRE,
+          useFactory: (borrowed: KyselyModuleBorrowedOptions) => borrowed.centre ?? null,
+          inject: [KYSELY_MODULE_OPTIONS],
+        },
+        {
+          provide: KYSELY_CONTROL_PLANE,
+          useFactory: (borrowed: KyselyModuleBorrowedOptions) => borrowed.controlPlane ?? null,
+          inject: [KYSELY_MODULE_OPTIONS],
+        },
+        {
+          provide: KYSELY_SYSTEM_BANK,
+          useFactory: (borrowed: KyselyModuleBorrowedOptions) => borrowed.systemBank ?? null,
+          inject: [KYSELY_MODULE_OPTIONS],
+        },
+      ],
+      exports: [KYSELY_CENTRE, KYSELY_CONTROL_PLANE, KYSELY_SYSTEM_BANK],
     };
   }
 }

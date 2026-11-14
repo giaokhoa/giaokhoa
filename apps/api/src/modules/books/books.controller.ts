@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { BookService } from './books.service';
 import {
@@ -22,11 +23,11 @@ export class BooksController {
     return this.booksService.importDataset(actor.id, dto.datasetKey);
   }
   @Get()
-  async listBooks(@Query('kind') kind: string | undefined, @Query('subjectId') subjectId: string | undefined, @Query('forCourseId') forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listBooks(@Query('kind', { schema: z.string().trim().min(1).optional() }) kind: string | undefined, @Query('subjectId', { schema: uuidIdSchema.optional() }) subjectId: string | undefined, @Query('forCourseId', { schema: uuidIdSchema.optional() }) forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.booksService.listBooks(actor.id, subjectId, forCourseId, kind);
   }
   @Get(':id/tree')
-  async getBookTree(@Param('id', { schema: uuidIdSchema }) id: string, @Query('forCourseId') forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async getBookTree(@Param('id', { schema: uuidIdSchema }) id: string, @Query('forCourseId', { schema: uuidIdSchema.optional() }) forCourseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.booksService.getBookTree(actor.id, id, forCourseId);
   }
   @Get(':id/questions')

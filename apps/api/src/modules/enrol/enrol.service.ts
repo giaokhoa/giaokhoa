@@ -216,7 +216,7 @@ export class EnrolService implements OnModuleInit {
     const { userEnrolment, isNewEnrolment } = await delegateToSharedCore(
       () => this.materialization.enrolUserInternal(instance, userId, modifierId, opts),
     );
-    if (isNewEnrolment) await this.maybeSendWelcomeMessage(instance, userId);
+    if (isNewEnrolment) await this.maybeSendWelcomeMessage(instance, userId, userEnrolment.id);
     return userEnrolment;
   }
 
@@ -228,7 +228,7 @@ export class EnrolService implements OnModuleInit {
     }
   }
 
-  private async maybeSendWelcomeMessage(instance: EnrolRow, userId: string): Promise<void> {
+  private async maybeSendWelcomeMessage(instance: EnrolRow, userId: string, enrolmentId: string): Promise<void> {
     if (instance.enrol !== 'self' && instance.enrol !== 'manual') return;
     if (!instance.sendWelcomeMessage) return;
     try {
@@ -241,6 +241,7 @@ export class EnrolService implements OnModuleInit {
       await this.messaging.notify(userId, 'enrol_welcome', {
         subject, body, contextUrl: `/courses/${instance.courseId}`,
         courseId: instance.courseId,
+        eventId: `enrol-welcome-${enrolmentId}`,
       });
     } catch {
     }

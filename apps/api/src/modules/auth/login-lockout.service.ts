@@ -1,7 +1,7 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../users/users.service';
 import { AuthRepository } from '@giaokhoa/db/repositories/auth';
+import { UsersRepository } from '@giaokhoa/db/repositories/users';
 
 export const AUTH_LOCKED_OUT_CODE = 'auth.locked_out';
 export const AUTH_LOCKED_OUT_MESSAGE = 'Account is locked out due to failed login attempts';
@@ -20,8 +20,7 @@ export interface LockoutGuardPort {
 export class LoginLockoutService implements LockoutGuardPort {
   constructor(
     private readonly repo: AuthRepository,
-    @Inject(forwardRef(() => UsersService))
-    private readonly users: UsersService,
+    private readonly users: UsersRepository,
     private readonly config: ConfigService,
   ) {}
 
@@ -45,8 +44,8 @@ export class LoginLockoutService implements LockoutGuardPort {
   }
 
   private async resolveUser(identifier: LoginIdentifier) {
-    if (identifier.username) return this.users.getByUsername(identifier.username);
-    if (identifier.email) return this.users.getByEmail(identifier.email);
+    if (identifier.username) return this.users.getByUsername(identifier.username.trim().toLowerCase());
+    if (identifier.email) return this.users.getByEmail(identifier.email.trim().toLowerCase());
     return undefined;
   }
 

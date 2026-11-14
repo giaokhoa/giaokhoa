@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { MyAccessView } from '@giaokhoa/contracts';
 import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { UsersRepository, type UserListFilter, type UserPatch, type UserRow } from '@giaokhoa/db/repositories/users';
@@ -40,11 +40,8 @@ export class UsersService {
     private readonly customFields: CustomFieldsService,
     private readonly outbox: OutboxService,
     private readonly planLimits: PlanLimitsService,
-    @Inject(forwardRef(() => CredentialBridgeService))
     private readonly credentialBridge: CredentialBridgeService,
-    @Inject(forwardRef(() => AuthRepository))
     private readonly authRepository: AuthRepository,
-    @Inject(forwardRef(() => SessionService))
     private readonly sessions: SessionService,
   ) {}
 

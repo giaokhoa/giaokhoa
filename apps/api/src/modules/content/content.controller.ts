@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
@@ -110,12 +111,12 @@ export class PlayerController {
   }
 
   @Get('progress/report')
-  async progressReport(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId') groupId: string | undefined, @CurrentUser() viewer: AuthenticatedUser) {
+  async progressReport(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId', { schema: uuidIdSchema.optional() }) groupId: string | undefined, @CurrentUser() viewer: AuthenticatedUser) {
     return this.content.getProgressReport(viewer.id, courseId, groupId);
   }
 
   @Get('progress/reports')
-  async progressReports(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId') groupId: string | undefined, @Query('format') format: string | undefined, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
+  async progressReports(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId', { schema: uuidIdSchema.optional() }) groupId: string | undefined, @Query('format', { schema: z.string().trim().min(1).optional() }) format: string | undefined, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
     if (format !== undefined && format !== 'csv') {
       throw new BadRequestException({ message: `Unsupported progress report format: ${format}`, code: 'content.progress_report_format_unsupported' });
     }
@@ -127,7 +128,7 @@ export class PlayerController {
 
   @Get('progress/report.csv')
   @UseInterceptors(DeprecatedRouteAliasInterceptor)
-  async progressReportCsv(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId') groupId: string | undefined, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
+  async progressReportCsv(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId', { schema: uuidIdSchema.optional() }) groupId: string | undefined, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
     return this.progressReports(courseId, groupId, 'csv', viewer, res);
   }
 

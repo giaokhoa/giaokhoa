@@ -11,6 +11,9 @@
     "model_not_found": "Analytics model not found",
     "provider_not_found": "Registered analytics provider not found"
   },
+  "assign": {
+    "file_required": "A file is required in the multipart field \"file\""
+  },
   "auth": {
     "account_inactive": "Account is not active",
     "account_suspended": "Account is suspended",
@@ -152,11 +155,13 @@
     "user_not_enrolled": "The user is not enrolled in this course"
   },
   "file": {
+    "file_required": "A file is required in the multipart field \"file\"",
     "invalid_filename": "Invalid file name",
     "not_found": "File not found",
     "signature_invalid": "The file access signature is invalid or has expired",
     "signature_missing": "Missing file access signature",
-    "snapshot_locked": "Exam snapshot media cannot be deleted"
+    "snapshot_locked": "Exam snapshot media cannot be deleted",
+    "type_mismatch": "File type does not match file content"
   },
   "grades": {
     "bad_aggregation": "Unknown aggregation method",

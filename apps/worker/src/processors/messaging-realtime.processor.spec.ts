@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DelayedError } from 'bullmq';
+import { DelayedError, UnrecoverableError } from 'bullmq';
 import {
   MESSAGING_DISTRIBUTED_KEY_PREFIX,
   MessagingRealtimeProcessor,
@@ -116,7 +116,7 @@ describe('MessagingRealtimeProcessor — chống trùng theo outboxId', () => {
   it('job thiếu outboxId thì ném lỗi ngay, không đọc dấu và không phân phối', async () => {
     const { processor, distribution, redis } = build();
 
-    await expect(processor.process({ data: { ...JOB_DATA, outboxId: '' } } as never)).rejects.toThrow();
+    await expect(processor.process({ data: { ...JOB_DATA, outboxId: '' } } as never)).rejects.toThrow(UnrecoverableError);
     expect(redis.exists).not.toHaveBeenCalled();
     expect(distribution.distributeEvent).not.toHaveBeenCalled();
   });

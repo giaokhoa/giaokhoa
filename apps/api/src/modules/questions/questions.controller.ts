@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { uuidIdSchema } from '@giaokhoa/contracts';
+import { cognitiveLevelSchema, uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { QuestionBanksService } from './question-banks.service';
 import { QuestionsService } from './questions.service';
@@ -19,7 +20,7 @@ export class QuestionsController {
     return this.questions.createCategory(actor.id, dto);
   }
   @Get('categories')
-  async listCategories(@Query('contextId') contextId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listCategories(@Query('contextId', { schema: uuidIdSchema.optional() }) contextId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.listCategoriesForViewer(actor.id, contextId || undefined);
   }
   @Get('categories/:id/questions')
@@ -33,11 +34,11 @@ export class QuestionsController {
   @Get()
   async listByCurriculumFilter(
     @CurrentUser() actor: AuthenticatedUser,
-    @Query('subjectId') subjectId?: string,
-    @Query('outcomeId') outcomeId?: string,
-    @Query('cognitiveLevel') cognitiveLevel?: string,
-    @Query('qtype') qtype?: string,
-    @Query('status') status?: string,
+    @Query('subjectId', { schema: uuidIdSchema.optional() }) subjectId?: string,
+    @Query('outcomeId', { schema: uuidIdSchema.optional() }) outcomeId?: string,
+    @Query('cognitiveLevel', { schema: cognitiveLevelSchema.optional() }) cognitiveLevel?: string,
+    @Query('qtype', { schema: z.string().trim().min(1).optional() }) qtype?: string,
+    @Query('status', { schema: z.string().trim().min(1).optional() }) status?: string,
   ) {
     return this.questions.listQuestionsByCurriculumFilterForViewer(actor.id, {
       subjectId: subjectId || undefined,
@@ -50,14 +51,14 @@ export class QuestionsController {
   @Get('discovery')
   async discover(
     @CurrentUser() actor: AuthenticatedUser,
-    @Query('bankId') bankId?: string,
-    @Query('subjectId') subjectId?: string,
-    @Query('nodeId') nodeId?: string,
-    @Query('outcomeId') outcomeId?: string,
-    @Query('cognitiveLevel') cognitiveLevel?: string,
-    @Query('qtype') qtype?: string,
-    @Query('keyword') keyword?: string,
-    @Query('authorId') authorId?: string,
+    @Query('bankId', { schema: uuidIdSchema.optional() }) bankId?: string,
+    @Query('subjectId', { schema: uuidIdSchema.optional() }) subjectId?: string,
+    @Query('nodeId', { schema: uuidIdSchema.optional() }) nodeId?: string,
+    @Query('outcomeId', { schema: uuidIdSchema.optional() }) outcomeId?: string,
+    @Query('cognitiveLevel', { schema: cognitiveLevelSchema.optional() }) cognitiveLevel?: string,
+    @Query('qtype', { schema: z.string().trim().min(1).optional() }) qtype?: string,
+    @Query('keyword', { schema: z.string().trim().min(1).optional() }) keyword?: string,
+    @Query('authorId', { schema: uuidIdSchema.optional() }) authorId?: string,
   ) {
     return this.banks.discover(actor.id, {
       bankId: bankId || undefined,

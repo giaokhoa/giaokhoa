@@ -960,4 +960,11 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(slots.slots).toHaveLength(1);
     expect(slots.slots[0]!.questionId).toBe(centreQuestionId);
   });
+
+  it('id câu hệ thống không phải UUID trả 400 ProblemDetails thay vì 404', async () => {
+    const res = await http(app).get('/api/v1/system-bank/questions/not-a-uuid').set(bearer(admin));
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.code).toBe('http.validation_failed');
+  });
 });

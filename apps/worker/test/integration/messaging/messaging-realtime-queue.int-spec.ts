@@ -13,6 +13,7 @@ import { io as clientIo, type Socket as ClientSocket } from 'socket.io-client';
 import { sql, type JsonValue } from '@giaokhoa/db';
 import { conversationRoom, userRoom } from '@giaokhoa/messaging';
 import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
+import { MessagingRealtimeRuntime } from '../../../src/messaging-realtime.runtime';
 import {
   MESSAGING_DISTRIBUTED_KEY_PREFIX,
   MessagingRealtimeProcessor,
@@ -193,6 +194,21 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
     httpServer.close();
     redis.disconnect();
     await harness.close();
+  });
+
+  it('runtime realtime do Nest quản lý phát biên đã-đọc qua Redis tới client đang nối ở server nhận', async () => {
+    const tenantId = randomUUID();
+    await makeTenant(tenantId);
+    const [a, b] = [randomUUID(), randomUUID()];
+    for (const u of [a, b]) await makeUser(u);
+    const convId = await makeConversation({ type: 2, tenantId, memberIds: [a, b] });
+    await connectClient('wiring-a', { userId: a, tenantId, conversationIds: [convId] });
+
+    const runtime = context.get(MessagingRealtimeRuntime);
+    await runtime.distribution.distributeReadReceipt({ conversationId: convId, userId: b, lastReadSeq: 1 });
+
+    await waitUntil(() => eventsOf('wiring-a', 'message.read').length === 1, 10000, 'A did not receive message.read from the Nest runtime');
+    expect(eventsOf('wiring-a', 'message.read')[0]!.payload).toEqual({ conversationId: convId, userId: b, lastReadSeq: 1 });
   });
 
   it('phân phối tin mới vào đúng room và conversation.updated mang số chưa đọc của chính từng thành viên', async () => {

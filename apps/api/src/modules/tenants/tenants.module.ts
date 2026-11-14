@@ -49,6 +49,7 @@ import { TenantsService } from './tenants.service';
   ],
   exports: [
     TenantsRepository,
+    SiteConfigRepository,
     TenantsService,
     TenantConfigService,
     TenantContextService,

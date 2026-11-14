@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, Res, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, Res, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
@@ -136,10 +137,7 @@ export class ExamPapersAliasController {
 
   @Get(':id/specification')
   @ApiOperation({ operationId: 'examPapersAliasSpecification' })
-  async aliasSpecification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId') pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
-    if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
-    }
+  async aliasSpecification(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId', { schema: uuidIdSchema.optional() }) pinId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.exams.getPaperSpecification(actor.id, id, pinId);
   }
 
@@ -148,14 +146,11 @@ export class ExamPapersAliasController {
   @ApiOperation({ operationId: 'examPapersAliasExportSpecification' })
   async aliasExportSpecification(
     @Param('id', { schema: uuidIdSchema }) id: string,
-    @Query('format') format: string | undefined,
-    @Query('pinId') pinId: string | undefined,
+    @Query('format', { schema: z.string().trim().min(1).optional() }) format: string | undefined,
+    @Query('pinId', { schema: uuidIdSchema.optional() }) pinId: string | undefined,
     @CurrentUser() actor: AuthenticatedUser,
     @Res() res: Response,
   ) {
-    if (pinId !== undefined && !uuidIdSchema.safeParse(pinId).success) {
-      throw new BadRequestException({ message: 'pinId must be a uuid', code: 'quiz.spec_quiz_invalid' });
-    }
     const file = await this.exams.exportPaperSpecification(actor.id, id, format ?? 'xlsx', pinId);
     res.setHeader('Content-Type', file.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
@@ -165,7 +160,7 @@ export class ExamPapersAliasController {
   @Get(':id/print')
   @Header('Content-Type', 'text/html; charset=utf-8')
   @ApiOperation({ operationId: 'examPapersAliasPrint' })
-  async aliasPrint(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId') pinId: string | undefined, @Query('variantCode') variantCode: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async aliasPrint(@Param('id', { schema: uuidIdSchema }) id: string, @Query('pinId', { schema: uuidIdSchema.optional() }) pinId: string | undefined, @Query('variantCode', { schema: z.string().trim().min(1).optional() }) variantCode: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.exams.printPaperHtml(actor.id, id, pinId ?? '', variantCode ?? '');
   }
 
@@ -198,7 +193,7 @@ export class ExamPapersAliasController {
   @ApiOperation({ operationId: 'examPapersAliasExportDossierSpecification' })
   async aliasExportDossierSpecification(
     @Param('dossierId', { schema: uuidIdSchema }) dossierId: string,
-    @Query('format') format: string | undefined,
+    @Query('format', { schema: z.string().trim().min(1).optional() }) format: string | undefined,
     @CurrentUser() actor: AuthenticatedUser,
     @Res() res: Response,
   ) {

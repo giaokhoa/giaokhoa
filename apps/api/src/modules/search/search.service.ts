@@ -12,17 +12,6 @@ export interface SearchArea {
   audienceCheck?(itemId: string, userId: string): Promise<boolean>;
 }
 
-export const SEARCH_ENGINE = Symbol('SEARCH_ENGINE');
-export interface SearchEngine {
-  query(q: string): Promise<SearchDocRow[]>;
-}
-
-@Injectable()
-export class PostgresSearchEngine implements SearchEngine {
-  constructor(private readonly repo: SearchRepository) {}
-  async query(q: string): Promise<SearchDocRow[]> { return this.repo.queryEngine(q); }
-}
-
 @Injectable()
 export class SearchService {
   private readonly areas = new Map<string, SearchArea>();

@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { ContentBankService } from './content-bank.service';
 import {
@@ -23,16 +24,16 @@ export class ContentBankController {
   }
   @Get()
   async list(
-    @Query('contextId') contextId: string | undefined,
-    @Query('scope') scope: string | undefined,
-    @Query('spaceId') spaceId: string | undefined,
-    @Query('creatorId') creatorId: string | undefined,
-    @Query('subjectId') subjectId: string | undefined,
-    @Query('grade') grade: string | undefined,
-    @Query('level') level: string | undefined,
-    @Query('curriculumNodeId') curriculumNodeId: string | undefined,
-    @Query('resourceType') resourceType: string | undefined,
-    @Query('reviewStatus') reviewStatus: string | undefined,
+    @Query('contextId', { schema: uuidIdSchema.optional() }) contextId: string | undefined,
+    @Query('scope', { schema: z.string().trim().min(1).optional() }) scope: string | undefined,
+    @Query('spaceId', { schema: uuidIdSchema.optional() }) spaceId: string | undefined,
+    @Query('creatorId', { schema: uuidIdSchema.optional() }) creatorId: string | undefined,
+    @Query('subjectId', { schema: uuidIdSchema.optional() }) subjectId: string | undefined,
+    @Query('grade', { schema: z.coerce.number().int().optional() }) grade: number | undefined,
+    @Query('level', { schema: z.string().trim().min(1).optional() }) level: string | undefined,
+    @Query('curriculumNodeId', { schema: uuidIdSchema.optional() }) curriculumNodeId: string | undefined,
+    @Query('resourceType', { schema: z.string().trim().min(1).optional() }) resourceType: string | undefined,
+    @Query('reviewStatus', { schema: z.string().trim().min(1).optional() }) reviewStatus: string | undefined,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.contentBank.listFor(actor.id, {
@@ -41,7 +42,7 @@ export class ContentBankController {
       spaceId: spaceId || undefined,
       creatorId: creatorId || undefined,
       subjectId: subjectId || undefined,
-      grade: grade ? Number(grade) : undefined,
+      grade: grade ?? undefined,
       level: level || undefined,
       curriculumNodeId: curriculumNodeId || undefined,
       resourceType: resourceType || undefined,

@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
 import { AccessModule } from '../access/access.module';
+import { AuthModule } from '../auth/auth.module';
 import { SiteConfigModule } from '../site-config/site-config.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { UsersModule } from '../users/users.module';
@@ -22,6 +23,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
 @Module({
   imports: [
     AccessModule, UsersModule, EventsModule, SiteConfigModule,
+    AuthModule,
     BetterAuthModule,
     SpaceRoutingModule, TenantsModule,
     BullModule.registerQueue({ name: NOTIFICATION_DISPATCH_QUEUE }),

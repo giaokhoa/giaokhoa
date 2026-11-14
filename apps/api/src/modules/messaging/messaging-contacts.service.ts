@@ -43,10 +43,12 @@ export class MessagingContactsService {
     const existing = await this.repo.getContactRequest(userId, contactId);
     if (!existing) {
       await this.repo.createContactRequest(userId, contactId);
+      const created = await this.repo.getContactRequest(userId, contactId);
       await this.notifications.notify(contactId, 'contact_request', {
         subject: 'New contact request',
         body: 'You have a new contact request. Open your messages to accept or decline it.',
         fromUserId: userId,
+        eventId: `contact-request-${userId}-${contactId}-${created?.createdAt.getTime() ?? 0}`,
       });
     }
     return { status: 'pending', contacts: await this.repo.listContacts(userId) };

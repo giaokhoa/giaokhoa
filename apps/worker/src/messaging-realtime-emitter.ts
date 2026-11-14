@@ -1,5 +1,6 @@
 import { createAdapter } from '@socket.io/redis-adapter';
 import type { RealtimeEmitter, RealtimeRemoteSocket } from '@giaokhoa/messaging';
+import { Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { Server } from 'socket.io';
 
@@ -31,8 +32,11 @@ export interface MessagingRealtimeEmitterHandle {
 }
 
 export function createMessagingRealtimeEmitter(redisUrl: string, redisOptions: Record<string, unknown> = {}): MessagingRealtimeEmitterHandle {
+  const logger = new Logger('MessagingRealtimeEmitter');
   const pub = new Redis(redisUrl, { maxRetriesPerRequest: null, ...redisOptions });
   const sub = pub.duplicate();
+  pub.on('error', (error: Error) => { logger.error(`Redis realtime emitter pub error: ${error.message}`); });
+  sub.on('error', (error: Error) => { logger.error(`Redis realtime emitter sub error: ${error.message}`); });
   let broadcastPublishes: Promise<number>[] | null = null;
   const publishThroughAdapter = pub.publish.bind(pub);
   pub.publish = (channel: string, message: string | Buffer) => {

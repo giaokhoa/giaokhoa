@@ -184,15 +184,17 @@ export class ReportsService {
     const schedule = await this.repo.getSchedule(scheduleId);
     if (!schedule) throw new NotFoundException({ message: `Schedule ${scheduleId} not found`, code: 'report.schedule_not_found' });
     let rowCount = 0;
+    const ranAt = new Date();
     try {
       const { rows } = await this.runReport(schedule.createdBy, schedule.reportId);
       rowCount = rows.length;
-      await this.repo.updateSchedule(scheduleId, { lastRun: new Date(), lastResult: { rows: rowCount, ranAs: schedule.createdBy } });
+      await this.repo.updateSchedule(scheduleId, { lastRun: ranAt, lastResult: { rows: rowCount, ranAs: schedule.createdBy } });
     } catch {
-      await this.repo.updateSchedule(scheduleId, { lastRun: new Date(), lastResult: { rows: 0, ranAs: schedule.createdBy, error: 'forbidden_at_run_time' } });
+      await this.repo.updateSchedule(scheduleId, { lastRun: ranAt, lastResult: { rows: 0, ranAs: schedule.createdBy, error: 'forbidden_at_run_time' } });
     }
     await this.messaging.notify(schedule.createdBy, 'report_scheduled', {
       subject: this.i18n.t('platform.reportFinishedSubject'), body: this.i18n.t('platform.reportFinishedBody', { args: { reportId: schedule.reportId, rows: rowCount } }), contextUrl: `/reports/${schedule.reportId}`,
+      eventId: `report-scheduled-${schedule.id}-${ranAt.getTime()}`,
     }).catch(() => undefined);
     return { scheduleId, rows: rowCount };
   }

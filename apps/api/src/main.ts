@@ -1,31 +1,38 @@
 import { existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
-import { VersioningType } from '@nestjs/common';
+import { ConsoleLogger, RequestMethod, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { enableTrustedProxy } from './common/client-ip';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
+import { CSRF_EXCLUSIONS } from './csrf-exclusions';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { mountBetterAuth } from './modules/auth/better-auth/better-auth.mount';
 import { BetterAuthService } from './modules/auth/better-auth/better-auth.service';
 import { McpDepsService } from './modules/mcp/mcp-deps.service';
 import { mountMcp } from './modules/mcp/mcp.mount';
 import { MessagingRedisIoAdapter } from './modules/messaging/messaging-redis-io.adapter';
+import { buildOpenApiDocumentConfig } from './openapi-document';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  enableTrustedProxy(app);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: process.env.NODE_ENV === 'production' ? new ConsoleLogger({ json: true }) : undefined,
+  });
+  app.useSecurityHeaders();
   const config = app.get(ConfigService);
-
-
   const corsOrigins = (config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  app.enableCsrfProtection({
+    trustedOrigins: corsOrigins,
+    exclude: CSRF_EXCLUSIONS,
+  });
+  enableTrustedProxy(app);
   app.enableCors({ origin: corsOrigins, credentials: true });
 
   const betterAuth = app.get(BetterAuthService);
@@ -33,7 +40,7 @@ async function bootstrap(): Promise<void> {
     mountBetterAuth(app, betterAuth.requireAuth(), app.get(SpaceDatabaseService, { strict: false }));
   }
   mountMcp(app, app.get(McpDepsService).createMountDeps());
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: [{ path: 'mcp', method: RequestMethod.ALL }] });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new ProblemDetailsFilter());
 
@@ -66,12 +73,7 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  const documentConfig = new DocumentBuilder()
-    .setTitle('Giáo khoa API')
-    .setDescription('TypeScript Giáo khoa — Moodle core business equivalent (backend)')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  const documentConfig = buildOpenApiDocumentConfig();
 
   SwaggerModule.setup('api/docs', app, () => SwaggerModule.createDocument(app, documentConfig));
 

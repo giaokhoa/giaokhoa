@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemBankService } from './system-bank.service';
 import {
@@ -60,13 +61,9 @@ export class SystemBankController {
   @Get(':id/versions/:version')
   async getVersion(
     @Param('id', { schema: uuidIdSchema }) id: string,
-    @Param('version') version: string,
+    @Param('version', { schema: z.coerce.number().int().positive() }) version: number,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
-    const versionNumber = Number(version);
-    if (!Number.isInteger(versionNumber) || versionNumber < 1) {
-      throw new BadRequestException({ message: `Invalid version number: ${version}`, code: 'system_bank.bad_version' });
-    }
-    return this.bank.getVersion(actor.id, id, versionNumber);
+    return this.bank.getVersion(actor.id, id, version);
   }
 }

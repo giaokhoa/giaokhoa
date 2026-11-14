@@ -1,9 +1,4 @@
-import { VersioningType, type INestApplication } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
-import { AppModule } from '../../../src/app.module';
-import { validateEnv } from '../../../src/config/env';
-import { ProblemDetailsFilter } from '../../../src/common/problem-details.filter';
+import { type INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
-import { adminToken, assignRole, createUserViaApi, http, login, roleIdByShortname,
+import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname,
   seedTenantMembershipFixture, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
@@ -27,17 +22,6 @@ import { RolesService } from '../../../src/modules/access/roles.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
-
-async function createSnapshotTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(ConfigService).useValue(new ConfigService(validateEnv({ ...process.env }))).compile();
-  const app = moduleRef.createNestApplication();
-  app.setGlobalPrefix('api');
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalFilters(new ProblemDetailsFilter());
-  await app.init();
-  return app;
-}
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const doc = (text: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
@@ -89,7 +73,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
     storageDir = await mkdtemp(join(tmpdir(), 'giaokhoa-shared-'));
     process.env.FILE_STORAGE_DIR = storageDir;
-    app = await createSnapshotTestApp();
+    app = await createTestApp();
     admin = await adminToken(app);
     centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
     bank = new Client({ connectionString: bankUrl }); await bank.connect();
@@ -194,7 +178,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     const newer = await http(app).post(`/api/v1/system-bank/questions/${sa.question.id}/versions`).set(bearer(admin)).send({ package: { ...emptyPackage(), answers: [{ answer: doc('Sai mới'), isCorrect: true, feedback: null, sortOrder: 0 }] } });
     expect(newer.status).toBe(201);
     delete process.env.SYSTEM_BANK_DATABASE_URL;
-    offlineApp = await createSnapshotTestApp();
+    offlineApp = await createTestApp();
     expect(offlineApp.get(SystemBankConnection).isConfigured).toBe(false);
     for (const token of [outsider, foreign]) {
       const denied = await http(offlineApp).post(`/api/v1/exam-pins/${pinId}/attempts`).set(bearer(token)).send({});
@@ -585,7 +569,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
       }
       process.env.CONTROL_PLANE_DATABASE_URL = cpUrl;
       process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
-      routed = await createSnapshotTestApp();
+      routed = await createTestApp();
       const [a, b] = provisioned;
       const hostA = `${a.slug}.test.local`; const hostB = `${b.slug}.test.local`;
       for (const space of provisioned) {
@@ -646,7 +630,7 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
         expect(files.rows).toEqual([{ storage_domain: `space-${a.spaceId}` }]);
         expect((await dbA.query('SELECT id FROM question WHERE id = $1', [source.question.id])).rowCount).toBe(0);
         delete process.env.SYSTEM_BANK_DATABASE_URL;
-        offline = await createSnapshotTestApp();
+        offline = await createTestApp();
         expect(offline.get(SystemBankConnection).isConfigured).toBe(false);
         expect((await http(offline).get(`/api/v1/exam-pins/${pinned.body.id}`).set('Host', hostB).set(bearer(tokenB))).status).toBe(404);
         const started = await http(offline).post(`/api/v1/exam-pins/${pinned.body.id}/attempts`).set('Host', hostA).set(bearer(studentA)).send({});

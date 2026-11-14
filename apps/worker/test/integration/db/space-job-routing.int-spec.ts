@@ -370,6 +370,11 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     await spaceDb.withSpaceKysely(
       CENTRE_SLUG,
       async () => {
+        await spaceDb.routedKysely.insertInto('grade_grades').values({
+          item_id: GRADE_ITEM_ID,
+          user_id: STUDENT_ID,
+          final_grade: 10,
+        }).execute();
         await spaceDb.routedKysely.insertInto('outbox_events').values({
           id: freshOutboxId,
           aggregate: 'grades',

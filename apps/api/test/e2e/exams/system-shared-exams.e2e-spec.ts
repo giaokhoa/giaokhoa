@@ -1,6 +1,4 @@
-import { VersioningType, type INestApplication } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { type INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,10 +9,7 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
-import { AppModule } from '../../../src/app.module';
 import { checksumPackage } from '../../../src/modules/system-bank/system-bank-package';
-import { ProblemDetailsFilter } from '../../../src/common/problem-details.filter';
-import { validateEnv } from '../../../src/config/env';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
@@ -23,7 +18,7 @@ import { TenantsService } from '../../../src/modules/tenants/tenants.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import {
-  adminToken, assignRole, createUserViaApi, http, login, roleIdByShortname, seedTenantMembershipFixture,
+  adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, seedTenantMembershipFixture,
   STRONG_PASSWORD, systemContextId, uniqueName,
 } from '../../support/identity-access-helpers';
 import {
@@ -32,17 +27,6 @@ import {
 import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
-
-async function testApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(ConfigService).useValue(new ConfigService(validateEnv({ ...process.env }))).compile();
-  const app = moduleRef.createNestApplication();
-  app.setGlobalPrefix('api');
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalFilters(new ProblemDetailsFilter());
-  await app.init();
-  return app;
-}
 
 describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép câu chỉnh sửa', () => {
   let app: INestApplication;
@@ -88,7 +72,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
     storageDir = await mkdtemp(join(tmpdir(), 'giaokhoa-shared-exam-'));
     process.env.FILE_STORAGE_DIR = storageDir;
-    app = await testApp();
+    app = await createTestApp();
     admin = await adminToken(app);
     centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
     bank = new Client({ connectionString: bankUrl }); await bank.connect();
@@ -240,7 +224,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(attemptsBefore).toBe(2);
 
     delete process.env.SYSTEM_BANK_DATABASE_URL;
-    offlineApp = await testApp();
+    offlineApp = await createTestApp();
     const startedA = await http(offlineApp).post(`/api/v1/exam-pins/${assignA.body.id}/attempts`).set(bearer(studentA)).send({});
     const startedB = await http(offlineApp).post(`/api/v1/exam-pins/${assignB.body.id}/attempts`).set(bearer(studentB)).send({});
     expect(startedA.status, JSON.stringify(startedA.body)).toBe(201);
@@ -523,7 +507,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       }
       process.env.CONTROL_PLANE_DATABASE_URL = cpUrl;
       process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
-      routed = await testApp();
+      routed = await createTestApp();
       const [a, b] = provisioned;
       const hostA = `${a.slug}.test.local`;
       const hostB = `${b.slug}.test.local`;
@@ -637,7 +621,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
           expect(policy.status, JSON.stringify(policy.body)).toBe(200);
         }
         delete process.env.SYSTEM_BANK_DATABASE_URL;
-        offline = await testApp();
+        offline = await createTestApp();
         expect((await http(offline).get(`/api/v1/exam-pins/${pinB.body.id}`)
           .set('Host', hostA).set(bearer(userA.admin))).status).toBe(404);
         expect((await http(offline).get(`/api/v1/exam-pins/${pinA.body.id}`)
@@ -740,7 +724,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
   }, 180_000);
 
   it('fork đề có ảnh lỗi ở slot thứ hai dọn metadata, object và rollback câu/đề/outbox', async () => {
-    const forkApp = await testApp();
+    const forkApp = await createTestApp();
     try {
     const original = (await bank.query('SELECT * FROM system_exam_versions WHERE id = $1', [publishedId])).rows[0];
     const versionId = (await bank.query<{ id: string }>('SELECT uuidv7() AS id')).rows[0]!.id;
@@ -832,7 +816,7 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
   });
 
   it('rút đề nguồn: B dùng lại bản đã ghim, tạo bản riêng chỉnh sửa, không nhận phiên bản chưa ghim', async () => {
-    const lifecycleApp = await testApp();
+    const lifecycleApp = await createTestApp();
     try {
     const version2 = await bank.query<{ id: string }>(
       'select id from system_exam_versions where source_exam_id=$1 and source_version_number=2 and status=$2',

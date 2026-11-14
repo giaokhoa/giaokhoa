@@ -48,6 +48,7 @@ function getRelay(): OutboxRelayScheduler {
       (name) =>
         new Queue(name, {
           connection,
+          prefix: 'giaokhoa',
           defaultJobOptions: {
             attempts: 3,
             backoff: { type: 'exponential', delay: 1000 },

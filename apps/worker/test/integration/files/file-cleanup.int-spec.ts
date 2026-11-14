@@ -50,7 +50,7 @@ describe('Worker file-cleanup: tách miền sở hữu khi cùng content hash', 
         item_id: null, file_path: '/', file_name: 'centre-b.txt', file_size: content.length,
       },
     ]).execute();
-    events = new QueueEvents('file-cleanup', { connection: { host: 'localhost', port: 6379 } });
+    events = new QueueEvents('file-cleanup', { connection: { host: 'localhost', port: 6379 }, prefix: 'giaokhoa' });
     await events.waitUntilReady();
   });
 

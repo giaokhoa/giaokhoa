@@ -21,6 +21,6 @@ import { GroupsService } from './groups.service';
     },
     GroupsService,
   ],
-  exports: [GroupsService],
+  exports: [GroupsService, GroupsRepository],
 })
 export class GroupsModule {}

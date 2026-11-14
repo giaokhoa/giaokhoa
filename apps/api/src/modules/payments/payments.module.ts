@@ -23,7 +23,7 @@ import { ManualPaymentGateway, PAYMENT_GATEWAY, PaymentsService } from './paymen
       useFactory: (spaceDb: SpaceDatabaseService) => new PaymentsRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
     },
-    PaymentsService, ManualPaymentGateway, PlanEntitlementsService,
+    PaymentsService, PlanEntitlementsService,
     { provide: PAYMENT_GATEWAY, useClass: ManualPaymentGateway },
   ],
   exports: [PaymentsService],

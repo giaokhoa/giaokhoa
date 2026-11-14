@@ -193,6 +193,18 @@ describe('Luồng chấm bài giấy CAM-0', () => {
     expect(blank.status).toBe(200);
   });
 
+  it('tham số copies không phải số nguyên trong khoảng trả 400 ProblemDetails thay vì PDF 0 trang', async () => {
+    const bad = await http(app).get(`/api/v1/exam-batches/${ctx.batch.id}/sheets?format=pdf&copies=abc`)
+      .set('Authorization', `Bearer ${ctx.teacher}`);
+    expect(bad.status).toBe(400);
+    expect(bad.headers['content-type']).toContain('application/problem+json');
+    expect(bad.body.code).toBe('http.validation_failed');
+    const zero = await http(app).get(`/api/v1/exam-batches/${ctx.batch.id}/sheets?format=pdf&copies=0`)
+      .set('Authorization', `Bearer ${ctx.teacher}`);
+    expect(zero.status).toBe(400);
+    expect(zero.body.code).toBe('http.validation_failed');
+  });
+
   it('học viên hoàn toàn không chạm được bề mặt chấm bài giấy', async () => {
     const create = await http(app).post(`/api/v1/exam-batches?pinId=${ctx.quizId}`).set('Authorization', `Bearer ${ctx.tokenA}`).send({});
     expect(create.status).toBe(403);

@@ -4,7 +4,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
 import Redis from 'ioredis';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { redisConnectionFromUrl } from './config/env';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
@@ -253,7 +253,7 @@ export class NotificationDeliveryService implements OnModuleDestroy {
   async notify(userId: string, providerName: string, input: {
     subject: string; body: string; contextUrl?: string; fromUserId?: string;
     externalSubject?: string; externalBody?: string; tenantId?: string | null;
-    courseId?: string | null;
+    courseId?: string | null; eventId?: string;
   }): Promise<{ notificationId: string | null; channels: Record<string, string>; skipped?: string }> {
     const provider = WORKER_PROVIDERS[providerName];
     if (!provider) return { notificationId: null, channels: {}, skipped: 'unknown-provider' };
@@ -289,12 +289,14 @@ export class NotificationDeliveryService implements OnModuleDestroy {
         channels['email'] = 'skipped-preference';
       } else {
         const external = this.resolveExternalContent(providerName, emailLaw, input);
-        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${notificationId ?? randomUUID()}`;
+        const inAppContentHash = createHash('sha256').update(JSON.stringify([input.subject, input.body, input.fromUserId ?? null, input.contextUrl ?? null, input.courseId ?? null])).digest('hex');
+        const eventKey = notificationId ?? (input.eventId ? `event-${input.eventId}` : `content-${inAppContentHash}`);
+        const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-email-${eventKey}`;
         await this.dispatchQueue.add('dispatch', {
           userId, provider: providerName, channel: 'email', tenantId,
           emailFrequency: frequency, subject: external.subject, body: external.body,
           notificationId, dedupeKey,
-        }, { jobId: dedupeKey, attempts: 3 });
+        }, { jobId: dedupeKey, attempts: 3, removeOnFail: true });
         channels['email'] = 'queued';
       }
     }

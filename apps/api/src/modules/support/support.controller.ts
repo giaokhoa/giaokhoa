@@ -8,6 +8,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
+import { z } from "zod";
 import {
   createSupportGrantSchema,
   uuidIdSchema,
@@ -73,7 +74,7 @@ export class SupportCentresController {
   @Get(":slug/my-grants")
   async myGrants(
     @CurrentUser() actor: AuthenticatedUser,
-    @Param("slug") slug: string,
+    @Param("slug", { schema: z.string().trim().min(1).max(63) }) slug: string,
     @Headers("host") host: string | undefined,
   ) {
     this.assertPlatformHost(host);
@@ -83,7 +84,7 @@ export class SupportCentresController {
   @Get(":slug/classes")
   async classes(
     @CurrentUser() actor: AuthenticatedUser,
-    @Param("slug") slug: string,
+    @Param("slug", { schema: z.string().trim().min(1).max(63) }) slug: string,
     @Headers("host") host: string | undefined,
   ) {
     this.assertPlatformHost(host);
@@ -93,7 +94,7 @@ export class SupportCentresController {
   @Get(":slug/courses")
   async courses(
     @CurrentUser() actor: AuthenticatedUser,
-    @Param("slug") slug: string,
+    @Param("slug", { schema: z.string().trim().min(1).max(63) }) slug: string,
     @Headers("host") host: string | undefined,
   ) {
     this.assertPlatformHost(host);

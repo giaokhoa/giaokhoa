@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Query, Req, Res } from '@ne
 import { ConfigService } from '@nestjs/config';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { clientIpOf } from '../../common/client-ip';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
@@ -45,8 +46,8 @@ export class OAuthController {
   @Get(':issuer/callback')
   async callback(
     @Param('issuer', { schema: oauthIssuerSchema }) issuer: OAuthIssuerParam,
-    @Query('code') code: string | undefined,
-    @Query('state') state: string | undefined,
+    @Query('code', { schema: z.string().trim().min(1).optional() }) code: string | undefined,
+    @Query('state', { schema: z.string().trim().min(1).optional() }) state: string | undefined,
     @Req() req: Request,
     @Res() res: Response,
   ) {

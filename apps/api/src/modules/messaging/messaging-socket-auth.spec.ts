@@ -20,6 +20,8 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     platformRegisteredSpaceId?: string;
     publicApiUrl?: string | null;
     environment?: 'production' | 'development' | 'test';
+    jwtSecret?: string;
+    configSecret?: string;
   } = {}) {
     const probe = {
       insideSpace: false,
@@ -92,7 +94,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       platformTenant: vi.fn(async () => ({ id: opts.platformTenantId ?? 'tenant-platform', slug: 'trang-chinh' })),
     };
     const config = {
-      getOrThrow: vi.fn(() => SECRET),
+      getOrThrow: vi.fn(() => opts.configSecret ?? SECRET),
       get: vi.fn((key: string) => {
         if (key === 'BETTER_AUTH_URL') return opts.publicApiUrl === null ? undefined : (opts.publicApiUrl ?? 'https://giaokhoa.example');
         if (key === 'NODE_ENV') return opts.environment ?? 'test';
@@ -100,6 +102,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       }),
     };
     const auth = new MessagingSocketAuth(
+      new JwtService({ secret: opts.jwtSecret ?? SECRET }),
       config as never,
       users as never,
       betterAuth as never,
@@ -180,6 +183,16 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     const { auth } = build({ betterAuthEnabled: false });
     const identity = await auth.authenticateHandshake({ headers: {} });
     expect(identity).toBeNull();
+  });
+
+  it('token được xác thực bằng JwtService được inject, không phải secret đọc từ config', async () => {
+    const { auth } = build({ betterAuthEnabled: false, jwtSecret: 'injected-secret', configSecret: 'config-secret' });
+    const injectedToken = new JwtService({ secret: 'injected-secret' }).sign({ sub: 'u6', username: 'u6', sid: 's1' });
+    const configToken = new JwtService({ secret: 'config-secret' }).sign({ sub: 'u6', username: 'u6', sid: 's1' });
+    const viaInjected = await auth.authenticateHandshake({ headers: {}, auth: { token: injectedToken } });
+    expect(viaInjected?.userId).toBe('u6');
+    const viaConfig = await auth.authenticateHandshake({ headers: {}, auth: { token: configToken } });
+    expect(viaConfig).toBeNull();
   });
 
   describe('phân giải không gian theo Host của handshake (tiền điều kiện Phần B, issue #587)', () => {

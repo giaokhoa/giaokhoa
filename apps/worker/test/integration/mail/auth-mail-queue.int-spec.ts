@@ -128,6 +128,7 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     db = harness.adminDb;
     queue = new Queue('auth-mail', {
       connection: redisConnectionFromUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+      prefix: 'giaokhoa',
     });
   });
 

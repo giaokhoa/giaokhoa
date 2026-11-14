@@ -1,10 +1,8 @@
-import { Controller, Get, INestApplication, NotFoundException, VersioningType } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Controller, Get, INestApplication, NotFoundException } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AppModule } from '../../../src/app.module';
-import { ProblemDetailsFilter } from '../../../src/common/problem-details.filter';
 import { Public } from '../../../src/common/public.decorator';
+import { createTestApp } from '../../support/identity-access-helpers';
 
 @Public()
 @Controller({ path: 'throw-probe', version: '1' })
@@ -19,15 +17,7 @@ describe('API e2e (supertest, DB + Redis thật)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-      controllers: [ThrowProbeController],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('api');
-    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-    app.useGlobalFilters(new ProblemDetailsFilter());
-    await app.init();
+    app = await createTestApp({ controllers: [ThrowProbeController] });
   });
 
   afterAll(async () => {

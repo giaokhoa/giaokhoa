@@ -34,6 +34,39 @@ export function sniffImageMimeType(data: Buffer): string | null {
   return null;
 }
 
+export function sniffMimeType(data: Buffer): string | null {
+  const image = sniffImageMimeType(data);
+  if (image) return image;
+  if (data.length >= 5 && data.subarray(0, 5).toString('ascii') === '%PDF-') return 'application/pdf';
+  if (data.length >= 4 && data[0] === 0x50 && data[1] === 0x4b
+    && ((data[2] === 0x03 && data[3] === 0x04) || (data[2] === 0x05 && data[3] === 0x06) || (data[2] === 0x07 && data[3] === 0x08))) return 'application/zip';
+  if (data.length >= 2 && data[0] === 0x4d && data[1] === 0x5a) return 'application/x-msdownload';
+  return null;
+}
+
+const SNIFFABLE_EXTENSION_MIME_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  pdf: 'application/pdf', zip: 'application/zip', docx: 'application/zip', xlsx: 'application/zip', pptx: 'application/zip',
+};
+
+const ZIP_FAMILY_MIME_TYPES = new Set([
+  'application/zip', 'application/x-zip-compressed',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
+
+export function resolveGenericUploadMimeType(fileName: string, data: Buffer, mimeType?: string): string | undefined {
+  const sniffed = sniffMimeType(data);
+  const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
+  const expected = SNIFFABLE_EXTENSION_MIME_TYPES[ext];
+  if (expected && sniffed !== expected) {
+    throw new BadRequestException({ message: 'File type does not match file content', code: 'file.type_mismatch' });
+  }
+  if (sniffed === 'application/zip' && mimeType && ZIP_FAMILY_MIME_TYPES.has(mimeType)) return mimeType;
+  return sniffed ?? mimeType;
+}
+
 @Injectable()
 export class FilesService {
   constructor(
@@ -182,7 +215,7 @@ export class FilesService {
       await this.cleanupQueue.add(
         'cleanup-orphan',
         { contentHash: row.contentHash, storageDomain: row.storageDomain, ...(spaceSlug ? { spaceSlug } : {}) },
-        { jobId: ['orphan', row.storageDomain, row.contentHash, row.id].join('-'), attempts: 3 },
+        { jobId: ['orphan', row.storageDomain, row.contentHash, row.id].join('-'), attempts: 3, removeOnFail: true },
       );
     }
     return { deleted: true, contentHash: row.contentHash, refcount };

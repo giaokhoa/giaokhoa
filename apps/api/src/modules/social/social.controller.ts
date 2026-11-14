@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { CommentsService } from './comments.service';
 import { NotesService } from './notes.service';
@@ -25,7 +26,7 @@ export class TagsController {
     return this.tags.addItemTag(actor.id, dto);
   }
   @Get('items')
-  async list(@Query('component') component: string, @Query('itemType') itemType: string, @Query('itemId') itemId: string, @CurrentUser() actor: AuthenticatedUser) {
+  async list(@Query('component', { schema: z.string().trim().min(1) }) component: string, @Query('itemType', { schema: z.string().trim().min(1) }) itemType: string, @Query('itemId', { schema: z.string().trim().min(1) }) itemId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.tags.listItemTags(component, itemType, itemId, actor.id);
   }
   @Get(':tagId/correlated')
@@ -43,8 +44,8 @@ export class CommentsController {
     return this.comments.addComment(actor.id, dto);
   }
   @Get()
-  async list(@Query('contextId') contextId: string, @Query('component') component: string,
-    @Query('commentArea') commentArea: string, @Query('itemId') itemId: string, @CurrentUser() actor: AuthenticatedUser) {
+  async list(@Query('contextId', { schema: uuidIdSchema }) contextId: string, @Query('component', { schema: z.string().trim().min(1) }) component: string,
+    @Query('commentArea', { schema: z.string().trim().min(1) }) commentArea: string, @Query('itemId', { schema: z.string().trim().min(1) }) itemId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.comments.listComments(actor.id, { contextId, component, commentArea, itemId });
   }
   @Delete(':id')
@@ -62,13 +63,13 @@ export class RatingsController {
     return this.ratings.rate(actor.id, dto);
   }
   @Get('aggregate')
-  async aggregate(@Query('contextId') contextId: string, @Query('component') component: string,
-    @Query('ratingArea') ratingArea: string, @Query('itemId') itemId: string, @CurrentUser() actor: AuthenticatedUser) {
+  async aggregate(@Query('contextId', { schema: uuidIdSchema }) contextId: string, @Query('component', { schema: z.string().trim().min(1) }) component: string,
+    @Query('ratingArea', { schema: z.string().trim().min(1) }) ratingArea: string, @Query('itemId', { schema: z.string().trim().min(1) }) itemId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.ratings.aggregate(actor.id, { contextId, component, ratingArea, itemId });
   }
   @Get()
-  async list(@Query('contextId') contextId: string, @Query('component') component: string,
-    @Query('ratingArea') ratingArea: string, @Query('itemId') itemId: string, @CurrentUser() actor: AuthenticatedUser) {
+  async list(@Query('contextId', { schema: uuidIdSchema }) contextId: string, @Query('component', { schema: z.string().trim().min(1) }) component: string,
+    @Query('ratingArea', { schema: z.string().trim().min(1) }) ratingArea: string, @Query('itemId', { schema: z.string().trim().min(1) }) itemId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.ratings.listRatings(actor.id, { contextId, component, ratingArea, itemId });
   }
 }
@@ -82,7 +83,7 @@ export class NotesController {
     return this.notes.createNote(actor.id, dto);
   }
   @Get('user/:userId')
-  async listAbout(@Param('userId', { schema: uuidIdSchema }) userId: string, @Query('courseId') courseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async listAbout(@Param('userId', { schema: uuidIdSchema }) userId: string, @Query('courseId', { schema: uuidIdSchema.optional() }) courseId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.notes.listNotesAbout(actor.id, userId, courseId || undefined);
   }
   @Get(':id')

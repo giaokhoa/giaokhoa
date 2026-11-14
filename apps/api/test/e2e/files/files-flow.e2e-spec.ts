@@ -22,12 +22,32 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
   let uploaderId: string;
   const CONTENT = `hello-dedup-content-${Date.now()}`;
 
+  const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52]);
+  const PDF_BYTES = Buffer.from('%PDF-1.4\n%noi-dung-pdf-gia\n');
+  const EXE_BYTES = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00]);
+
   async function upload(token: string, fileName: string, content: string): Promise<{ id: string; contentHash: string }> {
     const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${token}`)
       .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile')
       .attach('file', Buffer.from(content), fileName);
     if (res.status !== 201) throw new Error(`upload failed: ${res.status} ${JSON.stringify(res.body)}`);
     return res.body;
+  }
+
+  async function uploadBytes(token: string, fileName: string, buffer: Buffer): Promise<{ id: string; contentHash: string }> {
+    const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${token}`)
+      .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile')
+      .attach('file', buffer, fileName);
+    if (res.status !== 201) throw new Error(`upload failed: ${res.status} ${JSON.stringify(res.body)}`);
+    return res.body;
+  }
+
+  async function uploadExpecting(token: string, fileName: string, buffer: Buffer, status: number): Promise<{ status: number; headers: Record<string, string | undefined>; body: { code?: string } }> {
+    const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${token}`)
+      .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile')
+      .attach('file', buffer, fileName);
+    expect(res.status).toBe(status);
+    return res;
   }
 
   beforeAll(async () => {
@@ -163,6 +183,89 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
       await repo.deleteById(fileB.id);
       await storage.delete(spaceB, hash);
     }
+  });
+
+  it('tải lên thiếu part file trả 400 ProblemDetails thay vì 500', async () => {
+    const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile');
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.status).toBe(400);
+    expect(res.body.code).toBe('file.file_required');
+  });
+
+  it('tải ảnh câu hỏi thiếu part file trả 400 ProblemDetails thay vì 500', async () => {
+    const res = await http(app).post('/api/v1/files/question-image').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('fileArea', 'questiontext');
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.status).toBe(400);
+    expect(res.body.code).toBe('file.file_required');
+  });
+
+  it('tải file chung có đuôi .png nhưng byte là chữ trả 400 file.type_mismatch', async () => {
+    const res = await uploadExpecting(uploaderToken, 'gia.png', Buffer.from('day la chu, khong phai anh'), 400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.code).toBe('file.type_mismatch');
+  });
+
+  it('tải file .exe đổi tên .png trả 400 file.type_mismatch', async () => {
+    const res = await uploadExpecting(uploaderToken, 'gia.png', EXE_BYTES, 400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.code).toBe('file.type_mismatch');
+  });
+
+  it('tải file .pdf chứa byte PNG trả 400 file.type_mismatch', async () => {
+    const res = await uploadExpecting(uploaderToken, 'gia.pdf', PNG_BYTES, 400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.code).toBe('file.type_mismatch');
+  });
+
+  it('tải file PNG và PDF thật qua route chung trả 201 và lưu đúng mime đã sniff', async () => {
+    const png = await uploadBytes(uploaderToken, 'that.png', PNG_BYTES);
+    const pngMeta = await http(app).get(`/api/v1/files/${png.id}`).set('Authorization', `Bearer ${uploaderToken}`);
+    expect(pngMeta.status).toBe(200);
+    expect(pngMeta.body.mimeType).toBe('image/png');
+    const pdf = await uploadBytes(uploaderToken, 'that.pdf', PDF_BYTES);
+    const pdfMeta = await http(app).get(`/api/v1/files/${pdf.id}`).set('Authorization', `Bearer ${uploaderToken}`);
+    expect(pdfMeta.status).toBe(200);
+    expect(pdfMeta.body.mimeType).toBe('application/pdf');
+  });
+
+  it('nội dung file text/html phục vụ dạng attachment kèm CSP sandbox thay vì inline', async () => {
+    const file = await upload(uploaderToken, 'evil.html', '<script>alert(1)</script>');
+    const stream = await http(app).get(`/api/v1/files/${file.id}/content`).set('Authorization', `Bearer ${uploaderToken}`);
+    expect(stream.status).toBe(200);
+    expect(stream.headers['content-type']).toContain('text/html');
+    expect(stream.headers['content-disposition']).toContain('attachment');
+    expect(stream.headers['content-security-policy']).toContain('sandbox');
+    expect(stream.text).toBe('<script>alert(1)</script>');
+  });
+
+  it('ảnh PNG hợp lệ phục vụ inline qua /content, không ép attachment', async () => {
+    const file = await uploadBytes(uploaderToken, 'xem.png', PNG_BYTES);
+    const stream = await http(app).get(`/api/v1/files/${file.id}/content`).set('Authorization', `Bearer ${uploaderToken}`);
+    expect(stream.status).toBe(200);
+    expect(stream.headers['content-type']).toContain('image/png');
+    expect(stream.headers['content-disposition']).toBeUndefined();
+  });
+
+  it('tải file chung vượt trần 25 MB trả 413 ProblemDetails với title Payload Too Large', async () => {
+    const res = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('component', 'core_user').field('fileArea', 'profile')
+      .attach('file', Buffer.alloc(25 * 1024 * 1024 + 1), 'qua-lon.bin');
+    expect(res.status).toBe(413);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body).toMatchObject({ title: 'Payload Too Large', status: 413, code: 'http.payload_too_large' });
+  });
+
+  it('tải ảnh câu hỏi vượt trần 8 MB trả 413 ProblemDetails thay vì 400 của service', async () => {
+    const res = await http(app).post('/api/v1/files/question-image').set('Authorization', `Bearer ${uploaderToken}`)
+      .field('contextId', String(courseCtx)).field('fileArea', 'questiontext')
+      .attach('file', Buffer.alloc(8 * 1024 * 1024 + 1), 'qua-lon.png');
+    expect(res.status).toBe(413);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body).toMatchObject({ title: 'Payload Too Large', status: 413, code: 'http.payload_too_large' });
   });
 
   it('từ chối người lạ: request URL đã ký và luồng có rào trả 403 Problem Details; tải không ký trả 401', async () => {

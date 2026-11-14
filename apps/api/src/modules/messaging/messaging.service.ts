@@ -164,6 +164,7 @@ export class MessagingService {
     forceExternalMinimized?: boolean;
     courseId?: string;
     tenantId?: string | null;
+    eventId?: string;
   }): Promise<NotifyResult> {
     return this.notifications.notify(userId, providerName, input);
   }

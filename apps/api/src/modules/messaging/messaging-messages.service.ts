@@ -412,6 +412,7 @@ export class MessagingMessagesService {
         body: 'A conversation was reported and is waiting in the moderation queue. Open the reports list in Messages to review it.',
         fromUserId: actorId,
         courseId: courseId ?? undefined,
+        eventId: `conversation-report-${report.id}`,
       }).catch(() => undefined);
     }
     return report;

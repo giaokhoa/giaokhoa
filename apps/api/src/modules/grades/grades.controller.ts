@@ -27,7 +27,7 @@ export class CourseGradebookController {
   constructor(private readonly grades: GradesService) {}
 
   @Get()
-  async gradebook(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('userId') userId: string | undefined, @CurrentUser() viewer: AuthenticatedUser) {
+  async gradebook(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('userId', { schema: uuidIdSchema.optional() }) userId: string | undefined, @CurrentUser() viewer: AuthenticatedUser) {
     const target = userId || viewer.id;
     return this.grades.listUserActivityGrades(viewer.id, courseId, target);
   }

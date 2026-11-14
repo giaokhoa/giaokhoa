@@ -1,7 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { Queue } from 'bullmq';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
 import { ContextsService } from '../access/contexts.service';
@@ -252,7 +252,7 @@ export class CalendarService {
     const delayMs = Math.max(0, remindAt.getTime() - Date.now());
     await this.reminderQueue.add('remind', { eventId, userId: actorId, minutesBefore, ...backgroundJobContext() }, {
       jobId: backgroundJobId(`cal-reminder-${eventId}-${actorId}-${minutesBefore}`),
-      delay: delayMs, attempts: 3, removeOnComplete: true,
+      delay: delayMs, attempts: 3, removeOnComplete: true, removeOnFail: true,
     });
     return { eventId, userId: actorId, remindAt: remindAt.toISOString(), delayMs };
   }
@@ -271,7 +271,7 @@ export class CalendarService {
       userId: actorId, pollInterval: input.pollInterval ?? 604800,
     });
     if (subscription.icsData) {
-      await this.importQueue.add('import', { subscriptionId: subscription.id, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscription.id}`), attempts: 3 });
+      await this.importQueue.add('import', { subscriptionId: subscription.id, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscription.id}`), attempts: 3, removeOnComplete: true, removeOnFail: true });
     }
     return subscription;
   }
@@ -287,7 +287,7 @@ export class CalendarService {
 
 
 
-    await this.importQueue.add('import', { subscriptionId, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscriptionId}-${randomUUID()}`), attempts: 3 });
+    await this.importQueue.add('import', { subscriptionId, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscriptionId}`), attempts: 3, removeOnComplete: true, removeOnFail: true });
     return { queued: true, subscriptionId };
   }
 }

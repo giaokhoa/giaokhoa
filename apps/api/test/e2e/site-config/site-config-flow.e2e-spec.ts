@@ -92,4 +92,11 @@ describe('Cấu hình site (cài đặt admin)', () => {
     const unchanged = await http(app).get('/api/v1/site-config/core/fullname').set('Authorization', `Bearer ${admin}`);
     expect(unchanged.body.value).toBe('Giáo khoa');
   });
+
+  it('audit với settingKey rỗng trả 400 ProblemDetails thay vì toàn bộ nhật ký', async () => {
+    const res = await http(app).get('/api/v1/site-config/audit?settingKey=').set('Authorization', `Bearer ${admin}`);
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.code).toBe('http.validation_failed');
+  });
 });

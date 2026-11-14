@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildOpenApiDocumentConfig } from '../../../src/openapi-document';
 import { createTestApp } from '../../support/identity-access-helpers';
 
 describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', () => {
@@ -9,10 +10,7 @@ describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', (
 
   beforeAll(async () => {
     app = await createTestApp();
-    document = SwaggerModule.createDocument(
-      app,
-      new DocumentBuilder().setTitle('Giáo khoa API').setDescription('bootstrap parity probe').setVersion('1.0').build(),
-    );
+    document = SwaggerModule.createDocument(app, buildOpenApiDocumentConfig());
   });
 
   afterAll(async () => {
@@ -23,6 +21,11 @@ describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', (
     expect(document).toBeDefined();
     expect(document.openapi).toMatch(/^3\./);
     expect(Object.keys(document.paths ?? {}).length).toBeGreaterThan(0);
+  });
+
+  it('khai báo bearer auth trong securitySchemes như bootstrap production', () => {
+    const schemes = document.components?.securitySchemes as Record<string, { type?: string; scheme?: string; bearerFormat?: string }> | undefined;
+    expect(schemes?.bearer).toMatchObject({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
   });
 
   it('ghi tài liệu cho GET /event-logs với from/to là chuỗi ngày-giờ ISO', () => {

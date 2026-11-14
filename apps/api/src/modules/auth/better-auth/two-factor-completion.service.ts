@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
+import { HttpException, Injectable, Optional } from '@nestjs/common';
 import { constantTimeEqual, makeSignature } from 'better-auth/crypto';
 import { createHash } from 'node:crypto';
 import { sql, type CentreTx } from '@giaokhoa/db';
@@ -16,13 +16,13 @@ const MAX_USER_MFA_FAILURES = 10;
 const MAX_IP_MFA_FAILURES = 500;
 const TWO_FACTOR_COOKIE_NAME = 'two_factor';
 
-export class TwoFactorCompletionError extends Error {
+export class TwoFactorCompletionError extends HttpException {
   constructor(
-    readonly status: number,
+    status: number,
     readonly code: string,
     message: string,
   ) {
-    super(message);
+    super({ message, code }, status);
     this.name = 'TwoFactorCompletionError';
   }
 }
@@ -56,7 +56,6 @@ export class TwoFactorCompletionService {
     private readonly betterAuth: BetterAuthService,
     private readonly bridge: CredentialBridgeService,
     @Optional()
-    @Inject(forwardRef(() => TotpService))
     private readonly totp?: TotpService,
   ) {
     this.db = spaceDb.routedKysely;

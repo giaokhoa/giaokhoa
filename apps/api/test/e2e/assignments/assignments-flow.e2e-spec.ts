@@ -469,4 +469,14 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(detailFinal.body.files).toHaveLength(1);
     expect(detailFinal.body.files[0].fileId).toBe(fileId);
   });
+
+  it('nộp bài tập thiếu part file trả 400 ProblemDetails với mã assign.file_required thay vì 500', async () => {
+    const ctx = await setup();
+    const assignment = await createAssignment(ctx);
+    const res = await http(app).post(`/api/v1/assignments/${assignment.id}/submission/files`)
+      .set('Authorization', `Bearer ${ctx.studentToken}`);
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+    expect(res.body.code).toBe('assign.file_required');
+  });
 });

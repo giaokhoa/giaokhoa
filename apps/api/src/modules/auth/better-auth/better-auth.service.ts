@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SpaceDatabaseService } from '../../../db/routing/space-database.service';
 import { AuthRepository } from '@giaokhoa/db/repositories/auth';
@@ -36,16 +36,12 @@ export class BetterAuthService {
     passwordService: PasswordService,
     @Optional() authMail?: AuthMailService,
     @Optional()
-    @Inject(forwardRef(() => LoginLockoutService))
     lockout?: LoginLockoutService,
     @Optional()
-    @Inject(forwardRef(() => TotpService))
     totp?: TotpService,
     @Optional()
-    @Inject(forwardRef(() => AuthRepository))
     authRepository?: AuthRepository,
     @Optional()
-    @Inject(forwardRef(() => SessionService))
     sessionService?: SessionService,
   ) {
     this.enabled = config.get<boolean>('BETTER_AUTH_ENABLED') ?? false;
