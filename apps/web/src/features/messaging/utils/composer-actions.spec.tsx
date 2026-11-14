@@ -2,7 +2,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { act, useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useComposerActions } from "./composer-actions";
-import { linkSelection } from "./composer-format";
+
+vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
 type ComposerActions = ReturnType<typeof useComposerActions>;
 
@@ -97,7 +98,7 @@ function renderDualComposer(overrides: Partial<DualComposerProps> = {}) {
   const onNoteReplace = vi.fn();
   const onNoteTyping = vi.fn();
   const onMessageEmojiInserted = vi.fn();
-  const promptForLink = vi.fn(() => "example.org" as string | null);
+  const promptForLink = vi.fn(() => "example.org");
   const holder: { current: { message: ComposerActions; note: ComposerActions } | null } = { current: null };
   render(
     <DualComposer
@@ -113,7 +114,7 @@ function renderDualComposer(overrides: Partial<DualComposerProps> = {}) {
       {...overrides}
     />,
   );
-  if (!holder.current) throw new Error("chưa gắn xong hai hook soạn thảo");
+  if (!holder.current) throw new Error("composer hooks not attached");
   return { captured: holder.current, onMessageReplace, onNoteReplace, onNoteTyping, onMessageEmojiInserted, promptForLink };
 }
 
@@ -177,6 +178,34 @@ describe("Thao tác soạn thảo của hai ô tin nhắn và ghi chú", () => {
     });
   });
 
+  it("hủy nhập liên kết thì bản nháp tin nhắn không đổi", () => {
+    const promptForLink = vi.fn(() => null);
+    const { captured, onMessageReplace } = renderDualComposer({ promptForLink });
+    const composer = screen.getByTestId("message-composer") as HTMLTextAreaElement;
+    composer.focus();
+    composer.setSelectionRange(4, 8);
+    act(() => {
+      captured.message.insertLink();
+    });
+    expect(promptForLink).toHaveBeenCalledTimes(1);
+    expect(onMessageReplace).not.toHaveBeenCalled();
+    expect(composer.value).toBe("xin chào");
+  });
+
+  it("nhập liên kết rỗng thì bản nháp tin nhắn không đổi", () => {
+    const promptForLink = vi.fn(() => "");
+    const { captured, onMessageReplace } = renderDualComposer({ promptForLink });
+    const composer = screen.getByTestId("message-composer") as HTMLTextAreaElement;
+    composer.focus();
+    composer.setSelectionRange(4, 8);
+    act(() => {
+      captured.message.insertLink();
+    });
+    expect(promptForLink).toHaveBeenCalledTimes(1);
+    expect(onMessageReplace).not.toHaveBeenCalled();
+    expect(composer.value).toBe("xin chào");
+  });
+
   it("không có cuộc trò chuyện thì bôi đậm, chèn emoji và chèn liên kết đều không thay bản nháp", () => {
     const { captured, onMessageReplace, promptForLink } = renderDualComposer({
       conversationId: undefined,
@@ -192,9 +221,5 @@ describe("Thao tác soạn thảo của hai ô tin nhắn và ghi chú", () => {
     expect(promptForLink).toHaveBeenCalledTimes(1);
     expect(onMessageReplace).not.toHaveBeenCalled();
     expect(composer.value).toBe("xin chào");
-  });
-
-  it("linkSelection nhận null thì trả null thay vì ném lỗi", () => {
-    expect(linkSelection("nội dung", 0, 3, null)).toBeNull();
   });
 });

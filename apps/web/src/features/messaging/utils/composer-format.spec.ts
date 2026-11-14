@@ -23,4 +23,8 @@ describe("Định dạng bản nháp tin nhắn và ghi chú", () => {
   it("nhập liên kết rỗng không làm thay đổi bản nháp", () => {
     expect(linkSelection("nội dung", 0, 3, "  ")).toBeNull();
   });
+
+  it("nhập liên kết null thì trả null thay vì ném lỗi", () => {
+    expect(linkSelection("nội dung", 0, 3, null)).toBeNull();
+  });
 });
