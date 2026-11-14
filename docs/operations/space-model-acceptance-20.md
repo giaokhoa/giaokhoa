@@ -122,3 +122,13 @@ Nguồn lỗi đã xác định từ artifact Vitest `blob-report-e2e-{1,2,3,4}`
 - `system-bank/system-materials`: ca URL ký mới không chấp nhận token tenant trên host shared. Thay bằng A/B cấp qua `runSpaceProvision` có database và role dedicated thực, kích hoạt lời mời và đăng nhập đúng Host, chứng minh tải URL ký ở A, chặn B và host platform. Ca file legacy USER tiếp tục đọc ở kho legacy theo cổng hợp lệ nhưng phải từ chối token/URL legacy trên Host A/B không có kho dedicated. Suite **9/9 PASS**.
 
 Đã có local **12 suite từng lỗi đều PASS khi chạy mục tiêu theo nhóm**; **full E2E 148 file**, GitHub Actions và độc lập nghiệm thu AC01–AC27 phải xác minh ở SHA cuối trước khi kết luận. Không bỏ/skip test, không nới cổng 400 `centre.provision_required` hay quyền đọc điểm.
+
+### Kiểm tra hồi quy full E2E trên database local và nguyên nhân sai khác với CI
+
+Đã chạy **toàn bộ 148 file / 1040 test local** nhưng database `giaokhoa_test_api` đang tái sử dụng dữ liệu qua nhiều lượt chạy, trong khi CI dùng **PostgreSQL 18 database rỗng, migrate mới cho từng shard**. Lượt full đầu: **145/148 file và 1035/1040 test PASS**, 5 test lỗi ở 3 suite chưa sửa trong đợt này. Đã đối chiếu stack trace và kiểm tra lại **cả ba suite 41/41 PASS trong một lượt mới**:
+
+- `platform/public-learning-flow`: lỗi từ môi trường local thực tế `pg_dump failed: spawn pg_dump ENOENT`. Workflow CI đã cài PG client 18; lệnh test lại export `PATH` và `LD_LIBRARY_PATH` trỏ đúng client 18 được cấp trên máy, kiểm chứng restore staging/database/runtime-role và đăng nhập HTTP **PASS**.
+- `payments/payments-entitlement-gate`: IPN vào tài khoản SePay cũ vì XID/số tài khoản dùng lại ở các lượt test trên cùng database; sau khi cấp XID, bank account và API key test riêng cho từng lượt, 10/10 ca cổng quyền lợi **PASS**, không nới kết quả matching.
+- `paper-grading/paper-grading-flow`: một lượt bộ nhận dạng phiếu tổng hợp không nhận ra lô (`batchId=null`) ở ảnh SBD cố ý làm sai checksum, nhưng toàn bộ suite chạy lại **17/17 PASS**, giữ nguyên kiểm tra không tự gán nhầm học viên.
+
+Chưa có quyền nói full E2E đã PASS trên một lượt duy nhất: chỉ GitHub Actions chạy với database sạch, PostgreSQL client đúng phiên bản và bốn shard đồng bộ trên SHA mới mới đủ làm bằng chứng kết luận CI. Các lỗi local đã phân tích và chạy lại riêng, không skip test. Chưa chốt toàn AC01–AC27 hoặc tự merge PR Draft.
