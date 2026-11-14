@@ -28,9 +28,15 @@ return {totalHits, redis.call('PTTL', KEYS[1]), 0, 0}
 @Injectable()
 export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy {
   private readonly redis: Redis;
+  private readyWait: Promise<void> | null = null;
+  private readyWaitFailed = false;
 
   constructor(config: ConfigService) {
     this.redis = new Redis(redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')));
+    this.redis.on('ready', () => {
+      this.readyWaitFailed = false;
+      this.readyWait = null;
+    });
   }
 
   async increment(
@@ -66,18 +72,34 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
     if (this.redis.status === 'end') {
       return Promise.reject(new Error('Redis throttler storage is closed'));
     }
-    return new Promise<void>((resolve, reject) => {
+    if (this.readyWaitFailed) {
+      return Promise.reject(new Error('Redis throttler storage did not become ready in time'));
+    }
+    if (this.readyWait) return this.readyWait;
+    this.readyWait = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.redis.off('ready', onReady);
+        this.redis.off('end', onEnd);
+        this.readyWait = null;
+        this.readyWaitFailed = true;
         reject(new Error('Redis throttler storage did not become ready in time'));
       }, REDIS_READY_TIMEOUT_MS);
       timer.unref?.();
       const onReady = (): void => {
         clearTimeout(timer);
+        this.redis.off('end', onEnd);
         resolve();
       };
+      const onEnd = (): void => {
+        clearTimeout(timer);
+        this.redis.off('ready', onReady);
+        this.readyWait = null;
+        reject(new Error('Redis throttler storage is closed'));
+      };
       this.redis.once('ready', onReady);
+      this.redis.once('end', onEnd);
     });
+    return this.readyWait;
   }
 
   async onModuleDestroy(): Promise<void> {
