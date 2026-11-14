@@ -1,8 +1,12 @@
 import type { INestApplication } from '@nestjs/common';
+import { Client } from 'pg';
+import { join } from 'node:path';
+import { buildTestDatabase, dropTestDatabase } from '@giaokhoa/db/test-support';
+import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname,
-  STRONG_PASSWORD, systemContextId, uniqueName, grantTenantManagerFixture,
+  STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
@@ -10,8 +14,30 @@ import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../
 
 interface Person { id: string; username: string; token: string }
 
+const suffix = Math.random().toString(36).slice(2, 8);
+const centreSlug = `gate-${suffix}`;
+const centreHost = `${centreSlug}.test.local`;
+const centreUsername = `gatemanager${suffix}`;
+const centrePassword = 'GkGateTestDatabase123!';
+const controlPlaneDatabase = `giaokhoa_test_cp_gate_${suffix}`;
+const migrationDir = join(__dirname, '../../../../../packages/db/migrations/centre');
+const actorId = '22222222-2222-4222-8222-222222222222';
+const adminDatabaseUrl = new URL(process.env.DATABASE_URL!);
+adminDatabaseUrl.pathname = '/postgres';
+const adminUrl = adminDatabaseUrl.toString();
+
+function centreUrl(centre: SpaceProvisionResult): string {
+  const url = new URL(adminUrl);
+  url.pathname = `/${centre.databaseName}`;
+  url.username = centre.connectionRole;
+  url.password = centrePassword;
+  return url.toString();
+}
+
 describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị viên và chủ trung tâm (issue #563)', () => {
   let app: INestApplication;
+  let centre: SpaceProvisionResult;
+  const previousControlPlaneUrl = process.env.CONTROL_PLANE_DATABASE_URL;
   let admin: string;
   let adminId: string;
   let teacher: Person;
@@ -30,13 +56,25 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  async function createFreeGroup(token: string, memberIds: string[]) {
-    return http(app).post('/api/v1/messages/conversations')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ type: 2, memberIds, name: 'Nhóm kiểm cổng tạo nhóm' });
+  async function createFreeGroup(token: string, memberIds: string[], host?: string) {
+    const req = http(app).post('/api/v1/messages/conversations')
+      .set('Authorization', `Bearer ${token}`);
+    if (host) req.set('Host', host);
+    return req.send({ type: 2, memberIds, name: 'Nhóm kiểm cổng tạo nhóm' });
   }
 
   beforeAll(async () => {
+    const controlPlaneUrl = await buildTestDatabase({
+      adminUrl, database: controlPlaneDatabase, store: 'control-plane',
+    });
+    centre = await runSpaceProvision({
+      slug: centreSlug, name: 'Trung tâm kiểm quyền tạo nhóm',
+      adminEmail: `gate-${suffix}@example.com`, adminUsername: centreUsername,
+      databasePassword: centrePassword, actorId, migrationsDir: migrationDir,
+      env: { ...process.env, CONTROL_PLANE_DATABASE_URL: controlPlaneUrl }, log: () => undefined,
+    });
+    process.env.CONTROL_PLANE_DATABASE_URL = controlPlaneUrl;
+    process.env[centre.secretEnvVar] = centreUrl(centre);
     app = await createTestApp();
     admin = await adminToken(app);
     adminId = (await login(app, 'admin', 'Admin123!')).userId;
@@ -67,28 +105,39 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
     await addGroupMember(app, admin, course.id, group.id, student.id);
     await addGroupMember(app, admin, course.id, group.id, member.id);
 
-    const slug = `gate-${uniqueName('t').toLowerCase()}`;
-    const tenantRes = await http(app).post('/api/v1/tenants')
-      .set('Authorization', `Bearer ${admin}`).send({ name: 'Trường kiểm cổng tạo nhóm', slug, kind: 'school' });
-    if (tenantRes.status !== 201) throw new Error(`create tenant failed: ${tenantRes.status} ${JSON.stringify(tenantRes.body)}`);
-    const centreTenantId = (tenantRes.body as { id: string }).id;
-    await grantTenantManagerFixture(app, admin, centreTenantId);
-    owner = await person();
-    centreMember = await person();
-    for (const p of [owner, centreMember]) {
-      const add = await http(app).post(`/api/v1/tenants/${centreTenantId}/members`)
-        .set('Authorization', `Bearer ${admin}`).send({ userId: p.id });
-      if (add.status !== 201) throw new Error(`add tenant member failed: ${add.status} ${JSON.stringify(add.body)}`);
+    const activated = await http(app).post('/api/v1/centres/activate-invite')
+      .send({ slug: centreSlug, token: centre.inviteToken, password: STRONG_PASSWORD });
+    expect(activated.status, JSON.stringify(activated.body)).toBe(201);
+    const ownerLogin = await http(app).post('/api/v1/auth/token').set('Host', centreHost)
+      .send({ username: centreUsername, password: STRONG_PASSWORD });
+    expect(ownerLogin.status, JSON.stringify(ownerLogin.body)).toBe(201);
+    ownerCentreToken = ownerLogin.body.accessToken as string;
+    owner = { id: centre.adminUserId!, username: centreUsername, token: ownerCentreToken };
+    const memberUsername = `gatemember${suffix}`;
+    const createdMember = await http(app).post(`/api/v1/tenants/${centre.tenantId}/users`)
+      .set('Host', centreHost).set('Authorization', `Bearer ${ownerCentreToken}`)
+      .send({ username: memberUsername, email: `${memberUsername}@example.com`,
+        password: STRONG_PASSWORD, firstName: 'Học', lastName: 'Viên' });
+    expect(createdMember.status, JSON.stringify(createdMember.body)).toBe(201);
+    centreMember = { id: createdMember.body.id as string, username: memberUsername, token: '' };
+  }, 180_000);
+  afterAll(async () => {
+    await app?.close();
+    if (centre) {
+      delete process.env[centre.secretEnvVar];
+      const admin = new Client({ connectionString: adminUrl });
+      await admin.connect();
+      try {
+        await admin.query(`DROP DATABASE IF EXISTS "${centre.databaseName}" WITH (FORCE)`);
+        await admin.query(`DROP ROLE IF EXISTS "${centre.connectionRole}"`);
+      } finally {
+        await admin.end();
+      }
     }
-    const centreCtx = await contextIdByLevelInstance(app, admin, 20, centreTenantId);
-    const managerRole = await roleIdByShortname(app, admin, 'manager');
-    await assignRole(app, admin, owner.id, managerRole, centreCtx);
-    const switched = await http(app).post(`/api/v1/auth/switch-tenant/${centreTenantId}`)
-      .set('Authorization', `Bearer ${owner.token}`);
-    if (switched.status !== 201) throw new Error(`switch tenant failed: ${switched.status} ${JSON.stringify(switched.body)}`);
-    ownerCentreToken = (switched.body as { accessToken: string }).accessToken;
+    if (previousControlPlaneUrl === undefined) delete process.env.CONTROL_PLANE_DATABASE_URL;
+    else process.env.CONTROL_PLANE_DATABASE_URL = previousControlPlaneUrl;
+    await dropTestDatabase(adminUrl, controlPlaneDatabase);
   });
-  afterAll(async () => { await app.close(); });
 
   it('giáo viên có gán vai giảng dạy tại context khoá bị từ chối tạo nhóm tự do với mã messaging.group_creation_forbidden', async () => {
     const res = await createFreeGroup(teacher.token, [student.id, member.id]);
@@ -116,7 +165,7 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
   });
 
   it('chủ trung tâm tạo được nhóm tự do trong tenant của mình với phiên đã chuyển vào tenant đó', async () => {
-    const res = await createFreeGroup(ownerCentreToken, [centreMember.id]);
+    const res = await createFreeGroup(ownerCentreToken, [centreMember.id], centreHost);
     expect(res.status).toBe(201);
     expect(new Set(res.body.members as string[])).toEqual(new Set([owner.id, centreMember.id]));
     expect(res.body.createdBy).toBe(owner.id);
@@ -137,8 +186,10 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
   });
 
   it('cờ canCreateFreeGroup trên cây nhóm khớp cổng tạo nhóm: quản trị viên, chủ trung tâm và quản trị nền tảng true; giáo viên, nhân viên và học viên false', async () => {
-    const flagOf = async (token: string) => {
-      const res = await http(app).get('/api/v1/messages/group-tree').set('Authorization', `Bearer ${token}`);
+    const flagOf = async (token: string, host?: string) => {
+      const req = http(app).get('/api/v1/messages/group-tree').set('Authorization', `Bearer ${token}`);
+      if (host) req.set('Host', host);
+      const res = await req;
       expect(res.status).toBe(200);
       return (res.body as { canCreateFreeGroup: boolean }).canCreateFreeGroup;
     };
@@ -146,7 +197,7 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
     expect(await flagOf(staff.token)).toBe(false);
     expect(await flagOf(student.token)).toBe(false);
     expect(await flagOf(admin)).toBe(true);
-    expect(await flagOf(ownerCentreToken)).toBe(true);
+    expect(await flagOf(ownerCentreToken, centreHost)).toBe(true);
     expect(await flagOf(platformManager.token)).toBe(true);
   });
 
