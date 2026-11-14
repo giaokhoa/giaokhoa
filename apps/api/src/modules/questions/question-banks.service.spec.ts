@@ -241,6 +241,7 @@ describe('QuestionBanksService — mã lỗi not-found giữ nguyên khi gom fac
     evaluator.hasCapability.mockImplementation(async (_actor: string, _cap: string, ctx: string) => ctx !== 'bctx');
     const error = await capture(service.assertCanUseQuestionInExam(ACTOR, 'q-1'));
     expect(error).toBeInstanceOf(NotFoundException);
+    expect(error).not.toBeInstanceOf(ForbiddenException);
     expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
   });
 
@@ -416,25 +417,50 @@ describe('QuestionBanksService — mã lỗi not-found giữ nguyên khi gom fac
     expect(problem(error)).toEqual({ message: 'Contribution c-9 not found', code: 'question.contribution_not_found' });
   });
 
-  it('danh mục trong context bank cá nhân của người khác nhưng không gắn bankId thì người có quyền dùng vẫn xem được nguồn gốc câu hỏi', async () => {
+  it('danh mục không gắn bankId thì người có quyền dùng vẫn xem được nguồn gốc câu hỏi mà không cần phân giải bank qua context', async () => {
     const { service, repo, questionsRepo } = buildService();
     questionsRepo.getQuestion.mockResolvedValue(questionRow('q-1', 'cat-1') as never);
     questionsRepo.getCategory.mockResolvedValue(categoryRow('cat-1', { bankId: null, contextId: 'pctx' }) as never);
-    questionsRepo.getBankByContextId.mockResolvedValue(bankRow('bank-p', { scope: 'personal', ownerId: OTHER, contextId: 'pctx' }) as never);
     repo.getUserDisplayNames.mockResolvedValue(new Map() as never);
     repo.countSlotsByQuestionIds.mockResolvedValue(new Map([['q-1', 1]]) as never);
     const view = await service.getAttributionForViewer(ACTOR, 'q-1');
     expect(view.questionId).toBe('q-1');
     expect(view.useCount).toBe(1);
+    expect(questionsRepo.getBankByContextId).not.toHaveBeenCalled();
   });
 
   it('tác giả thu hồi câu hỏi của mình dù không có quyền moderate hay editall', async () => {
     const built = buildService();
     governableQuestion(built);
     built.evaluator.hasCapability.mockResolvedValue(false);
-    built.evaluator.requireCapability.mockRejectedValue(new ForbiddenException({ message: 'Missing capability', code: 'question.capability_missing' }));
     built.questionsRepo.getEntryByQuestion.mockResolvedValue(entryRow('entry-1') as never);
     const result = await built.service.withdrawQuestion(ACTOR, 'q-1', 'lý do');
     expect(result).toEqual({ questionId: 'q-1', status: 'hidden', affectedPinIds: [] });
+    expect(built.evaluator.hasCapability).not.toHaveBeenCalled();
+    expect(built.evaluator.isSiteAdmin).not.toHaveBeenCalled();
+    expect(built.evaluator.requireCapability).not.toHaveBeenCalled();
+  });
+
+  it('câu hỏi không tồn tại thì thu hồi báo question.not_found kèm id', async () => {
+    const { service } = buildService();
+    const error = await capture(service.withdrawQuestion(ACTOR, 'q-9', 'lý do'));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-9 not found', code: 'question.not_found' });
+  });
+
+  it('câu hỏi thuộc bank cá nhân của người khác thì đề xuất đóng góp báo question.not_found kèm id', async () => {
+    const { service, repo, questions, questionsRepo } = buildService();
+    repo.getBank.mockImplementation((async (id: string) => (id === 'bank-p'
+      ? bankRow('bank-p', { scope: 'personal', ownerId: OTHER })
+      : bankRow('bank-1'))) as never);
+    questions.getQuestion.mockResolvedValue({
+      question: questionRow('q-1', 'cat-1'),
+      entry: entryRow('entry-1'),
+      latestVersion: versionRow('v-1'),
+    } as never);
+    questionsRepo.getCategory.mockResolvedValue(categoryRow('cat-1', { bankId: 'bank-p' }) as never);
+    const error = await capture(service.proposeContribution(ACTOR, 'bank-1', { questionId: 'q-1' }));
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(problem(error)).toEqual({ message: 'Question q-1 not found', code: 'question.not_found' });
   });
 });
